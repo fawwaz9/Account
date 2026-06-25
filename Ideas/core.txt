@@ -1,0 +1,6 @@
+Calender part that is heavuly modifiable and helps me keep track of everything. Must have repeat features for events and ends by.
+Tasks on calender should have check box and progess bar for major goals like saving money gym consisitency.
+Grade calculator and class schedule.
+I am building the ultimate student application all for my personal use.
+Ability/Potential to scale the app in the future and we are going to be constantly working on it for the next few years, adding features and upgrading.
+Budgeting capabilities included.

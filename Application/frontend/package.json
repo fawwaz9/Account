@@ -1,0 +1,12 @@
+{
+  "dependencies": {
+    "react": "^19.x",
+    "react-dom": "^19.x"
+  },
+  "devDependencies": {
+    "@types/react": "^19.x",
+    "@types/react-dom": "^19.x",
+    "typescript": "^5.x",
+    "vite": "^7.x"
+  }
+}

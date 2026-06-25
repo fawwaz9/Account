@@ -1,0 +1,71 @@
+users (
+    id SERIAL PRIMARY KEY,
+    name TEXT
+)
+
+events (
+    id SERIAL PRIMARY KEY,
+    user_id INT,
+    title TEXT,
+    description TEXT,
+    start_time TIMESTAMP,
+    end_time TIMESTAMP,
+    recurrence_rule TEXT,  -- e.g. "WEEKLY", "DAILY", custom RRULE
+    ends_by DATE,
+    created_at TIMESTAMP
+)
+
+tasks (
+    id SERIAL PRIMARY KEY,
+    user_id INT,
+    title TEXT,
+    is_completed BOOLEAN,
+    goal_type TEXT,   -- gym, money, study, etc.
+    due_date TIMESTAMP,
+    created_at TIMESTAMP
+)
+
+goals (
+    id SERIAL PRIMARY KEY,
+    user_id INT,
+    name TEXT,
+    target_value FLOAT,
+    current_value FLOAT,
+    unit TEXT  -- $, hours, workouts, etc.
+)
+
+courses (
+    id SERIAL PRIMARY KEY,
+    user_id INT,
+    name TEXT,
+    credits INT,
+    final_grade FLOAT
+)
+
+assignments (
+    id SERIAL PRIMARY KEY,
+    course_id INT,
+    title TEXT,
+    weight FLOAT,
+    score FLOAT
+)
+
+classes (
+    id SERIAL PRIMARY KEY,
+    course_id INT,
+    day_of_week INT,
+    start_time TIME,
+    end_time TIME,
+    location TEXT
+)
+
+budget (
+    id SERIAL PRIMARY KEY,
+    user_id INT,
+    month TEXT,
+    planned FLOAT,
+    actual FLOAT,
+    remainder FLOAT,
+    rating INT
+)
+
