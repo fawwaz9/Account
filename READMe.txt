@@ -1,0 +1,1 @@
+An all in one application that is perfect in helping students navigate their grades, fincances, schedules and responsibilities.
