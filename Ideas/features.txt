@@ -1,0 +1,32 @@
+Dashboard
+│
+├── Grades
+│   ├── GPA calculator
+│   ├── Assignment tracker
+│   ├── Predictions
+│   └── Analytics
+│
+├── Calendar
+│   ├── Classes
+│   ├── Exams
+│   ├── Deadlines
+│   └── Study planner
+│
+├── Finances
+│   ├── Budget
+│   ├── Expenses
+│   ├── Income
+│   └── Savings
+│
+├── Tasks
+│   ├── Homework
+│   ├── Personal
+│   └── Recurring
+│
+├── Notes
+│
+├── Goals
+│
+├── Study Analytics
+│
+└── Settings

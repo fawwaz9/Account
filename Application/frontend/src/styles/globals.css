@@ -1,0 +1,62 @@
+/* ===== Theme Variables ===== */
+:root {
+  --bg: #0b0f1a;          /* deep black-navy */
+  --panel: #111a2e;       /* navy card */
+  --panel-2: #0f172a;     
+  --text: #e5e7eb;        /* soft white */
+  --muted: #9ca3af;
+
+  --gold: #d4af37;
+  --gold-soft: #f5d97b;
+
+  --border: rgba(212, 175, 55, 0.15);
+}
+
+/* ===== Base ===== */
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+/* ===== Layout helpers ===== */
+.container {
+  padding: 24px;
+}
+
+h1, h2, h3 {
+  color: var(--gold-soft);
+  letter-spacing: 0.5px;
+}
+
+/* ===== Card ===== */
+.card {
+  background: linear-gradient(145deg, var(--panel), var(--panel-2));
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+
+/* ===== Buttons ===== */
+button {
+  background: var(--gold);
+  color: #0b0f1a;
+  border: none;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+button:hover {
+  background: #111a2e;
+  transform: translateY(-1px);
+}
+
+/* ===== Subtle text ===== */
+.muted {
+  color: var(--muted);
+}
