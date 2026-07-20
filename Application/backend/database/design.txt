@@ -1,0 +1,96 @@
+users (
+    id SERIAL PRIMARY KEY,
+    name TEXT
+)
+
+events (
+    id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users(id),
+    title TEXT,
+    description TEXT,
+    start_time TIMESTAMP,
+    end_time TIMESTAMP,
+    recurrence_rule TEXT,  -- e.g. "WEEKLY", "DAILY", custom RRULE
+    ends_by DATE,
+    created_at TIMESTAMP
+)
+
+tasks (
+    id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users(id),
+    title TEXT,
+    is_completed BOOLEAN,
+    goal_type TEXT,   -- gym, money, study, etc.
+    due_date TIMESTAMP,
+    created_at TIMESTAMP
+)
+
+goals (
+    id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users(id),
+    name TEXT,
+    target_value FLOAT,
+    current_value FLOAT,
+    unit TEXT  -- $, hours, workouts, etc.
+)
+
+-- Updated to match CourseCreate / CourseDetail
+courses (
+    id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users(id),
+    code TEXT NOT NULL,              -- e.g. "CS101"
+    name TEXT NOT NULL,
+    semester TEXT NOT NULL,          -- Semester enum: "Fall" | "Winter" | "Spring" | "Summer"
+    year INT NOT NULL,
+    credits FLOAT DEFAULT 3.0,
+    required BOOLEAN DEFAULT TRUE,
+    professor TEXT,
+    final_grade FLOAT DEFAULT 0.0,
+    average FLOAT DEFAULT 0.0,
+    start_date DATE,
+    end_date DATE,
+    created_at TIMESTAMP DEFAULT now(),
+    UNIQUE (user_id, code)           -- matches your "course code already exists" check
+)
+
+-- New table: category_weights lives per-course as a dict in your Pydantic model.
+-- Normalized here since GradeCategory is a fixed set of values (Assignment, Lab,
+-- Quiz, Midterm, Final, Participation, Project, Other).
+course_category_weights (
+    id SERIAL PRIMARY KEY,
+    course_id INT REFERENCES courses(id) ON DELETE CASCADE,
+    category TEXT NOT NULL,          -- GradeCategory enum value
+    weight FLOAT NOT NULL DEFAULT 0.0 CHECK (weight >= 0 AND weight <= 100),
+    UNIQUE (course_id, category)
+)
+
+-- Updated to match Grade / GradeCreate
+grades (
+    id SERIAL PRIMARY KEY,
+    course_id INT REFERENCES courses(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,              -- was "title"
+    category TEXT NOT NULL,          -- GradeCategory enum value
+    score FLOAT,
+    max_score FLOAT NOT NULL,
+    weight FLOAT DEFAULT 0.0,        -- synced from course_category_weights, per sync_grade_weights()
+    created_at TIMESTAMP DEFAULT now()
+)
+
+classes (
+    id SERIAL PRIMARY KEY,
+    course_id INT REFERENCES courses(id) ON DELETE CASCADE,
+    day_of_week INT,
+    start_time TIME,
+    end_time TIME,
+    location TEXT
+)
+
+budget (
+    id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users(id),
+    month TEXT,
+    planned FLOAT,
+    actual FLOAT,
+    remainder FLOAT,
+    rating INT
+)

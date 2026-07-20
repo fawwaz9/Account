@@ -1,8 +1,8 @@
 from uuid import UUID, uuid4
 
-from Application.backend.app.Grades.schemas.course import CourseCreate, CourseDetail, CourseUpdate
-from Application.backend.app.Grades.services.grade_service import calculate_current_average, update_category_weights
-from Application.backend.app.Users.services.user_service import get_user
+from app.Grades.schemas.course import CourseCreate, CourseDetail, CourseUpdate
+from app.Grades.services.grade_service import calculate_current_average, update_category_weights
+from app.Users.services.user_service import get_user
 
 def create_course(user_id: UUID, course_data: CourseCreate):
     user = get_user(user_id)

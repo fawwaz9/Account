@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException
 
 from app.shared.errors import error_user, responses
-from Application.backend.app.Users.services.user_service import get_user
+from app.Users.services.user_service import get_user
 
 router = APIRouter()
 

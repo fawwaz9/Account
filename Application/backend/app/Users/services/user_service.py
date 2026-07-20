@@ -1,7 +1,7 @@
 from uuid import UUID, uuid4
 
-from app.core.errors import error_user
-from app.data.store import users
+from app.shared.errors import error_user
+from app.temp_data.store import users
 from app.Users.schemas.user import UserCreate, UserDetail, UserUpdate
 
 

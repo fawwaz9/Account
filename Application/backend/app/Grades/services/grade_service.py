@@ -214,3 +214,20 @@ def calculate_required_final(user_id: UUID, course_id: UUID, target_grade: float
         "unfinished_categories": unfinished_categories
     }
 
+def calculate_grade_category_average(course, category: GradeCategory) -> float:
+    category_grades = [
+        g for g in course.grades
+        if g.category == category and g.score is not None and g.max_score > 0
+    ]
+    if not category_grades:
+        return 0.0
+
+    total_weight = sum(g.max_score for g in category_grades)
+    if total_weight == 0:
+        return 0.0
+
+    weighted_sum = sum(
+        (g.score / g.max_score) * 100 * g.max_score
+        for g in category_grades
+    )
+    return round(weighted_sum / total_weight, 2)
