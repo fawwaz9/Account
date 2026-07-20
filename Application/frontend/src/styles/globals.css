@@ -1,3 +1,5 @@
+@import "tailwindcss";
+
 /* ===== Theme Variables ===== */
 :root {
   --bg: #0b0f1a;          /* deep black-navy */
@@ -5,6 +7,7 @@
   --panel-2: #0f172a;     
   --text: #e5e7eb;        /* soft white */
   --muted: #9ca3af;
+  --error: #d40707;
 
   --gold: #d4af37;
   --gold-soft: #f5d97b;
@@ -18,6 +21,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  font-size: 15px;
 }
 
 /* ===== Layout helpers ===== */
@@ -25,38 +29,93 @@ body {
   padding: 24px;
 }
 
+.title {
+  font-size: 2.5rem;
+  margin-bottom: 30px;
+  color: var(--gold);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.right {
+  display: flex;
+  align-items: flex-end;  
+  justify-content: right; 
+  text-align: right;       
+}
+
+.space-between {
+  display: flex;
+  align-items: center;    
+  justify-content: space-between; 
+  text-align: left;       
+}
+
+h1 {
+  font-size: 40px;
+}
+h2 {
+  font-size: 28px;
+}
+h3{
+  font-size: 19px;
+}
+
 h1, h2, h3 {
-  color: var(--gold-soft);
+  color: var(--gold);
   letter-spacing: 0.5px;
 }
 
-/* ===== Card ===== */
-.card {
-  background: linear-gradient(145deg, var(--panel), var(--panel-2));
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 16px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-}
-
 /* ===== Buttons ===== */
-button {
-  background: var(--gold);
-  color: #0b0f1a;
-  border: none;
-  padding: 10px 14px;
+.buttons {
+  background: linear-gradient(145deg, var(--panel), var(--panel-2));
+  color: var(--gold);
+  border: var(--panel);
+  padding: 3px 5px;
+  margin: 5px;
   border-radius: 10px;
-  font-weight: 600;
   cursor: pointer;
   transition: 0.2s ease;
 }
 
-button:hover {
-  background: #111a2e;
+.buttons:hover {
+  opacity: 0.7;
   transform: translateY(-1px);
+  border-color: var(--gold);
 }
 
 /* ===== Subtle text ===== */
 .muted {
   color: var(--muted);
+}
+
+
+.--input{
+  color: var(--text);
+  background: var(--panel);
+  text-align: center;
+  margin: 2px;
+}
+.--input::placeholder{
+  text-align: center;
+  color: var(--muted);
+}
+.--select{
+  color: var(--text);
+  background: var(--panel);
+  text-align: center;
+  margin: 2px;
+}
+
+.small-text {
+  font-size: 10px;
+  color: var(--text);
+}
+
+.error{
+  font-size: 13px;
+  color: var(--error);
 }

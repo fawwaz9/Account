@@ -6,12 +6,6 @@
   font-family: Arial, sans-serif;
 }
 
-.title {
-  font-size: 2.5rem;
-  margin-bottom: 30px;
-  color: #d4af37; /* gold */
-}
-
 .grid {
   display: flex;
   gap: 20px;

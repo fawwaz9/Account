@@ -76,7 +76,7 @@ def get_dashboard(user_id: UUID | None = None):
     )
 
 
-def calculate_gpa(courses):
+def calculate_cumulative_average(courses):
     total_quality_points = 0.0
     total_credits = 0.0
 
@@ -90,6 +90,6 @@ def calculate_gpa(courses):
     if total_credits == 0:
         return 0.0
 
-    gpa = total_quality_points / total_credits
-    return round(gpa, 2)
+    average = total_quality_points / total_credits
+    return round(average, 2)
 

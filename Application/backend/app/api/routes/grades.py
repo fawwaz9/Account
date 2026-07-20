@@ -27,7 +27,7 @@ from app.Grades.services.grade_service import (
     update_category_weights,
     update_grade,
 )
-from Application.backend.app.Grades.services.dash_services import get_dashboard
+from app.Grades.services.dash_services import get_dashboard
 
 router = APIRouter()
 
