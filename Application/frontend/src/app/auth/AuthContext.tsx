@@ -8,6 +8,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (token: string) => Promise<void>;
   logout: () => void;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -21,6 +22,11 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
 
   useEffect(() => {
     if (token) {
+      // Mark loading again while the profile for a *new* token is fetched.
+      // Without this, the moment after login the token is set but user is
+      // still null, so isAuthenticated reads false and ProtectedRoute
+      // redirects back to /login before the fetch resolves.
+      setIsLoading(true);
       sessionStorage.setItem("access_token", token);
       getCurrentUser()
         .then(setUser)
@@ -47,9 +53,19 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
     setUser(null);
   }, []);
 
+  // Re-read the profile after something changes it server-side, e.g. adding a
+  // password, so has_password stops being stale.
+  const refreshUser = useCallback(async () => {
+    try {
+      setUser(await getCurrentUser());
+    } catch {
+      // leave the existing user in place; the 401 path already handles expiry
+    }
+  }, []);
+
   const value = useMemo(
-    () => ({ token, user, isAuthenticated: !!token && !!user, isLoading, login, logout }),
-    [token, user, isLoading, login, logout]
+    () => ({ token, user, isAuthenticated: !!token && !!user, isLoading, login, logout, refreshUser }),
+    [token, user, isLoading, login, logout, refreshUser]
   );
 
   return (

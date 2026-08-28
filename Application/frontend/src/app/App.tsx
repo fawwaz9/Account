@@ -8,6 +8,7 @@ import CourseDetailPage from "../pages/grades/CourseDetailPage";
 import CalendarPage from "../pages/CalendarPage";
 import TasksPage from "../pages/TasksPage";
 import BudgetPage from "../pages/BudgetPage";
+import SettingsPage from "../pages/SettingsPage";
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
           <Route path="/calendar" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
           <Route path="/tasks" element={<ProtectedRoute><TasksPage /></ProtectedRoute>} />
           <Route path="/budget" element={<ProtectedRoute><BudgetPage /></ProtectedRoute>} />
+          <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

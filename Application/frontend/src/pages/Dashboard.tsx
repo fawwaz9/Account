@@ -30,6 +30,11 @@ export default function Dashboard() {
           <h2>Budget</h2>
           <p>Review budgets and manage your spending.</p>
         </button>
+
+        <button type="button" className="widget action-widget" onClick={() => navigate("/settings")}>
+          <h2>Settings</h2>
+          <p>Manage your account and sign-in methods.</p>
+        </button>
       </div>
     </div>
   );
