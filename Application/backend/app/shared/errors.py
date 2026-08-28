@@ -21,6 +21,14 @@ error_auth = {
     # "wrong password" — a distinct message for each would turn the login
     # endpoint into an account-enumeration oracle.
     "invalid_credentials": "Invalid email or password",
+    # Registration inherently reveals that an address is taken, so naming the
+    # provider costs no extra information and saves the user a dead end.
+    "use_google": (
+        "This email is already registered with Google. Sign in with Google, "
+        "then add a password from your account settings."
+    ),
+    "wrong_current_password": "Current password is incorrect",
+    "current_password_required": "Current password is required to change an existing password",
 }
 
 responses = {
@@ -34,7 +42,8 @@ responses = {
     "grade_both": {404: {"description": error_grade["not_found"]}, 400: {"description": error_grade["invalid_data"]}},
     "user_both": {404: {"description": error_user["not_found"]}, 400: {"description": error_user["invalid_data"]}},
     "auth_401": {401: {"description": error_auth["invalid_credentials"]}},
-    "auth_409": {400: {"description": error_user["already_exists"]}}
+    "auth_409": {400: {"description": error_user["already_exists"]}},
+    "auth_password": {400: {"description": error_auth["wrong_current_password"]}}
 }
 
 weight_error = {

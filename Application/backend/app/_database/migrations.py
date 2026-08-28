@@ -17,7 +17,16 @@ from app._database.db import engine
 ADDED_COLUMNS: dict[str, dict[str, str]] = {
     "users": {
         "password_hash": "VARCHAR",
+        "email_verified": "BOOLEAN NOT NULL DEFAULT 0",
     },
+}
+
+# Run once, immediately after the named column is first added, to give existing
+# rows a sensible value. Keyed by column so it cannot fire twice.
+BACKFILLS: dict[str, str] = {
+    # Every pre-existing Google account had its address vouched for by Google
+    # at signup, before this column existed.
+    "email_verified": "UPDATE users SET email_verified = 1 WHERE google_id IS NOT NULL",
 }
 
 
@@ -38,3 +47,6 @@ def ensure_schema() -> None:
             for name, ddl in missing.items():
                 # Identifiers come from the literal dict above, never user input.
                 connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
+                backfill = BACKFILLS.get(name)
+                if backfill is not None:
+                    connection.execute(text(backfill))

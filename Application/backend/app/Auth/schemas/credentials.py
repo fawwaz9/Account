@@ -52,3 +52,21 @@ class LoginRequest(BaseModel):
         # Deliberately lenient: login must not reveal, through a 422, whether
         # a given address is well-formed differently from how it was stored.
         return value.strip().lower()
+
+
+class SetPasswordRequest(BaseModel):
+    """Add a first password, or change an existing one, while signed in."""
+
+    new_password: str = Field(
+        ...,
+        description=f"At least {MIN_PASSWORD_LENGTH} characters, at most {MAX_PASSWORD_BYTES} bytes",
+    )
+    current_password: str | None = Field(
+        default=None,
+        description="Required only when the account already has a password",
+    )
+
+    @field_validator("new_password")
+    @classmethod
+    def check_new_password(cls, value: str) -> str:
+        return validate_password(value)

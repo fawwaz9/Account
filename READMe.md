@@ -110,7 +110,7 @@ users ──< courses ──< grades
 
 | Table | Notes |
 |---|---|
-| `users` | UUID PK, unique `email` and `google_id`, `auth_provider` (`google` \| `local`), `password_hash` (bcrypt; NULL for Google users) |
+| `users` | UUID PK, unique `email` and `google_id`, `auth_provider` (how it was created), `password_hash` (bcrypt; NULL until one is set), `email_verified` |
 | `courses` | UUID PK, `code`, `name`, `semester`, `year`, `credits`, `required`, `professor`, `final_grade`, `average`, optional `start_date`/`end_date` |
 | `course_category_weights` | One row per (course, category) — the normalized form of the `category_weights` dict |
 | `grades` | `name`, `category`, `score` (nullable), `max_score`, `weight` copied from the course's category weight |
@@ -164,12 +164,36 @@ Two providers, one session format. Both routes return the same `TokenResponse`,
 so everything downstream — `get_current_user_id`, `VerifiedUserId`, the
 frontend's bearer header — is provider-agnostic.
 
-| Route | Body | Success |
-|---|---|---|
-| `POST /api/auth/google` | `{ id_token }` | 200 + JWT |
-| `POST /api/auth/register` | `{ name, email, password }` | 201 + JWT |
-| `POST /api/auth/login` | `{ email, password }` | 200 + JWT |
+| Route | Auth | Body | Success |
+|---|---|---|---|
+| `POST /api/auth/google` | — | `{ id_token }` | 200 + JWT |
+| `POST /api/auth/register` | — | `{ name, email, password }` | 201 + JWT |
+| `POST /api/auth/login` | — | `{ email, password }` | 200 + JWT |
+| `POST /api/auth/password` | bearer | `{ new_password, current_password? }` | 204 |
 
+**One account, both sign-in methods.** Signing in with Google on an address that
+already has a local account links the two rather than erroring — same user id,
+same courses. `/me` reports `has_password` and `has_google` so the UI can show
+what the account can actually use; `auth_provider` records only how it was
+first created.
+
+To go the other direction, a Google-only account adds a password through
+`POST /api/auth/password` **while signed in**. Registration onto an address
+that already belongs to a Google account is refused, because letting an
+unauthenticated caller attach a password to an existing account is account
+takeover by anyone who knows the address.
+
+- **Linking drops an unproven password.** Local signup cannot verify an address
+  (there is no verification email yet), so a password on an unverified account
+  proves nothing about who owns the mailbox — someone could register
+  `victim@example.com` before the real owner ever signs in with Google and keep
+  access afterwards. This is account pre-hijacking. Google's assertion settles
+  ownership, so on link the unverified account's password is cleared and
+  `email_verified` is set; the owner sets a new one from account settings.
+  An already-verified account keeps its password.
+- **Changing a password requires the current one**, so a stolen session cannot
+  silently lock the owner out. An account with no password yet can set its
+  first without that step.
 - Passwords are hashed with **bcrypt** (`Auth/services/password_service.py`).
   bcrypt rejects anything over 72 bytes outright rather than truncating, so
   that limit is enforced in the schema as a 422 instead of surfacing as a 500.
@@ -384,13 +408,11 @@ Prints every user with their course count, and every course with its per-categor
 - `features/grades/api.ts` is missing `updateCategoryWeights`, `recordGrade`, `searchCourses`, and `fetchDashboard`, even though all four backend endpoints exist. The dashboard types are already defined in `types.ts` but nothing calls the endpoint — `Dashboard.tsx` is just four navigation tiles.
 - Course search is done client-side in `useFilteredCourses`; the server-side `/courses/search` endpoint is unused.
 - `GET /api/grades/{user_id}/courses` raises 404 when a user simply has no courses, which is a legitimate empty state rather than an error.
-- **Accounts cannot be linked across providers.** Registering with an email and
-  later signing in with Google on that same address fails, because
-  `get_or_create_user_by_google_id` rejects an email already claimed by another
-  account. Linking would be safe to add (the Google path only proceeds when
-  `email_verified` is true), but it is not implemented.
-- There is no password change, password reset, or email verification flow for
-  local accounts, and no session revocation for either provider.
+- There is **no email verification flow**, so a local account's `email_verified`
+  only ever becomes true by linking Google. A real verification email would let
+  local accounts stand on their own and would remove the password-drop on link.
+- There is no password *reset* (forgot-password) flow, and no session
+  revocation for either provider — a leaked JWT stays valid for its full 7 days.
 - `axios` is a dependency but unused. `requirements.txt` looks like a full `pip freeze` and carries `firebase_admin`, `openai`, `google-cloud-storage`, `google-cloud-firestore`, and `grpcio` — none of which appear anywhere in the code.
 - `calculate_required_final` computes category averages independently of `calculate_grade_category_average`, using a plain mean of percentages rather than the point-weighted average used everywhere else — the two can disagree and should be unified.
 - `app/temp_data/store.py` and the empty `Grades/utils/errors.py`, `Users/utils/errors.py`, and `api/api.txt` are leftovers from before the database existed.

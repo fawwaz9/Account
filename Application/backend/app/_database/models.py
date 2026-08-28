@@ -18,9 +18,22 @@ class UserModel(Base):
     # bcrypt hash for the local provider; NULL for Google-authenticated
     # users, who have no password of ours to check.
     password_hash = Column(String, nullable=True)
+    # How the account was first created. Once providers are linked, use the
+    # has_* properties below to ask what the account can actually sign in with.
     auth_provider = Column(String, nullable=False, default="google")
+    # True once an identity provider has vouched for the address. Google sets
+    # it; local signup cannot, since there is no verification email yet.
+    email_verified = Column(Boolean, nullable=False, default=False)
 
     courses = relationship("CourseModel", back_populates="user", cascade=cascade)
+
+    @property
+    def has_password(self) -> bool:
+        return self.password_hash is not None
+
+    @property
+    def has_google(self) -> bool:
+        return self.google_id is not None
 
 
 class CourseModel(Base):

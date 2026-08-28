@@ -126,8 +126,13 @@ class UserUpdate(BaseModel):
 
 class User(UserBase):
     id: UUID = Field(default_factory=uuid4)
+    # How the account was originally created. Ask has_password / has_google
+    # for what it can actually sign in with today.
     auth_provider: AuthProvider = AuthProvider.GOOGLE
     google_id: str | None = None
+    email_verified: bool = False
+    has_password: bool = False
+    has_google: bool = False
     preferences: UserPreferences = Field(default_factory=UserPreferences)
     created_at: datetime | None = None
 
