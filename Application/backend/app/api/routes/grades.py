@@ -1,5 +1,5 @@
 from uuid import UUID
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from fastapi import HTTPException
 from app._database.dependencies import DBSession
 from app.Auth.services.access import VerifiedUserId
@@ -45,8 +45,8 @@ def get_courses(user_id: VerifiedUserId, db: DBSession):
     courses = get_all_courses(db, user_id)
     if courses is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
-    if not courses:
-        raise HTTPException(status_code=404, detail="No courses found")
+    # An account with no courses yet is an empty collection, not an error --
+    # the UI has an empty state for exactly this and never got to show it.
     return courses
 
 @router.post("/{user_id}/courses", response_model=CourseDetail, responses={404: {"description": error_course["not_found"]}, 400: {"description": error_course["already_exists"]}})
@@ -62,7 +62,11 @@ def add_course(user_id: VerifiedUserId, course: CourseCreate, db: DBSession):
     return new_course
 
 @router.get("/{user_id}/courses/search", response_model=list[Course], responses=responses["user_404"])
-def search_course_list(user_id: VerifiedUserId, query: str, db: DBSession):
+def search_course_list(
+    user_id: VerifiedUserId,
+    db: DBSession,
+    query: str = Query(..., min_length=1, max_length=100),
+):
     courses = search_courses(db, user_id, query)
     if courses is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
@@ -71,7 +75,14 @@ def search_course_list(user_id: VerifiedUserId, query: str, db: DBSession):
 
 @router.get("/{user_id}/courses/{course_id}", response_model=CourseDetail, responses=responses["course_404"])
 def get_single_course(user_id: VerifiedUserId, course_id: UUID, db: DBSession):
-    course = get_course(db, user_id, course_id)
+    # get_course recomputes the average, which raises if stored category
+    # weights sum past 100. Without this guard that surfaced as a 500, while
+    # the sibling /average route already returned 400 for the same cause.
+    try:
+        course = get_course(db, user_id, course_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     if course is None:
         raise HTTPException(status_code=404, detail=error_course["not_found"])
 

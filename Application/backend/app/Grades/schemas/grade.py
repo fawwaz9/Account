@@ -5,7 +5,10 @@ from app.Grades.utils.enums import GradeCategory
 
 class GradeBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, description="The name of the grade (e.g., Midterm Exam, Final Project)")
-    score: float = Field(..., ge=0, description="The score obtained for the grade")
+    # Optional so an assignment can be added before it has been marked. Every
+    # averaging function already skips grades whose score is None, and the
+    # column is nullable; only this schema was forcing a score up front.
+    score: float | None = Field(default=None, ge=0, description="The score obtained, or null if not yet graded")
     max_score: float = Field(..., gt=0, description="The maximum possible score for the grade")
     category: GradeCategory = Field(..., description="The category of the grade (e.g., Assignment, Lab, Quiz, etc.)")
 
@@ -13,8 +16,8 @@ class GradeBase(BaseModel):
     def validate_grade_logic(self):
         if self.name.strip() == "":
             raise ValueError("Grade name cannot be empty")
-        if self.category not in GradeCategory or self.category is None:
-            raise ValueError("Invalid grade category")
+        if self.score is not None and self.score > self.max_score:
+            raise ValueError("Score cannot be greater than max score")
 
         return self
  

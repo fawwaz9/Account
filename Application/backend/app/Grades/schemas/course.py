@@ -45,9 +45,6 @@ class CourseBase(BaseModel):
         if self.name.strip() == "":
             raise ValueError("course name cannot be empty")
 
-        if self.final_grade > 0 and self.final_grade < 0:
-            raise ValueError("invalid final grade")
-
         self.category_weights = normalize_category_weights(self.category_weights)
         return self
 

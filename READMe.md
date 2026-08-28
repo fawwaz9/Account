@@ -404,18 +404,36 @@ Prints every user with their course count, and every course with its per-categor
 - `AcademicStatus` schemas exist but have no model, service, or route.
 
 ### Wired but incomplete
-- **Tailwind is declared but never active.** `package.json` lists `tailwindcss` and `@tailwindcss/vite`, and `globals.css` starts with `@import "tailwindcss"`, but there is **no `vite.config.ts`** anywhere in the frontend — so the plugin is never registered and the Tailwind utility classes used in `GradesPage.tsx` (`rounded-lg`, `bg-slate-900`, …) are inert. Either add a Vite config that registers the plugin, or drop the classes in favour of the existing CSS-variable stylesheets.
+- **Tailwind is declared but never active.** `package.json` lists `tailwindcss` and
+  `@tailwindcss/vite`, and `globals.css` starts with `@import "tailwindcss"`, but there
+  is **no `vite.config.ts`** anywhere in the frontend, so the plugin is never registered.
+  Vite still resolves the import and ships ~31 KB of Tailwind's theme variables, but
+  generates **no utility classes** — every Tailwind class in `GradesPage.tsx`
+  (`rounded-lg`, `bg-slate-900`, …) is inert.
+
+  This is deliberately left as-is because both fixes change something visible.
+  Registering the plugin would also switch on Tailwind's Preflight reset, which
+  rewrites default margins, headings, and list styles across an app whose CSS was
+  written assuming browser defaults — likely reworking the whole look, not just the
+  Grades page. Deleting the `@import` and the two dependencies drops the 31 KB and
+  keeps the current appearance, but abandons Tailwind. Worth a deliberate choice
+  rather than a silent one.
 - `features/grades/api.ts` is missing `updateCategoryWeights`, `recordGrade`, `searchCourses`, and `fetchDashboard`, even though all four backend endpoints exist. The dashboard types are already defined in `types.ts` but nothing calls the endpoint — `Dashboard.tsx` is just four navigation tiles.
 - Course search is done client-side in `useFilteredCourses`; the server-side `/courses/search` endpoint is unused.
-- `GET /api/grades/{user_id}/courses` raises 404 when a user simply has no courses, which is a legitimate empty state rather than an error.
 - There is **no email verification flow**, so a local account's `email_verified`
   only ever becomes true by linking Google. A real verification email would let
   local accounts stand on their own and would remove the password-drop on link.
 - There is no password *reset* (forgot-password) flow, and no session
   revocation for either provider — a leaked JWT stays valid for its full 7 days.
 - `axios` is a dependency but unused. `requirements.txt` looks like a full `pip freeze` and carries `firebase_admin`, `openai`, `google-cloud-storage`, `google-cloud-firestore`, and `grpcio` — none of which appear anywhere in the code.
-- `calculate_required_final` computes category averages independently of `calculate_grade_category_average`, using a plain mean of percentages rather than the point-weighted average used everywhere else — the two can disagree and should be unified.
 - `app/temp_data/store.py` and the empty `Grades/utils/errors.py`, `Users/utils/errors.py`, and `api/api.txt` are leftovers from before the database existed.
+
+### Data integrity
+Grade `score` is nullable, so an assignment can be added before it is marked;
+every averaging function already skipped `None` scores. A score above its
+`max_score` is rejected on create, on partial update, and on the
+`/score` shortcut — the update paths check after applying changes, since a
+partial update can raise the score or lower `max_score` independently.
 
 ### Schema migrations
 There is no Alembic. `Base.metadata.create_all` only creates missing *tables* —

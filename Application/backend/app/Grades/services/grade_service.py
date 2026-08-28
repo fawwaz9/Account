@@ -113,6 +113,11 @@ def update_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id
         weights = course.category_weights
         grade.weight = weights.get(grade.category, 0.0)
 
+    # A partial update can raise the score or lower max_score independently, so
+    # the pair is only checkable after both have been applied.
+    if grade.score is not None and grade.score > grade.max_score:
+        raise ValueError("Score cannot be greater than max score")
+
     course.average = calculate_current_average(course)
     db.commit()
     db.refresh(grade)
@@ -154,6 +159,8 @@ def record_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id
 
     if score < 0:
         raise ValueError("score must be a positive value")
+    if score > grade.max_score:
+        raise ValueError("Score cannot be greater than max score")
 
     grade.score = score
     course.average = calculate_current_average(course)
@@ -217,30 +224,35 @@ def calculate_required_final(db: Session, user_id: uuid.UUID, course_id: uuid.UU
     weights = course.category_weights
     final_weight = weights.get(GradeCategory.FINAL.value, 0.0)
 
-    earned_categories: dict[str, list[float]] = {}
-    for grade in course.grades:
-        if grade.category == GradeCategory.FINAL.value or grade.score is None or grade.max_score == 0:
-            continue
-
-        earned_categories.setdefault(grade.category, []).append(
-            (grade.score / grade.max_score) * 100
-        )
+    # Which non-final categories have at least one marked grade. The averages
+    # themselves come from calculate_grade_category_average so this prediction
+    # agrees with the average shown on the course; computing a plain mean of
+    # percentages here made the two disagree whenever a category mixed
+    # assignments of different sizes (5/10 and 90/100 gave 70% here but 86.36%
+    # on the course page).
+    graded_categories = {
+        grade.category
+        for grade in course.grades
+        if grade.category != GradeCategory.FINAL.value
+        and grade.score is not None
+        and grade.max_score > 0
+    }
 
     if final_weight == 0:
         raise ValueError("Course has no final exam.")
 
     earned_weighted_sum = sum(
-        (sum(scores) / len(scores)) * weights.get(category, 0.0)
-        for category, scores in earned_categories.items()
+        calculate_grade_category_average(course, category) * weights.get(category, 0.0)
+        for category in graded_categories
     )
-    graded_weight = sum(weights.get(category, 0.0) for category in earned_categories)
+    graded_weight = sum(weights.get(category, 0.0) for category in graded_categories)
 
     unfinished_categories = [
         category for category, weight in weights.items()
         if (
             category != GradeCategory.FINAL.value
             and weight > 0
-            and category not in earned_categories
+            and category not in graded_categories
         )
     ]
     counted_weight = graded_weight + final_weight

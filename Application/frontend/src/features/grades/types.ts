@@ -66,7 +66,8 @@ export interface CourseUpdate{
 export interface Grade {
   id: string;
   name: string;
-  score: number;
+  // null until the assignment has been marked
+  score: number | null;
   max_score: number;
   category: GradeCategory;
   weight: number;
@@ -89,7 +90,8 @@ export interface CategoryWeightsUpdate {
 
 export interface GradeCreate{
   name: string;
-  score: number;
+  // omit or send null to add an assignment that is not graded yet
+  score: number | null;
   max_score: number;
   category: GradeCategory;
 }

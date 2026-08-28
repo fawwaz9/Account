@@ -208,7 +208,7 @@ export default function CourseDetailPage() {
         className="finalGradeButton"
         onClick={handleFinalClick}
       >
-        {finalGrade ? `Final: ${finalGrade.score}/${finalGrade.max_score}` : "Add Final Grade"}
+        {finalGrade ? `Final: ${finalGrade.score ?? "-"}/${finalGrade.max_score}` : "Add Final Grade"}
       </button>
 
       <div className="flex gap-3">
