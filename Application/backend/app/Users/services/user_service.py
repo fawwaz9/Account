@@ -3,6 +3,12 @@ from uuid import UUID, uuid4
 from sqlalchemy.orm import Session
 
 from app._database.models import UserModel
+from app.Auth.schemas.credentials import RegisterRequest
+from app.Auth.services.password_service import (
+    burn_one_verification,
+    hash_password,
+    verify_password,
+)
 from app.shared.errors import error_user
 from app.Users.schemas.user import AuthProvider, UserCreate, UserUpdate
 
@@ -17,7 +23,7 @@ def create_user(db: Session, user_data: UserCreate):
         name=user_data.name,
         email=user_data.email,
         google_id=user_data.google_id,
-        auth_provider=AuthProvider.GOOGLE,
+        auth_provider=AuthProvider.GOOGLE.value,
     )
     db.add(user)
     db.commit()
@@ -31,6 +37,46 @@ def get_all_users(db: Session):
 
 def get_user(db: Session, user_id: UUID):
     return db.query(UserModel).filter(UserModel.id == user_id).first()
+
+
+def get_user_by_email(db: Session, email: str):
+    return db.query(UserModel).filter(UserModel.email.ilike(email)).first()
+
+
+def create_local_user(db: Session, data: RegisterRequest):
+    """Register an email + password account."""
+    if get_user_by_email(db, data.email) is not None:
+        raise ValueError(error_user["already_exists"])
+
+    user = UserModel(
+        id=uuid4(),
+        name=data.name,
+        email=data.email,
+        google_id=None,
+        auth_provider=AuthProvider.LOCAL.value,
+        password_hash=hash_password(data.password),
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def authenticate_local_user(db: Session, email: str, password: str):
+    """Return the user for valid credentials, otherwise None.
+
+    The caller must not distinguish the failure cases in its response. An
+    unregistered address, a Google-only account, and a wrong password all
+    return None, and the no-account path still spends a bcrypt verification
+    so the three take comparable time.
+    """
+    user = get_user_by_email(db, email)
+    if user is None or not user.password_hash:
+        burn_one_verification()
+        return None
+    if not verify_password(password, user.password_hash):
+        return None
+    return user
 
 
 def get_user_by_google_id(db: Session, google_id: str):

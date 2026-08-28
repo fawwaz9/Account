@@ -21,7 +21,7 @@ BACKEND="$APP_DIR/backend"
 FRONTEND="$APP_DIR/frontend"
 VENV="$BACKEND/.venv"
 
-BACKEND_PORT="${BACKEND_PORT:-8000}"
+BACKEND_PORT="${BACKEND_PORT:-8001}"
 FRONTEND_PORT="${FRONTEND_PORT:-5173}"
 
 # ---------------------------------------------------------------- output ----

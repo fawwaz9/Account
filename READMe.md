@@ -44,7 +44,7 @@ The project is built around UBC-specific context: UBC does not use a GPA scale, 
 | ORM | **SQLAlchemy** 2.0 |
 | Database | **SQLite** (`Application/backend/data/app.db`) |
 | Validation | **Pydantic v2** + `pydantic-settings` |
-| Auth | **Google OAuth** (`google-auth`) → **PyJWT** bearer tokens |
+| Auth | **Google OAuth** (`google-auth`) and email + password (**bcrypt**), both issuing **PyJWT** bearer tokens |
 | Server | **uvicorn** |
 
 ### Frontend
@@ -110,7 +110,7 @@ users ──< courses ──< grades
 
 | Table | Notes |
 |---|---|
-| `users` | UUID PK, unique `email` and `google_id`, `auth_provider` defaults to `"google"` |
+| `users` | UUID PK, unique `email` and `google_id`, `auth_provider` (`google` \| `local`), `password_hash` (bcrypt; NULL for Google users) |
 | `courses` | UUID PK, `code`, `name`, `semester`, `year`, `credits`, `required`, `professor`, `final_grade`, `average`, optional `start_date`/`end_date` |
 | `course_category_weights` | One row per (course, category) — the normalized form of the `category_weights` dict |
 | `grades` | `name`, `category`, `score` (nullable), `max_score`, `weight` copied from the course's category weight |
@@ -125,7 +125,7 @@ Every router is mounted under `/api`, and every route except `POST /api/auth/goo
 
 | Router | Base path | State |
 |---|---|---|
-| Auth | `/api/auth` | `POST /google` — exchange a Google ID token for a 7-day app JWT |
+| Auth | `/api/auth` | `POST /google`, `POST /register`, `POST /login` — all return the same 7-day app JWT |
 | Users | `/api/users` | `GET /me`, `GET/PATCH/DELETE /{user_id}` |
 | Grades | `/api/grades` | Full CRUD — see below |
 | Calendar | `/api/calendar` | `GET /{user_id}/events` — **returns a hardcoded sample event** |
@@ -157,6 +157,34 @@ PATCH  /courses/{course_id}/grades/{grade_id}/score?score=
 ```
 
 Direct user creation/listing endpoints were deliberately **removed** — Google OAuth is the only supported path for creating or identifying a user, since exposing raw user CRUD was a security risk.
+
+### Authentication
+
+Two providers, one session format. Both routes return the same `TokenResponse`,
+so everything downstream — `get_current_user_id`, `VerifiedUserId`, the
+frontend's bearer header — is provider-agnostic.
+
+| Route | Body | Success |
+|---|---|---|
+| `POST /api/auth/google` | `{ id_token }` | 200 + JWT |
+| `POST /api/auth/register` | `{ name, email, password }` | 201 + JWT |
+| `POST /api/auth/login` | `{ email, password }` | 200 + JWT |
+
+- Passwords are hashed with **bcrypt** (`Auth/services/password_service.py`).
+  bcrypt rejects anything over 72 bytes outright rather than truncating, so
+  that limit is enforced in the schema as a 422 instead of surfacing as a 500.
+  Minimum length is 8 characters.
+- `password_hash` is NULL for Google users. A Google-only account attempting a
+  password login is rejected exactly like a wrong password.
+- **Login never reveals whether an address is registered.** A missing account,
+  a Google-only account, and a wrong password all return the same
+  `401 Invalid email or password`, and the no-account path still spends a
+  bcrypt verification so the responses take comparable time.
+- Emails are normalized (trimmed, lower-cased, format-checked) on the way in,
+  so casing cannot produce two accounts for one address.
+- `GET /api/users/me` declares `response_model=User`. This is load-bearing —
+  without it FastAPI serializes the raw ORM row, which now includes
+  `password_hash`.
 
 ### Frontend layout
 
@@ -354,11 +382,30 @@ Prints every user with their course count, and every course with its per-categor
 - **Tailwind is declared but never active.** `package.json` lists `tailwindcss` and `@tailwindcss/vite`, and `globals.css` starts with `@import "tailwindcss"`, but there is **no `vite.config.ts`** anywhere in the frontend — so the plugin is never registered and the Tailwind utility classes used in `GradesPage.tsx` (`rounded-lg`, `bg-slate-900`, …) are inert. Either add a Vite config that registers the plugin, or drop the classes in favour of the existing CSS-variable stylesheets.
 - `features/grades/api.ts` is missing `updateCategoryWeights`, `recordGrade`, `searchCourses`, and `fetchDashboard`, even though all four backend endpoints exist. The dashboard types are already defined in `types.ts` but nothing calls the endpoint — `Dashboard.tsx` is just four navigation tiles.
 - Course search is done client-side in `useFilteredCourses`; the server-side `/courses/search` endpoint is unused.
-- `GET /api/users/me` has no `response_model`, so it serializes the raw SQLAlchemy row including `google_id`.
 - `GET /api/grades/{user_id}/courses` raises 404 when a user simply has no courses, which is a legitimate empty state rather than an error.
+- **Accounts cannot be linked across providers.** Registering with an email and
+  later signing in with Google on that same address fails, because
+  `get_or_create_user_by_google_id` rejects an email already claimed by another
+  account. Linking would be safe to add (the Google path only proceeds when
+  `email_verified` is true), but it is not implemented.
+- There is no password change, password reset, or email verification flow for
+  local accounts, and no session revocation for either provider.
 - `axios` is a dependency but unused. `requirements.txt` looks like a full `pip freeze` and carries `firebase_admin`, `openai`, `google-cloud-storage`, `google-cloud-firestore`, and `grpcio` — none of which appear anywhere in the code.
 - `calculate_required_final` computes category averages independently of `calculate_grade_category_average`, using a plain mean of percentages rather than the point-weighted average used everywhere else — the two can disagree and should be unified.
 - `app/temp_data/store.py` and the empty `Grades/utils/errors.py`, `Users/utils/errors.py`, and `api/api.txt` are leftovers from before the database existed.
+
+### Schema migrations
+There is no Alembic. `Base.metadata.create_all` only creates missing *tables* —
+it never alters an existing one — so columns added later are applied by
+`app/_database/migrations.py`, which runs on startup and is idempotent. Anything
+beyond adding a nullable column (renames, type changes, backfills) will need a
+real migration tool.
+
+Note also that `DATABASE_URL` now defaults to an absolute path anchored to the
+backend directory (`backend/data/app.db`). It previously defaulted to
+`sqlite:///./app.db`, which resolved against whatever directory uvicorn was
+started from, so a local run and `docker-compose` (which bind-mounts
+`backend/data`) silently used two different database files.
 
 ### Repository hygiene
 `node_modules` was committed before `.gitignore` existed, so **1150 of the repo's 1278 tracked files are dependencies**. Compiled `__pycache__/*.pyc` files and the built `frontend/dist/` output are also tracked. `.gitignore` currently covers only `node_modules` and `.env`; it should also cover `__pycache__/`, `*.pyc`, `dist/`, `.DS_Store`, and `data/*.db`, and the already-tracked files need `git rm -r --cached` to stop being versioned.
@@ -372,7 +419,7 @@ Prints every user with their course count, and every course with its per-categor
 | Issue | Severity | Impact |
 |---|---|---|
 | JWT stored in `sessionStorage` | Critical | Any XSS steals a token valid for 7 days; the backend has no revocation or refresh mechanism |
-| No rate limiting on `POST /api/auth/google` | High | Unlimited token-verification attempts |
+| No rate limiting on `/api/auth/login`, `/register`, or `/google` | High | `/login` now accepts unlimited password guesses; bcrypt's cost is the only brake |
 | Cascading hard deletes, no soft delete or audit trail | High | An account compromise permanently destroys all course and grade history |
 | Unbounded `query` length in `search_courses` | Medium | A very large search string burns CPU; needs a length cap |
 | `allow_methods=["*"]` / `allow_headers=["*"]` with `allow_credentials=True` | Medium | Should be narrowed to the methods and headers actually used |

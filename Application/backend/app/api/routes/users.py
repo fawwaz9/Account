@@ -6,7 +6,7 @@ from app.Auth.services.access import VerifiedUserId
 from app.Auth.dependencies import CurrentUser
 from app._database.dependencies import DBSession
 from app.shared.errors import error_user, responses
-from app.Users.schemas.user import UserDetail, UserUpdate
+from app.Users.schemas.user import User, UserDetail, UserUpdate
 from app.Users.services.user_service import (
     delete_user,
     get_user,
@@ -15,7 +15,9 @@ from app.Users.services.user_service import (
 
 router = APIRouter()
 
-@router.get("/me")
+# response_model is load-bearing: without it FastAPI serializes the raw
+# SQLAlchemy row, which now includes password_hash.
+@router.get("/me", response_model=User)
 def get_me(current_user: CurrentUser):
     return current_user
 

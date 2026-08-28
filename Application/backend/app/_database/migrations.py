@@ -1,0 +1,40 @@
+"""Additive schema fixes for databases created before a column existed.
+
+``Base.metadata.create_all`` only ever creates missing *tables* — it will not
+alter one that already exists. An existing ``data/app.db`` therefore keeps the
+old shape and every query touching a new column fails with
+``no such column``.
+
+Until this project adopts Alembic, new nullable columns are added here. Each
+step must be idempotent, since this runs on every startup.
+"""
+
+from sqlalchemy import inspect, text
+
+from app._database.db import engine
+
+# table -> column -> DDL type, for columns added after the table's first release
+ADDED_COLUMNS: dict[str, dict[str, str]] = {
+    "users": {
+        "password_hash": "VARCHAR",
+    },
+}
+
+
+def ensure_schema() -> None:
+    inspector = inspect(engine)
+    existing_tables = set(inspector.get_table_names())
+
+    for table, columns in ADDED_COLUMNS.items():
+        if table not in existing_tables:
+            continue  # create_all just made it with the full set
+
+        present = {column["name"] for column in inspector.get_columns(table)}
+        missing = {name: ddl for name, ddl in columns.items() if name not in present}
+        if not missing:
+            continue
+
+        with engine.begin() as connection:
+            for name, ddl in missing.items():
+                # Identifiers come from the literal dict above, never user input.
+                connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))

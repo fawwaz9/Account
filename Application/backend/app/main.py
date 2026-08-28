@@ -5,9 +5,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import calender, finances, grades, tasks, users, auth
 from app._database.db import Base, engine
 from app._database import models
+from app._database.migrations import ensure_schema
 
 app = FastAPI()
 Base.metadata.create_all(bind=engine)
+ensure_schema()
 
 allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
 

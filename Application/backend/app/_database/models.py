@@ -15,6 +15,9 @@ class UserModel(Base):
     name = Column(String, nullable=False)
     email = Column(String, nullable=False, unique=True)
     google_id = Column(String, nullable=True, unique=True)
+    # bcrypt hash for the local provider; NULL for Google-authenticated
+    # users, who have no password of ours to check.
+    password_hash = Column(String, nullable=True)
     auth_provider = Column(String, nullable=False, default="google")
 
     courses = relationship("CourseModel", back_populates="user", cascade=cascade)

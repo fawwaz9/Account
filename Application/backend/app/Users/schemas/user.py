@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from enum import Enum
 from uuid import UUID, uuid4
@@ -6,6 +7,24 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.Grades.schemas.course import CourseDetail
+
+# Bounded by the max_length=255 on every email field, so the alternation
+# cannot be driven into pathological backtracking.
+EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def normalize_email(value: str) -> str:
+    """Trim, lower-case, and sanity-check an email address.
+
+    Email is the login identifier for the local auth provider, so it is
+    normalized on the way in. Lookups also use ILIKE, but storing a single
+    canonical form keeps 'A@b.com' and 'a@b.com' from reading as two
+    different accounts anywhere else in the app.
+    """
+    email = value.strip().lower()
+    if not EMAIL_PATTERN.match(email):
+        raise ValueError("Invalid email address")
+    return email
 
 
 class WeekStart(str, Enum):
@@ -65,17 +84,25 @@ class UserBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     email: str = Field(..., min_length=3, max_length=255)
 
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        return normalize_email(value)
+
     @model_validator(mode="after")
     def validate_user_logic(self):
         if self.name.strip() == "":
             raise ValueError("User name cannot be empty")
-        if "@" not in self.email or self.email.strip() == "":
-            raise ValueError("Invalid email address")
         return self
 
 
 class UserCreate(UserBase):
-    """Used for Google OAuth signup - the only supported path for now."""
+    """Google OAuth signup.
+
+    Local email + password signup goes through
+    ``app.Auth.schemas.credentials.RegisterRequest`` instead, which carries a
+    password rather than a google_id.
+    """
     google_id: str = Field(..., min_length=1)
     preferences: UserPreferences = Field(default_factory=UserPreferences)
 
@@ -85,12 +112,15 @@ class UserUpdate(BaseModel):
     email: str | None = Field(default=None, min_length=3, max_length=255)
     preferences: UserPreferences | None = None
 
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str | None) -> str | None:
+        return None if value is None else normalize_email(value)
+
     @model_validator(mode="after")
     def validate_user_update(self):
         if self.name is not None and self.name.strip() == "":
             raise ValueError("User name cannot be empty")
-        if self.email is not None and ("@" not in self.email or self.email.strip() == ""):
-            raise ValueError("Invalid email address")
         return self
 
 
