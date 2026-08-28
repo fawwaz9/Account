@@ -9,6 +9,7 @@ export const endpoints = {
     dashboard: (userId: string) => `grades/${userId}/grades/dashboard`,
     courseDetail: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}`,
     CategoryWeights: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/category-weights`,
+    requiredFinal: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/required-final`,
     courseGrades: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/grades`,
     gradeDetail: (userId: string, courseId: string, gradeId: string) => `grades/${userId}/courses/${courseId}/grades/${gradeId}`,
   },

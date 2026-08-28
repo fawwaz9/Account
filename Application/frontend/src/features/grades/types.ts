@@ -95,6 +95,16 @@ export enum GradeCategory {
   FINAL = "Final"
 }
 
+/** Answer from the "what do I need on the final" calculation. */
+export interface RequiredFinal {
+  /** Score needed on the final, as a percentage. Can fall outside 0-100. */
+  needed: number;
+  /** False when `needed` is unreachable — above 100 or already below 0. */
+  possible: boolean;
+  /** Weighted categories with no marks yet, which the figure does not count. */
+  unfinished_categories: string[];
+}
+
 export interface CategoryWeightsUpdate {
   category_weights: Partial<Record<GradeCategory, number>>;
 }

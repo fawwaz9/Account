@@ -111,15 +111,3 @@
 }
 
 .summaryCourses p { margin: 0; font-size: 0.9rem; }
-
-.summaryNeeds h3 {
-  margin: 0 0 6px;
-  font-size: 0.8rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-  font-weight: 500;
-}
-
-.summaryNeeds ul { margin: 0; padding-left: 18px; font-size: 0.9rem; }
-.summaryNeeds li { margin-bottom: 2px; }

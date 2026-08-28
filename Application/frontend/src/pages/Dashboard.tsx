@@ -68,20 +68,6 @@ export default function Dashboard() {
               </p>
             </div>
           )}
-
-          {summary.courses_needing_final_score.length > 0 && (
-            <div className="summaryNeeds">
-              <h3>To reach 90%</h3>
-              <ul>
-                {summary.courses_needing_final_score.map((course) => (
-                  <li key={course.course_id}>
-                    {course.course_code} needs{" "}
-                    <strong>{course.needed_final_score}</strong> on the final
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
         </section>
       )}
 

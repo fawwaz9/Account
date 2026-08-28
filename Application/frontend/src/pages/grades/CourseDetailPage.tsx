@@ -7,6 +7,7 @@ import AddGradeModal from "../../features/grades/components/AddGradeModal";
 import EditGradeModal from "../../features/grades/components/EditGradeModal";
 import EditCourseModal from "../../features/grades/components/EditCourseModal";
 import DeleteConfirmModal from "../../features/grades/components/DeleteConfirmModal";
+import RequiredFinalModal from "../../features/grades/components/RequiredFinalModal";
 import { getErrorMessage } from "../../features/grades/components/AddCourseModal";
 import GradeCategoryColumn from "../../features/grades/components/GradeCategoryColumn";
 
@@ -20,6 +21,7 @@ export default function CourseDetailPage() {
   const [addGradeCategory, setAddGradeCategory] = useState<GradeCategory | null>(null);
   const [editGrade, setEditGrade] = useState<Grade | null>(null);
   const [editingCourse, setEditingCourse] = useState(false);
+  const [showRequiredFinal, setShowRequiredFinal] = useState(false);
 
   const [deleteGradeTarget, setDeleteGradeTarget] = useState<Grade | null>(null);
   const [deletingGrade, setDeletingGrade] = useState(false);
@@ -209,13 +211,23 @@ export default function CourseDetailPage() {
         ))}
       </div>
 
-      <button
-        type="button"
-        className="finalGradeButton"
-        onClick={handleFinalClick}
-      >
-        {finalGrade ? `Final: ${finalGrade.score ?? "-"}/${finalGrade.max_score}` : "Add Final Grade"}
-      </button>
+      <div className="finalGradeActions">
+        <button
+          type="button"
+          className="finalGradeButton"
+          onClick={handleFinalClick}
+        >
+          {finalGrade ? `Final: ${finalGrade.score ?? "-"}/${finalGrade.max_score}` : "Add Final Grade"}
+        </button>
+
+        <button
+          type="button"
+          className="requiredFinalButton"
+          onClick={() => setShowRequiredFinal(true)}
+        >
+          Required Final Grade
+        </button>
+      </div>
 
       <div className="flex gap-3">
         <button
@@ -260,6 +272,13 @@ export default function CourseDetailPage() {
         course={course}
         onClose={() => setEditingCourse(false)}
         onCourseUpdated={refreshCourse}
+      />
+
+      <RequiredFinalModal
+        open={showRequiredFinal}
+        courseId={courseId}
+        courseCode={course.code}
+        onClose={() => setShowRequiredFinal(false)}
       />
 
       <DeleteConfirmModal

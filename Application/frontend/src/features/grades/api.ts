@@ -9,6 +9,7 @@ import {
   Grade,
   GradeCreate,
   GradeUpdate,
+  RequiredFinal,
   UserGradeDashboard,
 } from "./types";
 
@@ -87,5 +88,16 @@ export async function recordGrade(
 export async function searchCourses(userId: string, query: string) {
   return get<Course[]>(
     `${endpoints.grades.courses(userId)}/search?query=${encodeURIComponent(query)}`
+  );
+}
+
+/** What score is needed on the final to finish the course at `targetGrade`. */
+export async function fetchRequiredFinal(
+  userId: string,
+  courseId: string,
+  targetGrade: number
+) {
+  return get<RequiredFinal>(
+    `${endpoints.grades.requiredFinal(userId, courseId)}?target_grade=${targetGrade}`
   );
 }
