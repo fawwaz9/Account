@@ -3,14 +3,15 @@
 # dev.run.sh — launch the Account app for local development.
 #
 #   ./dev.run.sh             start backend + frontend together (default)
-#   ./dev.run.sh backend     backend only  — uvicorn on :8000
-#   ./dev.run.sh frontend    frontend only — vite on :5173
+#   ./dev.run.sh backend     backend only  (uvicorn)
+#   ./dev.run.sh frontend    frontend only (vite)
 #   ./dev.run.sh docker      full stack via docker compose
 #   ./dev.run.sh install     install/refresh dependencies, then exit
 #   ./dev.run.sh --help
 #
-# Dependencies are installed on first run and skipped afterwards. Ctrl+C
-# stops every service it started.
+# Each service prints its URL on startup. Override a port with BACKEND_PORT or
+# FRONTEND_PORT. Dependencies are installed on first run and skipped
+# afterwards. Ctrl+C stops every service it started.
 
 set -euo pipefail
 set -m   # job control: each service gets its own process group, so a single

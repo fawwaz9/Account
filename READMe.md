@@ -321,14 +321,15 @@ colour-coded output. Ctrl+C stops everything it started.
 ```bash
 cd Application
 ./dev.run.sh              # backend + frontend
-./dev.run.sh backend      # uvicorn only, :8000
-./dev.run.sh frontend     # vite only, :5173
+./dev.run.sh backend      # uvicorn only
+./dev.run.sh frontend     # vite only
 ./dev.run.sh docker       # full stack via docker compose
 ./dev.run.sh install      # install dependencies, then exit
 ```
 
-Dependency installs are skipped on later runs unless `requirements.txt` or
-`package-lock.json` changes. Override a port with `BACKEND_PORT=8001 ./dev.run.sh`.
+Each service prints its URL on startup. Dependency installs are skipped on later
+runs unless `requirements.txt` or `package-lock.json` changes. Override a port
+with `BACKEND_PORT=8005 ./dev.run.sh`.
 
 The manual equivalents are below, if you'd rather drive the services yourself.
 
