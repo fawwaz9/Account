@@ -29,13 +29,17 @@ from app.Grades.services.grade_service import (
     update_category_weights,
     update_grade,
 )
-from app.Grades.services.dash_services import get_dashboard
+from app.Grades.services.dash_services import DEFAULT_TARGET_GRADE, get_dashboard
 
 router = APIRouter()
 
 @router.get("/{user_id}/grades/dashboard", response_model=UserGradeDashboard, responses=responses["user_404"])
-def grade_dashboard(user_id: VerifiedUserId, db: DBSession):
-    dashboard = get_dashboard(db, user_id)
+def grade_dashboard(
+    user_id: VerifiedUserId,
+    db: DBSession,
+    target_grade: float = Query(DEFAULT_TARGET_GRADE, ge=0, le=100),
+):
+    dashboard = get_dashboard(db, user_id, target_grade)
     if dashboard is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
     return dashboard
@@ -163,7 +167,12 @@ def get_course_letter_grade(user_id: VerifiedUserId, course_id: UUID, db: DBSess
     }
 
 @router.get("/{user_id}/courses/{course_id}/required-final", responses=responses["course_both"])
-def get_required_final_score(user_id: VerifiedUserId, course_id: UUID, target_grade: float, db: DBSession):
+def get_required_final_score(
+    user_id: VerifiedUserId,
+    course_id: UUID,
+    db: DBSession,
+    target_grade: float = Query(..., ge=0, le=100),
+):
     try:
         return calculate_required_final(db, user_id, course_id, target_grade)
     except ValueError as exc:

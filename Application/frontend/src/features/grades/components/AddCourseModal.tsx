@@ -20,6 +20,8 @@ const defaultForm: CourseCreate = {
   professor: "",
   final_grade: 0,
   category_weights: {},
+  start_date: null,
+  end_date: null,
 };
 
 export default function AddCourseModal({
@@ -58,18 +60,15 @@ export default function AddCourseModal({
         professor: form.professor,
         final_grade: form.final_grade,
         category_weights: fullWeights,
+        start_date: form.start_date || null,
+        end_date: form.end_date || null,
       };
       await createCourse(user.id, payload);
       setForm(defaultForm);
       onCourseAdded();
       onClose();
     } catch (err: any) {
-      const apiError =
-        err?.response?.data?.detail ||
-        err?.response?.data?.message ||
-        err?.message;
-
-      setError(getErrorMessage(apiError));
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -96,10 +95,16 @@ export default function AddCourseModal({
   );
 }
 
-export function getErrorMessage(apiError: any): string {
+export function getErrorMessage(apiError: unknown): string {
+  // apiClient throws a plain Error whose message is already the unpacked
+  // detail, so this has to come first -- JSON.stringify(new Error("x")) is "{}".
+  if (apiError instanceof Error) {
+    return apiError.message;
+  }
+
   if (Array.isArray(apiError)) {
     return apiError
-      .map((e) => e?.msg || e?.message || JSON.stringify(e))
+      .map((e: any) => e?.msg || e?.message || JSON.stringify(e))
       .join(", ");
   }
 
@@ -107,5 +112,7 @@ export function getErrorMessage(apiError: any): string {
     return JSON.stringify(apiError);
   }
 
-  return apiError || "An unexpected error occurred.";
+  return typeof apiError === "string" && apiError
+    ? apiError
+    : "An unexpected error occurred.";
 }

@@ -16,7 +16,9 @@ interface AddGradeModalProps {
 function buildDefaultForm(category: GradeCategory | null): GradeCreate {
   return {
     name: "",
-    score: 0,
+    // null, not 0: a new assignment is unmarked until it is marked, and a 0
+    // would drag the category average down as though it had been failed.
+    score: null,
     max_score: 0,
     category: category ?? GradeCategory.OTHER,
   };
@@ -51,11 +53,7 @@ export default function AddGradeModal({
       onGradeAdded();
       onClose();
     } catch (err: any) {
-      const apiError =
-        err?.response?.data?.detail ||
-        err?.response?.data?.message ||
-        err?.message;
-      setError(getErrorMessage(apiError));
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }

@@ -10,7 +10,12 @@ export function useCourses() {
   const [error, setError] = useState<string | null>(null);
 
   const loadCourses = useCallback(async () => {
-    if (!user) return;
+    // Clear loading on the way out, or a null user leaves the page stuck on
+    // "Loading courses..." forever.
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     setError(null);

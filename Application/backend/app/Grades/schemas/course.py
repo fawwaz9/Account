@@ -1,3 +1,4 @@
+from datetime import date
 from uuid import UUID, uuid4
 from typing import List
 from pydantic import BaseModel, Field, model_validator
@@ -36,7 +37,11 @@ class CourseBase(BaseModel):
     professor: str = Field(..., min_length=3, max_length=100, description="The name of the professor teaching the course")
     final_grade: float = Field(default=0.0, ge=0, le=100, description="The final grade for the course submitted by the professor")
     category_weights: dict[GradeCategory, float] = Field(default_factory=default_category_weights, description="Weights by grade category")
-    
+    # Typed as date, not str: the column is Column(Date), and Pydantic v2 will not
+    # coerce a date into a str -- it raises. Serialization still emits ISO strings.
+    start_date: date | None = Field(default=None, description="The date the course starts")
+    end_date: date | None = Field(default=None, description="The date the course ends")
+
     @model_validator(mode="after")
     def validate_course_logic(self):
         if self.code.strip() == "":
@@ -44,6 +49,9 @@ class CourseBase(BaseModel):
 
         if self.name.strip() == "":
             raise ValueError("course name cannot be empty")
+
+        if self.start_date and self.end_date and self.end_date < self.start_date:
+            raise ValueError("end date cannot be before start date")
 
         self.category_weights = normalize_category_weights(self.category_weights)
         return self
@@ -77,6 +85,8 @@ class CourseUpdate(BaseModel):
     professor: str | None = Field(default=None, min_length=3, max_length=100, description="The name of the professor teaching the course")
     final_grade: float | None = Field(default=None, ge=0, le=100, description="The final grade for the course submitted by the professor")
     category_weights: dict[GradeCategory, float] | None = Field(default=None, description="Weights by grade category")
+    start_date: date | None = Field(default=None, description="The date the course starts")
+    end_date: date | None = Field(default=None, description="The date the course ends")
 
     @model_validator(mode="after")
     def validate_course_update(self):
@@ -90,6 +100,9 @@ class CourseUpdate(BaseModel):
             if total > 100:
                 raise ValueError(weight_error["invalid_weights"])
 
+        if self.start_date and self.end_date and self.end_date < self.start_date:
+            raise ValueError("end date cannot be before start date")
+
         return self
 
 class Course(CourseBase):
@@ -101,8 +114,13 @@ class Course(CourseBase):
 
 class CourseDetail(Course):
     grades: List[Grade] =  Field(default_factory=list)
-    start_date: str | None = Field(default=None, description="The start date of the course in YYYY-MM-DD format")
-    end_date: str | None = Field(default=None, description="The end date of the course in YYYY-MM-DD format")
+    # Point-weighted average per category, computed server-side so the client
+    # renders one authoritative number instead of reimplementing the formula.
+    # Defaults to empty so any path that does not populate it still serializes.
+    category_averages: dict[GradeCategory, float] = Field(
+        default_factory=dict,
+        description="Current average per category, 0-100",
+    )
 
     class Config:
         from_attributes = True

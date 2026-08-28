@@ -18,7 +18,7 @@ interface EditGradeModalProps {
 function buildFormFromGrade(grade: Grade | null) {
   return {
     name: grade?.name ?? "",
-    score: grade?.score ?? 0,
+    score: grade?.score ?? null,
     max_score: grade?.max_score ?? 0,
   };
 }
@@ -64,11 +64,7 @@ export default function EditGradeModal({
       onGradeUpdated();
       onClose();
     } catch (err: any) {
-      const apiError =
-        err?.response?.data?.detail ||
-        err?.response?.data?.message ||
-        err?.message;
-      setError(getErrorMessage(apiError));
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -85,11 +81,7 @@ export default function EditGradeModal({
       onGradeDeleted();
       onClose();
     } catch (err: any) {
-      const apiError =
-        err?.response?.data?.detail ||
-        err?.response?.data?.message ||
-        err?.message;
-      setDeleteError(getErrorMessage(apiError));
+      setDeleteError(getErrorMessage(err));
     } finally {
       setDeleting(false);
     }

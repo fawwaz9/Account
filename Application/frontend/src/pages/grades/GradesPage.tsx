@@ -40,10 +40,17 @@ export default function GradesPage() {
             <div className="card">
               {loading && <p>Loading courses from backend...</p>}
               {error && <p className="muted">{error}</p>}
+              {/* Two different empties. Gating both on `courses` meant a search
+                  matching nothing rendered neither the list nor a message. */}
               {!loading && !error && courses.length === 0 && (
                 <p className="muted">No courses found yet. Use Add Course to create one.</p>
               )}
-              {!loading && !error && courses.length > 0 && <CourseList courses={filteredCourses} />}
+              {!loading && !error && courses.length > 0 && filteredCourses.length === 0 && (
+                <p className="muted">No courses match &ldquo;{searchQuery}&rdquo;.</p>
+              )}
+              {!loading && !error && filteredCourses.length > 0 && (
+                <CourseList courses={filteredCourses} />
+              )}
             </div>
 
             <button

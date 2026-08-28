@@ -11,6 +11,8 @@ export interface Course {
   final_grade: number;
   category_weights: Partial<Record<GradeCategory, number>>;
   average: number;
+  start_date: string | null;
+  end_date: string | null;
 }
 
 export enum Semester {
@@ -30,6 +32,9 @@ export interface CourseCreate {
   professor: string;
   final_grade: number;
   category_weights: Partial<Record<GradeCategory, number>>;
+  // ISO yyyy-mm-dd, or null for a course with no set term dates
+  start_date: string | null;
+  end_date: string | null;
 }
 
 export interface CourseDetail {
@@ -47,6 +52,10 @@ export interface CourseDetail {
   grades: Grade[];
   start_date: string | null;
   end_date: string | null;
+  // Point-weighted average per category, computed by the API. Render these
+  // rather than recomputing -- the component used to do its own arithmetic and
+  // disagreed with the course average on the same screen.
+  category_averages: Partial<Record<GradeCategory, number>>;
 }
 
 export interface CourseUpdate{
@@ -59,6 +68,8 @@ export interface CourseUpdate{
   professor: string | null;
   final_grade: number | null;
   category_weights: Partial<Record<GradeCategory, number>> | null;
+  start_date: string | null;
+  end_date: string | null;
 }
 
 
@@ -147,7 +158,10 @@ export interface UserUpdate{
 // Dashboard
 export interface UserGradeDashboard {
   total_courses: number;
+  /** Plain mean across courses */
   overall_average: number;
+  /** Credit-weighted mean */
+  cumulative_average: number;
   best_course: CourseDashboardEntry | null;
   weakest_course: CourseDashboardEntry | null;
   courses_needing_final_score: CourseNeedingFinalScore[];

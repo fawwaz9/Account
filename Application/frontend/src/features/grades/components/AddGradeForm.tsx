@@ -35,10 +35,13 @@ export default function AddGradeForm({
           id="grade-score"
           type="number"
           min={0}
-          value={form.score}
-          onChange={(event) => updateField("score", Number(event.target.value))}
+          // Number("") is 0, so clearing the box used to silently record a zero.
+          value={form.score ?? ""}
+          onChange={(event) =>
+            updateField("score", event.target.value === "" ? null : Number(event.target.value))
+          }
           className="--input mt-1 w-[45%] rounded-lg border border-slate-700 bg-transparent px-3 py-2 text-white text-center"
-          placeholder="Score"
+          placeholder="Score (blank = not graded yet)"
           required
         />
         <input

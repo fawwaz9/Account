@@ -23,6 +23,8 @@ function buildFormFromCourse(course: CourseDetail | null): CourseCreate {
     professor: course?.professor ?? "",
     final_grade: course?.final_grade ?? 0,
     category_weights: course?.category_weights ?? {},
+    start_date: course?.start_date ?? null,
+    end_date: course?.end_date ?? null,
   };
 }
 
@@ -55,11 +57,7 @@ export default function EditCourseModal({
       onCourseUpdated();
       onClose();
     } catch (err: any) {
-      const apiError =
-        err?.response?.data?.detail ||
-        err?.response?.data?.message ||
-        err?.message;
-      setError(getErrorMessage(apiError));
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }

@@ -2,7 +2,24 @@ import uuid
 from sqlalchemy.orm import Session
 from app._database.models import CourseModel, CourseCategoryWeightModel, UserModel
 from app.Grades.schemas.course import CourseCreate, CourseUpdate
-from app.Grades.services.grade_service import calculate_current_average, update_category_weights as apply_category_weights
+from app.Grades.services.grade_service import (
+    calculate_grade_category_average,
+    update_category_weights as apply_category_weights,
+)
+
+
+def attach_category_averages(course: CourseModel) -> CourseModel:
+    """Compute the per-category averages CourseDetail exposes.
+
+    Set on the instance rather than defined as a CourseModel property because
+    models.py is imported *by* grade_service -- a property calling back into it
+    would be a circular import. This mirrors how `course.average` is attached.
+    """
+    course.category_averages = {
+        category: calculate_grade_category_average(course, category)
+        for category in course.category_weights
+    }
+    return course
 
 
 def create_course(db: Session, user_id: uuid.UUID, course_data: CourseCreate):
@@ -27,6 +44,8 @@ def create_course(db: Session, user_id: uuid.UUID, course_data: CourseCreate):
         required=course_data.required,
         professor=course_data.professor,
         final_grade=course_data.final_grade,
+        start_date=course_data.start_date,
+        end_date=course_data.end_date,
     )
     db.add(course)
     db.flush()  # gets course.id available before commit if needed
@@ -36,7 +55,7 @@ def create_course(db: Session, user_id: uuid.UUID, course_data: CourseCreate):
 
     db.commit()
     db.refresh(course)
-    return course
+    return attach_category_averages(course)
 
 
 def get_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
@@ -46,8 +65,12 @@ def get_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
     if course is None:
         return None
 
-    course.average = calculate_current_average(course)
-    return course
+    # The stored `average` column is authoritative: every write path
+    # (add_grade, update_grade, delete_grade, record_grade,
+    # update_category_weights) recomputes and commits it. Recomputing here too
+    # meant this route and the course list could return different numbers for
+    # the same course, since get_all_courses reads the stored value.
+    return attach_category_averages(course)
 
 
 def get_all_courses(db: Session, user_id: uuid.UUID):
@@ -72,7 +95,9 @@ def update_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, data: C
         apply_category_weights(db, user_id, course_id, category_weights)
         db.refresh(course)
 
-    return course
+    # db.refresh expires the instance, so recompute after the last one rather
+    # than relying on what get_course attached before the writes.
+    return attach_category_averages(course)
 
 
 def delete_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
@@ -90,11 +115,12 @@ def get_course_statistics(db: Session, user_id: uuid.UUID, course_id: uuid.UUID)
     if not course:
         return None
 
-    average = calculate_current_average(course)
     return {
         "course_id": course.id,
         "course_code": course.code,
-        "current_grade": average,
+        # Named `average` like every other route; this was the lone
+        # `current_grade` for the same value.
+        "average": course.average,
     }
 
 

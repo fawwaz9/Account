@@ -86,7 +86,7 @@ export default function AddCourseForm({
       </div>
 
       <div>
-        <label htmlFor="course-final-grade" className="block text-sm text-slate-200">Final Grade</label>
+        <label htmlFor="course-final-grade" className="block text-sm text-slate-200">Final Grade (overrides your calculated average)</label>
         <input
           id="course-final-grade"
           type="number"
@@ -120,6 +120,29 @@ export default function AddCourseForm({
           onChange={(event) => updateField("required", event.target.checked)}
           className="--input h-4 w-4 rounded border-slate-700 !bg-slate-900 !text-gold"
         />
+      </div>
+
+      <div className="flex gap-3">
+        <div>
+          <label htmlFor="course-start-date" className="block text-sm text-slate-200">Starts</label>
+          <input
+            id="course-start-date"
+            type="date"
+            value={form.start_date ?? ""}
+            onChange={(event) => updateField("start_date", event.target.value || null)}
+            className="--input mt-1 rounded-lg border border-slate-700 bg-transparent text-white"
+          />
+        </div>
+        <div>
+          <label htmlFor="course-end-date" className="block text-sm text-slate-200">Ends</label>
+          <input
+            id="course-end-date"
+            type="date"
+            value={form.end_date ?? ""}
+            onChange={(event) => updateField("end_date", event.target.value || null)}
+            className="--input mt-1 rounded-lg border border-slate-700 bg-transparent text-white"
+          />
+        </div>
       </div>
 
       <div className="category_grid">

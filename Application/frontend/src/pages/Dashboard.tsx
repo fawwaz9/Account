@@ -1,14 +1,89 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "../styles/dashboard.css";
-import { useAuth } from "../app/auth/AuthContext"; // adjust path to match your structure
+import { useAuth } from "../app/auth/AuthContext";
+import { fetchDashboard } from "../features/grades/api";
+import { UserGradeDashboard } from "../features/grades/types";
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
+  const [summary, setSummary] = useState<UserGradeDashboard | null>(null);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    if (!user) return;
+
+    fetchDashboard(user.id)
+      .then((data) => {
+        if (mounted) setSummary(data);
+      })
+      .catch((err) => {
+        if (mounted) {
+          setSummaryError(err instanceof Error ? err.message : "Could not load your grades");
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [user]);
+
+  const hasCourses = (summary?.total_courses ?? 0) > 0;
+
   return (
     <div className="dashboard">
       <h1 className="title">Welcome, {user?.name}</h1>
+
+      {summaryError && <p className="muted">{summaryError}</p>}
+
+      {hasCourses && summary && (
+        <section className="gradeSummary">
+          <div className="summaryStats">
+            <div className="statBlock">
+              <span className="statValue">{summary.overall_average}</span>
+              <span className="statLabel">Average</span>
+            </div>
+            <div className="statBlock">
+              <span className="statValue">{summary.cumulative_average}</span>
+              <span className="statLabel">Credit-weighted</span>
+            </div>
+            <div className="statBlock">
+              <span className="statValue">{summary.total_courses}</span>
+              <span className="statLabel">Courses</span>
+            </div>
+          </div>
+
+          {summary.best_course && summary.weakest_course && (
+            <div className="summaryCourses">
+              <p>
+                Strongest <strong>{summary.best_course.course_code}</strong>{" "}
+                <span className="muted">{summary.best_course.average}</span>
+              </p>
+              <p>
+                Weakest <strong>{summary.weakest_course.course_code}</strong>{" "}
+                <span className="muted">{summary.weakest_course.average}</span>
+              </p>
+            </div>
+          )}
+
+          {summary.courses_needing_final_score.length > 0 && (
+            <div className="summaryNeeds">
+              <h3>To reach 90%</h3>
+              <ul>
+                {summary.courses_needing_final_score.map((course) => (
+                  <li key={course.course_id}>
+                    {course.course_code} needs{" "}
+                    <strong>{course.needed_final_score}</strong> on the final
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
 
       <div className="grid">
         <button type="button" className="widget action-widget" onClick={() => navigate("/grades")}>

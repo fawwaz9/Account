@@ -66,12 +66,26 @@ export default function CourseDetailPage() {
     }, {} as Record<GradeCategory, Grade[]>);
   }, [course]);
 
+  // Weighted categories, plus any category that actually holds grades. Filtering
+  // on weight > 0 alone meant a grade under a zero-weight category had no column
+  // to render in -- it stayed in the database, invisible and un-deletable.
   const weightedCategories = useMemo(() => {
     if (!course) return [];
-    return Object.entries(course.category_weights)
-      .filter(([category, weight]) => weight > 0 && category !== GradeCategory.FINAL)
+    const weighted = Object.entries(course.category_weights)
+      .filter(([, weight]) => weight > 0)
       .map(([category]) => category as GradeCategory);
+    const withGrades = course.grades.map((grade) => grade.category);
+    return [...new Set([...weighted, ...withGrades])].filter(
+      (category) => category !== GradeCategory.FINAL
+    );
   }, [course]);
+
+  const unweightedCategories = useMemo(() => {
+    if (!course) return new Set<GradeCategory>();
+    return new Set(
+      weightedCategories.filter((category) => !(course.category_weights[category] ?? 0))
+    );
+  }, [course, weightedCategories]);
 
   const finalGrade = useMemo(
     () => course?.grades.find((g) => g.category === GradeCategory.FINAL) ?? null,
@@ -110,11 +124,7 @@ export default function CourseDetailPage() {
       setDeleteGradeTarget(null);
       await refreshCourse();
     } catch (err: any) {
-      const apiError =
-        err?.response?.data?.detail ||
-        err?.response?.data?.message ||
-        err?.message;
-      setDeleteGradeError(getErrorMessage(apiError));
+      setDeleteGradeError(getErrorMessage(err));
     } finally {
       setDeletingGrade(false);
     }
@@ -129,11 +139,7 @@ export default function CourseDetailPage() {
       await deleteCourse(user.id, courseId);
       navigate("/grades");
     } catch (err: any) {
-      const apiError =
-        err?.response?.data?.detail ||
-        err?.response?.data?.message ||
-        err?.message;
-      setDeleteCourseError(getErrorMessage(apiError));
+      setDeleteCourseError(getErrorMessage(err));
     } finally {
       setDeletingCourse(false);
     }
@@ -168,10 +174,10 @@ export default function CourseDetailPage() {
           {Object.entries(course.category_weights)
             .filter(([, weight]) => weight > 0)
             .map(([category, weight]) => {
-              const items = gradesByCategory[category as GradeCategory] ?? [];
-              const earned = items.reduce((sum, g) => sum + (g.score ?? 0), 0);
-              const possible = items.reduce((sum, g) => sum + g.max_score, 0);
-              const weightage = (weight * (earned / (possible || 1))).toFixed(2);
+              // Straight from the API. Recomputing it here counted ungraded work
+              // as a zero, so this strip disagreed with the average beside it.
+              const average = course.category_averages?.[category as GradeCategory] ?? 0;
+              const weightage = ((weight * average) / 100).toFixed(2);
               return (
                 <div className="summaryItem" key={category}>
                   <span style={{ textTransform: "capitalize" }}>{category}</span>
@@ -193,7 +199,7 @@ export default function CourseDetailPage() {
         {weightedCategories.map((category) => (
           <GradeCategoryColumn
             key={category}
-            title={category}
+            title={unweightedCategories.has(category) ? `${category} (0% weight)` : category}
             category={category}
             items={gradesByCategory[category] ?? []}
             onEditItem={handleEditGrade}
