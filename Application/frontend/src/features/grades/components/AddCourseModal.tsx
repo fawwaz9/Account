@@ -2,7 +2,7 @@ import { useState } from "react";
 import AddCourseForm from "./AddCourseForm";
 import { createCourse } from "../api";
 import { CourseCreate, GradeCategory, Semester } from "../types";
-import { getOrCreateUserId } from "../../../services/userService";
+import { useAuth } from "../../../app/auth/AuthContext";
 
 interface AddCourseModalProps {
   readonly open: boolean;
@@ -27,6 +27,7 @@ export default function AddCourseModal({
   onClose,
   onCourseAdded,
 }: AddCourseModalProps) {
+  const { user } = useAuth(); // moved to top level
   const [form, setForm] = useState(defaultForm);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,11 +35,11 @@ export default function AddCourseModal({
   if (!open) return null;
 
   async function handleSubmit() {
+    if (!user) return;
+
     setLoading(true);
     setError(null);
     try {
-      const userId = await getOrCreateUserId();
-
       // Fill any untouched categories with 0 before sending
       const fullWeights = Object.fromEntries(
         Object.values(GradeCategory).map((cat) => [
@@ -58,15 +59,15 @@ export default function AddCourseModal({
         final_grade: form.final_grade,
         category_weights: fullWeights,
       };
-      await createCourse(userId, payload);
+      await createCourse(user.id, payload);
       setForm(defaultForm);
       onCourseAdded();
       onClose();
     } catch (err: any) {
       const apiError =
-          err?.response?.data?.detail ||
-          err?.response?.data?.message ||
-          err?.message;
+        err?.response?.data?.detail ||
+        err?.response?.data?.message ||
+        err?.message;
 
       setError(getErrorMessage(apiError));
     } finally {

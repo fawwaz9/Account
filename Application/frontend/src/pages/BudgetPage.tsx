@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { fetchBudgets, fetchGoals } from "../features/budget/api";
 import { BudgetItem, GoalItem } from "../features/budget/types";
-import { getOrCreateUserId } from "../services/userService";
+import { useAuth } from "../app/auth/AuthContext";
 
 export default function BudgetPage() {
+  const { user } = useAuth();
   const [budgets, setBudgets] = useState<BudgetItem[]>([]);
   const [goals, setGoals] = useState<GoalItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -13,14 +14,15 @@ export default function BudgetPage() {
     let mounted = true;
 
     async function load() {
+      if (!user) return;
+
       setLoading(true);
       setError(null);
 
       try {
-        const userId = await getOrCreateUserId();
         const [budgetData, goalData] = await Promise.all([
-          fetchBudgets(userId),
-          fetchGoals(userId),
+          fetchBudgets(user.id),
+          fetchGoals(user.id),
         ]);
         if (mounted) {
           setBudgets(budgetData);
@@ -37,7 +39,7 @@ export default function BudgetPage() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [user]);
 
   return (
     <div className="container">

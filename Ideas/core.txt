@@ -3,4 +3,5 @@ Tasks on calender should have check box and progess bar for major goals like sav
 Grade calculator and class schedule.
 I am building the ultimate student application all for my personal use.
 Ability/Potential to scale the app in the future and we are going to be constantly working on it for the next few years, adding features and upgrading.
-Budgeting capabilities included.
+Budget/Finance section is divided into the following accounts. Investments, Emergency Savings, Spending, Savings. User will distribute income into these 4 categories and movements of funds will be tracked seperately.
+Also all these will be shown on the Calender. Classes, tasks/reminders, money spent on each day(maybe time/hour), recurring payments/transfers, etc

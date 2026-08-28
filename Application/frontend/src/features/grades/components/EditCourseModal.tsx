@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import EditCourseForm from "./EditCourseForm";
 import { updateCourse } from "../api";
 import { CourseCreate, CourseDetail, CourseUpdate, Semester } from "../types";
-import { getOrCreateUserId } from "../../../services/userService";
+import { useAuth } from "../../../app/auth/AuthContext";
 import { getErrorMessage } from "./AddCourseModal";
 
 interface EditCourseModalProps {
@@ -32,6 +32,7 @@ export default function EditCourseModal({
   onClose,
   onCourseUpdated,
 }: EditCourseModalProps) {
+  const { user } = useAuth();
   const [form, setForm] = useState<CourseCreate>(buildFormFromCourse(course));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,14 +45,13 @@ export default function EditCourseModal({
   if (!open || !course) return null;
 
   async function handleSubmit() {
-    if (!course) return;
+    if (!course || !user) return;
 
     setLoading(true);
     setError(null);
     try {
-      const userId = await getOrCreateUserId();
       const payload: Partial<CourseUpdate> = { ...form };
-      await updateCourse(userId, course.id, payload);
+      await updateCourse(user.id, course.id, payload);
       onCourseUpdated();
       onClose();
     } catch (err: any) {

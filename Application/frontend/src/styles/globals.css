@@ -3,16 +3,24 @@
 /* ===== Theme Variables ===== */
 :root {
   --bg: #0b0f1a;          /* deep black-navy */
+  --bg-gradient: linear-gradient(145deg, #0f1a33, #0a0f1f);
+
   --panel: #111a2e;       /* navy card */
   --panel-2: #0f172a;     
+
   --text: #e5e7eb;        /* soft white */
   --muted: #9ca3af;
+
   --error: #d40707;
+  --delete: #f87171;
+
+  --shadow: rgba(0,0,0,0.4);
 
   --gold: #d4af37;
   --gold-soft: #f5d97b;
 
   --border: rgba(212, 175, 55, 0.15);
+  --deep-border: 1px solid #1f2a44;
 }
 
 /* ===== Base ===== */

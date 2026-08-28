@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { fetchTasks } from "../features/tasks/api";
 import { Task } from "../features/tasks/types";
-import { getOrCreateUserId } from "../services/userService";
+import { useAuth } from "../app/auth/AuthContext";
 
 export default function TasksPage() {
+  const { user } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -12,12 +13,13 @@ export default function TasksPage() {
     let mounted = true;
 
     async function load() {
+      if (!user) return;
+
       setLoading(true);
       setError(null);
 
       try {
-        const userId = await getOrCreateUserId();
-        const data = await fetchTasks(userId);
+        const data = await fetchTasks(user.id);
         if (mounted) setTasks(data);
       } catch (err) {
         if (mounted) setError(err instanceof Error ? err.message : "Failed to load tasks");
@@ -30,7 +32,7 @@ export default function TasksPage() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [user]);
 
   return (
     <div className="container">

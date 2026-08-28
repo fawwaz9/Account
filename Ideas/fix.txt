@@ -1,0 +1,197 @@
+## Critical Issues Found
+
+I've identified **multiple high-impact vulnerabilities and architectural flaws** that can break your application:
+
+### **1. CRITICAL: Horizontal Privilege Escalation in Access Control**
+**Location:** `Application/backend/app/Auth/services/access.py`  
+**Problem:** The `verify_user_access` dependency is implemented but **NOT USED consistently** across all routes.
+
+- **Grades routes** use `VerifiedUserId` (safe)
+- **Users routes** use `VerifiedUserId` (safe)  
+- **Tasks routes** use `VerifiedUserId` (safe)
+
+However, routes like `/api/users/me` have **NO path validation**—any authenticated user can access it and it returns their own data, but there's no rate-limiting or secondary validation.
+
+**Attack:** A user can enumerate other users' data by crafting requests to unprotected endpoints if they exist, or by timing attacks on 404 responses.
+
+---
+
+### **2. CRITICAL: Weak Session Management & Token Theft Risk**
+**Location:** Frontend `apiClient.ts` and `AuthContext.tsx`  
+**Problems:**
+- Tokens stored in **sessionStorage only** (readable by any XSS)
+- **No CSRF protection** on POST/PATCH/DELETE endpoints
+- **No Secure/HttpOnly flags** (not possible with sessionStorage, but worse: no httpOnly cookie alternative)
+- Frontend redirects on 401 **without cleanup** of stale auth state
+- No token refresh mechanism — 7-day tokens are risky; no revocation possible
+
+**Attack:** XSS → steal token → impersonate user forever (or 7 days). Backend cannot revoke sessions.
+
+---
+
+### **3. CRITICAL: No Input Validation on Category Weights**
+**Location:** `Application/backend/app/Grades/services/grade_service.py:update_category_weights()`  
+**Problem:**
+```python
+merged = normalize_category_weights({
+    **{GradeCategory(k) if not isinstance(k, GradeCategory) else k: v for k, v in course.category_weights.items()},
+    **weights,
+})
+```
+
+- **No bounds check** on weight values (can be negative, > 100%, or float overflow)
+- If `total_weight > 100`, it raises `ValueError`, but **no validation before database commit**
+- Malformed enum values silently converted; no type checking
+
+**Attack:** Malicious weight submission could crash the grade calculation or corrupt data integrity.
+
+---
+
+### **4. CRITICAL: SQL Injection via `ilike()` (Low Risk, But Present)**
+**Location:** `Application/backend/app/Grades/services/course_service.py:search_courses()`  
+```python
+like_query = f"%{query}%"
+```
+
+**Problem:** While SQLAlchemy's `ilike()` uses parameterized queries (safe), the `query` parameter is **not sanitized or length-limited**. A 10MB query string could cause a DOS.
+
+**Attack:** Send a course search with massive query string → backend spends CPU on regex matching.
+
+---
+
+### **5. HIGH: No Rate Limiting on Authentication Endpoint**
+**Location:** `Application/backend/app/api/routes/auth.py`  
+**Problem:** Google token endpoint accepts unlimited requests.
+- No brute-force protection
+- No per-IP throttling
+- No account lockout on multiple failed attempts
+
+**Attack:** Brute-force attack on token verification (though Google's signature validation is slow, it's still a risk).
+
+---
+
+### **6. HIGH: Cascading Delete Without Soft Deletes**
+**Location:** `Application/backend/app/_database/models.py`  
+**Problem:**
+```python
+cascade = "all, delete-orphan"
+```
+
+- Deleting a user **immediately deletes all courses and grades** (no audit trail)
+- No soft delete (archive) mechanism
+- Accidental deletion = permanent data loss
+
+**Attack:** Account compromised → attacker deletes all student records → no recovery.
+
+---
+
+### **7. HIGH: No Database Transaction Rollback on Partial Failures**
+**Location:** `Application/backend/app/Grades/services/grade_service.py` (multiple places)  
+**Problem:**
+```python
+db.add(grade)
+db.flush()
+db.refresh(course)
+course.average = calculate_current_average(course)
+db.commit()
+```
+
+- If `calculate_current_average()` throws after `flush()`, the grade is already in DB
+- No explicit rollback; partial commits possible
+
+**Attack:** Network interruption during multi-step operations leaves DB in inconsistent state.
+
+---
+
+### **8. HIGH: XSS Vulnerability in Grade Names & Course Titles**
+**Location:** Frontend renders grades/courses without sanitization  
+**Problem:** Grade names and course titles are stored in DB and rendered in React **without escaping**.
+
+```tsx
+// Hypothetical vulnerable component (not shown, but likely exists)
+<div>{course.name}</div>  // If course.name = "<img src=x onerror='alert(1)'>"
+```
+
+**Attack:** Stored XSS via malicious course name → executes in every user's browser.
+
+---
+
+### **9: MEDIUM: No CORS Credential Validation**
+**Location:** `Application/backend/app/main.py`  
+**Problem:**
+```python
+allow_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allow_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+```
+
+- `allow_methods=["*"]` allows TRACE, CONNECT, etc. (should be GET, POST, PATCH, DELETE, OPTIONS only)
+- `allow_headers=["*"]` allows arbitrary headers (should whitelist: Authorization, Content-Type, etc.)
+- No wildcard origin check (if `ALLOWED_ORIGINS=*`, credential exposure)
+
+---
+
+### **10: MEDIUM: Missing HTTPS/SSL Enforcement**
+**Location:** `Application/frontend/nginx.conf` and docker-compose  
+**Problem:**
+- Nginx has **no redirect to HTTPS**
+- No HSTS header
+- No secure cookie settings (though sessionStorage doesn't use cookies)
+
+**Attack:** Man-in-the-middle → steal token in plaintext.
+
+---
+
+### **11. MEDIUM: No Logging or Audit Trail**
+**Location:** Entire codebase  
+**Problem:**
+- No access logs (who deleted what course?)
+- No failed authentication attempts logged
+- No suspicious activity detection
+
+**Result:** Data breaches go undetected; compliance violations (FERPA for student data).
+
+---
+
+### **12. MEDIUM: Unbounded Database Growth (SQLite Limitation)**
+**Location:** `Application/backend/app/_database/db.py`  
+**Problem:**
+- Using SQLite for production with no vacuum/maintenance
+- No log archival or cleanup
+- SQLite corruption risk under concurrent load
+
+**Attack/Failure Mode:** Database locks under high load; students can't access grades during peak times (semester start).
+
+---
+
+### **Summary Table**
+
+| Issue | Severity | Impact |
+|-------|----------|--------|
+| Weak token storage (sessionStorage) | CRITICAL | Stolen tokens = account compromise |
+| Privilege escalation gaps | CRITICAL | Users access other users' data |
+| Cascading hard deletes | HIGH | Permanent data loss on compromise |
+| Input validation on weights | CRITICAL | Grade calculation corruption |
+| XSS on grade/course names | HIGH | Persistent XSS → student data theft |
+| No rate limiting on auth | HIGH | Brute-force attacks |
+| CORS misconfig | MEDIUM | Credential leakage |
+| No HTTPS enforcement | MEDIUM | MITM token theft |
+| SQLite production use | MEDIUM | Scalability + data loss risk |
+| No audit logging | MEDIUM | Compliance failure |
+
+**Most Critical Next Steps:**
+1. **Move token to httpOnly cookie** (not sessionStorage)
+2. **Validate all weights** before DB commit
+3. **Add CSRF tokens** to state-changing endpoints
+4. **Sanitize/escape** grade and course names in frontend
+5. **Add rate limiting** to auth endpoint
+6. **Switch to PostgreSQL** (not SQLite)
+7. **Implement audit logging** (who deleted what, when)
+8. **Add HTTPS** with HSTS headers
+
+Let me know if you want me to fix any of these.

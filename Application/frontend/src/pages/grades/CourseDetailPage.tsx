@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getOrCreateUserId } from "../../services/userService";
+import { useAuth } from "../../app/auth/AuthContext";
 import { fetchCourseDetail, deleteCourse, deleteGrade } from "../../features/grades/api";
 import { GradeCategory, Grade, CourseDetail } from "../../features/grades/types";
 import AddGradeModal from "../../features/grades/components/AddGradeModal";
@@ -8,12 +8,13 @@ import EditGradeModal from "../../features/grades/components/EditGradeModal";
 import EditCourseModal from "../../features/grades/components/EditCourseModal";
 import DeleteConfirmModal from "../../features/grades/components/DeleteConfirmModal";
 import { getErrorMessage } from "../../features/grades/components/AddCourseModal";
-import GradeCategoryColumn from "../../features/grades/components/GradeCategoryColumn"
+import GradeCategoryColumn from "../../features/grades/components/GradeCategoryColumn";
 
 
 export default function CourseDetailPage() {
   const { courseId } = useParams<{ courseId: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [course, setCourse] = useState<CourseDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [addGradeCategory, setAddGradeCategory] = useState<GradeCategory | null>(null);
@@ -32,15 +33,14 @@ export default function CourseDetailPage() {
     let mounted = true;
 
     async function load() {
-      if (!courseId) {
-        navigate("/grades");
+      if (!courseId || !user) {
+        if (!courseId) navigate("/grades");
         return;
       }
 
       setLoading(true);
       try {
-        const userId = await getOrCreateUserId();
-        const c = await fetchCourseDetail(userId, courseId);
+        const c = await fetchCourseDetail(user.id, courseId);
         if (mounted) setCourse(c);
       } catch (err) {
         console.error(err);
@@ -53,7 +53,7 @@ export default function CourseDetailPage() {
     return () => {
       mounted = false;
     };
-  }, [courseId]);
+  }, [courseId, user, navigate]);
 
   const gradesByCategory = useMemo(() => {
     if (!course) return {} as Record<GradeCategory, Grade[]>;
@@ -101,13 +101,12 @@ export default function CourseDetailPage() {
   }
 
   async function handleConfirmDeleteGrade() {
-    if (!courseId || !deleteGradeTarget) return;
+    if (!courseId || !deleteGradeTarget || !user) return;
 
     setDeletingGrade(true);
     setDeleteGradeError(null);
     try {
-      const userId = await getOrCreateUserId();
-      await deleteGrade(userId, courseId, deleteGradeTarget.id);
+      await deleteGrade(user.id, courseId, deleteGradeTarget.id);
       setDeleteGradeTarget(null);
       await refreshCourse();
     } catch (err: any) {
@@ -122,13 +121,12 @@ export default function CourseDetailPage() {
   }
 
   async function handleConfirmDeleteCourse() {
-    if (!courseId) return;
+    if (!courseId || !user) return;
 
     setDeletingCourse(true);
     setDeleteCourseError(null);
     try {
-      const userId = await getOrCreateUserId();
-      await deleteCourse(userId, courseId);
+      await deleteCourse(user.id, courseId);
       navigate("/grades");
     } catch (err: any) {
       const apiError =
@@ -142,9 +140,8 @@ export default function CourseDetailPage() {
   }
 
   async function refreshCourse() {
-    if (!courseId) return;
-    const userId = await getOrCreateUserId();
-    const c = await fetchCourseDetail(userId, courseId);
+    if (!courseId || !user) return;
+    const c = await fetchCourseDetail(user.id, courseId);
     setCourse(c);
   }
 
