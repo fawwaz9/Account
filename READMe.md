@@ -283,6 +283,27 @@ Optional overrides: `JWT_ALGORITHM` (default `HS256`), `JWT_EXPIRE_MINUTES` (def
 
 All `.env` files are gitignored and must be created locally.
 
+### Quick start
+
+`Application/dev.run.sh` handles everything — it creates the backend virtualenv,
+installs both dependency sets on first run, checks that the required `.env` keys
+are present and the ports are free, then starts both services with prefixed,
+colour-coded output. Ctrl+C stops everything it started.
+
+```bash
+cd Application
+./dev.run.sh              # backend + frontend
+./dev.run.sh backend      # uvicorn only, :8000
+./dev.run.sh frontend     # vite only, :5173
+./dev.run.sh docker       # full stack via docker compose
+./dev.run.sh install      # install dependencies, then exit
+```
+
+Dependency installs are skipped on later runs unless `requirements.txt` or
+`package-lock.json` changes. Override a port with `BACKEND_PORT=8001 ./dev.run.sh`.
+
+The manual equivalents are below, if you'd rather drive the services yourself.
+
 ### Running with Docker Compose
 ```bash
 cd Application
