@@ -1,35 +1,36 @@
-from uuid import UUID
-
+import uuid
+from sqlalchemy.orm import Session
+from app._database.models import CourseModel
 from app.Grades.utils.enums import GradeCategory
-from app.temp_data.store import courses
 from app.Grades.schemas.dashboard import CourseDashboardEntry, UserGradeDashboard
 from app.Grades.services.grade_service import calculate_current_average, calculate_required_final
+from app.Grades.services.course_service import get_all_courses
 from app.Users.services.user_service import get_user
 
 
-def get_dashboard(user_id: UUID | None = None):
-    user = get_user(user_id) if user_id is not None else None
-    course_list = user.courses if user is not None else courses
-
-    if user_id is not None and user is None:
+def get_dashboard(db: Session, user_id: uuid.UUID):
+    user = get_user(db, user_id)
+    if user is None:
         return None
+
+    course_list = get_all_courses(db, user_id)
 
     entries: list[CourseDashboardEntry] = []
     for course in course_list:
+        weights = course.category_weights
         average = calculate_current_average(course)
         unfinished_categories = [
-            category.value
-            for category, weight in course.category_weights.items()
-            if category != GradeCategory.FINAL and weight > 0 and not any(
+            category for category, weight in weights.items()
+            if category != GradeCategory.FINAL.value and weight > 0 and not any(
                 grade.category == category and grade.score is not None
                 for grade in course.grades
             )
         ]
 
         needed_final_score = None
-        if user_id is not None and course.category_weights.get(GradeCategory.FINAL, 0.0) > 0:
+        if weights.get(GradeCategory.FINAL.value, 0.0) > 0:
             try:
-                required_final = calculate_required_final(user_id, course.id, 90)
+                required_final = calculate_required_final(db, user_id, course.id, 90)
                 needed_final_score = required_final.get("needed")
             except ValueError:
                 needed_final_score = None
@@ -90,6 +91,4 @@ def calculate_cumulative_average(courses):
     if total_credits == 0:
         return 0.0
 
-    average = total_quality_points / total_credits
-    return round(average, 2)
-
+    return round(total_quality_points / total_credits, 2)

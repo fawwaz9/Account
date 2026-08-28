@@ -1,6 +1,8 @@
 from uuid import UUID
 from fastapi import APIRouter
 from fastapi import HTTPException
+from app._database.dependencies import DBSession
+from app.Auth.services.access import VerifiedUserId
 from app.Grades.schemas.course import CategoryWeightsUpdate, CourseCreate, Course, CourseDetail, CourseUpdate
 from app.shared.errors import error_course, error_grade, error_user, responses
 from app.Grades.services.course_service import (
@@ -32,15 +34,15 @@ from app.Grades.services.dash_services import get_dashboard
 router = APIRouter()
 
 @router.get("/{user_id}/grades/dashboard", response_model=UserGradeDashboard, responses=responses["user_404"])
-def grade_dashboard(user_id: UUID):
-    dashboard = get_dashboard(user_id)
+def grade_dashboard(user_id: VerifiedUserId, db: DBSession):
+    dashboard = get_dashboard(db, user_id)
     if dashboard is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
     return dashboard
 
 @router.get("/{user_id}/courses", response_model=list[Course], responses=responses["course_404"])
-def get_courses(user_id: UUID):
-    courses = get_all_courses(user_id)
+def get_courses(user_id: VerifiedUserId, db: DBSession):
+    courses = get_all_courses(db, user_id)
     if courses is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
     if not courses:
@@ -48,9 +50,9 @@ def get_courses(user_id: UUID):
     return courses
 
 @router.post("/{user_id}/courses", response_model=CourseDetail, responses={404: {"description": error_course["not_found"]}, 400: {"description": error_course["already_exists"]}})
-def add_course(user_id: UUID, course: CourseCreate):
+def add_course(user_id: VerifiedUserId, course: CourseCreate, db: DBSession):
     try:
-        new_course = create_course(user_id, course)
+        new_course = create_course(db, user_id, course)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -60,25 +62,25 @@ def add_course(user_id: UUID, course: CourseCreate):
     return new_course
 
 @router.get("/{user_id}/courses/search", response_model=list[Course], responses=responses["user_404"])
-def search_course_list(user_id: UUID, query: str):
-    courses = search_courses(user_id, query)
+def search_course_list(user_id: VerifiedUserId, query: str, db: DBSession):
+    courses = search_courses(db, user_id, query)
     if courses is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
 
     return courses
 
 @router.get("/{user_id}/courses/{course_id}", response_model=CourseDetail, responses=responses["course_404"])
-def get_single_course(user_id: UUID, course_id: UUID):
-    course = get_course(user_id, course_id)
+def get_single_course(user_id: VerifiedUserId, course_id: UUID, db: DBSession):
+    course = get_course(db, user_id, course_id)
     if course is None:
         raise HTTPException(status_code=404, detail=error_course["not_found"])
 
     return course
 
 @router.patch("/{user_id}/courses/{course_id}", response_model=CourseDetail, responses=responses["course_404"])
-def edit_course(user_id: UUID, course_id: UUID, course: CourseUpdate):
+def edit_course(user_id: VerifiedUserId, course_id: UUID, course: CourseUpdate, db: DBSession):
     try:
-        updated_course = update_course(user_id, course_id, course)
+        updated_course = update_course(db, user_id, course_id, course)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -88,33 +90,33 @@ def edit_course(user_id: UUID, course_id: UUID, course: CourseUpdate):
     return updated_course
 
 @router.delete("/{user_id}/courses/{course_id}", response_model=CourseDetail, responses=responses["course_404"])
-def remove_course(user_id: UUID, course_id: UUID):
-    deleted_course = delete_course(user_id, course_id)
+def remove_course(user_id: VerifiedUserId, course_id: UUID, db: DBSession):
+    deleted_course = delete_course(db, user_id, course_id)
     if deleted_course is None:
         raise HTTPException(status_code=404, detail=error_course["not_found"])
 
     return deleted_course
 
 @router.get("/{user_id}/courses/{course_id}/statistics", response_model=dict, responses=responses["course_404"])
-def get_singlecourse_statistics(user_id: UUID, course_id: UUID):
-    statistics = get_course_statistics(user_id, course_id)
+def get_singlecourse_statistics(user_id: VerifiedUserId, course_id: UUID, db: DBSession):
+    statistics = get_course_statistics(db, user_id, course_id)
     if statistics is None:
         raise HTTPException(status_code=404, detail=error_course["not_found"])
 
     return statistics
 
 @router.get("/{user_id}/courses/{course_id}/category-weights", responses=responses["course_404"])
-def get_course_category_weights(user_id: UUID, course_id: UUID):
-    category_weights = get_category_weights(user_id, course_id)
+def get_course_category_weights(user_id: VerifiedUserId, course_id: UUID, db: DBSession):
+    category_weights = get_category_weights(db, user_id, course_id)
     if category_weights is None:
         raise HTTPException(status_code=404, detail=error_course["not_found"])
 
     return category_weights
 
 @router.patch("/{user_id}/courses/{course_id}/category-weights", responses=responses["course_both"])
-def edit_course_category_weights(user_id: UUID, course_id: UUID, category_weights: CategoryWeightsUpdate):
+def edit_course_category_weights(user_id: VerifiedUserId, course_id: UUID, category_weights: CategoryWeightsUpdate, db: DBSession):
     try:
-        updated_weights = update_category_weights(user_id, course_id, category_weights.category_weights)
+        updated_weights = update_category_weights(db, user_id, course_id, category_weights.category_weights)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -124,8 +126,8 @@ def edit_course_category_weights(user_id: UUID, course_id: UUID, category_weight
     return updated_weights
 
 @router.get("/{user_id}/courses/{course_id}/average", responses=responses["course_both"])
-def get_course_average(user_id: UUID, course_id: UUID):
-    course = get_course(user_id, course_id)
+def get_course_average(user_id: VerifiedUserId, course_id: UUID, db: DBSession):
+    course = get_course(db, user_id, course_id)
     if course is None:
         raise HTTPException(status_code=404, detail=error_course["not_found"])
 
@@ -137,8 +139,8 @@ def get_course_average(user_id: UUID, course_id: UUID):
     return {"course_id": course.id, "average": course.average}
 
 @router.get("/{user_id}/courses/{course_id}/letter-grade", responses=responses["course_404"])
-def get_course_letter_grade(user_id: UUID, course_id: UUID):
-    course = get_course(user_id, course_id)
+def get_course_letter_grade(user_id: VerifiedUserId, course_id: UUID, db: DBSession):
+    course = get_course(db, user_id, course_id)
     if course is None:
         raise HTTPException(status_code=404, detail=error_course["not_found"])
 
@@ -150,26 +152,26 @@ def get_course_letter_grade(user_id: UUID, course_id: UUID):
     }
 
 @router.get("/{user_id}/courses/{course_id}/required-final", responses=responses["course_both"])
-def get_required_final_score(user_id: UUID, course_id: UUID, target_grade: float):
+def get_required_final_score(user_id: VerifiedUserId, course_id: UUID, target_grade: float, db: DBSession):
     try:
-        return calculate_required_final(user_id, course_id, target_grade)
+        return calculate_required_final(db, user_id, course_id, target_grade)
     except ValueError as exc:
         message = str(exc)
         status_code = 404 if "not found" in message.lower() else 400
         raise HTTPException(status_code=status_code, detail=message)
 
 @router.get("/{user_id}/courses/{course_id}/grades", response_model=list[Grade], responses=responses["course_404"])
-def list_grades(user_id: UUID, course_id: UUID):
-    grades = get_all_grades(user_id, course_id)
+def list_grades(user_id: VerifiedUserId, course_id: UUID, db: DBSession):
+    grades = get_all_grades(db, user_id, course_id)
     if grades is None:
         raise HTTPException(status_code=404, detail=error_course["not_found"])
 
     return grades
 
 @router.post("/{user_id}/courses/{course_id}/grades", response_model=Grade, responses={404: {"description": error_course["not_found"]}, 400: {"description": error_grade["invalid_data"]}})
-def create_grade(user_id: UUID, course_id: UUID, grade: GradeCreate):
+def create_grade(user_id: VerifiedUserId, course_id: UUID, grade: GradeCreate, db: DBSession):
     try:
-        new_grade = add_grade(user_id, course_id, grade)
+        new_grade = add_grade(db, user_id, course_id, grade)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -179,17 +181,17 @@ def create_grade(user_id: UUID, course_id: UUID, grade: GradeCreate):
     return new_grade
 
 @router.get("/{user_id}/courses/{course_id}/grades/{grade_id}", response_model=Grade, responses={404: {"description": error_grade["not_found"]}})
-def get_single_grade(user_id: UUID, course_id: UUID, grade_id: UUID):
-    grade = get_grade(user_id, course_id, grade_id)
+def get_single_grade(user_id: VerifiedUserId, course_id: UUID, grade_id: UUID, db: DBSession):
+    grade = get_grade(db, user_id, course_id, grade_id)
     if grade is None:
         raise HTTPException(status_code=404, detail=error_grade["not_found"])
 
     return grade
 
 @router.patch("/{user_id}/courses/{course_id}/grades/{grade_id}", response_model=Grade, responses=responses["grade_both"])
-def edit_grade(user_id: UUID, course_id: UUID, grade_id: UUID, grade: GradeUpdate):
+def edit_grade(user_id: VerifiedUserId, course_id: UUID, grade_id: UUID, grade: GradeUpdate, db: DBSession):
     try:
-        updated_grade = update_grade(user_id, course_id, grade_id, grade)
+        updated_grade = update_grade(db, user_id, course_id, grade_id, grade)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -199,17 +201,17 @@ def edit_grade(user_id: UUID, course_id: UUID, grade_id: UUID, grade: GradeUpdat
     return updated_grade
 
 @router.delete("/{user_id}/courses/{course_id}/grades/{grade_id}", response_model=Grade, responses={404: {"description": error_grade["not_found"]}})
-def remove_grade(user_id: UUID, course_id: UUID, grade_id: UUID):
-    deleted_grade = delete_grade(user_id, course_id, grade_id)
+def remove_grade(user_id: VerifiedUserId, course_id: UUID, grade_id: UUID, db: DBSession):
+    deleted_grade = delete_grade(db, user_id, course_id, grade_id)
     if deleted_grade is None:
         raise HTTPException(status_code=404, detail=error_grade["not_found"])
 
     return deleted_grade
 
 @router.patch("/{user_id}/courses/{course_id}/grades/{grade_id}/score", response_model=Grade, responses=responses["grade_both"])
-def record_single_grade(user_id: UUID, course_id: UUID, grade_id: UUID, score: float):
+def record_single_grade(user_id: VerifiedUserId, course_id: UUID, grade_id: UUID, score: float, db: DBSession):
     try:
-        grade = record_grade(user_id, course_id, grade_id, score)
+        grade = record_grade(db, user_id, course_id, grade_id, score)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -217,4 +219,3 @@ def record_single_grade(user_id: UUID, course_id: UUID, grade_id: UUID, score: f
         raise HTTPException(status_code=404, detail=error_grade["not_found"])
 
     return grade
-

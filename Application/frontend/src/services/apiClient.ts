@@ -1,6 +1,16 @@
 import { ValidationError } from "../features/grades/types"; // adjust path to wherever these live
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api/users").replace(/\/+$|\s+$/, "");
+function stripTrailingSlashes(value: string) {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === "/") {
+    end--;
+  }
+  return value.slice(0, end);
+}
+
+const API_BASE_URL = stripTrailingSlashes(
+  (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api").trim()
+);
 
 interface RequestOptions extends RequestInit {
   data?: unknown;
@@ -42,6 +52,11 @@ function extractErrorMessage(json: unknown, fallback: string): string {
   return fallback;
 }
 
+function getAuthHeaders(): HeadersInit {
+  const token = sessionStorage.getItem("access_token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { data, headers, ...init } = options;
   const body = (data == null) ? undefined : JSON.stringify(data);
@@ -49,10 +64,17 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     ...init,
     headers: {
       "Content-Type": "application/json",
+      ...getAuthHeaders(),
       ...headers,
     },
     body,
   });
+
+  if (response.status === 401) {
+    sessionStorage.removeItem("access_token");
+    window.location.href = "/login";
+    throw new Error("Session expired");
+  }
 
   const text = await response.text();
   const json = text ? JSON.parse(text) : null;

@@ -3,7 +3,7 @@ import EditGradeForm from "./EditGradeForm";
 import DeleteConfirmModal from "./DeleteConfirmModal";
 import { updateGrade, deleteGrade } from "../api";
 import { Grade, GradeUpdate } from "../types";
-import { getOrCreateUserId } from "../../../services/userService";
+import { useAuth } from "../../../app/auth/AuthContext";
 import { getErrorMessage } from "./AddCourseModal";
 
 interface EditGradeModalProps {
@@ -31,6 +31,7 @@ export default function EditGradeModal({
   onGradeUpdated,
   onGradeDeleted,
 }: EditGradeModalProps) {
+  const { user } = useAuth();
   const [form, setForm] = useState(buildFormFromGrade(grade));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,18 +50,17 @@ export default function EditGradeModal({
   if (!open || !grade) return null;
 
   async function handleSubmit() {
-    if (!grade) return;
+    if (!grade || !user) return;
 
     setLoading(true);
     setError(null);
     try {
-      const userId = await getOrCreateUserId();
       const payload: Partial<GradeUpdate> = {
         name: form.name,
         score: form.score,
         max_score: form.max_score,
       };
-      await updateGrade(userId, courseId, grade.id, payload);
+      await updateGrade(user.id, courseId, grade.id, payload);
       onGradeUpdated();
       onClose();
     } catch (err: any) {
@@ -75,13 +75,12 @@ export default function EditGradeModal({
   }
 
   async function handleConfirmDelete() {
-    if (!grade) return;
+    if (!grade || !user) return;
 
     setDeleting(true);
     setDeleteError(null);
     try {
-      const userId = await getOrCreateUserId();
-      await deleteGrade(userId, courseId, grade.id);
+      await deleteGrade(user.id, courseId, grade.id);
       setConfirmingDelete(false);
       onGradeDeleted();
       onClose();

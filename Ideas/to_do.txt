@@ -1,4 +1,6 @@
-Add Course Editing Feature.
-Saving mechanism / database
-Finish up user Backend
-Docker functionality
+Add Course Editing Feature. DONE
+Saving mechanism / database. DONE
+Finish up user Backend. DONE
+Standardize color with variables. DONE
+Add user auth. DONE
+Docker functionality.

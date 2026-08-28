@@ -1,0 +1,387 @@
+# Account — The Ultimate Student App
+
+A full-stack personal productivity application built for self-use, covering academics, scheduling, finances, tasks, and goals. Built as both a daily-use tool and a long-term learning vehicle — designed to be iterated on and scaled over several years.
+
+**Repository:** [github.com/fawwaz9/Account](https://github.com/fawwaz9/Account)
+
+> **Status:** Active development on `grades-branch`. The **Grades** module is the only end-to-end vertical slice (DB → service → API → typed client → UI). Calendar, Tasks, and Finances are wired end-to-end but return hardcoded sample data from the backend. Notes, Goals, Study Analytics, and Settings are not started.
+
+---
+
+## The Goal
+
+From `Ideas/core.txt` — the app is meant to become a single place that holds:
+
+- A **heavily modifiable calendar** with recurring events and "ends by" rules, showing classes, tasks/reminders, money spent per day, and recurring payments/transfers all on the same surface.
+- A **grade calculator and class schedule**, with predictions and analytics.
+- A **budget system split into four accounts** — Investments, Emergency Savings, Spending, Savings — where income is distributed across them and movements between them are tracked separately.
+- **Tasks with checkboxes and progress bars** for long-running goals (saving money, gym consistency, study hours).
+
+Target feature tree (`Ideas/features.txt`):
+
+```
+Dashboard
+├── Grades      (calculator, assignment tracker, predictions, analytics)
+├── Calendar    (classes, exams, deadlines, study planner)
+├── Finances    (budget, expenses, income, savings)
+├── Tasks       (homework, personal, recurring)
+├── Notes
+├── Goals
+├── Study Analytics
+└── Settings
+```
+
+The project is built around UBC-specific context: UBC does not use a GPA scale, so there is **no `GPAScale` model** by design. `calculate_letter_grade` maps percentages onto UBC's letter scale instead.
+
+---
+
+## Tech Stack
+
+### Backend
+| Piece | Choice |
+|---|---|
+| Framework | **FastAPI** 0.135 |
+| ORM | **SQLAlchemy** 2.0 |
+| Database | **SQLite** (`Application/backend/data/app.db`) |
+| Validation | **Pydantic v2** + `pydantic-settings` |
+| Auth | **Google OAuth** (`google-auth`) → **PyJWT** bearer tokens |
+| Server | **uvicorn** |
+
+### Frontend
+| Piece | Choice |
+|---|---|
+| UI | **React 19** + **TypeScript** |
+| Build | **Vite 7** |
+| Routing | **React Router 7** |
+| HTTP | Hand-rolled `fetch` wrapper (`services/apiClient.ts`) |
+| Styling | Plain CSS with CSS custom properties (`styles/globals.css`) |
+
+### Infrastructure
+- **Docker** — multi-stage production builds for both services (backend runs as a non-root `appuser`)
+- **docker-compose** — orchestration, backend bound to `127.0.0.1:8000` only
+- **nginx** — serves the built frontend with SPA fallback so `/grades` survives a hard refresh
+
+### Tooling
+- **SonarQube / SonarLint** — static analysis, treated as actionable and fixed inline rather than deferred
+
+---
+
+## Architecture
+
+### Backend layout
+
+```
+Application/backend/
+├── Dockerfile
+├── requirements.txt
+├── data/app.db                        # SQLite file, bind-mounted for host visibility
+└── app/
+    ├── main.py                        # FastAPI app, CORS, router registration
+    ├── config.py                      # pydantic-settings: GOOGLE_CLIENT_ID, JWT_SECRET, ...
+    ├── Auth/
+    │   ├── dependencies.py            # bearer scheme → get_current_user_id / CurrentUser
+    │   ├── schemas/token.py           # GoogleAuthRequest, TokenResponse, TokenPayload
+    │   └── services/
+    │       ├── access.py              # VerifiedUserId — path-level user authorization
+    │       ├── google_auth_service.py # verifies the Google ID token
+    │       └── session_service.py     # create/decode our own JWT
+    ├── Users/
+    │   ├── schemas/user.py            # User, UserCreate/Update, UserPreferences
+    │   ├── schemas/academic_status.py # school year / semester (not yet persisted)
+    │   └── services/user_service.py
+    ├── Grades/
+    │   ├── schemas/                   # course.py, grade.py, dashboard.py
+    │   ├── services/                  # course_service.py, grade_service.py, dash_services.py
+    │   └── utils/enums.py             # Semester, GradeCategory
+    ├── api/routes/                    # auth, users, grades, calender, tasks, finances
+    ├── shared/errors.py               # error dicts + reusable OpenAPI `responses`
+    └── _database/
+        ├── db.py, models.py, dependencies.py
+        ├── design.txt                 # target schema, including tables not yet built
+        └── check_state.py             # diagnostic script for inspecting live DB state
+```
+
+### Data model (`_database/models.py`)
+
+```
+users ──< courses ──< grades
+              └────< course_category_weights
+```
+
+| Table | Notes |
+|---|---|
+| `users` | UUID PK, unique `email` and `google_id`, `auth_provider` defaults to `"google"` |
+| `courses` | UUID PK, `code`, `name`, `semester`, `year`, `credits`, `required`, `professor`, `final_grade`, `average`, optional `start_date`/`end_date` |
+| `course_category_weights` | One row per (course, category) — the normalized form of the `category_weights` dict |
+| `grades` | `name`, `category`, `score` (nullable), `max_score`, `weight` copied from the course's category weight |
+
+All child relationships use `cascade = "all, delete-orphan"` — deleting a user hard-deletes their courses and grades. There are no soft deletes or audit trail yet (see [Security backlog](#security-backlog)).
+
+`CourseModel.category_weights` is a `@property` that flattens the `category_weight_rows` relationship into a clean `dict[str, float]` for Pydantic, keeping ORM internals out of the API-facing shape.
+
+### API surface
+
+Every router is mounted under `/api`, and every route except `POST /api/auth/google` and `GET /api/users/me` is scoped by `{user_id}` and guarded by the `VerifiedUserId` dependency, which 403s if the JWT subject doesn't match the path.
+
+| Router | Base path | State |
+|---|---|---|
+| Auth | `/api/auth` | `POST /google` — exchange a Google ID token for a 7-day app JWT |
+| Users | `/api/users` | `GET /me`, `GET/PATCH/DELETE /{user_id}` |
+| Grades | `/api/grades` | Full CRUD — see below |
+| Calendar | `/api/calendar` | `GET /{user_id}/events` — **returns a hardcoded sample event** |
+| Tasks | `/api/tasks` | `GET /{user_id}/tasks` — **returns a hardcoded sample task** |
+| Finances | `/api/finances` | `GET /{user_id}/budgets`, `GET /{user_id}/goals` — **hardcoded samples** |
+
+Grades endpoints (all prefixed `/api/grades/{user_id}`):
+
+```
+GET    /grades/dashboard                            aggregated cross-course rollup
+GET    /courses                                     list
+POST   /courses                                     create
+GET    /courses/search?query=                       server-side ilike search
+GET    /courses/{course_id}                         detail (with grades)
+PATCH  /courses/{course_id}                         update
+DELETE /courses/{course_id}
+GET    /courses/{course_id}/statistics
+GET    /courses/{course_id}/category-weights
+PATCH  /courses/{course_id}/category-weights
+GET    /courses/{course_id}/average
+GET    /courses/{course_id}/letter-grade
+GET    /courses/{course_id}/required-final?target_grade=
+GET    /courses/{course_id}/grades                  list grades
+POST   /courses/{course_id}/grades                  create grade
+GET    /courses/{course_id}/grades/{grade_id}
+PATCH  /courses/{course_id}/grades/{grade_id}
+DELETE /courses/{course_id}/grades/{grade_id}
+PATCH  /courses/{course_id}/grades/{grade_id}/score?score=
+```
+
+Direct user creation/listing endpoints were deliberately **removed** — Google OAuth is the only supported path for creating or identifying a user, since exposing raw user CRUD was a security risk.
+
+### Frontend layout
+
+```
+Application/frontend/
+├── Dockerfile, nginx.conf, index.html   # index.html loads Google Identity Services
+└── src/
+    ├── main.tsx
+    ├── app/
+    │   ├── App.tsx                      # AuthProvider + BrowserRouter + all routes
+    │   ├── auth/AuthContext.tsx         # token, user, isAuthenticated, isLoading, login, logout
+    │   ├── auth/ProtectedRoute.tsx
+    │   └── layout/                      # MainLayout, Sidebar, Topbar — EMPTY STUBS
+    ├── services/
+    │   ├── apiClient.ts                 # fetch wrapper: base URL, bearer header, 401 handling
+    │   ├── authClient.ts                # loginWithGoogle
+    │   ├── currentUserClient.ts         # getCurrentUser
+    │   └── endpoints.ts                 # centralized path builders
+    ├── features/
+    │   ├── grades/                      # api.ts, types.ts, hooks/useCourses.ts, 11 components
+    │   ├── calender/                    # api.ts + types.ts only; components are EMPTY STUBS
+    │   ├── tasks/                       # api.ts + types.ts only; components are EMPTY STUBS
+    │   └── budget/                      # api.ts + types.ts only; components are EMPTY STUBS
+    ├── pages/                           # Dashboard, LoginPage, Calendar, Tasks, Budget,
+    │   └── grades/                      #   GradesPage, CourseDetailPage
+    ├── shared/                          # components, hooks, utils — ALL EMPTY STUBS
+    └── styles/                          # globals.css, dashboard.css, grades/*.css
+```
+
+**Auth flow:** `index.html` loads the Google Identity Services script → `LoginPage` renders the Google button and polls up to ~10s for the script → the Google credential is POSTed to `/api/auth/google` → the returned app JWT goes into `AuthContext` and `sessionStorage` → the effect fetches `/api/users/me` to populate `user`. `isLoading` exists specifically so `ProtectedRoute` doesn't bounce to `/login` before auth state has resolved on first load.
+
+**API client:** `apiClient.ts` is a hand-written `fetch` wrapper (not axios — `axios` is listed in `package.json` but is unused). It reads `VITE_API_BASE_URL` (default `http://localhost:8000/api`), attaches the bearer token from `sessionStorage`, unpacks FastAPI's 422 `detail` arrays into readable messages, and on a 401 clears the token and redirects to `/login`.
+
+---
+
+## Core Feature: Grade Tracking
+
+The one fully-built module. Supports:
+
+- **Courses** with configurable **category weights** drawn from the `GradeCategory` enum (`Assignment`, `Lab`, `Quiz`, `Midterm`, `Final`, `Participation`, `Project`, `Other`) and a `Semester` enum (`Fall`, `Winter`, `Spring`, `Summer`).
+- **Grades** recorded per category, each with `score`, `max_score`, and a `weight` inherited from the course's category weight at time of grading. `sync_grade_weights` re-propagates weights to existing grades when a category weight changes.
+- **Point-weighted category averages** — `calculate_grade_category_average` weights each grade within a category by its `max_score`, so a 20-point assignment counts more than a 5-point quiz (equivalent to total points earned ÷ total points possible).
+- **Course-level weighted average** — `calculate_current_average` combines each *graded* category's average weighted by its `category_weight`, normalizing over only the categories that have grades, with a guard against weights summing over 100.
+- **"What do I need on the final"** — `calculate_required_final` back-solves for the final score needed to hit a target, and reports which categories are still ungraded so the answer can be read with the right caveat.
+- **Dashboard aggregation** — `get_dashboard` rolls all courses into best/weakest course, overall average, courses still needing a final score, and unfinished categories per course.
+- **Modal-driven CRUD UI** — `AddCourseModal`, `EditCourseModal`, `AddGradeModal`, `EditGradeModal`, `DeleteConfirmModal`, with `GradeCategoryColumn`s derived dynamically from each course's active (non-zero-weight) categories.
+
+### Data flow pattern (the house style)
+
+```
+Modal owns form state (useState)
+  → Form component is presentational only (form, updateField, onSubmit, error props)
+    → handleSubmit builds a typed payload
+      → typed API function (features/<domain>/api.ts)
+        → apiClient (get/post/patch/del) + endpoints.ts path builder
+          → FastAPI route (VerifiedUserId + DBSession)
+            → service-layer function (course_service.py / grade_service.py)
+              → SQLAlchemy model mutation + commit
+```
+
+Every new resource — budgets, tasks, calendar events — is expected to follow this same five-layer pattern.
+
+---
+
+## Key Design Decisions & Learnings
+
+### Data integrity: category weight normalization
+`update_course` once bypassed `normalize_category_weights`, letting weights summing over 100% reach the database. Fixed by routing all weight updates through `apply_category_weights` (the alias `course_service` uses for `grade_service.update_category_weights`), adding sum-check `@model_validator`s to `CourseUpdate` and `CategoryWeightsUpdate`, and building `check_state.py` to inspect live DB state and flag any course whose weights still sum over 100.
+
+### Pydantic ↔ SQLAlchemy boundary
+The relationship is `category_weight_rows`; the `@property category_weights` converts it to `dict[str, float]` for serialization. `DetachedInstanceError` on deletes is avoided by snapshotting via `GradeSchema.model_validate(grade)` **before** committing the delete.
+
+### HTTP status code conventions
+- **422** — a Pydantic validator fires during FastAPI's request parsing (bypasses the route's own `try/except`)
+- **400** — a validator fires inside service-layer code (caught by the route's exception handler)
+
+Used consistently across the grades module.
+
+### Form state typing
+`CourseCreate` (not `CourseUpdate`) is used for form state, because `CourseUpdate`'s nullable fields break controlled React inputs.
+
+### React hooks discipline
+`useAuth()` is always called at the top level of a component — never inside a handler or conditional. All consumer files were migrated off an earlier `getOrCreateUserId` pattern to `useAuth()`, which also fixed a Rules-of-Hooks violation in `AddCourseModal`.
+
+### CSS specificity
+When a global rule like `.container button` overrides component styles, the fix is a more specific component selector (`.courses .courseBox`) rather than `!important`. `all: unset` is avoided as a reset — it also resets `display` and breaks flex/grid; targeted resets (`background`, `border`, `padding`, `font`, `appearance`) are used instead.
+
+### Accessibility (SonarQube-driven)
+- **S6848 / S6819** — clickable `<div>`s and `role="button"` are replaced with native `<button>` elements, which get focus, keyboard activation, and touch support for free.
+- **S6470** — Docker `COPY` scope is tightened rather than copying broad directories.
+- Super-linear regex backtracking patterns identified and fixed.
+- Dependencies use the SonarQube-recommended `Annotated[Session, Depends(get_db)]`, aliased as `DBSession`.
+
+---
+
+## Getting Started
+
+### Prerequisites
+- Python 3.12
+- Node.js 20+
+- Docker & Docker Compose (optional)
+- A Google Cloud OAuth **Web application** client ID with `http://localhost:5173` as an authorized JavaScript origin
+
+### Environment variables
+
+`Application/.env` (read by docker-compose):
+```
+GOOGLE_CLIENT_ID=<your-google-oauth-client-id>
+JWT_SECRET=<a-long-random-string>
+```
+
+`Application/backend/.env`:
+```
+GOOGLE_CLIENT_ID=<same-client-id>
+JWT_SECRET=<same-secret>
+```
+
+`Application/frontend/.env`:
+```
+VITE_GOOGLE_CLIENT_ID=<same-client-id>
+```
+
+Optional overrides: `JWT_ALGORITHM` (default `HS256`), `JWT_EXPIRE_MINUTES` (default 7 days), `DATABASE_URL` (default `sqlite:///./app.db`), `ALLOWED_ORIGINS` (default `http://localhost:5173`), `VITE_API_BASE_URL` (default `http://localhost:8000/api`).
+
+All `.env` files are gitignored and must be created locally.
+
+### Running with Docker Compose
+```bash
+cd Application
+docker-compose up --build
+```
+Frontend on `http://localhost:5173`, backend on `http://localhost:8000` (bound to loopback only). The SQLite file is bind-mounted at `backend/data/app.db` so it survives rebuilds and stays visible from the host.
+
+Note that Vite inlines `VITE_*` values at build time, so changing `VITE_API_BASE_URL` or `VITE_GOOGLE_CLIENT_ID` requires a rebuild, not just a restart.
+
+### Running locally (without Docker)
+
+**Backend:**
+```bash
+cd Application/backend
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+Tables are created on startup via `Base.metadata.create_all`. Interactive API docs at `http://localhost:8000/docs`.
+
+**Frontend:**
+```bash
+cd Application/frontend
+npm install
+npm run dev
+```
+
+### Inspecting the database
+```bash
+cd Application/backend
+python3 -m app._database.check_state
+```
+Prints every user with their course count, and every course with its per-category weights, flagging any whose weights sum over 100.
+
+---
+
+## Known Gaps
+
+### Not yet built
+- **Calendar, Tasks, and Finances** have no database models, schemas, or service layers — their routes return hardcoded sample dicts. The target schema for `events`, `tasks`, `goals`, `classes`, and `budget` is already sketched in `app/_database/design.txt`, including recurrence rules and "ends by" dates.
+- **Notes, Goals, Study Analytics, and Settings** are not started.
+- **Layout shell** — `MainLayout.tsx`, `Sidebar.tsx`, and `Topbar.tsx` are empty files, so every page renders bare with no persistent navigation.
+- **Shared UI kit** — `shared/components/{Button,Card,Checkbox,Input,Modal}.tsx`, `shared/hooks/{useDebounce,useLocalStorage}.ts`, and `shared/utils/{dateUtils,formatters,mathUtils}.ts` are all empty. The grades modals each roll their own markup as a result.
+- `SchedulePage.tsx`, `app/router.tsx`, and `features/grades/hooks/UseAssignments.ts` are empty; routing lives inline in `App.tsx`.
+- `AcademicStatus` schemas exist but have no model, service, or route.
+
+### Wired but incomplete
+- **Tailwind is declared but never active.** `package.json` lists `tailwindcss` and `@tailwindcss/vite`, and `globals.css` starts with `@import "tailwindcss"`, but there is **no `vite.config.ts`** anywhere in the frontend — so the plugin is never registered and the Tailwind utility classes used in `GradesPage.tsx` (`rounded-lg`, `bg-slate-900`, …) are inert. Either add a Vite config that registers the plugin, or drop the classes in favour of the existing CSS-variable stylesheets.
+- `features/grades/api.ts` is missing `updateCategoryWeights`, `recordGrade`, `searchCourses`, and `fetchDashboard`, even though all four backend endpoints exist. The dashboard types are already defined in `types.ts` but nothing calls the endpoint — `Dashboard.tsx` is just four navigation tiles.
+- Course search is done client-side in `useFilteredCourses`; the server-side `/courses/search` endpoint is unused.
+- `GET /api/users/me` has no `response_model`, so it serializes the raw SQLAlchemy row including `google_id`.
+- `GET /api/grades/{user_id}/courses` raises 404 when a user simply has no courses, which is a legitimate empty state rather than an error.
+- `axios` is a dependency but unused. `requirements.txt` looks like a full `pip freeze` and carries `firebase_admin`, `openai`, `google-cloud-storage`, `google-cloud-firestore`, and `grpcio` — none of which appear anywhere in the code.
+- `calculate_required_final` computes category averages independently of `calculate_grade_category_average`, using a plain mean of percentages rather than the point-weighted average used everywhere else — the two can disagree and should be unified.
+- `app/temp_data/store.py` and the empty `Grades/utils/errors.py`, `Users/utils/errors.py`, and `api/api.txt` are leftovers from before the database existed.
+
+### Repository hygiene
+`node_modules` was committed before `.gitignore` existed, so **1150 of the repo's 1278 tracked files are dependencies**. Compiled `__pycache__/*.pyc` files and the built `frontend/dist/` output are also tracked. `.gitignore` currently covers only `node_modules` and `.env`; it should also cover `__pycache__/`, `*.pyc`, `dist/`, `.DS_Store`, and `data/*.db`, and the already-tracked files need `git rm -r --cached` to stop being versioned.
+
+---
+
+## Security Backlog
+
+`Ideas/fix.txt` holds a full security audit. The highest-priority items, none of which are addressed yet:
+
+| Issue | Severity | Impact |
+|---|---|---|
+| JWT stored in `sessionStorage` | Critical | Any XSS steals a token valid for 7 days; the backend has no revocation or refresh mechanism |
+| No rate limiting on `POST /api/auth/google` | High | Unlimited token-verification attempts |
+| Cascading hard deletes, no soft delete or audit trail | High | An account compromise permanently destroys all course and grade history |
+| Unbounded `query` length in `search_courses` | Medium | A very large search string burns CPU; needs a length cap |
+| `allow_methods=["*"]` / `allow_headers=["*"]` with `allow_credentials=True` | Medium | Should be narrowed to the methods and headers actually used |
+| No HTTPS/HSTS in `nginx.conf` | Medium | Tokens travel in plaintext outside localhost |
+| No access or auth-failure logging | Medium | Deletions and failed logins leave no trace |
+| SQLite in production, no vacuum or maintenance | Medium | Lock contention and corruption risk under concurrent load |
+
+---
+
+## Repository & Branches
+
+```
+origin  https://github.com/fawwaz9/Account.git
+```
+
+- **`main`** — the integration branch; PRs merge here.
+- **`grades-branch`** — the active working branch, currently ahead of local `main`.
+
+Note that `origin` currently publishes only `main`; the remote `grades-branch` was deleted after PR #1 merged, so any local `origin/grades-branch` reference is stale and can be cleared with `git remote prune origin`. A large amount of work — the entire `Auth/` module, `_database/`, `config.py`, the Docker and docker-compose setup, `LoginPage.tsx`, and the auth clients — is currently **untracked and has never been pushed**.
+
+### Progress log (`Ideas/to_do.txt`)
+- ✅ Course editing feature
+- ✅ Saving mechanism / database
+- ✅ User backend
+- ✅ Standardized colors with CSS variables
+- ✅ User auth (Google OAuth + JWT)
+- ⬜ Docker functionality (files written; not yet verified end-to-end)
+
+---
+
+## License
+
+Not yet specified — personal project.

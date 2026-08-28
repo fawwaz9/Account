@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { fetchEvents } from "../features/calender/api";
 import { CalendarEvent } from "../features/calender/types";
-import { getOrCreateUserId } from "../services/userService";
+import { useAuth } from "../app/auth/AuthContext";
 
 export default function CalendarPage() {
+  const { user } = useAuth();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -12,12 +13,13 @@ export default function CalendarPage() {
     let mounted = true;
 
     async function load() {
+      if (!user) return;
+
       setLoading(true);
       setError(null);
 
       try {
-        const userId = await getOrCreateUserId();
-        const data = await fetchEvents(userId);
+        const data = await fetchEvents(user.id);
         if (mounted) setEvents(data);
       } catch (err) {
         if (mounted) setError(err instanceof Error ? err.message : "Failed to load events");
@@ -30,7 +32,7 @@ export default function CalendarPage() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [user]);
 
   return (
     <div className="container">

@@ -59,9 +59,14 @@ class CategoryWeightsUpdate(BaseModel):
 
     @model_validator(mode="after")
     def validate_category_weights(self):
+        total = 0.0
         for weight in self.category_weights.values():
             if weight < 0 or weight > 100:
                 raise ValueError(weight_error["invalid_weight_value"])
+            total += weight
+
+        if total > 100:
+            raise ValueError(weight_error["invalid_weights"])
 
         return self
 
@@ -79,9 +84,14 @@ class CourseUpdate(BaseModel):
     @model_validator(mode="after")
     def validate_course_update(self):
         if self.category_weights is not None:
+            total = 0.0
             for weight in self.category_weights.values():
                 if weight < 0 or weight > 100:
                     raise ValueError(weight_error["invalid_weight_value"])
+                total += weight
+
+            if total > 100:
+                raise ValueError(weight_error["invalid_weights"])
 
         return self
 

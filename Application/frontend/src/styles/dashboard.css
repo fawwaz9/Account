@@ -1,7 +1,7 @@
 .dashboard {
   min-height: 100vh;
-  background: #0b0f1a; /* near black */
-  color: #f5f5f5;
+  background: var(--bg);
+  color: var(--text);
   padding: 40px;
   font-family: Arial, sans-serif;
 }
@@ -13,8 +13,8 @@
 }
 
 .widget {
-  background: linear-gradient(145deg, #0f1a33, #0a0f1f); /* navy tones */
-  border: 1px solid #1f2a44;
+  background: var(--bg-gradient);
+  border: var(--deep-border);
   border-radius: 12px;
   padding: 20px;
   width: 260px;
@@ -27,20 +27,20 @@
 
 .widget:hover {
   transform: translateY(-4px);
-  border-color: #d4af37;
+  border-color: var(--gold);
 }
 
 .widget:focus-visible {
-  outline: 2px solid #d4af37;
+  outline: 2px solid var(--gold);
   outline-offset: 2px;
 }
 
 .widget h2 {
-  color: #d4af37;
+  color: var(--gold);
 }
 
 .widget p {
-  color: #b0b8c5;
+  color: var(--muted);
   font-size: 0.9rem;
 }
 
@@ -48,16 +48,16 @@
   display: inline-block;
   margin-top: 12px;
   padding: 8px 12px;
-  background: #d4af37;
+  background: var(--gold);
   border: none;
-  color: #0b0f1a;
+  color: var(--bg);
   font-weight: bold;
   border-radius: 6px;
   cursor: pointer;
 }
 
 .widget-link:hover {
-  background: #f0c94d;
+  background: var(--gold-soft);
 }
 
 .disabled {

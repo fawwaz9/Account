@@ -2,8 +2,8 @@ import { useState, useEffect } from "react";
 import AddGradeForm from "./AddGradeForm";
 import { createGrade } from "../api";
 import { GradeCreate, GradeCategory } from "../types";
-import { getOrCreateUserId } from "../../../services/userService";
-import { getErrorMessage } from "./AddCourseModal"; // reuse existing helper
+import { useAuth } from "../../../app/auth/AuthContext";
+import { getErrorMessage } from "./AddCourseModal";
 
 interface AddGradeModalProps {
   readonly open: boolean;
@@ -29,6 +29,7 @@ export default function AddGradeModal({
   onClose,
   onGradeAdded,
 }: AddGradeModalProps) {
+  const { user } = useAuth();
   const [form, setForm] = useState<GradeCreate>(buildDefaultForm(category));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,11 +42,12 @@ export default function AddGradeModal({
   if (!open || !category) return null;
 
   async function handleSubmit() {
+    if (!user) return;
+
     setLoading(true);
     setError(null);
     try {
-      const userId = await getOrCreateUserId();
-      await createGrade(userId, courseId, form);
+      await createGrade(user.id, courseId, form);
       onGradeAdded();
       onClose();
     } catch (err: any) {

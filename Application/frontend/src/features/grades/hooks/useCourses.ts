@@ -1,27 +1,29 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { fetchCourses } from "../api";
 import { Course } from "../types";
-import { getOrCreateUserId } from "../../../services/userService";
+import { useAuth } from "../../../app/auth/AuthContext";
 
 export function useCourses() {
+  const { user } = useAuth();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const loadCourses = useCallback(async () => {
+    if (!user) return;
+
     setLoading(true);
     setError(null);
 
     try {
-      const userId = await getOrCreateUserId();
-      const data = await fetchCourses(userId);
+      const data = await fetchCourses(user.id);
       setCourses(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load courses");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     loadCourses();
@@ -30,11 +32,7 @@ export function useCourses() {
   return { courses, loading, error, reload: loadCourses };
 }
 
-export function useFilteredCourses(
-  courses: Course[],
-  searchQuery: string
-) {
-
+export function useFilteredCourses(courses: Course[], searchQuery: string) {
   return useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) {

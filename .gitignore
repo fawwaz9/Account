@@ -1,1 +1,27 @@
-node_modules
+# ---- Dependencies (regenerate with `npm ci`) ----
+node_modules/
+
+# ---- Secrets ----
+.env
+.env.*
+!.env.example
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ---- Build output (regenerate with `npm run build`) ----
+dist/
+.vite/
+
+# ---- Local database ----
+*.db
+*.sqlite
+*.sqlite3
+
+# ---- OS / editor cruft ----
+.DS_Store
+*.swp
