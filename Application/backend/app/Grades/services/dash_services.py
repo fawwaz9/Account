@@ -118,18 +118,20 @@ def plain_average(courses) -> float:
 
 
 def calculate_cumulative_average(courses):
-    """Credit-weighted average across courses, so a 6-credit course counts double a 3.
+    """Credit-weighted average over courses with a final grade recorded.
 
-    Skips courses with nothing recorded rather than folding a zero in -- a
-    course you have not started should not halve your cumulative average.
+    Only finished courses count. A running average is a snapshot of work in
+    progress, not a result, so a term you are partway through does not move
+    your cumulative figure -- that is what the semester average is for.
+    Credit-weighted, so a 6-credit course counts double a 3.
     """
     total_quality_points = 0.0
     total_credits = 0.0
 
     for course in courses:
-        result = course_result_grade(course)
-        if result is not None and course.credits > 0:
-            total_quality_points += result * course.credits
+        final = course.final_grade
+        if final and final > 0 and course.credits > 0:
+            total_quality_points += final * course.credits
             total_credits += course.credits
 
     if total_credits == 0:
@@ -139,19 +141,20 @@ def calculate_cumulative_average(courses):
 
 
 def calculate_cgpa(courses) -> float | None:
-    """Credit-weighted grade points across every course with a recorded result.
+    """Credit-weighted grade points over courses with a final grade recorded.
 
-    Courses with nothing marked are skipped rather than counted as zero, the
-    same rule the past-year averages use.
+    Deliberately the same set as calculate_cumulative_average: the two are the
+    same measure on different scales, and letting one count in-progress work
+    while the other did not would put contradictory figures side by side.
     """
     total_points = 0.0
     total_credits = 0.0
 
     for course in courses:
-        result = course_result_grade(course)
-        if result is None or not course.credits:
+        final = course.final_grade
+        if not final or final <= 0 or not course.credits:
             continue
-        total_points += calculate_gpa_points(result) * course.credits
+        total_points += calculate_gpa_points(final) * course.credits
         total_credits += course.credits
 
     if total_credits == 0:
