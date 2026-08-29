@@ -4,12 +4,32 @@ from app._database.models import CourseModel, CourseCategoryWeightModel, UserMod
 from app.Grades.schemas.course import CourseCreate, CourseUpdate
 from app.Grades.services.grade_service import (
     calculate_grade_category_average,
+    calculate_letter_grade,
     update_category_weights as apply_category_weights,
 )
+from app.Grades.utils.terms import term_bucket
+
+
+def attach_course_summary(
+    course: CourseModel,
+    current_school_year: int | None = None,
+    current_semester: str | None = None,
+) -> CourseModel:
+    """Attach the fields every course carries, cheaply.
+
+    Reads only columns already loaded, so it is safe to map over a whole list
+    without lazy-loading each course's grades.
+    """
+    course.letter_grade = calculate_letter_grade(course)
+    course.term_bucket = term_bucket(course, current_school_year, current_semester)
+    return course
 
 
 def attach_category_averages(course: CourseModel) -> CourseModel:
     """Compute the per-category averages CourseDetail exposes.
+
+    Touches course.grades, so this is for single-course reads only -- mapping it
+    over a list would lazy-load grades once per course.
 
     Set on the instance rather than defined as a CourseModel property because
     models.py is imported *by* grade_service -- a property calling back into it
@@ -20,6 +40,13 @@ def attach_category_averages(course: CourseModel) -> CourseModel:
         for category in course.category_weights
     }
     return course
+
+
+def current_term_of(db: Session, user_id: uuid.UUID) -> tuple[int | None, str | None]:
+    user = db.query(UserModel).filter(UserModel.id == user_id).first()
+    if user is None:
+        return None, None
+    return user.current_school_year, user.current_semester
 
 
 def create_course(db: Session, user_id: uuid.UUID, course_data: CourseCreate):
@@ -55,7 +82,8 @@ def create_course(db: Session, user_id: uuid.UUID, course_data: CourseCreate):
 
     db.commit()
     db.refresh(course)
-    return attach_category_averages(course)
+    year, semester = current_term_of(db, user_id)
+    return attach_category_averages(attach_course_summary(course, year, semester))
 
 
 def get_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
@@ -70,11 +98,15 @@ def get_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
     # update_category_weights) recomputes and commits it. Recomputing here too
     # meant this route and the course list could return different numbers for
     # the same course, since get_all_courses reads the stored value.
-    return attach_category_averages(course)
+    year, semester = current_term_of(db, user_id)
+    return attach_category_averages(attach_course_summary(course, year, semester))
 
 
 def get_all_courses(db: Session, user_id: uuid.UUID):
-    return db.query(CourseModel).filter(CourseModel.user_id == user_id).all()
+    courses = db.query(CourseModel).filter(CourseModel.user_id == user_id).all()
+    # One lookup for the whole list, not one per course.
+    year, semester = current_term_of(db, user_id)
+    return [attach_course_summary(course, year, semester) for course in courses]
 
 
 def update_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, data: CourseUpdate):
@@ -97,7 +129,8 @@ def update_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, data: C
 
     # db.refresh expires the instance, so recompute after the last one rather
     # than relying on what get_course attached before the writes.
-    return attach_category_averages(course)
+    year, semester = current_term_of(db, user_id)
+    return attach_category_averages(attach_course_summary(course, year, semester))
 
 
 def delete_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
@@ -130,7 +163,7 @@ def search_courses(db: Session, user_id: uuid.UUID, query: str):
         return None
 
     like_query = f"%{query}%"
-    return (
+    matches = (
         db.query(CourseModel)
         .filter(
             CourseModel.user_id == user_id,
@@ -138,3 +171,8 @@ def search_courses(db: Session, user_id: uuid.UUID, query: str):
         )
         .all()
     )
+    # Search reaches every term, so results need their bucket to be labelled.
+    return [
+        attach_course_summary(course, user.current_school_year, user.current_semester)
+        for course in matches
+    ]

@@ -8,9 +8,11 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.Grades.schemas.course import CourseDetail
 
-# Bounded by the max_length=255 on every email field, so the alternation
-# cannot be driven into pathological backtracking.
-EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+# Each domain label excludes the dot, so a label and the separator that follows
+# it can never match the same character. That makes the match linear; the
+# earlier `[^@\s]+\.[^@\s]+` let the engine backtrack across every dot in a
+# long non-matching address (SonarQube S8786).
+EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s.]+(?:\.[^@\s.]+)+$")
 
 
 def normalize_email(value: str) -> str:
@@ -62,6 +64,10 @@ class UserPreferences(BaseModel):
     date_format: DateFormat = Field(default=DateFormat.ISO)
     time_format: TimeFormat = Field(default=TimeFormat.TWENTY_FOUR_HOUR)
     default_reminder_minutes_before: int = Field(default=30, ge=0, le=10080)
+    #: Total credits the degree requires, for the credits progress bar.
+    credit_target: int = Field(default=120, ge=1, le=400)
+    #: UBC does not publish a GPA on transcripts, so this is opt-out.
+    gpa_scale_enabled: bool = Field(default=True)
 
     @field_validator("currency")
     @classmethod
@@ -133,6 +139,11 @@ class User(UserBase):
     email_verified: bool = False
     has_password: bool = False
     has_google: bool = False
+    # Which term the student is in. Null until they set it, in which case every
+    # course reads as current rather than the page showing nothing.
+    current_school_year: int | None = None
+    current_semester: str | None = None
+    term_label: str | None = None
     preferences: UserPreferences = Field(default_factory=UserPreferences)
     created_at: datetime | None = None
 

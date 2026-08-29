@@ -108,6 +108,13 @@ class CourseUpdate(BaseModel):
 class Course(CourseBase):
     id: UUID = Field(default_factory=uuid4)
     average: float = 0.0
+    # Both computed server-side so one grade scale and one term comparison
+    # serve the list, the course page, and search alike.
+    letter_grade: str = Field(default="", description="Letter grade for the current average")
+    term_bucket: str = Field(
+        default="current",
+        description="past, current, or future, relative to the student's term",
+    )
 
     class Config:
         from_attributes = True

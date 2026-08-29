@@ -18,6 +18,10 @@ ADDED_COLUMNS: dict[str, dict[str, str]] = {
     "users": {
         "password_hash": "VARCHAR",
         "email_verified": "BOOLEAN NOT NULL DEFAULT 0",
+        "preferences": "JSON NOT NULL DEFAULT '{}'",
+        "current_school_year": "INTEGER",
+        "current_semester": "VARCHAR",
+        "term_label": "VARCHAR",
     },
 }
 

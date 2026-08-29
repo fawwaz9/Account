@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session, joinedload
 from app._database.models import CourseModel, CourseCategoryWeightModel, GradeModel
 from app.Grades.schemas.grade import GradeCreate, GradeUpdate, Grade as GradeSchema
 from app.Grades.utils.enums import GradeCategory
+from app.Grades.utils.terms import course_result_grade
 
 
 def get_user_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> CourseModel | None:
@@ -191,29 +192,49 @@ def calculate_current_average(course: CourseModel) -> float:
     return round(weighted_sum / total_weight, 2)
 
 
+# (minimum percentage, letter, grade points) on UBC's published 4.33 scale.
+# One table so the letter and the GPA can never disagree about a boundary --
+# they were separate ladders waiting to drift apart.
+GRADE_SCALE: list[tuple[float, str, float]] = [
+    (90, "A+", 4.33),
+    (85, "A", 4.00),
+    (80, "A-", 3.67),
+    (76, "B+", 3.30),
+    (72, "B", 3.00),
+    (68, "B-", 2.67),
+    (64, "C+", 2.33),
+    (60, "C", 2.00),
+    (55, "C-", 1.67),
+    (50, "D", 1.00),
+    (0, "F", 0.00),
+]
+
+
+def grade_scale_row(average: float) -> tuple[str, float]:
+    for minimum, letter, points in GRADE_SCALE:
+        if average >= minimum:
+            return letter, points
+
+    return "F", 0.0
+
+
 def calculate_letter_grade(course) -> str:
-    if course.average >= 90:
-        return "A+"
-    elif course.average >= 85:
-        return "A"
-    elif course.average >= 80:
-        return "A-"
-    elif course.average >= 76:
-        return "B+"
-    elif course.average >= 72:
-        return "B"
-    elif course.average >= 68:
-        return "B-"
-    elif course.average >= 64:
-        return "C+"
-    elif course.average >= 60:
-        return "C"
-    elif course.average >= 55:
-        return "C-"
-    elif course.average >= 50:
-        return "D"
-    else:
-        return "F"
+    """Letter for the course's result, or "" when nothing is recorded.
+
+    Reads course_result_grade rather than the raw average, so a finished course
+    carrying only the professor's final_grade does not read as an F, and an
+    untouched course shows no letter at all instead of failing.
+    """
+    result = course_result_grade(course)
+    if result is None:
+        return ""
+
+    return grade_scale_row(result)[0]
+
+
+def calculate_gpa_points(average: float | None) -> float:
+    """Grade points for a percentage, on the configured scale."""
+    return grade_scale_row(average or 0.0)[1]
 
 
 def calculate_required_final(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, target_grade: float):

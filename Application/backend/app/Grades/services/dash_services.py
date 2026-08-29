@@ -3,9 +3,10 @@ from sqlalchemy.orm import Session
 from app._database.models import CourseModel
 from app.Grades.utils.enums import GradeCategory
 from app.Grades.schemas.dashboard import CourseDashboardEntry, UserGradeDashboard
-from app.Grades.services.grade_service import calculate_required_final
+from app.Grades.services.grade_service import calculate_gpa_points, calculate_required_final
+from app.Grades.utils.terms import CURRENT, PAST, course_result_grade
 from app.Grades.services.course_service import get_all_courses
-from app.Users.services.user_service import get_user
+from app.Users.services.user_service import get_preferences, get_user
 
 
 DEFAULT_TARGET_GRADE = 90.0
@@ -62,11 +63,20 @@ def get_dashboard(db: Session, user_id: uuid.UUID, target_grade: float = DEFAULT
             total_courses=0,
             overall_average=0.0,
             cumulative_average=0.0,
+            semester_average=0.0,
+            cgpa=None,
+            credits_completed=0.0,
+            credits_in_progress=0.0,
+            credit_target=get_preferences(user).credit_target,
             best_course=None,
             weakest_course=None,
             courses_needing_final_score=[],
             unfinished_categories_by_course={},
         )
+
+    preferences = get_preferences(user)
+    current_courses = [c for c in course_list if c.term_bucket == CURRENT]
+    completed_credits, in_progress_credits = credits_by_state(course_list)
 
     best_course = max(entries, key=lambda entry: entry.average)
     weakest_course = min(entries, key=lambda entry: entry.average)
@@ -84,6 +94,11 @@ def get_dashboard(db: Session, user_id: uuid.UUID, target_grade: float = DEFAULT
         # Plain mean across courses; cumulative_average weights by credits.
         overall_average=round(sum(entry.average for entry in entries) / len(entries), 2),
         cumulative_average=calculate_cumulative_average(course_list),
+        semester_average=plain_average(current_courses),
+        cgpa=calculate_cgpa(course_list) if preferences.gpa_scale_enabled else None,
+        credits_completed=completed_credits,
+        credits_in_progress=in_progress_credits,
+        credit_target=preferences.credit_target,
         best_course=best_course,
         weakest_course=weakest_course,
         courses_needing_final_score=courses_needing_final_score,
@@ -91,19 +106,76 @@ def get_dashboard(db: Session, user_id: uuid.UUID, target_grade: float = DEFAULT
     )
 
 
+def plain_average(courses) -> float:
+    """Unweighted mean over courses that have a result, skipping the rest."""
+    results = [g for g in (course_result_grade(c) for c in courses) if g is not None]
+    if not results:
+        return 0.0
+
+    return round(sum(results) / len(results), 2)
+
+
 def calculate_cumulative_average(courses):
-    """Credit-weighted average across courses, so a 6-credit course counts double a 3."""
+    """Credit-weighted average across courses, so a 6-credit course counts double a 3.
+
+    Skips courses with nothing recorded rather than folding a zero in -- a
+    course you have not started should not halve your cumulative average.
+    """
     total_quality_points = 0.0
     total_credits = 0.0
 
     for course in courses:
-        course_average = course.average
-        if course_average is not None and course.credits > 0:
-            quality_points = course_average * course.credits
-            total_quality_points += quality_points
+        result = course_result_grade(course)
+        if result is not None and course.credits > 0:
+            total_quality_points += result * course.credits
             total_credits += course.credits
 
     if total_credits == 0:
         return 0.0
 
     return round(total_quality_points / total_credits, 2)
+
+
+def calculate_cgpa(courses) -> float | None:
+    """Credit-weighted grade points across every course with a recorded result.
+
+    Courses with nothing marked are skipped rather than counted as zero, the
+    same rule the past-year averages use.
+    """
+    total_points = 0.0
+    total_credits = 0.0
+
+    for course in courses:
+        result = course_result_grade(course)
+        if result is None or not course.credits:
+            continue
+        total_points += calculate_gpa_points(result) * course.credits
+        total_credits += course.credits
+
+    if total_credits == 0:
+        return None
+
+    return round(total_points / total_credits, 2)
+
+
+def credits_by_state(courses) -> tuple[float, float]:
+    """(completed, in progress).
+
+    Completed is every past-term credit plus current-term courses that already
+    have a final grade recorded -- a course finished mid-year should not sit in
+    "in progress" until the whole term rolls over.
+    """
+    completed = 0.0
+    in_progress = 0.0
+
+    for course in courses:
+        credits = course.credits or 0.0
+        if course.term_bucket == PAST:
+            completed += credits
+        elif course.term_bucket == CURRENT:
+            if course.final_grade and course.final_grade > 0:
+                completed += credits
+            else:
+                in_progress += credits
+
+    return completed, in_progress

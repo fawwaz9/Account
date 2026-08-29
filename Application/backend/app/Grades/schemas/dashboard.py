@@ -18,6 +18,13 @@ class UserGradeDashboard(BaseModel):
     overall_average: float
     #: Credit-weighted mean, so a 6-credit course counts double a 3-credit one.
     cumulative_average: float = 0.0
+    #: Plain mean across the current term's courses only.
+    semester_average: float = 0.0
+    #: Credit-weighted grade points. None when the GPA scale is switched off.
+    cgpa: float | None = None
+    credits_completed: float = 0.0
+    credits_in_progress: float = 0.0
+    credit_target: int = 120
     best_course: CourseDashboardEntry | None = None
     weakest_course: CourseDashboardEntry | None = None
     courses_needing_final_score: list[CourseDashboardEntry] = Field(default_factory=list)

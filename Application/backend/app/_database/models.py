@@ -1,6 +1,6 @@
 import uuid
 from sqlalchemy import (
-    Column, String, Float, Boolean, Integer, ForeignKey, Date, DateTime, Time
+    Column, String, Float, Boolean, Integer, ForeignKey, Date, DateTime, Time, JSON
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import Uuid
@@ -24,6 +24,16 @@ class UserModel(Base):
     # True once an identity provider has vouched for the address. Google sets
     # it; local signup cannot, since there is no verification email yet.
     email_verified = Column(Boolean, nullable=False, default=False)
+    # UserPreferences as JSON. Previously the schema declared preferences with
+    # no column behind it, so update_user's setattr loop wrote to a non-mapped
+    # attribute and every change was silently dropped on commit.
+    preferences = Column(JSON, nullable=False, default=dict)
+
+    # Which term the student is in right now. Everything past/current/future on
+    # the grades page is decided by comparing a course against these.
+    current_school_year = Column(Integer, nullable=True)
+    current_semester = Column(String, nullable=True)
+    term_label = Column(String, nullable=True)
 
     courses = relationship("CourseModel", back_populates="user", cascade=cascade)
 

@@ -10,7 +10,8 @@ from app.Auth.services.password_service import (
     verify_password,
 )
 from app.shared.errors import error_auth, error_user
-from app.Users.schemas.user import AuthProvider, UserCreate, UserUpdate
+from app.Users.schemas.academic_status import AcademicStatusUpdate
+from app.Users.schemas.user import AuthProvider, UserCreate, UserPreferences, UserUpdate
 
 
 def create_user(db: Session, user_data: UserCreate):
@@ -166,8 +167,43 @@ def update_user(db: Session, user_id: UUID, data: UserUpdate):
         if existing:
             raise ValueError(error_user["already_exists"])
 
+    # Preferences are a JSON column, so a partial patch must merge rather than
+    # replace -- otherwise setting one preference silently clears the rest.
+    preferences = update_data.pop("preferences", None)
+    if preferences is not None:
+        user.preferences = {**(user.preferences or {}), **preferences}
+
     for key, value in update_data.items():
         setattr(user, key, value)
+
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def get_preferences(user: UserModel) -> UserPreferences:
+    """Stored preferences, filled in with defaults for anything unset."""
+    return UserPreferences(**(user.preferences or {}))
+
+
+def update_academic_status(db: Session, user_id: UUID, data: AcademicStatusUpdate):
+    """Set which term the student is currently in.
+
+    Everything past/current/future on the grades page is decided by comparing a
+    course against these three fields.
+    """
+    user = get_user(db, user_id)
+    if user is None:
+        return None
+
+    update_data = data.model_dump(exclude_unset=True)
+    if "school_year" in update_data:
+        user.current_school_year = update_data["school_year"]
+    if "semester" in update_data:
+        semester = update_data["semester"]
+        user.current_semester = semester.value if hasattr(semester, "value") else semester
+    if "term_label" in update_data:
+        user.term_label = update_data["term_label"]
 
     db.commit()
     db.refresh(user)
