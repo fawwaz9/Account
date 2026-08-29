@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../app/auth/AuthContext";
 import { setPassword } from "../services/authClient";
+import { updateAcademicStatus, updatePreferences } from "../services/currentUserClient";
 import "../styles/login.css";
 
 export default function SettingsPage() {
@@ -15,6 +16,52 @@ export default function SettingsPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const hasPassword = user?.has_password ?? false;
+
+  const [schoolYear, setSchoolYear] = useState(String(user?.current_school_year ?? ""));
+  const [semester, setSemester] = useState(user?.current_semester ?? "Fall");
+  const [creditTarget, setCreditTarget] = useState(String(user?.preferences?.credit_target ?? 120));
+  const [gpaEnabled, setGpaEnabled] = useState(user?.preferences?.gpa_scale_enabled ?? true);
+  const [academicError, setAcademicError] = useState<string | null>(null);
+  const [academicSaved, setAcademicSaved] = useState(false);
+  const [savingAcademic, setSavingAcademic] = useState(false);
+
+  // user is null on the first render and arrives once /me resolves, so the
+  // initial useState values would otherwise stay blank forever.
+  useEffect(() => {
+    if (!user) return;
+    setSchoolYear(user.current_school_year === null ? "" : String(user.current_school_year));
+    setSemester(user.current_semester ?? "Fall");
+    setCreditTarget(String(user.preferences?.credit_target ?? 120));
+    setGpaEnabled(user.preferences?.gpa_scale_enabled ?? true);
+  }, [user]);
+
+  async function handleAcademicSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!user) return;
+
+    setAcademicError(null);
+    setAcademicSaved(false);
+    setSavingAcademic(true);
+
+    try {
+      // Two endpoints: the term lives on the user record, the targets in
+      // preferences. Saved together so one button means one saved state.
+      await updateAcademicStatus(user.id, {
+        school_year: Number(schoolYear),
+        semester,
+      });
+      await updatePreferences(user.id, {
+        credit_target: Number(creditTarget),
+        gpa_scale_enabled: gpaEnabled,
+      });
+      await refreshUser();
+      setAcademicSaved(true);
+    } catch (err) {
+      setAcademicError(err instanceof Error ? err.message : "Could not save your settings");
+    } finally {
+      setSavingAcademic(false);
+    }
+  }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -67,6 +114,80 @@ export default function SettingsPage() {
               </span>
             </span>
           </div>
+        </div>
+
+        <div className="card">
+          <h2>Academic</h2>
+          <p className="muted small-text">
+            Your current term decides which courses count as past, current, or future.
+          </p>
+
+          <form className="loginForm" onSubmit={handleAcademicSubmit}>
+            <div className="loginField">
+              <label htmlFor="school-year">Current school year</label>
+              <input
+                id="school-year"
+                className="loginInput"
+                type="number"
+                min={1}
+                max={10}
+                value={schoolYear}
+                onChange={(event) => setSchoolYear(event.target.value)}
+                placeholder="e.g. 2"
+                required
+              />
+            </div>
+
+            <div className="loginField">
+              <label htmlFor="current-semester">Current semester</label>
+              <select
+                id="current-semester"
+                className="loginInput"
+                value={semester}
+                onChange={(event) => setSemester(event.target.value)}
+              >
+                {["Fall", "Winter", "Spring", "Summer"].map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="loginField">
+              <label htmlFor="credit-target">Credits required for your degree</label>
+              <input
+                id="credit-target"
+                className="loginInput"
+                type="number"
+                min={1}
+                max={400}
+                value={creditTarget}
+                onChange={(event) => setCreditTarget(event.target.value)}
+                required
+              />
+            </div>
+
+            <div className="settingsToggle">
+              <input
+                id="gpa-enabled"
+                type="checkbox"
+                checked={gpaEnabled}
+                onChange={(event) => setGpaEnabled(event.target.checked)}
+              />
+              <label htmlFor="gpa-enabled">
+                Show CGPA
+                <span className="small-text muted">
+                  {" "}&mdash; UBC doesn&apos;t put a GPA on transcripts, so this is optional.
+                </span>
+              </label>
+            </div>
+
+            {academicError && <p className="loginError">{academicError}</p>}
+            {academicSaved && <p className="loginSuccess">Saved.</p>}
+
+            <button type="submit" className="loginSubmit" disabled={savingAcademic}>
+              {savingAcademic ? "Saving..." : "Save"}
+            </button>
+          </form>
         </div>
 
         <div className="card">

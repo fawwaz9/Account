@@ -12,6 +12,15 @@ class CourseDashboardEntry(BaseModel):
     unfinished_categories: list[str] = Field(default_factory=list)
 
 
+class YearSummary(BaseModel):
+    """One school year's worth of courses, for the past/future sections."""
+
+    school_year: int
+    #: None when no course that year has anything recorded.
+    average: float | None = None
+    course_count: int = 0
+
+
 class UserGradeDashboard(BaseModel):
     total_courses: int
     #: Plain mean across courses, every course counting equally.
@@ -29,4 +38,6 @@ class UserGradeDashboard(BaseModel):
     weakest_course: CourseDashboardEntry | None = None
     courses_needing_final_score: list[CourseDashboardEntry] = Field(default_factory=list)
     unfinished_categories_by_course: dict[str, list[str]] = Field(default_factory=dict)
+    past_years: list[YearSummary] = Field(default_factory=list)
+    future_years: list[YearSummary] = Field(default_factory=list)
 

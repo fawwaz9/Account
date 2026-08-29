@@ -13,7 +13,12 @@ export interface Course {
   average: number;
   start_date: string | null;
   end_date: string | null;
+  /** Letter for the course's result; "" when nothing is recorded yet. */
+  letter_grade: string;
+  term_bucket: TermBucket;
 }
+
+export type TermBucket = "past" | "current" | "future";
 
 export enum Semester {
   FALL = "Fall",
@@ -166,12 +171,28 @@ export interface UserUpdate{
 
 
 // Dashboard
+export interface YearSummary {
+  school_year: number;
+  /** null when no course that year has anything recorded */
+  average: number | null;
+  course_count: number;
+}
+
 export interface UserGradeDashboard {
   total_courses: number;
   /** Plain mean across courses */
   overall_average: number;
   /** Credit-weighted mean */
   cumulative_average: number;
+  /** Plain mean across the current term only */
+  semester_average: number;
+  /** null when the GPA scale is switched off in settings */
+  cgpa: number | null;
+  credits_completed: number;
+  credits_in_progress: number;
+  credit_target: number;
+  past_years: YearSummary[];
+  future_years: YearSummary[];
   best_course: CourseDashboardEntry | null;
   weakest_course: CourseDashboardEntry | null;
   courses_needing_final_score: CourseNeedingFinalScore[];

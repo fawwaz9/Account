@@ -9,9 +9,20 @@ interface CourseCardProps {
   readonly course: Course;
 }
 
+/**
+ * The grade a course should be represented by: the professor's final grade
+ * once submitted, otherwise the running average. Mirrors course_result_grade
+ * on the backend, which is what letter_grade is derived from.
+ */
+export function displayGrade(course: Course): number | null {
+  if (course.final_grade > 0) return course.final_grade;
+  if (course.average > 0) return course.average;
+  return null;
+}
+
 export default function CourseList({ courses }: CourseListProps) {
   return (
-    <div className="flex flex-col gap-4">
+    <div className="courseList">
       {courses.map((course) => (
         <CourseCard key={course.id} course={course} />
       ))}
@@ -21,26 +32,25 @@ export default function CourseList({ courses }: CourseListProps) {
 
 export function CourseCard({ course }: CourseCardProps) {
   const navigate = useNavigate();
-
-  function gotoDetail() {
-    navigate(`/grades/courses/${course.id}`);
-  }
+  const grade = displayGrade(course);
 
   return (
     <div className="courses">
-      <button type="button" className="courseBox" onClick={gotoDetail}>
-        <h3>{course.code}</h3>
-        <p className="small-text">{course.professor}</p>
-        <div className="right">
-          {/* Implement letter grade later */}
-        </div>
+      <button
+        type="button"
+        className="courseBox"
+        onClick={() => navigate(`/grades/courses/${course.id}`)}
+      >
+        <span className="courseBoxMain">
+          <span className="courseCode">{course.code}</span>
+          <span className="small-text courseProfessor">{course.professor}</span>
+        </span>
+        {course.letter_grade && (
+          <span className="courseLetter">{course.letter_grade}</span>
+        )}
       </button>
 
-      <div className="averageCircle">
-        {Math.round(
-          course.final_grade <= 0 ? course.average : course.final_grade
-        )}
-      </div>
+      <div className="averageCircle">{grade === null ? "–" : Math.round(grade)}</div>
     </div>
   );
 }

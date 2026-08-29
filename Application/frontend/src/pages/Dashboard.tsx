@@ -1,35 +1,13 @@
-import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "../styles/dashboard.css";
 import { useAuth } from "../app/auth/AuthContext";
-import { fetchDashboard } from "../features/grades/api";
-import { UserGradeDashboard } from "../features/grades/types";
+import { useDashboard } from "../features/grades/hooks/useDashboard";
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const [summary, setSummary] = useState<UserGradeDashboard | null>(null);
-  const [summaryError, setSummaryError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let mounted = true;
-    if (!user) return;
-
-    fetchDashboard(user.id)
-      .then((data) => {
-        if (mounted) setSummary(data);
-      })
-      .catch((err) => {
-        if (mounted) {
-          setSummaryError(err instanceof Error ? err.message : "Could not load your grades");
-        }
-      });
-
-    return () => {
-      mounted = false;
-    };
-  }, [user]);
+  const { summary, error: summaryError } = useDashboard();
 
   const hasCourses = (summary?.total_courses ?? 0) > 0;
 

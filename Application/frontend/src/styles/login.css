@@ -224,3 +224,16 @@
   border-color: #1f2a44;
   color: var(--muted);
 }
+
+.settingsToggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.settingsToggle input {
+  margin-top: 3px;
+  accent-color: var(--gold);
+}

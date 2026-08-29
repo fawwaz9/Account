@@ -2,9 +2,9 @@ import uuid
 from sqlalchemy.orm import Session
 from app._database.models import CourseModel
 from app.Grades.utils.enums import GradeCategory
-from app.Grades.schemas.dashboard import CourseDashboardEntry, UserGradeDashboard
+from app.Grades.schemas.dashboard import CourseDashboardEntry, UserGradeDashboard, YearSummary
 from app.Grades.services.grade_service import calculate_gpa_points, calculate_required_final
-from app.Grades.utils.terms import CURRENT, PAST, course_result_grade
+from app.Grades.utils.terms import CURRENT, FUTURE, PAST, course_result_grade, year_average
 from app.Grades.services.course_service import get_all_courses
 from app.Users.services.user_service import get_preferences, get_user
 
@@ -103,6 +103,8 @@ def get_dashboard(db: Session, user_id: uuid.UUID, target_grade: float = DEFAULT
         weakest_course=weakest_course,
         courses_needing_final_score=courses_needing_final_score,
         unfinished_categories_by_course=unfinished_categories_by_course,
+        past_years=summarize_years(course_list, PAST),
+        future_years=summarize_years(course_list, FUTURE),
     )
 
 
@@ -179,3 +181,26 @@ def credits_by_state(courses) -> tuple[float, float]:
                 in_progress += credits
 
     return completed, in_progress
+
+
+def summarize_years(courses, bucket: str) -> list[YearSummary]:
+    """Group one bucket's courses by school year, newest year first for past.
+
+    Uses year_average, so a course that was never filled in is skipped rather
+    than pulling its year toward zero.
+    """
+    by_year: dict[int, list] = {}
+    for course in courses:
+        if course.term_bucket != bucket:
+            continue
+        by_year.setdefault(course.year, []).append(course)
+
+    summaries = [
+        YearSummary(
+            school_year=year,
+            average=year_average(year_courses),
+            course_count=len(year_courses),
+        )
+        for year, year_courses in by_year.items()
+    ]
+    return sorted(summaries, key=lambda entry: entry.school_year)

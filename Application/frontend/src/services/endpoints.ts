@@ -3,6 +3,7 @@ export const endpoints = {
     base: "users",
     detail: (userId: string) => `users/${userId}`,
     me: "users/me",
+    academicStatus: (userId: string) => `users/${userId}/academic-status`,
   },
   grades: {
     courses: (userId: string) => `grades/${userId}/courses`,
