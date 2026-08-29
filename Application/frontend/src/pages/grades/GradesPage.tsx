@@ -31,12 +31,15 @@ export default function GradesPage() {
     <>
       <div className="container gradesPage">
         <header className="gradesHeader">
-          <button type="button" className="buttons backButton" onClick={() => navigate("/")}>
-            &larr;
-          </button>
           <h1 className="gradesTitle">Grades</h1>
-          <CourseSearch />
         </header>
+
+        <div className="gradesMenu">
+          <button type="button" className="buttons backButton" onClick={() => navigate("/")}>
+              &larr;
+          </button>
+          <CourseSearch />
+        </div>
 
         <div className="gradesGrid">
           <div className="gradesColumn">

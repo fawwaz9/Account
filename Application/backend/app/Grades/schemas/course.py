@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from app.Grades.schemas.grade import Grade
 from app.Grades.utils.enums import GradeCategory, Semester
-from app.shared.errors import weight_error
+from app.shared.errors import MAX_TOTAL_WEIGHT, weight_error
 
 def default_category_weights() -> dict[GradeCategory, float]:
     return dict.fromkeys(GradeCategory, 0.0)
@@ -22,7 +22,7 @@ def normalize_category_weights(
             raise ValueError(weight_error["invalid_weight_value"])
 
     total_weight = sum(normalized.values())
-    if total_weight > 100:
+    if total_weight > MAX_TOTAL_WEIGHT:
         raise ValueError(weight_error["invalid_weights"])
 
     return normalized
@@ -34,7 +34,7 @@ class CourseBase(BaseModel):
     semester: Semester = Field(..., description="The semester in which the course is offered")
     credits: float = Field(default=3.0, ge=0.5, le=10.0, description="The number of credits for the course")
     required: bool = Field(default=True, description="Indicates if the course is required or elective")
-    professor: str = Field(..., min_length=3, max_length=100, description="The name of the professor teaching the course")
+    professor: str | None = Field(default=None, max_length=100, description="The name of the professor teaching the course")
     final_grade: float = Field(default=0.0, ge=0, le=100, description="The final grade for the course submitted by the professor")
     category_weights: dict[GradeCategory, float] = Field(default_factory=default_category_weights, description="Weights by grade category")
     # Typed as date, not str: the column is Column(Date), and Pydantic v2 will not
@@ -70,7 +70,7 @@ class CategoryWeightsUpdate(BaseModel):
                 raise ValueError(weight_error["invalid_weight_value"])
             total += weight
 
-        if total > 100:
+        if total > MAX_TOTAL_WEIGHT:
             raise ValueError(weight_error["invalid_weights"])
 
         return self
@@ -82,7 +82,7 @@ class CourseUpdate(BaseModel):
     semester: Semester | None = Field(default=None, description="The semester in which the course is offered")
     credits: float | None = Field(default=None, ge=0.5, le=10.0, description="The number of credits for the course")
     required: bool | None = Field(default=None, description="Indicates if the course is required or elective")
-    professor: str | None = Field(default=None, min_length=3, max_length=100, description="The name of the professor teaching the course")
+    professor: str | None = Field(default=None, max_length=100, description="The name of the professor teaching the course")
     final_grade: float | None = Field(default=None, ge=0, le=100, description="The final grade for the course submitted by the professor")
     category_weights: dict[GradeCategory, float] | None = Field(default=None, description="Weights by grade category")
     start_date: date | None = Field(default=None, description="The date the course starts")
@@ -97,7 +97,7 @@ class CourseUpdate(BaseModel):
                     raise ValueError(weight_error["invalid_weight_value"])
                 total += weight
 
-            if total > 100:
+            if total > MAX_TOTAL_WEIGHT:
                 raise ValueError(weight_error["invalid_weights"])
 
         if self.start_date and self.end_date and self.end_date < self.start_date:

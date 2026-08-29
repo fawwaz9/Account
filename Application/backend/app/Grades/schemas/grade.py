@@ -3,6 +3,10 @@ from pydantic import BaseModel, Field, model_validator
 
 from app.Grades.utils.enums import GradeCategory
 
+#: Kept in step with grade_service.MAX_SCORE_MULTIPLE; defined here to avoid a
+#: schema -> service import.
+MAX_SCORE_MULTIPLE = 2.0
+
 class GradeBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, description="The name of the grade (e.g., Midterm Exam, Final Project)")
     # Optional so an assignment can be added before it has been marked. Every
@@ -16,8 +20,10 @@ class GradeBase(BaseModel):
     def validate_grade_logic(self):
         if self.name.strip() == "":
             raise ValueError("Grade name cannot be empty")
-        if self.score is not None and self.score > self.max_score:
-            raise ValueError("Score cannot be greater than max score")
+        # Bonus marks are real, so a score may exceed its max -- but not by an
+        # implausible multiple, which catches a slipped digit.
+        if self.score is not None and self.score > self.max_score * MAX_SCORE_MULTIPLE:
+            raise ValueError(f"Score cannot exceed {MAX_SCORE_MULTIPLE:g}x the max score")
 
         return self
  

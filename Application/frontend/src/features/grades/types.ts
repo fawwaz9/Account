@@ -7,7 +7,7 @@ export interface Course {
   semester: Semester;
   credits: number;
   required: boolean;
-  professor: string;
+  professor: string | null;
   final_grade: number;
   category_weights: Partial<Record<GradeCategory, number>>;
   average: number;
@@ -34,7 +34,7 @@ export interface CourseCreate {
   year: number;
   credits: number;
   required: boolean;
-  professor: string;
+  professor: string | null;
   final_grade: number;
   category_weights: Partial<Record<GradeCategory, number>>;
   // ISO yyyy-mm-dd, or null for a course with no set term dates
@@ -50,7 +50,7 @@ export interface CourseDetail {
   semester: Semester;
   credits: number;
   required: boolean;
-  professor: string;
+  professor: string | null;
   final_grade: number;
   category_weights: Partial<Record<GradeCategory, number>>;
   average: number;

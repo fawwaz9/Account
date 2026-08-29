@@ -17,7 +17,7 @@ const defaultForm: CourseCreate = {
   year: 1,
   credits: 3,
   required: true,
-  professor: "",
+  professor: null,
   final_grade: 0,
   category_weights: {},
   start_date: null,

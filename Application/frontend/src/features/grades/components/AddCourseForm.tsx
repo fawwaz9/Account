@@ -101,11 +101,10 @@ export default function AddCourseForm({
       <div>
         <input
           id="course-professor"
-          value={form.professor}
+          value={form.professor ?? ""}
           onChange={(event) => updateField("professor", event.target.value)}
           className="--input mt-1 w-full rounded-lg border border-slate-700 bg-transparent text-white"
-          placeholder="Professor"
-          required
+          placeholder="Professor (optional)"
         />
       </div>
 

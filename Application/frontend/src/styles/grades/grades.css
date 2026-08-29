@@ -82,7 +82,8 @@
   border-radius: 8px;
   margin: 5px 0;
   box-shadow: 0 8px 24px var(--shadow);
-  width: 250px;
+  width: 80%;
+  height: 60px;
 }
 
 .courses .courseBox:hover {
@@ -91,13 +92,12 @@
 }
 .courses {
   display: flex;
-  flex-wrap: wrap;
   gap: 10px;
 }
 
 .averageCircle {
-  width: 50px;
-  height: 50px;
+  width: 70px;
+  height: 60px;
   border-radius: 50%;
   background: linear-gradient(145deg, var(--panel), var(--panel-2));
   border: 1px solid var(--gold);
@@ -204,13 +204,20 @@
 
 /* ===== Grades page layout ===== */
 .gradesPage {
-  max-width: 1180px;
   margin: 0 auto;
 }
 
 .gradesHeader {
   display: flex;
   align-items: center;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.gradesMenu {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 16px;
   margin-bottom: 28px;
 }

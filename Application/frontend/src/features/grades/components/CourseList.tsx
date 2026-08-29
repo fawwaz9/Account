@@ -43,7 +43,9 @@ export function CourseCard({ course }: CourseCardProps) {
       >
         <span className="courseBoxMain">
           <span className="courseCode">{course.code}</span>
-          <span className="small-text courseProfessor">{course.professor}</span>
+          {course.professor && (
+            <span className="small-text courseProfessor">{course.professor}</span>
+          )}
         </span>
         {course.letter_grade && (
           <span className="courseLetter">{course.letter_grade}</span>

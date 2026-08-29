@@ -19,6 +19,7 @@ dist/
 
 # ---- Local database ----
 *.db
+*.db.backup*
 *.sqlite
 *.sqlite3
 

@@ -46,7 +46,12 @@ responses = {
     "auth_password": {400: {"description": error_auth["wrong_current_password"]}}
 }
 
+# Totals above 100 are legitimate: a course can be marked out of 101%, or carry
+# an explicit bonus category, and the extra acts as bonus rather than inflating
+# the denominator. Only nonsense totals are rejected.
+MAX_TOTAL_WEIGHT = 200.0
+
 weight_error = {
-    "invalid_weights": "Invalid category weights. The sum of weights must be less than or equal to 100.",
+    "invalid_weights": f"Invalid category weights. The sum of weights cannot exceed {MAX_TOTAL_WEIGHT:g}.",
     "invalid_weight_value": "Invalid weight value. Each weight must be between 0 and 100."
 }

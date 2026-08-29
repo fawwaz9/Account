@@ -6,6 +6,17 @@ from app.Grades.utils.enums import GradeCategory
 from app.Grades.utils.terms import course_result_grade
 
 
+MAX_COURSE_PERCENT = 100.0
+
+#: A grade may exceed its max -- bonus marks are real -- but not absurdly, so a
+#: slipped digit (150 out of 10) is still caught.
+MAX_SCORE_MULTIPLE = 2.0
+
+
+def score_exceeds_limit(score: float | None, max_score: float) -> bool:
+    return score is not None and score > max_score * MAX_SCORE_MULTIPLE
+
+
 def get_user_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> CourseModel | None:
     return (
         db.query(CourseModel)
@@ -116,8 +127,8 @@ def update_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id
 
     # A partial update can raise the score or lower max_score independently, so
     # the pair is only checkable after both have been applied.
-    if grade.score is not None and grade.score > grade.max_score:
-        raise ValueError("Score cannot be greater than max score")
+    if score_exceeds_limit(grade.score, grade.max_score):
+        raise ValueError(f"Score cannot exceed {MAX_SCORE_MULTIPLE:g}x the max score")
 
     course.average = calculate_current_average(course)
     db.commit()
@@ -160,8 +171,8 @@ def record_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id
 
     if score < 0:
         raise ValueError("score must be a positive value")
-    if score > grade.max_score:
-        raise ValueError("Score cannot be greater than max score")
+    if score_exceeds_limit(score, grade.max_score):
+        raise ValueError(f"Score cannot exceed {MAX_SCORE_MULTIPLE:g}x the max score")
 
     grade.score = score
     course.average = calculate_current_average(course)
@@ -179,9 +190,6 @@ def calculate_current_average(course: CourseModel) -> float:
     categories_present = {g.category for g in graded}
 
     total_weight = sum(weights.get(category, 0.0) for category in categories_present)
-    if total_weight > 100:
-        raise ValueError("Total grade weight cannot exceed 100.")
-
     if total_weight == 0:
         return 0.0
 
@@ -189,7 +197,13 @@ def calculate_current_average(course: CourseModel) -> float:
         calculate_grade_category_average(course, category) * weights.get(category, 0.0)
         for category in categories_present
     )
-    return round(weighted_sum / total_weight, 2)
+
+    # Weight past 100 is bonus: it adds marks without enlarging the denominator,
+    # which is how a course marked out of 101% works. Earning beyond a
+    # category's weight (bonus marks on an assignment) is allowed to offset
+    # losses elsewhere, but the course itself still caps at 100.
+    denominator = min(total_weight, MAX_COURSE_PERCENT)
+    return min(round(weighted_sum / denominator, 2), MAX_COURSE_PERCENT)
 
 
 # (minimum percentage, letter, grade points) on UBC's published 4.33 scale.
