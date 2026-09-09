@@ -99,6 +99,52 @@ def add_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_data:
     return grade
 
 
+def add_grades_bulk(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grades: list[GradeCreate]):
+    """Create several grades in one transaction.
+
+    Entering a course's categories one modal at a time meant eleven sequential
+    requests, any of which could fail and leave the course half-populated. This
+    commits once: either every row lands or none does.
+    """
+    course = get_user_course(db, user_id, course_id)
+    if course is None:
+        return None
+
+    weights = course.category_weights
+    created: list[GradeModel] = []
+
+    try:
+        for grade_data in grades:
+            category_value = (
+                grade_data.category.value
+                if isinstance(grade_data.category, GradeCategory)
+                else grade_data.category
+            )
+            grade = GradeModel(
+                id=uuid.uuid4(),
+                course_id=course.id,
+                name=grade_data.name,
+                category=category_value,
+                score=grade_data.score,
+                max_score=grade_data.max_score,
+                weight=weights.get(category_value, 0.0),
+            )
+            db.add(grade)
+            created.append(grade)
+
+        db.flush()
+        db.refresh(course)
+        course.average = calculate_current_average(course)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    for grade in created:
+        db.refresh(grade)
+    return created
+
+
 def find_course_and_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id: uuid.UUID):
     course = get_user_course(db, user_id, course_id)
     if course is None:

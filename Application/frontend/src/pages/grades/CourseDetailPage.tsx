@@ -8,6 +8,7 @@ import EditGradeModal from "../../features/grades/components/EditGradeModal";
 import EditCourseModal from "../../features/grades/components/EditCourseModal";
 import DeleteConfirmModal from "../../features/grades/components/DeleteConfirmModal";
 import RequiredFinalModal from "../../features/grades/components/RequiredFinalModal";
+import BulkGradesModal from "../../features/grades/components/BulkGradesModal";
 import { getErrorMessage } from "../../features/grades/components/AddCourseModal";
 import GradeCategoryColumn from "../../features/grades/components/GradeCategoryColumn";
 
@@ -22,6 +23,7 @@ export default function CourseDetailPage() {
   const [editGrade, setEditGrade] = useState<Grade | null>(null);
   const [editingCourse, setEditingCourse] = useState(false);
   const [showRequiredFinal, setShowRequiredFinal] = useState(false);
+  const [showBulkAdd, setShowBulkAdd] = useState(false);
 
   const [deleteGradeTarget, setDeleteGradeTarget] = useState<Grade | null>(null);
   const [deletingGrade, setDeletingGrade] = useState(false);
@@ -238,6 +240,14 @@ export default function CourseDetailPage() {
         <button
           type="button"
           className="editCourseButton"
+          onClick={() => setShowBulkAdd(true)}
+        >
+          Add Several
+        </button>
+
+        <button
+          type="button"
+          className="editCourseButton"
           onClick={() => setEditingCourse(true)}
         >
           Edit Course
@@ -277,6 +287,13 @@ export default function CourseDetailPage() {
         course={course}
         onClose={() => setEditingCourse(false)}
         onCourseUpdated={refreshCourse}
+      />
+
+      <BulkGradesModal
+        open={showBulkAdd}
+        courseId={courseId}
+        onClose={() => setShowBulkAdd(false)}
+        onGradesAdded={refreshCourse}
       />
 
       <RequiredFinalModal

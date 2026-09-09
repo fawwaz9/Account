@@ -1,3 +1,4 @@
+import itertools
 import uuid
 from sqlalchemy.orm import Session
 from app._database.models import CourseModel
@@ -5,6 +6,7 @@ from app.Grades.utils.enums import GradeCategory
 from app.Grades.schemas.dashboard import (
     AttentionItem,
     CourseDashboardEntry,
+    TermPoint,
     UserGradeDashboard,
     YearSummary,
 )
@@ -82,6 +84,7 @@ def get_dashboard(db: Session, user_id: uuid.UUID, target_grade: float = DEFAULT
     preferences = get_preferences(user)
     current_courses = [c for c in course_list if c.term_bucket == CURRENT]
     completed_credits, in_progress_credits = credits_by_state(course_list)
+    required_credits, elective_credits = completed_credits_by_kind(course_list)
 
     best_course = max(entries, key=lambda entry: entry.average)
     weakest_course = min(entries, key=lambda entry: entry.average)
@@ -101,12 +104,15 @@ def get_dashboard(db: Session, user_id: uuid.UUID, target_grade: float = DEFAULT
         cgpa=calculate_cgpa(course_list) if preferences.gpa_scale_enabled else None,
         credits_completed=completed_credits,
         credits_in_progress=in_progress_credits,
+        credits_required=required_credits,
+        credits_elective=elective_credits,
         credit_target=preferences.credit_target,
         best_course=best_course,
         weakest_course=weakest_course,
         courses_needing_final_score=courses_needing_final_score,
         unfinished_categories_by_course=unfinished_categories_by_course,
         attention=collect_attention(course_list, preferences.default_target_grade),
+        term_history=build_term_history(course_list),
         past_years=summarize_years(course_list, PAST),
         future_years=summarize_years(course_list, FUTURE),
     )
@@ -252,3 +258,64 @@ def collect_attention(courses, default_target: float) -> list[AttentionItem]:
             weights.append(AttentionItem(kind="weight_problem", **common, message=problem))
 
     return missing + below + weights
+
+
+def completed_credits_by_kind(courses) -> tuple[float, float]:
+    """(required, elective) among completed credits.
+
+    The `required` flag has been on the model since the beginning with nothing
+    reading it.
+    """
+    required = elective = 0.0
+    for course in courses:
+        if not is_completed(course):
+            continue
+        if course.required:
+            required += course.credits or 0.0
+        else:
+            elective += course.credits or 0.0
+
+    return required, elective
+
+
+def is_completed(course) -> bool:
+    """Past terms, plus current courses that already carry a final grade."""
+    if course.term_bucket == PAST:
+        return True
+    return course.term_bucket == CURRENT and bool(course.final_grade and course.final_grade > 0)
+
+
+def build_term_history(courses) -> list[TermPoint]:
+    """One point per term, in order, with the running cumulative beside it.
+
+    Relies on get_all_courses returning courses sorted by year then term, so
+    consecutive runs are the terms. Terms where nothing is recorded are left
+    out rather than plotted as zero, which would drag the line to the floor.
+    """
+    history: list[TermPoint] = []
+    accumulated: list = []
+
+    for (year, semester), group in itertools.groupby(
+        courses, key=lambda course: (course.year, course.semester)
+    ):
+        term_courses = list(group)
+        accumulated.extend(term_courses)
+
+        if not any(course_result_grade(course) is not None for course in term_courses):
+            continue
+
+        # Cumulative counts finished courses only, so it stays undefined until
+        # one exists rather than reporting zero and flooring the chart.
+        has_finals = any(
+            course.final_grade and course.final_grade > 0 for course in accumulated
+        )
+
+        history.append(TermPoint(
+            school_year=year,
+            semester=semester,
+            label=f"Y{year} {semester}",
+            term_average=plain_average(term_courses),
+            cumulative_average=calculate_cumulative_average(accumulated) if has_finals else None,
+        ))
+
+    return history

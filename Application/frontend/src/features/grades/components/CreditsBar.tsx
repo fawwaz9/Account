@@ -2,9 +2,17 @@ interface CreditsBarProps {
   readonly completed: number;
   readonly inProgress: number;
   readonly target: number;
+  readonly required?: number;
+  readonly elective?: number;
 }
 
-export default function CreditsBar({ completed, inProgress, target }: CreditsBarProps) {
+export default function CreditsBar({
+  completed,
+  inProgress,
+  target,
+  required = 0,
+  elective = 0,
+}: CreditsBarProps) {
   const safeTarget = target > 0 ? target : 1;
   const completedPct = Math.min((completed / safeTarget) * 100, 100);
   const inProgressPct = Math.min((inProgress / safeTarget) * 100, 100 - completedPct);
@@ -50,6 +58,12 @@ export default function CreditsBar({ completed, inProgress, target }: CreditsBar
 
       <p className="creditsRemaining">
         {completed} of {target} credits &middot; {remaining} left
+        {completed > 0 && (
+          <>
+            <br />
+            {required} required &middot; {elective} elective
+          </>
+        )}
       </p>
     </div>
   );

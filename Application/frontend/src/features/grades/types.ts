@@ -195,6 +195,16 @@ export interface AttentionItem {
   message: string;
 }
 
+export interface TermPoint {
+  school_year: number;
+  semester: string;
+  label: string;
+  /** Plain mean across that term's courses */
+  term_average: number;
+  /** Credit-weighted cumulative up to that term; null until a course has a final */
+  cumulative_average: number | null;
+}
+
 export interface UserGradeDashboard {
   total_courses: number;
   /** Credit-weighted mean */
@@ -205,8 +215,11 @@ export interface UserGradeDashboard {
   cgpa: number | null;
   credits_completed: number;
   credits_in_progress: number;
+  credits_required: number;
+  credits_elective: number;
   credit_target: number;
   attention: AttentionItem[];
+  term_history: TermPoint[];
   past_years: YearSummary[];
   future_years: YearSummary[];
   best_course: CourseDashboardEntry | null;

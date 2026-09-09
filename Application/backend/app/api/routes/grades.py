@@ -18,6 +18,7 @@ from app.Grades.schemas.dashboard import UserGradeDashboard
 from app.Grades.schemas.grade import Grade, GradeCreate, GradeUpdate
 from app.Grades.services.grade_service import (
     add_grade,
+    add_grades_bulk,
     calculate_current_average,
     calculate_letter_grade,
     calculate_required_final,
@@ -199,6 +200,20 @@ def create_grade(user_id: VerifiedUserId, course_id: UUID, grade: GradeCreate, d
         raise HTTPException(status_code=404, detail=error_course["not_found"])
 
     return new_grade
+
+@router.post("/{user_id}/courses/{course_id}/grades/bulk", response_model=list[Grade], responses={404: {"description": error_course["not_found"]}, 400: {"description": error_grade["invalid_data"]}})
+def create_grades_bulk(user_id: VerifiedUserId, course_id: UUID, grades: list[GradeCreate], db: DBSession):
+    """Add several grades at once, all or nothing."""
+    try:
+        created = add_grades_bulk(db, user_id, course_id, grades)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if created is None:
+        raise HTTPException(status_code=404, detail=error_course["not_found"])
+
+    return created
+
 
 @router.get("/{user_id}/courses/{course_id}/grades/{grade_id}", response_model=Grade, responses={404: {"description": error_grade["not_found"]}})
 def get_single_grade(user_id: VerifiedUserId, course_id: UUID, grade_id: UUID, db: DBSession):

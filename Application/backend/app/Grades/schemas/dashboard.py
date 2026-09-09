@@ -21,6 +21,20 @@ class YearSummary(BaseModel):
     course_count: int = 0
 
 
+class TermPoint(BaseModel):
+    """One term on the grade trend: how it went, and where it left the total."""
+
+    school_year: int
+    semester: str
+    label: str
+    #: Plain mean across the term's courses, matching how a term average reads.
+    term_average: float
+    #: Credit-weighted cumulative up to and including this term. None until
+    #: some course has a final grade -- an in-progress term leaves the
+    #: cumulative undefined rather than zero.
+    cumulative_average: float | None = None
+
+
 class AttentionItem(BaseModel):
     """Something worth acting on, surfaced on the grades page."""
 
@@ -43,12 +57,16 @@ class UserGradeDashboard(BaseModel):
     cgpa: float | None = None
     credits_completed: float = 0.0
     credits_in_progress: float = 0.0
+    #: Completed credits split by the course's required flag.
+    credits_required: float = 0.0
+    credits_elective: float = 0.0
     credit_target: int = 120
     best_course: CourseDashboardEntry | None = None
     weakest_course: CourseDashboardEntry | None = None
     courses_needing_final_score: list[CourseDashboardEntry] = Field(default_factory=list)
     unfinished_categories_by_course: dict[str, list[str]] = Field(default_factory=dict)
     attention: list[AttentionItem] = Field(default_factory=list)
+    term_history: list[TermPoint] = Field(default_factory=list)
     past_years: list[YearSummary] = Field(default_factory=list)
     future_years: list[YearSummary] = Field(default_factory=list)
 

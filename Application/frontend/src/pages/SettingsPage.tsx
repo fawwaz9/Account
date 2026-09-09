@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useAuth } from "../app/auth/AuthContext";
 import { setPassword } from "../services/authClient";
 import { updateAcademicStatus, updatePreferences } from "../services/currentUserClient";
@@ -7,7 +6,6 @@ import "../styles/login.css";
 
 export default function SettingsPage() {
   const { user, refreshUser } = useAuth();
-  const navigate = useNavigate();
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -87,12 +85,6 @@ export default function SettingsPage() {
 
   return (
     <div className="container">
-      <div className="mb-6">
-        <button type="button" className="buttons" onClick={() => navigate("/")}>
-          ←
-        </button>
-      </div>
-
       <h1 className="title">Settings</h1>
 
       <div className="settingsGrid">

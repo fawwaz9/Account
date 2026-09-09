@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import CourseList from "../../features/grades/components/CourseList";
 import AddCourseModal from "../../features/grades/components/AddCourseModal";
 import CourseSearch from "../../features/grades/components/CourseSearch";
@@ -7,6 +6,7 @@ import SemesterSummary from "../../features/grades/components/SemesterSummary";
 import CreditsBar from "../../features/grades/components/CreditsBar";
 import YearCourses from "../../features/grades/components/YearCourses";
 import AttentionPanel from "../../features/grades/components/AttentionPanel";
+import GradeTrendChart from "../../features/grades/components/GradeTrendChart";
 import { useCourses } from "../../features/grades/hooks/useCourses";
 import { useDashboard } from "../../features/grades/hooks/useDashboard";
 import { Course } from "../../features/grades/types";
@@ -22,7 +22,6 @@ export default function GradesPage() {
   const { summary, reload: reloadSummary } = useDashboard();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
-  const navigate = useNavigate();
   const { user } = useAuth();
 
   // The default list is the current term only. Everything else is reached
@@ -63,10 +62,6 @@ export default function GradesPage() {
     <>
       <div className="container gradesPage">
         <div className="gradesMenu">
-          {/* Until the sidebar lands this is the only way back to the dashboard. */}
-          <button type="button" className="buttons backButton" onClick={() => navigate("/")}>
-            &larr;
-          </button>
           <h1 className="gradesTitle">Grades</h1>
           <CourseSearch />
         </div>
@@ -151,15 +146,12 @@ export default function GradesPage() {
                 completed={summary.credits_completed}
                 inProgress={summary.credits_in_progress}
                 target={summary.credit_target}
+                required={summary.credits_required}
+                elective={summary.credits_elective}
               />
             )}
 
-            <div className="comingSoon">
-              <span className="comingSoonLabel">Grade trend</span>
-              <p className="small-text muted">
-                Needs per-term history, which isn&apos;t recorded yet.
-              </p>
-            </div>
+            <GradeTrendChart points={summary?.term_history ?? []} />
 
             <AttentionPanel items={summary?.attention ?? []} userId={user?.id} />
           </div>

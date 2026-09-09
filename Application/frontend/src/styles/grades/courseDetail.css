@@ -304,3 +304,46 @@
   margin: 10px 0 0;
   line-height: 1.5;
 }
+
+/* ===== Bulk grade entry ===== */
+.bulkPopup { min-width: min(640px, 92vw); }
+
+.bulkGrid {
+  display: grid;
+  grid-template-columns: 2fr 1.4fr 0.8fr 0.8fr 28px;
+  gap: 6px;
+  align-items: center;
+  margin: 14px 0 10px;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+.bulkHead {
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.bulkInput {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid #1f2a44;
+  text-align: left;
+}
+
+.bulkRemove {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0;
+}
+
+.bulkRemove:hover:enabled { color: var(--delete); }
+.bulkRemove:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.bulkAddRow { padding: 5px 12px; font-size: 0.82rem; }

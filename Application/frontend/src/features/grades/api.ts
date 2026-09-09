@@ -101,3 +101,16 @@ export async function fetchRequiredFinal(
     `${endpoints.grades.requiredFinal(userId, courseId)}?target_grade=${targetGrade}`
   );
 }
+
+/**
+ * Add several grades at once. The server commits them in one transaction, so
+ * either every row lands or none does -- entering a course one modal at a time
+ * meant a dozen requests that could each fail halfway.
+ */
+export async function createGradesBulk(
+  userId: string,
+  courseId: string,
+  payload: GradeCreate[]
+) {
+  return post<Grade[]>(endpoints.grades.bulkGrades(userId, courseId), payload);
+}
