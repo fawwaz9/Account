@@ -22,7 +22,11 @@ export const endpoints = {
     list: (userId: string) => `tasks/${userId}/tasks`,
   },
   finances: {
-    budgets: (userId: string) => `finances/${userId}/budgets`,
-    goals: (userId: string) => `finances/${userId}/goals`,
+    accounts: (userId: string) => `finances/${userId}/accounts`,
+    account: (userId: string, accountId: string) => `finances/${userId}/accounts/${accountId}`,
+    transactions: (userId: string) => `finances/${userId}/transactions`,
+    transaction: (userId: string, transactionId: string) =>
+      `finances/${userId}/transactions/${transactionId}`,
+    transfers: (userId: string) => `finances/${userId}/transfers`,
   },
 };

@@ -36,6 +36,7 @@ class UserModel(Base):
     term_label = Column(String, nullable=True)
 
     courses = relationship("CourseModel", back_populates="user", cascade=cascade)
+    accounts = relationship("AccountModel", back_populates="user", cascade=cascade)
 
     @property
     def has_password(self) -> bool:
@@ -100,3 +101,55 @@ class GradeModel(Base):
     weight = Column(Float, default=0.0)
 
     course = relationship("CourseModel", back_populates="grades")
+
+class AccountModel(Base):
+    """One pot money sits in.
+
+    Seeded with the four from the project notes -- Spending, Savings,
+    Investments, Emergency -- but a row rather than an enum, so a fifth pot
+    later is data instead of a migration.
+    """
+
+    __tablename__ = "accounts"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False)
+    name = Column(String, nullable=False)
+    #: spending | savings | investment | emergency | other -- drives styling and
+    #: sensible defaults, not behaviour.
+    kind = Column(String, nullable=False, default="spending")
+    #: Share of incoming money this account takes by default, as a percentage.
+    income_share = Column(Float, nullable=False, default=0.0)
+    #: Archived accounts keep their history but stop being offered.
+    archived = Column(Boolean, nullable=False, default=False)
+    position = Column(Integer, nullable=False, default=0)
+
+    user = relationship("UserModel", back_populates="accounts")
+    transactions = relationship(
+        "TransactionModel", back_populates="account", cascade=cascade
+    )
+
+
+class TransactionModel(Base):
+    """A single movement of money.
+
+    `amount` is signed: positive is money into the account, negative is out. A
+    balance is then just the sum of its rows, and a transfer is two rows that
+    cancel each other -- no special case in the arithmetic.
+    """
+
+    __tablename__ = "transactions"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False)
+    account_id = Column(Uuid, ForeignKey("accounts.id"), nullable=False)
+    #: income | expense | transfer
+    kind = Column(String, nullable=False)
+    amount = Column(Float, nullable=False)
+    description = Column(String)
+    occurred_on = Column(Date, nullable=False)
+    #: Ties the two halves of a transfer together so they can be shown, edited
+    #: and deleted as one event.
+    group_id = Column(Uuid, nullable=True)
+
+    account = relationship("AccountModel", back_populates="transactions")

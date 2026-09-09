@@ -1,0 +1,99 @@
+import { useMemo, useState } from "react";
+import Sectors from "./Sectors";
+import Transactions from "./Transactions";
+import AddMoneyModal from "./AddMoneyModal";
+import { useBudget } from "../hooks/useBudget";
+import { deleteTransaction } from "../api";
+import { Transaction } from "../types";
+import { useAuth } from "../../../app/auth/AuthContext";
+
+export default function BudgetView() {
+  const { user } = useAuth();
+  const { accounts, transactions, loading, error, reload } = useBudget();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const visible = useMemo(
+    () =>
+      selectedId === null
+        ? transactions
+        : transactions.filter((transaction) => transaction.account_id === selectedId),
+    [transactions, selectedId]
+  );
+
+  async function handleDelete(transaction: Transaction) {
+    if (!user) return;
+
+    setDeletingId(transaction.id);
+    setDeleteError(null);
+    try {
+      await deleteTransaction(user.id, transaction.id);
+      // Balances are derived, so the accounts have to be re-read too.
+      await reload();
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Could not delete that");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  const selectedName = accounts.find((account) => account.id === selectedId)?.name;
+
+  return (
+    <div className="container budgetPage">
+      <div className="budgetHeader">
+        <h1 className="gradesTitle">Budget</h1>
+        <button
+          type="button"
+          className="buttons addCourseButton"
+          onClick={() => setModalOpen(true)}
+          disabled={accounts.length === 0}
+        >
+          Record Money
+        </button>
+      </div>
+
+      {loading && <p className="muted">Loading your accounts...</p>}
+      {error && <p className="muted">{error}</p>}
+
+      {!loading && !error && (
+        <>
+          <Sectors accounts={accounts} selectedId={selectedId} onSelect={setSelectedId} />
+
+          <section className="ledgerSection">
+            <div className="sectionHeading">
+              <h2>{selectedName ? `${selectedName} activity` : "Recent activity"}</h2>
+              {selectedId && (
+                <button
+                  type="button"
+                  className="buttons addCourseButton"
+                  onClick={() => setSelectedId(null)}
+                >
+                  All accounts
+                </button>
+              )}
+            </div>
+
+            {deleteError && <p className="muted">{deleteError}</p>}
+
+            <Transactions
+              transactions={visible}
+              accounts={accounts}
+              onDelete={handleDelete}
+              deletingId={deletingId}
+            />
+          </section>
+        </>
+      )}
+
+      <AddMoneyModal
+        open={modalOpen}
+        accounts={accounts}
+        onClose={() => setModalOpen(false)}
+        onSaved={reload}
+      />
+    </div>
+  );
+}
