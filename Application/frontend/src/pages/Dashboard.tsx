@@ -21,13 +21,16 @@ export default function Dashboard() {
         <section className="gradeSummary">
           <div className="summaryStats">
             <div className="statBlock">
-              <span className="statValue">{summary.overall_average}</span>
+              <span className="statValue">{summary.cumulative_average}</span>
               <span className="statLabel">Average</span>
             </div>
-            <div className="statBlock">
-              <span className="statValue">{summary.cumulative_average}</span>
-              <span className="statLabel">Credit-weighted</span>
-            </div>
+            {/* Null when the GPA scale is switched off in Settings. */}
+            {summary.cgpa !== null && (
+              <div className="statBlock">
+                <span className="statValue">{summary.cgpa}</span>
+                <span className="statLabel">CGPA</span>
+              </div>
+            )}
             <div className="statBlock">
               <span className="statValue">{summary.total_courses}</span>
               <span className="statLabel">Courses</span>

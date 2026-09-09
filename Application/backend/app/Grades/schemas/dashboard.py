@@ -23,9 +23,9 @@ class YearSummary(BaseModel):
 
 class UserGradeDashboard(BaseModel):
     total_courses: int
-    #: Plain mean across courses, every course counting equally.
-    overall_average: float
     #: Credit-weighted mean, so a 6-credit course counts double a 3-credit one.
+    #: The plain mean that used to sit beside this was removed with the tile that
+    #: rendered it -- it counted a 1-credit elective the same as a 6-credit course.
     cumulative_average: float = 0.0
     #: Plain mean across the current term's courses only.
     semester_average: float = 0.0

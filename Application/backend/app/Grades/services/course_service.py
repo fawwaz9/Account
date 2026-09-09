@@ -7,6 +7,7 @@ from app.Grades.services.grade_service import (
     calculate_letter_grade,
     update_category_weights as apply_category_weights,
 )
+from app.Grades.utils.enums import SEMESTER_ORDER
 from app.Grades.utils.terms import term_bucket
 
 
@@ -106,6 +107,10 @@ def get_all_courses(db: Session, user_id: uuid.UUID):
     courses = db.query(CourseModel).filter(CourseModel.user_id == user_id).all()
     # One lookup for the whole list, not one per course.
     year, semester = current_term_of(db, user_id)
+
+    # Sorted here so term order lives in one place. The client groups consecutive
+    # runs rather than carrying its own idea of what follows Fall.
+    courses.sort(key=lambda c: (c.year, SEMESTER_ORDER.get(c.semester, 0), c.code))
     return [attach_course_summary(course, year, semester) for course in courses]
 
 

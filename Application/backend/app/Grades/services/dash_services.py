@@ -61,7 +61,6 @@ def get_dashboard(db: Session, user_id: uuid.UUID, target_grade: float = DEFAULT
     if not entries:
         return UserGradeDashboard(
             total_courses=0,
-            overall_average=0.0,
             cumulative_average=0.0,
             semester_average=0.0,
             cgpa=None,
@@ -91,8 +90,6 @@ def get_dashboard(db: Session, user_id: uuid.UUID, target_grade: float = DEFAULT
 
     return UserGradeDashboard(
         total_courses=len(entries),
-        # Plain mean across courses; cumulative_average weights by credits.
-        overall_average=round(sum(entry.average for entry in entries) / len(entries), 2),
         cumulative_average=calculate_cumulative_average(course_list),
         semester_average=plain_average(current_courses),
         cgpa=calculate_cgpa(course_list) if preferences.gpa_scale_enabled else None,

@@ -180,8 +180,6 @@ export interface YearSummary {
 
 export interface UserGradeDashboard {
   total_courses: number;
-  /** Plain mean across courses */
-  overall_average: number;
   /** Credit-weighted mean */
   cumulative_average: number;
   /** Plain mean across the current term only */
