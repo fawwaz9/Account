@@ -2,9 +2,15 @@ import uuid
 from sqlalchemy.orm import Session
 from app._database.models import CourseModel
 from app.Grades.utils.enums import GradeCategory
-from app.Grades.schemas.dashboard import CourseDashboardEntry, UserGradeDashboard, YearSummary
+from app.Grades.schemas.dashboard import (
+    AttentionItem,
+    CourseDashboardEntry,
+    UserGradeDashboard,
+    YearSummary,
+)
 from app.Grades.services.grade_service import calculate_gpa_points, calculate_required_final
 from app.Grades.utils.terms import CURRENT, FUTURE, PAST, course_result_grade, year_average
+from app.Grades.utils.weights import weight_problems
 from app.Grades.services.course_service import get_all_courses
 from app.Users.services.user_service import get_preferences, get_user
 
@@ -100,6 +106,7 @@ def get_dashboard(db: Session, user_id: uuid.UUID, target_grade: float = DEFAULT
         weakest_course=weakest_course,
         courses_needing_final_score=courses_needing_final_score,
         unfinished_categories_by_course=unfinished_categories_by_course,
+        attention=collect_attention(course_list, preferences.default_target_grade),
         past_years=summarize_years(course_list, PAST),
         future_years=summarize_years(course_list, FUTURE),
     )
@@ -204,3 +211,44 @@ def summarize_years(courses, bucket: str) -> list[YearSummary]:
         for year, year_courses in by_year.items()
     ]
     return sorted(summaries, key=lambda entry: entry.school_year)
+
+
+def effective_target(course, default_target: float) -> float:
+    """The course's own target, or the account default when it has none."""
+    return course.target_grade if course.target_grade is not None else default_target
+
+
+def collect_attention(courses, default_target: float) -> list[AttentionItem]:
+    """Things worth acting on, most actionable first.
+
+    Deliberately built from data already loaded -- no extra queries.
+    """
+    missing: list[AttentionItem] = []
+    below: list[AttentionItem] = []
+    weights: list[AttentionItem] = []
+
+    for course in courses:
+        common = {"course_id": course.id, "course_code": course.code}
+
+        # A finished course with no final silently drops out of the cumulative.
+        if course.term_bucket == PAST and not (course.final_grade and course.final_grade > 0):
+            missing.append(AttentionItem(
+                kind="missing_final", **common,
+                message="finished, but no final grade recorded",
+            ))
+
+        # Only current courses: a past course under target is history, not
+        # something you can still do anything about.
+        if course.term_bucket == CURRENT:
+            result = course_result_grade(course)
+            target = effective_target(course, default_target)
+            if result is not None and result < target:
+                below.append(AttentionItem(
+                    kind="below_target", **common,
+                    message=f"at {result:g}% against a {target:g}% target",
+                ))
+
+        for problem in weight_problems(course):
+            weights.append(AttentionItem(kind="weight_problem", **common, message=problem))
+
+    return missing + below + weights

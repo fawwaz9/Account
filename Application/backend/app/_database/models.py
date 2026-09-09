@@ -59,6 +59,10 @@ class CourseModel(Base):
     required = Column(Boolean, default=True)
     professor = Column(String)
     final_grade = Column(Float, default=0.0)
+    # What you are aiming for in this course. Null falls back to the account
+    # default, so a new course is measured against something without you
+    # having to fill it in.
+    target_grade = Column(Float, nullable=True)
     average = Column(Float, default=0.0)
     start_date = Column(Date, nullable=True)
     end_date = Column(Date, nullable=True)

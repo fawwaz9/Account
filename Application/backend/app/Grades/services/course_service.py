@@ -3,12 +3,13 @@ from sqlalchemy.orm import Session
 from app._database.models import CourseModel, CourseCategoryWeightModel, UserModel
 from app.Grades.schemas.course import CourseCreate, CourseUpdate
 from app.Grades.services.grade_service import (
+    calculate_gpa_points,
     calculate_grade_category_average,
     calculate_letter_grade,
     update_category_weights as apply_category_weights,
 )
 from app.Grades.utils.enums import SEMESTER_ORDER
-from app.Grades.utils.terms import term_bucket
+from app.Grades.utils.terms import course_result_grade, term_bucket
 
 
 def attach_course_summary(
@@ -22,6 +23,7 @@ def attach_course_summary(
     without lazy-loading each course's grades.
     """
     course.letter_grade = calculate_letter_grade(course)
+    course.grade_points = calculate_gpa_points(course_result_grade(course))
     course.term_bucket = term_bucket(course, current_school_year, current_semester)
     return course
 
@@ -72,6 +74,7 @@ def create_course(db: Session, user_id: uuid.UUID, course_data: CourseCreate):
         required=course_data.required,
         professor=course_data.professor,
         final_grade=course_data.final_grade,
+        target_grade=course_data.target_grade,
         start_date=course_data.start_date,
         end_date=course_data.end_date,
     )

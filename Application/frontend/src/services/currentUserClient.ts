@@ -18,6 +18,7 @@ export interface CurrentUser {
   preferences: {
     credit_target: number;
     gpa_scale_enabled: boolean;
+    default_target_grade: number;
     [key: string]: unknown;
   };
 }

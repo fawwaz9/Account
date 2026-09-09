@@ -68,6 +68,8 @@ class UserPreferences(BaseModel):
     credit_target: int = Field(default=120, ge=1, le=400)
     #: UBC does not publish a GPA on transcripts, so this is opt-out.
     gpa_scale_enabled: bool = Field(default=True)
+    #: Used for any course without its own target.
+    default_target_grade: float = Field(default=85.0, ge=0, le=100)
 
     @field_validator("currency")
     @classmethod

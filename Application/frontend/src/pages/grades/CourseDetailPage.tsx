@@ -194,6 +194,11 @@ export default function CourseDetailPage() {
         <div className="averageSection">
           <div className="averageLabel"> Average</div>
           <div className="courseAverageCircle">{course.average}</div>
+          {course.letter_grade && (
+            <div className="courseGradePoints">
+              {course.letter_grade} &middot; {course.grade_points.toFixed(2)}
+            </div>
+          )}
         </div>
       </div>
 

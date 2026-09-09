@@ -23,6 +23,9 @@ ADDED_COLUMNS: dict[str, dict[str, str]] = {
         "current_semester": "VARCHAR",
         "term_label": "VARCHAR",
     },
+    "courses": {
+        "target_grade": "FLOAT",
+    },
 }
 
 # Run once, immediately after the named column is first added, to give existing

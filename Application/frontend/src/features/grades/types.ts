@@ -9,12 +9,16 @@ export interface Course {
   required: boolean;
   professor: string | null;
   final_grade: number;
+  /** null uses the account default from Settings */
+  target_grade: number | null;
   category_weights: Partial<Record<GradeCategory, number>>;
   average: number;
   start_date: string | null;
   end_date: string | null;
   /** Letter for the course's result; "" when nothing is recorded yet. */
   letter_grade: string;
+  /** Grade points on the configured scale */
+  grade_points: number;
   term_bucket: TermBucket;
 }
 
@@ -54,6 +58,9 @@ export interface CourseDetail {
   final_grade: number;
   category_weights: Partial<Record<GradeCategory, number>>;
   average: number;
+  target_grade: number | null;
+  letter_grade: string;
+  grade_points: number;
   grades: Grade[];
   start_date: string | null;
   end_date: string | null;
@@ -72,6 +79,7 @@ export interface CourseUpdate{
   required: boolean | null;
   professor: string | null;
   final_grade: number | null;
+  target_grade: number | null;
   category_weights: Partial<Record<GradeCategory, number>> | null;
   start_date: string | null;
   end_date: string | null;
@@ -178,6 +186,15 @@ export interface YearSummary {
   course_count: number;
 }
 
+export type AttentionKind = "missing_final" | "below_target" | "weight_problem";
+
+export interface AttentionItem {
+  kind: AttentionKind;
+  course_id: string;
+  course_code: string;
+  message: string;
+}
+
 export interface UserGradeDashboard {
   total_courses: number;
   /** Credit-weighted mean */
@@ -189,6 +206,7 @@ export interface UserGradeDashboard {
   credits_completed: number;
   credits_in_progress: number;
   credit_target: number;
+  attention: AttentionItem[];
   past_years: YearSummary[];
   future_years: YearSummary[];
   best_course: CourseDashboardEntry | null;

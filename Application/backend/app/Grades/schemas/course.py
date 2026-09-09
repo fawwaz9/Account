@@ -36,6 +36,7 @@ class CourseBase(BaseModel):
     required: bool = Field(default=True, description="Indicates if the course is required or elective")
     professor: str | None = Field(default=None, max_length=100, description="The name of the professor teaching the course")
     final_grade: float = Field(default=0.0, ge=0, le=100, description="The final grade for the course submitted by the professor")
+    target_grade: float | None = Field(default=None, ge=0, le=100, description="The grade you are aiming for; null uses the account default")
     category_weights: dict[GradeCategory, float] = Field(default_factory=default_category_weights, description="Weights by grade category")
     # Typed as date, not str: the column is Column(Date), and Pydantic v2 will not
     # coerce a date into a str -- it raises. Serialization still emits ISO strings.
@@ -84,6 +85,7 @@ class CourseUpdate(BaseModel):
     required: bool | None = Field(default=None, description="Indicates if the course is required or elective")
     professor: str | None = Field(default=None, max_length=100, description="The name of the professor teaching the course")
     final_grade: float | None = Field(default=None, ge=0, le=100, description="The final grade for the course submitted by the professor")
+    target_grade: float | None = Field(default=None, ge=0, le=100, description="The grade you are aiming for; null uses the account default")
     category_weights: dict[GradeCategory, float] | None = Field(default=None, description="Weights by grade category")
     start_date: date | None = Field(default=None, description="The date the course starts")
     end_date: date | None = Field(default=None, description="The date the course ends")
@@ -111,6 +113,7 @@ class Course(CourseBase):
     # Both computed server-side so one grade scale and one term comparison
     # serve the list, the course page, and search alike.
     letter_grade: str = Field(default="", description="Letter grade for the current average")
+    grade_points: float = Field(default=0.0, description="Grade points on the configured scale")
     term_bucket: str = Field(
         default="current",
         description="past, current, or future, relative to the student's term",

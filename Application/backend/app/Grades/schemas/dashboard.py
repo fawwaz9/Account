@@ -21,6 +21,16 @@ class YearSummary(BaseModel):
     course_count: int = 0
 
 
+class AttentionItem(BaseModel):
+    """Something worth acting on, surfaced on the grades page."""
+
+    #: missing_final | below_target | weight_problem
+    kind: str
+    course_id: UUID
+    course_code: str
+    message: str
+
+
 class UserGradeDashboard(BaseModel):
     total_courses: int
     #: Credit-weighted mean, so a 6-credit course counts double a 3-credit one.
@@ -38,6 +48,7 @@ class UserGradeDashboard(BaseModel):
     weakest_course: CourseDashboardEntry | None = None
     courses_needing_final_score: list[CourseDashboardEntry] = Field(default_factory=list)
     unfinished_categories_by_course: dict[str, list[str]] = Field(default_factory=dict)
+    attention: list[AttentionItem] = Field(default_factory=list)
     past_years: list[YearSummary] = Field(default_factory=list)
     future_years: list[YearSummary] = Field(default_factory=list)
 

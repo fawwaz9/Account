@@ -6,9 +6,11 @@ import CourseSearch from "../../features/grades/components/CourseSearch";
 import SemesterSummary from "../../features/grades/components/SemesterSummary";
 import CreditsBar from "../../features/grades/components/CreditsBar";
 import YearCourses from "../../features/grades/components/YearCourses";
+import AttentionPanel from "../../features/grades/components/AttentionPanel";
 import { useCourses } from "../../features/grades/hooks/useCourses";
 import { useDashboard } from "../../features/grades/hooks/useDashboard";
 import { Course } from "../../features/grades/types";
+import { useAuth } from "../../app/auth/AuthContext";
 
 interface TermGroup {
   semester: string;
@@ -21,6 +23,7 @@ export default function GradesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   // The default list is the current term only. Everything else is reached
   // through a year card or the search box, which spans every term.
@@ -158,12 +161,7 @@ export default function GradesPage() {
               </p>
             </div>
 
-            <div className="comingSoon">
-              <span className="comingSoonLabel">Attention</span>
-              <p className="small-text muted">
-                Needs exam dates and a target average, which aren&apos;t recorded yet.
-              </p>
-            </div>
+            <AttentionPanel items={summary?.attention ?? []} userId={user?.id} />
           </div>
         </div>
       </div>

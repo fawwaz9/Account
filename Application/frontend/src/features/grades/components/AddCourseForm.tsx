@@ -121,6 +121,21 @@ export default function AddCourseForm({
         />
       </div>
 
+      <div>
+        <label htmlFor="course-target" className="block text-sm text-slate-200">Target Grade (blank uses your account default)</label>
+        <input
+          id="course-target"
+          type="number"
+          min={0}
+          max={100}
+          value={form.target_grade ?? ""}
+          onChange={(event) =>
+            updateField("target_grade", event.target.value === "" ? null : Number(event.target.value))
+          }
+          className="--input mt-1 w-full rounded-lg border border-slate-700 bg-transparent text-white"
+        />
+      </div>
+
       <div className="flex gap-3">
         <div>
           <label htmlFor="course-start-date" className="block text-sm text-slate-200">Starts</label>

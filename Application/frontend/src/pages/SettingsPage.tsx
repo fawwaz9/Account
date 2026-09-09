@@ -21,6 +21,7 @@ export default function SettingsPage() {
   const [semester, setSemester] = useState(user?.current_semester ?? "Fall");
   const [creditTarget, setCreditTarget] = useState(String(user?.preferences?.credit_target ?? 120));
   const [gpaEnabled, setGpaEnabled] = useState(user?.preferences?.gpa_scale_enabled ?? true);
+  const [defaultTarget, setDefaultTarget] = useState(String(user?.preferences?.default_target_grade ?? 85));
   const [academicError, setAcademicError] = useState<string | null>(null);
   const [academicSaved, setAcademicSaved] = useState(false);
   const [savingAcademic, setSavingAcademic] = useState(false);
@@ -33,6 +34,7 @@ export default function SettingsPage() {
     setSemester(user.current_semester ?? "Fall");
     setCreditTarget(String(user.preferences?.credit_target ?? 120));
     setGpaEnabled(user.preferences?.gpa_scale_enabled ?? true);
+    setDefaultTarget(String(user.preferences?.default_target_grade ?? 85));
   }, [user]);
 
   async function handleAcademicSubmit(event: React.FormEvent) {
@@ -53,6 +55,7 @@ export default function SettingsPage() {
       await updatePreferences(user.id, {
         credit_target: Number(creditTarget),
         gpa_scale_enabled: gpaEnabled,
+        default_target_grade: Number(defaultTarget),
       });
       await refreshUser();
       setAcademicSaved(true);
@@ -164,6 +167,23 @@ export default function SettingsPage() {
                 onChange={(event) => setCreditTarget(event.target.value)}
                 required
               />
+            </div>
+
+            <div className="loginField">
+              <label htmlFor="default-target">Default target grade</label>
+              <input
+                id="default-target"
+                className="loginInput"
+                type="number"
+                min={0}
+                max={100}
+                value={defaultTarget}
+                onChange={(event) => setDefaultTarget(event.target.value)}
+                required
+              />
+              <span className="loginHint">
+                Used for any course without its own target.
+              </span>
             </div>
 
             <div className="settingsToggle">
