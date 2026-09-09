@@ -1,0 +1,133 @@
+import { useState } from "react";
+import ProgressBar from "./ProgressBar";
+import { BudgetSummary } from "../types";
+import { formatMoney } from "../money";
+
+interface PlannedSpendProps {
+  readonly summary: BudgetSummary | null;
+  readonly month: string;
+  readonly onMonthChange: (month: string) => void;
+  readonly onSetTarget: (accountId: string, planned: number) => Promise<void>;
+}
+
+export default function PlannedSpend({
+  summary,
+  month,
+  onMonthChange,
+  onSetTarget,
+}: PlannedSpendProps) {
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function commit(accountId: string) {
+    setSaving(true);
+    try {
+      await onSetTarget(accountId, Number(draft || 0));
+      setEditing(null);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="plannedSpend">
+      <div className="sectionHeading">
+        <h2>Planned spend</h2>
+        <input
+          className="loginInput monthPicker"
+          type="month"
+          value={month.slice(0, 7)}
+          onChange={(event) => onMonthChange(`${event.target.value}-01`)}
+          aria-label="Budget month"
+        />
+      </div>
+
+      {!summary || summary.accounts.length === 0 ? (
+        <p className="muted small-text">No accounts to budget yet.</p>
+      ) : (
+        <>
+          <div className="plannedTotals small-text muted">
+            {formatMoney(summary.total_actual)} spent of {formatMoney(summary.total_planned)} planned
+          </div>
+
+          <ul className="plannedList">
+            {summary.accounts.map((entry) => (
+              <li className="plannedRow" key={entry.account_id}>
+                <div className="plannedTop">
+                  <span className="plannedName">{entry.account_name}</span>
+
+                  {editing === entry.account_id ? (
+                    <span className="plannedEdit">
+                      <input
+                        className="loginInput plannedInput"
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={draft}
+                        autoFocus
+                        onChange={(event) => setDraft(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") commit(entry.account_id);
+                          if (event.key === "Escape") setEditing(null);
+                        }}
+                        aria-label={`Planned amount for ${entry.account_name}`}
+                      />
+                      <button
+                        type="button"
+                        className="buttons"
+                        onClick={() => commit(entry.account_id)}
+                        disabled={saving}
+                      >
+                        Save
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="plannedFigure"
+                      onClick={() => {
+                        setEditing(entry.account_id);
+                        setDraft(String(entry.planned || ""));
+                      }}
+                    >
+                      {formatMoney(entry.actual)} / {formatMoney(entry.planned)}
+                    </button>
+                  )}
+                </div>
+
+                <ProgressBar
+                  value={entry.actual}
+                  max={entry.planned}
+                  label={`${entry.account_name} spend against target`}
+                />
+
+                <span className="small-text muted plannedNote">
+                  {(() => {
+                    if (entry.planned === 0) return "No target set — click the figure to add one";
+                    if (entry.remaining < 0) return `${formatMoney(-entry.remaining)} over`;
+                    return `${formatMoney(entry.remaining)} left`;
+                  })()}
+                </span>
+              </li>
+            ))}
+          </ul>
+
+          {summary.by_category.length > 0 && (
+            <div className="categorySpend">
+              <h3 className="categorySpendTitle">Where it went</h3>
+              <ul className="categoryList">
+                {summary.by_category.map((entry) => (
+                  <li key={entry.category_id ?? "none"}>
+                    <span>{entry.category_name}</span>
+                    <span className="categoryAmount">{formatMoney(entry.actual)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}

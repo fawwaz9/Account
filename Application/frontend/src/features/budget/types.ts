@@ -31,6 +31,7 @@ export interface Transaction {
   id: string;
   kind: TransactionKind;
   account_id: string;
+  category_id: string | null;
   /** Always positive */
   amount: number;
   /** Positive into the account, negative out of it */
@@ -47,6 +48,39 @@ export interface TransactionCreate {
   amount: number;
   description: string | null;
   occurred_on: string;
+  /** Only meaningful on expenses; the server ignores it on income */
+  category_id: string | null;
+}
+
+export interface SpendCategory {
+  id: string;
+  name: string;
+  archived: boolean;
+  position: number;
+}
+
+export interface AccountBudget {
+  account_id: string;
+  account_name: string;
+  planned: number;
+  /** Expenses only -- transfers move money rather than spending it */
+  actual: number;
+  remaining: number;
+  used_percent: number;
+}
+
+export interface CategorySpend {
+  category_id: string | null;
+  category_name: string;
+  actual: number;
+}
+
+export interface BudgetSummary {
+  month: string;
+  total_planned: number;
+  total_actual: number;
+  accounts: AccountBudget[];
+  by_category: CategorySpend[];
 }
 
 export interface TransferCreate {

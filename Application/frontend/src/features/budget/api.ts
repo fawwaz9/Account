@@ -1,8 +1,10 @@
-import { del, get, patch, post } from "../../services/apiClient";
+import { del, get, patch, post, put } from "../../services/apiClient";
 import { endpoints } from "../../services/endpoints";
 import {
   Account,
   AccountCreate,
+  BudgetSummary,
+  SpendCategory,
   Transaction,
   TransactionCreate,
   TransferCreate,
@@ -44,4 +46,39 @@ export async function createTransfer(userId: string, payload: TransferCreate) {
 
 export async function deleteTransaction(userId: string, transactionId: string) {
   return del<Transaction>(endpoints.finances.transaction(userId, transactionId));
+}
+
+export async function fetchCategories(userId: string) {
+  return get<SpendCategory[]>(endpoints.finances.categories(userId));
+}
+
+export async function createCategory(userId: string, name: string) {
+  return post<SpendCategory>(endpoints.finances.categories(userId), {
+    name,
+    archived: false,
+    position: 0,
+  });
+}
+
+/** Removes the label only; the expenses it was on become uncategorised. */
+export async function deleteCategory(userId: string, categoryId: string) {
+  return del<SpendCategory>(endpoints.finances.category(userId, categoryId));
+}
+
+/** Sets what one account may spend in one month; replaces any existing target. */
+export async function setBudgetTarget(
+  userId: string,
+  accountId: string,
+  month: string,
+  plannedAmount: number
+) {
+  return put<unknown>(endpoints.finances.budgetTargets(userId), {
+    account_id: accountId,
+    month,
+    planned_amount: plannedAmount,
+  });
+}
+
+export async function fetchBudgetSummary(userId: string, month: string) {
+  return get<BudgetSummary>(`${endpoints.finances.budgetSummary(userId)}?month=${month}`);
 }

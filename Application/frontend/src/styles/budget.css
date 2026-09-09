@@ -172,3 +172,88 @@
   color: var(--gold);
   border: 1px solid var(--border);
 }
+
+/* ===== Planned spend ===== */
+.plannedSpend { margin-bottom: 32px; }
+.plannedSpend .sectionHeading h2 { font-size: 1.3rem; }
+
+.monthPicker { width: auto; padding: 6px 10px; }
+
+.plannedTotals { margin-bottom: 12px; }
+
+.plannedList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.plannedRow { display: flex; flex-direction: column; gap: 6px; }
+
+.plannedTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.plannedName { font-size: 0.95rem; }
+
+.plannedFigure {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 2px 6px;
+  color: var(--text);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.plannedFigure:hover { border-color: var(--border); color: var(--gold); }
+
+.plannedEdit { display: flex; align-items: center; gap: 6px; }
+.plannedInput { width: 110px; padding: 5px 8px; }
+.plannedNote { margin-top: 1px; }
+
+.progressTrack {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid #1f2a44;
+  overflow: hidden;
+}
+
+.progressFill { height: 100%; transition: width 0.25s ease; }
+.progressFill--under { background: #77c9a0; }
+.progressFill--close { background: var(--gold); }
+.progressFill--over { background: var(--delete); }
+.progressFill--none { background: transparent; }
+
+/* ----- Where it went ----- */
+.categorySpend { margin-top: 22px; }
+
+.categorySpendTitle {
+  margin: 0 0 8px;
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.categoryList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+
+.categoryList li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.88rem;
+  padding: 4px 0;
+  border-bottom: 1px solid #1f2a44;
+}
+
+.categoryList li:last-child { border-bottom: none; }
+.categoryAmount { font-variant-numeric: tabular-nums; color: var(--gold); }

@@ -47,6 +47,7 @@ def as_schema(transaction: TransactionModel) -> Transaction:
         description=transaction.description,
         occurred_on=transaction.occurred_on,
         group_id=transaction.group_id,
+        category_id=transaction.category_id,
     )
 
 
@@ -83,6 +84,9 @@ def create_transaction(db: Session, user_id: uuid.UUID, data: TransactionCreate)
         amount=signed(data.kind, data.amount),
         description=data.description,
         occurred_on=data.occurred_on,
+        # A category labels what money went on, which only makes sense for
+        # money going out.
+        category_id=data.category_id if data.kind == TransactionKind.EXPENSE else None,
     )
     db.add(transaction)
     db.commit()

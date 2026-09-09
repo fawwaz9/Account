@@ -26,6 +26,9 @@ ADDED_COLUMNS: dict[str, dict[str, str]] = {
     "courses": {
         "target_grade": "FLOAT",
     },
+    "transactions": {
+        "category_id": "CHAR(32)",
+    },
 }
 
 # Run once, immediately after the named column is first added, to give existing

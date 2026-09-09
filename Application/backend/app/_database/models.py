@@ -151,5 +151,40 @@ class TransactionModel(Base):
     #: Ties the two halves of a transfer together so they can be shown, edited
     #: and deleted as one event.
     group_id = Column(Uuid, nullable=True)
+    #: What the money went on, as opposed to which pot it came from. Only
+    #: meaningful for expenses, so nullable.
+    category_id = Column(Uuid, ForeignKey("spend_categories.id"), nullable=True)
 
     account = relationship("AccountModel", back_populates="transactions")
+    category = relationship("SpendCategoryModel", back_populates="transactions")
+
+
+class SpendCategoryModel(Base):
+    """What money was spent on -- groceries, rent -- as opposed to which pot paid.
+
+    User-defined rather than an enum, for the same reason accounts are.
+    """
+
+    __tablename__ = "spend_categories"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False)
+    name = Column(String, nullable=False)
+    archived = Column(Boolean, nullable=False, default=False)
+    position = Column(Integer, nullable=False, default=0)
+
+    transactions = relationship("TransactionModel", back_populates="category")
+
+
+class BudgetTargetModel(Base):
+    """What one account is allowed to spend in one month."""
+
+    __tablename__ = "budget_targets"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False)
+    account_id = Column(Uuid, ForeignKey("accounts.id"), nullable=False)
+    #: Always the first of the month, normalized on the way in so a month is
+    #: one value rather than any of twenty-eight.
+    month = Column(Date, nullable=False)
+    planned_amount = Column(Float, nullable=False, default=0.0)

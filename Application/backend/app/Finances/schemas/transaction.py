@@ -22,6 +22,8 @@ class TransactionBase(BaseModel):
 class TransactionCreate(TransactionBase):
     kind: TransactionKind
     account_id: UUID
+    #: Only meaningful for expenses; ignored on income.
+    category_id: UUID | None = None
 
 
 class TransferCreate(TransactionBase):
@@ -39,6 +41,7 @@ class TransactionUpdate(BaseModel):
     amount: float | None = Field(default=None, gt=0)
     description: str | None = Field(default=None, max_length=200)
     occurred_on: date | None = None
+    category_id: UUID | None = None
 
 
 class Transaction(TransactionBase):
@@ -49,6 +52,7 @@ class Transaction(TransactionBase):
     signed_amount: float = 0.0
     #: Present on both halves of a transfer, tying them together.
     group_id: UUID | None = None
+    category_id: UUID | None = None
 
     class Config:
         from_attributes = True

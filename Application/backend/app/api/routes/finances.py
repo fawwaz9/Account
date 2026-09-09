@@ -1,3 +1,4 @@
+from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query
@@ -5,6 +6,13 @@ from fastapi import APIRouter, HTTPException, Query
 from app._database.dependencies import DBSession
 from app.Auth.services.access import VerifiedUserId
 from app.Finances.schemas.account import Account, AccountCreate, AccountUpdate
+from app.Finances.schemas.budget import (
+    BudgetSummary,
+    BudgetTargetUpsert,
+    SpendCategory,
+    SpendCategoryCreate,
+    SpendCategoryUpdate,
+)
 from app.Finances.schemas.transaction import (
     Transaction,
     TransactionCreate,
@@ -25,6 +33,14 @@ from app.Finances.services.transaction_service import (
     get_transaction,
     list_transactions,
     update_transaction,
+)
+from app.Finances.services.budget_service import (
+    create_category,
+    delete_category,
+    get_budget_summary,
+    get_categories,
+    set_target,
+    update_category,
 )
 from app.shared.errors import error_user, responses
 
@@ -161,3 +177,75 @@ def remove_transaction(user_id: VerifiedUserId, transaction_id: UUID, db: DBSess
         raise HTTPException(status_code=404, detail="Transaction not found")
 
     return removed
+
+
+# --------------------------------------------------------------- categories --
+
+CATEGORY_404 = {404: {"description": "Category not found"}}
+
+
+@router.get("/{user_id}/categories", response_model=list[SpendCategory], responses=responses["user_404"])
+def list_categories(user_id: VerifiedUserId, db: DBSession, include_archived: bool = False):
+    categories = get_categories(db, user_id, include_archived)
+    if categories is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+
+    return categories
+
+
+@router.post("/{user_id}/categories", response_model=SpendCategory, responses=responses["user_both"])
+def add_category(user_id: VerifiedUserId, category: SpendCategoryCreate, db: DBSession):
+    try:
+        created = create_category(db, user_id, category)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if created is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+
+    return created
+
+
+@router.patch("/{user_id}/categories/{category_id}", response_model=SpendCategory, responses=CATEGORY_404)
+def edit_category(user_id: VerifiedUserId, category_id: UUID, category: SpendCategoryUpdate, db: DBSession):
+    updated = update_category(db, user_id, category_id, category)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    return updated
+
+
+@router.delete("/{user_id}/categories/{category_id}", response_model=SpendCategory, responses=CATEGORY_404)
+def remove_category(user_id: VerifiedUserId, category_id: UUID, db: DBSession):
+    """Removes the label; the expenses it was on are kept and uncategorised."""
+    removed = delete_category(db, user_id, category_id)
+    if removed is None:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    return removed
+
+
+# ---------------------------------------------------------- planned vs actual --
+
+@router.put("/{user_id}/budget-targets", responses=ACCOUNT_404)
+def upsert_budget_target(user_id: VerifiedUserId, target: BudgetTargetUpsert, db: DBSession):
+    """Set what one account may spend in one month."""
+    saved = set_target(db, user_id, target)
+    if saved is None:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    return {
+        "account_id": saved.account_id,
+        "month": saved.month,
+        "planned_amount": saved.planned_amount,
+    }
+
+
+@router.get("/{user_id}/budget-summary", response_model=BudgetSummary, responses=responses["user_404"])
+def budget_summary(user_id: VerifiedUserId, db: DBSession, month: date | None = None):
+    """Planned against actual for a month, per account and per category."""
+    summary = get_budget_summary(db, user_id, month or date.today())
+    if summary is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+
+    return summary

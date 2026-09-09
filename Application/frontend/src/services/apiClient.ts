@@ -102,6 +102,10 @@ export function patch<T>(path: string, data: unknown) {
   return request<T>(path, { method: "PATCH", data });
 }
 
+export function put<T>(path: string, data: unknown) {
+  return request<T>(path, { method: "PUT", data });
+}
+
 export function del<T>(path: string) {
   return request<T>(path, { method: "DELETE" });
 }

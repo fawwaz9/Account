@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { createTransaction, createTransfer } from "../api";
-import { Account } from "../types";
+import { Account, SpendCategory } from "../types";
 import { getErrorMessage } from "../../grades/components/AddCourseModal";
 import { useAuth } from "../../../app/auth/AuthContext";
 
 interface AddMoneyModalProps {
   readonly open: boolean;
   readonly accounts: readonly Account[];
+  readonly categories: readonly SpendCategory[];
   readonly onClose: () => void;
   readonly onSaved: () => void;
 }
@@ -18,6 +19,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 export default function AddMoneyModal({
   open,
   accounts,
+  categories,
   onClose,
   onSaved,
 }: AddMoneyModalProps) {
@@ -28,6 +30,7 @@ export default function AddMoneyModal({
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [occurredOn, setOccurredOn] = useState(today());
+  const [categoryId, setCategoryId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,6 +43,7 @@ export default function AddMoneyModal({
     setAmount("");
     setDescription("");
     setOccurredOn(today());
+    setCategoryId("");
     setError(null);
   }, [open, accounts]);
 
@@ -60,6 +64,8 @@ export default function AddMoneyModal({
           amount: Number(amount),
           description: description || null,
           occurred_on: occurredOn,
+          // Only expenses carry a category; the server ignores it on income.
+          category_id: mode === "expense" && categoryId ? categoryId : null,
         });
       } else {
         await createTransaction(user.id, {
@@ -146,6 +152,23 @@ export default function AddMoneyModal({
               required
             />
           </div>
+
+          {mode === "expense" && categories.length > 0 && (
+            <div className="loginField">
+              <label htmlFor="money-category">Category</label>
+              <select
+                id="money-category"
+                className="loginInput"
+                value={categoryId}
+                onChange={(event) => setCategoryId(event.target.value)}
+              >
+                <option value="">Uncategorised</option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>{category.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="loginField">
             <label htmlFor="money-description">Description</label>

@@ -28,5 +28,9 @@ export const endpoints = {
     transaction: (userId: string, transactionId: string) =>
       `finances/${userId}/transactions/${transactionId}`,
     transfers: (userId: string) => `finances/${userId}/transfers`,
+    categories: (userId: string) => `finances/${userId}/categories`,
+    category: (userId: string, categoryId: string) => `finances/${userId}/categories/${categoryId}`,
+    budgetTargets: (userId: string) => `finances/${userId}/budget-targets`,
+    budgetSummary: (userId: string) => `finances/${userId}/budget-summary`,
   },
 };
