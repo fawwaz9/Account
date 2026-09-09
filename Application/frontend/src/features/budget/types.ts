@@ -90,3 +90,23 @@ export interface TransferCreate {
   description: string | null;
   occurred_on: string;
 }
+
+export interface DepositAllocation {
+  account_id: string;
+  amount: number;
+}
+
+export interface DepositPreview {
+  amount: number;
+  allocations: DepositAllocation[];
+  /** True when no account carries an income share, so nothing can be split */
+  needs_shares: boolean;
+}
+
+export interface DepositCreate {
+  amount: number;
+  occurred_on: string;
+  description: string | null;
+  /** Empty means split by each account's income share */
+  allocations: DepositAllocation[];
+}

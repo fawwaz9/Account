@@ -4,6 +4,8 @@ import {
   Account,
   AccountCreate,
   BudgetSummary,
+  DepositCreate,
+  DepositPreview,
   SpendCategory,
   Transaction,
   TransactionCreate,
@@ -81,4 +83,20 @@ export async function setBudgetTarget(
 
 export async function fetchBudgetSummary(userId: string, month: string) {
   return get<BudgetSummary>(`${endpoints.finances.budgetSummary(userId)}?month=${month}`);
+}
+
+/**
+ * How a deposit would divide by the current income shares.
+ *
+ * Asked of the server rather than worked out here, so the cent-rounding rule
+ * lives in one place and the preview always matches what recording writes.
+ */
+export async function previewDeposit(userId: string, amount: number) {
+  return get<DepositPreview>(
+    `${endpoints.finances.depositPreview(userId)}?amount=${amount}`
+  );
+}
+
+export async function recordDeposit(userId: string, payload: DepositCreate) {
+  return post<Transaction[]>(endpoints.finances.deposits(userId), payload);
 }

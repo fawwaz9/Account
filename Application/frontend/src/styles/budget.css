@@ -257,3 +257,26 @@
 
 .categoryList li:last-child { border-bottom: none; }
 .categoryAmount { font-variant-numeric: tabular-nums; color: var(--gold); }
+
+/* ===== Deposit split ===== */
+.depositSplit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+}
+
+.depositSplitTitle {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.depositRow { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.depositRowName { font-size: 0.88rem; }
+.depositRowInput { width: 120px; padding: 5px 8px; }
+.depositSum { text-align: right; }

@@ -13,6 +13,7 @@ from app.Finances.schemas.budget import (
     SpendCategoryCreate,
     SpendCategoryUpdate,
 )
+from app.Finances.schemas.deposit import DepositCreate, DepositPreview
 from app.Finances.schemas.transaction import (
     Transaction,
     TransactionCreate,
@@ -42,6 +43,7 @@ from app.Finances.services.budget_service import (
     set_target,
     update_category,
 )
+from app.Finances.services.deposit_service import preview_deposit, record_deposit
 from app.shared.errors import error_user, responses
 
 router = APIRouter()
@@ -249,3 +251,33 @@ def budget_summary(user_id: VerifiedUserId, db: DBSession, month: date | None = 
         raise HTTPException(status_code=404, detail=error_user["not_found"])
 
     return summary
+
+
+# ----------------------------------------------------------------- deposits --
+
+@router.get("/{user_id}/deposit-preview", response_model=DepositPreview, responses=responses["user_404"])
+def get_deposit_preview(
+    user_id: VerifiedUserId,
+    db: DBSession,
+    amount: float = Query(..., gt=0),
+):
+    """How a deposit would divide by the current income shares.
+
+    Served rather than computed client-side so the cent-rounding rule lives in
+    one place and the preview always matches what recording actually writes.
+    """
+    return preview_deposit(db, user_id, amount)
+
+
+@router.post("/{user_id}/deposits", response_model=list[Transaction], responses=responses["user_both"])
+def add_deposit(user_id: VerifiedUserId, deposit: DepositCreate, db: DBSession):
+    """Record income and spread it across the accounts in one commit."""
+    try:
+        created = record_deposit(db, user_id, deposit)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if created is None:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    return created

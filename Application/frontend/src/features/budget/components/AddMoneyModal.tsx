@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { createTransaction, createTransfer } from "../api";
-import { Account, SpendCategory } from "../types";
+import { createTransaction, createTransfer, previewDeposit, recordDeposit } from "../api";
+import { useDebounce } from "../../../shared/hooks/useDebounce";
+import { Account, DepositAllocation, SpendCategory } from "../types";
 import { getErrorMessage } from "../../grades/components/AddCourseModal";
 import { useAuth } from "../../../app/auth/AuthContext";
 
@@ -12,7 +13,7 @@ interface AddMoneyModalProps {
   readonly onSaved: () => void;
 }
 
-type Mode = "income" | "expense" | "transfer";
+type Mode = "expense" | "income" | "transfer" | "deposit";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -31,6 +32,9 @@ export default function AddMoneyModal({
   const [description, setDescription] = useState("");
   const [occurredOn, setOccurredOn] = useState(today());
   const [categoryId, setCategoryId] = useState("");
+  const [allocations, setAllocations] = useState<DepositAllocation[]>([]);
+  const [needsShares, setNeedsShares] = useState(false);
+  const debouncedAmount = useDebounce(amount, 300);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,8 +48,36 @@ export default function AddMoneyModal({
     setDescription("");
     setOccurredOn(today());
     setCategoryId("");
+    setAllocations([]);
     setError(null);
   }, [open, accounts]);
+
+  // Ask the server how the deposit would divide, so the preview and what gets
+  // written can never round differently.
+  useEffect(() => {
+    if (!open || mode !== "deposit" || !user) return;
+
+    const value = Number(debouncedAmount);
+    if (!value || value <= 0) {
+      setAllocations([]);
+      return;
+    }
+
+    let cancelled = false;
+    previewDeposit(user.id, value)
+      .then((preview) => {
+        if (cancelled) return;
+        setAllocations(preview.allocations);
+        setNeedsShares(preview.needs_shares);
+      })
+      .catch(() => {
+        if (!cancelled) setAllocations([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, mode, debouncedAmount, user]);
 
   if (!open) return null;
 
@@ -57,7 +89,14 @@ export default function AddMoneyModal({
     setError(null);
 
     try {
-      if (mode === "transfer") {
+      if (mode === "deposit") {
+        await recordDeposit(user.id, {
+          amount: Number(amount),
+          occurred_on: occurredOn,
+          description: description || null,
+          allocations,
+        });
+      } else if (mode === "transfer") {
         await createTransfer(user.id, {
           from_account_id: accountId,
           to_account_id: toAccountId,
@@ -91,7 +130,7 @@ export default function AddMoneyModal({
         <h2>Record Money</h2>
 
         <div className="moneyTabs">
-          {(["expense", "income", "transfer"] as Mode[]).map((option) => (
+          {(["expense", "income", "transfer", "deposit"] as Mode[]).map((option) => (
             <button
               type="button"
               key={option}
@@ -107,6 +146,7 @@ export default function AddMoneyModal({
         </div>
 
         <form className="loginForm" onSubmit={handleSubmit}>
+          {mode !== "deposit" && (
           <div className="loginField">
             <label htmlFor="money-account">
               {mode === "transfer" ? "From" : "Account"}
@@ -122,6 +162,7 @@ export default function AddMoneyModal({
               ))}
             </select>
           </div>
+          )}
 
           {mode === "transfer" && (
             <div className="loginField">
@@ -152,6 +193,50 @@ export default function AddMoneyModal({
               required
             />
           </div>
+
+          {mode === "deposit" && (
+            <div className="depositSplit">
+              <span className="depositSplitTitle">Split across accounts</span>
+              {needsShares && (
+                <p className="small-text muted">
+                  No account has an income share yet. Set one on each account, or
+                  type the amounts below.
+                </p>
+              )}
+              {allocations.map((allocation) => {
+                const account = accounts.find((item) => item.id === allocation.account_id);
+                return (
+                  <div className="depositRow" key={allocation.account_id}>
+                    <span className="depositRowName">{account?.name ?? "Account"}</span>
+                    <input
+                      className="loginInput depositRowInput"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={allocation.amount}
+                      aria-label={`Amount for ${account?.name ?? "account"}`}
+                      onChange={(event) =>
+                        setAllocations((current) =>
+                          current.map((entry) =>
+                            entry.account_id === allocation.account_id
+                              ? { ...entry, amount: Number(event.target.value) }
+                              : entry
+                          )
+                        )
+                      }
+                    />
+                  </div>
+                );
+              })}
+              {allocations.length > 0 && (
+                <span className="small-text muted depositSum">
+                  Allocated{" "}
+                  {allocations.reduce((sum, entry) => sum + entry.amount, 0).toFixed(2)} of{" "}
+                  {(Number(amount) || 0).toFixed(2)}
+                </span>
+              )}
+            </div>
+          )}
 
           {mode === "expense" && categories.length > 0 && (
             <div className="loginField">

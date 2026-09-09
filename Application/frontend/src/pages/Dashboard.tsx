@@ -2,12 +2,15 @@ import { useNavigate } from "react-router-dom";
 import "../styles/dashboard.css";
 import { useAuth } from "../app/auth/AuthContext";
 import { useDashboard } from "../features/grades/hooks/useDashboard";
+import { useBudgetGlance } from "../features/budget/hooks/useBudgetGlance";
+import { formatMoney } from "../features/budget/money";
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
   const { summary, error: summaryError } = useDashboard();
+  const { summary: budget, totalBalance } = useBudgetGlance();
 
   const hasCourses = (summary?.total_courses ?? 0) > 0;
 
@@ -46,6 +49,38 @@ export default function Dashboard() {
               <p>
                 Weakest <strong>{summary.weakest_course.course_code}</strong>{" "}
                 <span className="muted">{summary.weakest_course.average}</span>
+              </p>
+            </div>
+          )}
+        </section>
+      )}
+
+      {budget && (
+        <section className="gradeSummary">
+          <div className="summaryStats">
+            <div className="statBlock">
+              <span className="statValue">{formatMoney(totalBalance)}</span>
+              <span className="statLabel">Across accounts</span>
+            </div>
+            <div className="statBlock">
+              <span className="statValue">{formatMoney(budget.total_actual)}</span>
+              <span className="statLabel">Spent this month</span>
+            </div>
+            {budget.total_planned > 0 && (
+              <div className="statBlock">
+                <span className="statValue">
+                  {formatMoney(budget.total_planned - budget.total_actual)}
+                </span>
+                <span className="statLabel">Left to spend</span>
+              </div>
+            )}
+          </div>
+
+          {budget.by_category.length > 0 && (
+            <div className="summaryCourses">
+              <p>
+                Biggest this month <strong>{budget.by_category[0].category_name}</strong>{" "}
+                <span className="muted">{formatMoney(budget.by_category[0].actual)}</span>
               </p>
             </div>
           )}
