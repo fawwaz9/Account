@@ -4,9 +4,10 @@ import Transactions from "./Transactions";
 import AddMoneyModal from "./AddMoneyModal";
 import PlannedSpend from "./PlannedSpend";
 import EditTransactionModal from "./EditTransactionModal";
+import EditAccountModal from "./EditAccountModal";
 import { useBudget } from "../hooks/useBudget";
 import { deleteTransaction, setBudgetTarget } from "../api";
-import { Transaction } from "../types";
+import { Account, Transaction } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
 
 export default function BudgetView() {
@@ -18,6 +19,7 @@ export default function BudgetView() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Transaction | null>(null);
+  const [editingAccount, setEditingAccount] = useState<Account | null>(null);
 
   const visible = useMemo(
     () =>
@@ -70,7 +72,12 @@ export default function BudgetView() {
 
       {!loading && !error && (
         <>
-          <Sectors accounts={accounts} selectedId={selectedId} onSelect={setSelectedId} />
+          <Sectors
+            accounts={accounts}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            onEdit={setEditingAccount}
+          />
 
           <PlannedSpend
             summary={summary}
@@ -105,6 +112,13 @@ export default function BudgetView() {
           </section>
         </>
       )}
+
+      <EditAccountModal
+        account={editingAccount}
+        accounts={accounts}
+        onClose={() => setEditingAccount(null)}
+        onSaved={reload}
+      />
 
       <EditTransactionModal
         transaction={editing}
