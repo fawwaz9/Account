@@ -5,6 +5,7 @@ interface TransactionsProps {
   readonly transactions: readonly Transaction[];
   readonly accounts: readonly Account[];
   readonly onDelete: (transaction: Transaction) => void;
+  readonly onEdit: (transaction: Transaction) => void;
   readonly deletingId: string | null;
 }
 
@@ -12,6 +13,7 @@ export default function Transactions({
   transactions,
   accounts,
   onDelete,
+  onEdit,
   deletingId,
 }: TransactionsProps) {
   const nameFor = (accountId: string) =>
@@ -25,26 +27,33 @@ export default function Transactions({
     <ul className="ledger">
       {transactions.map((transaction) => (
         <li className="ledgerRow" key={transaction.id}>
-          <span className={`ledgerKind ledgerKind--${transaction.kind}`}>
-            {transaction.kind}
-          </span>
-
-          <span className="ledgerBody">
-            <span className="ledgerDescription">
-              {transaction.description || "(no description)"}
-            </span>
-            <span className="small-text muted">
-              {transaction.occurred_on} &middot; {nameFor(transaction.account_id)}
-            </span>
-          </span>
-
-          <span
-            className={
-              transaction.signed_amount < 0 ? "ledgerAmount ledgerOut" : "ledgerAmount ledgerIn"
-            }
+          <button
+            type="button"
+            className="ledgerOpen"
+            onClick={() => onEdit(transaction)}
+            aria-label={`Edit ${transaction.description || transaction.kind}`}
           >
-            {formatMoney(transaction.signed_amount, { signed: true })}
-          </span>
+            <span className={`ledgerKind ledgerKind--${transaction.kind}`}>
+              {transaction.kind}
+            </span>
+
+            <span className="ledgerBody">
+              <span className="ledgerDescription">
+                {transaction.description || "(no description)"}
+              </span>
+              <span className="small-text muted">
+                {transaction.occurred_on} &middot; {nameFor(transaction.account_id)}
+              </span>
+            </span>
+
+            <span
+              className={
+                transaction.signed_amount < 0 ? "ledgerAmount ledgerOut" : "ledgerAmount ledgerIn"
+              }
+            >
+              {formatMoney(transaction.signed_amount, { signed: true })}
+            </span>
+          </button>
 
           <button
             type="button"

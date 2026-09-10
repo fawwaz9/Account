@@ -46,6 +46,22 @@ export async function createTransfer(userId: string, payload: TransferCreate) {
   return post<Transaction[]>(endpoints.finances.transfers(userId), payload);
 }
 
+export async function updateTransaction(
+  userId: string,
+  transactionId: string,
+  payload: {
+    amount?: number;
+    description?: string | null;
+    occurred_on?: string;
+    category_id?: string | null;
+  }
+) {
+  return patch<Transaction>(
+    endpoints.finances.transaction(userId, transactionId),
+    payload
+  );
+}
+
 export async function deleteTransaction(userId: string, transactionId: string) {
   return del<Transaction>(endpoints.finances.transaction(userId, transactionId));
 }

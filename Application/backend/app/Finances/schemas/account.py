@@ -12,12 +12,16 @@ class AccountKind(str, Enum):
     OTHER = "other"
 
 
-#: Seeded for a new account holder, from the four in the project notes.
+#: Seeded for a new account holder. The first four come from the project notes
+#: and carry the income split; School and Money Lent start at 0% so adding them
+#: does not quietly take a cut from the others.
 DEFAULT_ACCOUNTS: list[tuple[str, AccountKind, float]] = [
     ("Spending", AccountKind.SPENDING, 50.0),
     ("Savings", AccountKind.SAVINGS, 20.0),
     ("Investments", AccountKind.INVESTMENT, 20.0),
     ("Emergency Savings", AccountKind.EMERGENCY, 10.0),
+    ("School", AccountKind.OTHER, 0.0),
+    ("Money Lent", AccountKind.OTHER, 0.0),
 ]
 
 

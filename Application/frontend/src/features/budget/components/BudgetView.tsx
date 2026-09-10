@@ -3,6 +3,7 @@ import Sectors from "./Sectors";
 import Transactions from "./Transactions";
 import AddMoneyModal from "./AddMoneyModal";
 import PlannedSpend from "./PlannedSpend";
+import EditTransactionModal from "./EditTransactionModal";
 import { useBudget } from "../hooks/useBudget";
 import { deleteTransaction, setBudgetTarget } from "../api";
 import { Transaction } from "../types";
@@ -16,6 +17,7 @@ export default function BudgetView() {
   const [modalOpen, setModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<Transaction | null>(null);
 
   const visible = useMemo(
     () =>
@@ -97,11 +99,19 @@ export default function BudgetView() {
               transactions={visible}
               accounts={accounts}
               onDelete={handleDelete}
+              onEdit={setEditing}
               deletingId={deletingId}
             />
           </section>
         </>
       )}
+
+      <EditTransactionModal
+        transaction={editing}
+        categories={categories}
+        onClose={() => setEditing(null)}
+        onSaved={reload}
+      />
 
       <AddMoneyModal
         open={modalOpen}
