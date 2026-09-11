@@ -5,5 +5,11 @@ venv
 .env
 .git
 *.db
+*.db.backup*
 *.sqlite
 *.sqlite3
+
+# Runtime state, never part of an image. The Dockerfile creates /app/data itself
+# and compose bind-mounts over it, so copying it in only bakes real data into a
+# layer -- invisible at runtime behind the mount, but permanently in the image.
+data/

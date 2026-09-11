@@ -4,6 +4,7 @@ import { createGrade } from "../api";
 import { GradeCreate, GradeCategory } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { getErrorMessage } from "./AddCourseModal";
+import Modal from "../../../shared/components/Modal";
 
 interface AddGradeModalProps {
   readonly open: boolean;
@@ -16,9 +17,14 @@ interface AddGradeModalProps {
 function buildDefaultForm(category: GradeCategory | null): GradeCreate {
   return {
     name: "",
-    score: 0,
+    // null, not 0: a new assignment is unmarked until it is marked, and a 0
+    // would drag the category average down as though it had been failed.
+    score: null,
     max_score: 0,
     category: category ?? GradeCategory.OTHER,
+    // No deadline by default. Setting one raises a task for the assignment,
+    // which closes itself when the score lands.
+    due_date: null,
   };
 }
 
@@ -51,29 +57,22 @@ export default function AddGradeModal({
       onGradeAdded();
       onClose();
     } catch (err: any) {
-      const apiError =
-        err?.response?.data?.detail ||
-        err?.response?.data?.message ||
-        err?.message;
-      setError(getErrorMessage(apiError));
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="popup">
-      <div className="addCoursePopup">
-        <h2>Add Grade — {category}</h2>
-        <AddGradeForm
-          form={form}
-          updateField={(k, v) => setForm((s) => ({ ...s, [k]: v }))}
-          onSubmit={handleSubmit}
-          submitting={loading}
-          error={error}
-          onCancel={onClose}
-        />
-      </div>
-    </div>
+    <Modal title={`Add Grade — ${category}`} onClose={onClose}>
+      <AddGradeForm
+        form={form}
+        updateField={(k, v) => setForm((s) => ({ ...s, [k]: v }))}
+        onSubmit={handleSubmit}
+        submitting={loading}
+        error={error}
+        onCancel={onClose}
+      />
+    </Modal>
   );
 }

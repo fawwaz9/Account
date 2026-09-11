@@ -8,7 +8,6 @@ services:
       DATABASE_URL: sqlite:////app/data/app.db
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       JWT_SECRET: ${JWT_SECRET}
-      JWT_ALGORITHM: HS256
       ALLOWED_ORIGINS: http://localhost:5173
     volumes:
       - ./backend/data:/app/data   # bind mount, not a named volume

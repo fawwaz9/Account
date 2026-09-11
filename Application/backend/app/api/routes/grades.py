@@ -1,5 +1,5 @@
 from uuid import UUID
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from fastapi import HTTPException
 from app._database.dependencies import DBSession
 from app.Auth.services.access import VerifiedUserId
@@ -18,6 +18,7 @@ from app.Grades.schemas.dashboard import UserGradeDashboard
 from app.Grades.schemas.grade import Grade, GradeCreate, GradeUpdate
 from app.Grades.services.grade_service import (
     add_grade,
+    add_grades_bulk,
     calculate_current_average,
     calculate_letter_grade,
     calculate_required_final,
@@ -29,13 +30,18 @@ from app.Grades.services.grade_service import (
     update_category_weights,
     update_grade,
 )
-from app.Grades.services.dash_services import get_dashboard
+from app.Grades.services.dash_services import DEFAULT_TARGET_GRADE, get_dashboard
+from app.shared import audit
 
 router = APIRouter()
 
 @router.get("/{user_id}/grades/dashboard", response_model=UserGradeDashboard, responses=responses["user_404"])
-def grade_dashboard(user_id: VerifiedUserId, db: DBSession):
-    dashboard = get_dashboard(db, user_id)
+def grade_dashboard(
+    user_id: VerifiedUserId,
+    db: DBSession,
+    target_grade: float = Query(DEFAULT_TARGET_GRADE, ge=0, le=100),
+):
+    dashboard = get_dashboard(db, user_id, target_grade)
     if dashboard is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
     return dashboard
@@ -45,8 +51,8 @@ def get_courses(user_id: VerifiedUserId, db: DBSession):
     courses = get_all_courses(db, user_id)
     if courses is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
-    if not courses:
-        raise HTTPException(status_code=404, detail="No courses found")
+    # An account with no courses yet is an empty collection, not an error --
+    # the UI has an empty state for exactly this and never got to show it.
     return courses
 
 @router.post("/{user_id}/courses", response_model=CourseDetail, responses={404: {"description": error_course["not_found"]}, 400: {"description": error_course["already_exists"]}})
@@ -62,7 +68,11 @@ def add_course(user_id: VerifiedUserId, course: CourseCreate, db: DBSession):
     return new_course
 
 @router.get("/{user_id}/courses/search", response_model=list[Course], responses=responses["user_404"])
-def search_course_list(user_id: VerifiedUserId, query: str, db: DBSession):
+def search_course_list(
+    user_id: VerifiedUserId,
+    db: DBSession,
+    query: str = Query(..., min_length=1, max_length=100),
+):
     courses = search_courses(db, user_id, query)
     if courses is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
@@ -71,7 +81,14 @@ def search_course_list(user_id: VerifiedUserId, query: str, db: DBSession):
 
 @router.get("/{user_id}/courses/{course_id}", response_model=CourseDetail, responses=responses["course_404"])
 def get_single_course(user_id: VerifiedUserId, course_id: UUID, db: DBSession):
-    course = get_course(db, user_id, course_id)
+    # get_course recomputes the average, which raises if stored category
+    # weights sum past 100. Without this guard that surfaced as a 500, while
+    # the sibling /average route already returned 400 for the same cause.
+    try:
+        course = get_course(db, user_id, course_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     if course is None:
         raise HTTPException(status_code=404, detail=error_course["not_found"])
 
@@ -95,6 +112,11 @@ def remove_course(user_id: VerifiedUserId, course_id: UUID, db: DBSession):
     if deleted_course is None:
         raise HTTPException(status_code=404, detail=error_course["not_found"])
 
+    # A course takes its grades with it, so this is the most destructive mutation
+    # in the Grades module.
+    audit.deletion(
+        "course", user_id=user_id, target_id=course_id, detail=deleted_course.code,
+    )
     return deleted_course
 
 @router.get("/{user_id}/courses/{course_id}/statistics", response_model=dict, responses=responses["course_404"])
@@ -152,7 +174,12 @@ def get_course_letter_grade(user_id: VerifiedUserId, course_id: UUID, db: DBSess
     }
 
 @router.get("/{user_id}/courses/{course_id}/required-final", responses=responses["course_both"])
-def get_required_final_score(user_id: VerifiedUserId, course_id: UUID, target_grade: float, db: DBSession):
+def get_required_final_score(
+    user_id: VerifiedUserId,
+    course_id: UUID,
+    db: DBSession,
+    target_grade: float = Query(..., ge=0, le=100),
+):
     try:
         return calculate_required_final(db, user_id, course_id, target_grade)
     except ValueError as exc:
@@ -180,6 +207,20 @@ def create_grade(user_id: VerifiedUserId, course_id: UUID, grade: GradeCreate, d
 
     return new_grade
 
+@router.post("/{user_id}/courses/{course_id}/grades/bulk", response_model=list[Grade], responses={404: {"description": error_course["not_found"]}, 400: {"description": error_grade["invalid_data"]}})
+def create_grades_bulk(user_id: VerifiedUserId, course_id: UUID, grades: list[GradeCreate], db: DBSession):
+    """Add several grades at once, all or nothing."""
+    try:
+        created = add_grades_bulk(db, user_id, course_id, grades)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if created is None:
+        raise HTTPException(status_code=404, detail=error_course["not_found"])
+
+    return created
+
+
 @router.get("/{user_id}/courses/{course_id}/grades/{grade_id}", response_model=Grade, responses={404: {"description": error_grade["not_found"]}})
 def get_single_grade(user_id: VerifiedUserId, course_id: UUID, grade_id: UUID, db: DBSession):
     grade = get_grade(db, user_id, course_id, grade_id)
@@ -206,6 +247,10 @@ def remove_grade(user_id: VerifiedUserId, course_id: UUID, grade_id: UUID, db: D
     if deleted_grade is None:
         raise HTTPException(status_code=404, detail=error_grade["not_found"])
 
+    audit.deletion(
+        "grade", user_id=user_id, target_id=grade_id,
+        detail=f"course={course_id} name={deleted_grade.name}",
+    )
     return deleted_grade
 
 @router.patch("/{user_id}/courses/{course_id}/grades/{grade_id}/score", response_model=Grade, responses=responses["grade_both"])

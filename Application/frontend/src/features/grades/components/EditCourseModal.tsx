@@ -4,6 +4,7 @@ import { updateCourse } from "../api";
 import { CourseCreate, CourseDetail, CourseUpdate, Semester } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { getErrorMessage } from "./AddCourseModal";
+import Modal from "../../../shared/components/Modal";
 
 interface EditCourseModalProps {
   readonly open: boolean;
@@ -20,9 +21,15 @@ function buildFormFromCourse(course: CourseDetail | null): CourseCreate {
     year: course?.year ?? 1,
     credits: course?.credits ?? 3,
     required: course?.required ?? true,
-    professor: course?.professor ?? "",
+    professor: course?.professor ?? null,
     final_grade: course?.final_grade ?? 0,
+    target_grade: course?.target_grade ?? null,
     category_weights: course?.category_weights ?? {},
+    start_date: course?.start_date ?? null,
+    end_date: course?.end_date ?? null,
+    no_final: course?.no_final ?? false,
+    transfer_credit: course?.transfer_credit ?? false,
+    archived: course?.archived ?? false,
   };
 }
 
@@ -55,29 +62,22 @@ export default function EditCourseModal({
       onCourseUpdated();
       onClose();
     } catch (err: any) {
-      const apiError =
-        err?.response?.data?.detail ||
-        err?.response?.data?.message ||
-        err?.message;
-      setError(getErrorMessage(apiError));
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="popup">
-      <div className="addCoursePopup">
-        <h2>Edit Course</h2>
-        <EditCourseForm
-          form={form}
-          updateField={(k, v) => setForm((s) => ({ ...s, [k]: v }))}
-          onSubmit={handleSubmit}
-          onCancel={onClose}
-          submitting={loading}
-          error={error}
-        />
-      </div>
-    </div>
+    <Modal title="Edit Course" onClose={onClose}>
+      <EditCourseForm
+        form={form}
+        updateField={(k, v) => setForm((s) => ({ ...s, [k]: v }))}
+        onSubmit={handleSubmit}
+        onCancel={onClose}
+        submitting={loading}
+        error={error}
+      />
+    </Modal>
   );
 }

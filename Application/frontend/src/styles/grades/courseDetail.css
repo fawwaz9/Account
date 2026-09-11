@@ -230,3 +230,120 @@
   cursor: pointer;
   padding: 0.25rem 0.5rem;
 }
+/* ===== Final grade actions ===== */
+.finalGradeActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.requiredFinalButton {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--deep-border);
+  border-color: #1f2a44;
+  padding: 8px 16px;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.requiredFinalButton:hover {
+  color: var(--gold);
+  border-color: var(--border);
+  transform: translateY(-1px);
+}
+
+/* ===== Required final grade modal ===== */
+.requiredFinalForm {
+  margin-top: 14px;
+}
+
+.requiredFinalRow {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  align-items: center;
+}
+
+.requiredFinalInput {
+  width: 150px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid #1f2a44;
+}
+
+.requiredFinalResult {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+.requiredFinalScore,
+.requiredFinalGood,
+.requiredFinalBad {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.requiredFinalScore strong,
+.requiredFinalBad strong {
+  font-size: 1.35rem;
+}
+
+.requiredFinalScore strong { color: var(--gold); }
+.requiredFinalGood { color: var(--gold-soft); }
+.requiredFinalBad strong { color: var(--delete); }
+
+.requiredFinalCaveat {
+  margin: 10px 0 0;
+  line-height: 1.5;
+}
+
+/* ===== Bulk grade entry ===== */
+.bulkPopup { min-width: min(640px, 92vw); }
+
+.bulkGrid {
+  display: grid;
+  grid-template-columns: 2fr 1.4fr 0.8fr 0.8fr 28px;
+  gap: 6px;
+  align-items: center;
+  margin: 14px 0 10px;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+.bulkHead {
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.bulkInput {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid #1f2a44;
+  text-align: left;
+}
+
+.bulkRemove {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0;
+}
+
+.bulkRemove:hover:enabled { color: var(--delete); }
+.bulkRemove:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.bulkAddRow { padding: 5px 12px; font-size: 0.82rem; }

@@ -7,11 +7,28 @@ export interface Course {
   semester: Semester;
   credits: number;
   required: boolean;
-  professor: string;
+  professor: string | null;
   final_grade: number;
+  /** null uses the account default from Settings */
+  target_grade: number | null;
   category_weights: Partial<Record<GradeCategory, number>>;
   average: number;
+  start_date: string | null;
+  end_date: string | null;
+  /** No final exam, so a missing final grade is not flagged in Attention. */
+  no_final: boolean;
+  /** Credit granted without taking the course: counts credits, carries no grade. */
+  transfer_credit: boolean;
+  /** Searchable and still in the average, but out of credits completed. */
+  archived: boolean;
+  /** Letter for the course's result; "" when nothing is recorded yet. */
+  letter_grade: string;
+  /** Grade points on the configured scale */
+  grade_points: number;
+  term_bucket: TermBucket;
 }
+
+export type TermBucket = "past" | "current" | "future";
 
 export enum Semester {
   FALL = "Fall",
@@ -27,9 +44,20 @@ export interface CourseCreate {
   year: number;
   credits: number;
   required: boolean;
-  professor: string;
+  professor: string | null;
   final_grade: number;
+  /** The grade you are aiming for; null falls back to the account default */
+  target_grade: number | null;
   category_weights: Partial<Record<GradeCategory, number>>;
+  // ISO yyyy-mm-dd, or null for a course with no set term dates
+  start_date: string | null;
+  end_date: string | null;
+  /** No final exam, so a missing final grade is not flagged in Attention. */
+  no_final: boolean;
+  /** Credit granted without taking the course: counts credits, carries no grade. */
+  transfer_credit: boolean;
+  /** Searchable and still in the average, but out of credits completed. */
+  archived: boolean;
 }
 
 export interface CourseDetail {
@@ -40,13 +68,26 @@ export interface CourseDetail {
   semester: Semester;
   credits: number;
   required: boolean;
-  professor: string;
+  professor: string | null;
   final_grade: number;
   category_weights: Partial<Record<GradeCategory, number>>;
   average: number;
+  target_grade: number | null;
+  letter_grade: string;
+  grade_points: number;
   grades: Grade[];
   start_date: string | null;
   end_date: string | null;
+  /** No final exam, so a missing final grade is not flagged in Attention. */
+  no_final: boolean;
+  /** Credit granted without taking the course: counts credits, carries no grade. */
+  transfer_credit: boolean;
+  /** Searchable and still in the average, but out of credits completed. */
+  archived: boolean;
+  // Point-weighted average per category, computed by the API. Render these
+  // rather than recomputing -- the component used to do its own arithmetic and
+  // disagreed with the course average on the same screen.
+  category_averages: Partial<Record<GradeCategory, number>>;
 }
 
 export interface CourseUpdate{
@@ -58,7 +99,13 @@ export interface CourseUpdate{
   required: boolean | null;
   professor: string | null;
   final_grade: number | null;
+  target_grade: number | null;
   category_weights: Partial<Record<GradeCategory, number>> | null;
+  start_date: string | null;
+  end_date: string | null;
+  no_final: boolean | null;
+  transfer_credit: boolean | null;
+  archived: boolean | null;
 }
 
 
@@ -66,10 +113,16 @@ export interface CourseUpdate{
 export interface Grade {
   id: string;
   name: string;
-  score: number;
+  // null until the assignment has been marked
+  score: number | null;
   max_score: number;
   category: GradeCategory;
   weight: number;
+  /**
+   * When the work is due. Setting one raises a task automatically, and that
+   * task closes itself once a score is recorded.
+   */
+  due_date: string | null;
 }
 
 export enum GradeCategory {
@@ -83,15 +136,28 @@ export enum GradeCategory {
   FINAL = "Final"
 }
 
+/** Answer from the "what do I need on the final" calculation. */
+export interface RequiredFinal {
+  /** Score needed on the final, as a percentage. Can fall outside 0-100. */
+  needed: number;
+  /** False when `needed` is unreachable — above 100 or already below 0. */
+  possible: boolean;
+  /** Weighted categories with no marks yet, which the figure does not count. */
+  unfinished_categories: string[];
+}
+
 export interface CategoryWeightsUpdate {
   category_weights: Partial<Record<GradeCategory, number>>;
 }
 
 export interface GradeCreate{
   name: string;
-  score: number;
+  // omit or send null to add an assignment that is not graded yet
+  score: number | null;
   max_score: number;
   category: GradeCategory;
+  /** Setting a date raises a task for this assignment. */
+  due_date: string | null;
 }
 
 export interface GradeUpdate{
@@ -99,6 +165,7 @@ export interface GradeUpdate{
   score: number | null;
   max_score: number | null;
   category: GradeCategory | null;
+  due_date: string | null;
 }
 
 
@@ -143,9 +210,49 @@ export interface UserUpdate{
 
 
 // Dashboard
+export interface YearSummary {
+  school_year: number;
+  /** null when no course that year has anything recorded */
+  average: number | null;
+  course_count: number;
+}
+
+export type AttentionKind = "missing_final" | "below_target" | "weight_problem";
+
+export interface AttentionItem {
+  kind: AttentionKind;
+  course_id: string;
+  course_code: string;
+  message: string;
+}
+
+export interface TermPoint {
+  school_year: number;
+  semester: string;
+  label: string;
+  /** Plain mean across that term's courses */
+  term_average: number;
+  /** Credit-weighted cumulative up to that term; null until a course has a final */
+  cumulative_average: number | null;
+}
+
 export interface UserGradeDashboard {
   total_courses: number;
-  overall_average: number;
+  /** Credit-weighted mean */
+  cumulative_average: number;
+  /** Plain mean across the current term only */
+  semester_average: number;
+  /** null when the GPA scale is switched off in settings */
+  cgpa: number | null;
+  credits_completed: number;
+  credits_in_progress: number;
+  credits_required: number;
+  credits_elective: number;
+  credit_target: number;
+  attention: AttentionItem[];
+  term_history: TermPoint[];
+  past_years: YearSummary[];
+  future_years: YearSummary[];
   best_course: CourseDashboardEntry | null;
   weakest_course: CourseDashboardEntry | null;
   courses_needing_final_score: CourseNeedingFinalScore[];

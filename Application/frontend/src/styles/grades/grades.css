@@ -32,6 +32,20 @@
   gap: 0.75rem;
 }
 
+/* One labelled cell per category, so the grid keeps its 4x2 shape now that each
+   input is wrapped alongside its label rather than sitting in the grid directly. */
+.categoryWeightItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.categoryWeightLabel {
+  font-size: 0.75rem;
+  color: var(--text);
+  text-transform: capitalize;
+}
+
 .categoryWeightInput {
   width: 100%;
   min-width: 0; /* prevents inputs from overflowing their grid cell */
@@ -71,7 +85,6 @@
 .courses .courseBox {
   appearance: none;
   -webkit-appearance: none;
-  padding: 0;
   font: inherit;
   color: inherit;
   text-align: left;
@@ -82,7 +95,13 @@
   border-radius: 8px;
   margin: 5px 0;
   box-shadow: 0 8px 24px var(--shadow);
-  width: 250px;
+  width: 80%;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
 }
 
 .courses .courseBox:hover {
@@ -91,13 +110,12 @@
 }
 .courses {
   display: flex;
-  flex-wrap: wrap;
   gap: 10px;
 }
 
 .averageCircle {
-  width: 50px;
-  height: 50px;
+  width: 70px;
+  height: 60px;
   border-radius: 50%;
   background: linear-gradient(145deg, var(--panel), var(--panel-2));
   border: 1px solid var(--gold);
@@ -109,11 +127,26 @@
   margin: 5px 0;
 }
 
+/* Without an explicit background this input kept the browser default (white)
+   while colouring its text near-white, so whatever you typed was invisible. */
 .search-courses {
-  padding: 3px;
-  margin-bottom: 5px;
-  border-radius: 6px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #1f2a44;
+  background: var(--panel);
   color: var(--text);
+}
+
+.search-courses::placeholder {
+  color: var(--muted);
+}
+
+.search-courses:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px var(--border);
 }
 
 .courseActions {
@@ -122,4 +155,552 @@
   justify-content: center;
   margin-right: 10px;
   transform: translateX(-30px);
+}
+
+/* ===== Course search typeahead ===== */
+.courseSearch {
+  position: relative;
+  width: 100%;
+  max-width: 320px;
+}
+
+.searchResults {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 50;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  max-height: 300px;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px var(--shadow);
+}
+
+.searchResult {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+}
+
+.searchResultActive,
+.searchResult:focus-visible {
+  background: var(--bg);
+  outline: none;
+}
+
+.searchResultCode {
+  font-weight: 600;
+  color: var(--gold);
+  font-size: 0.9rem;
+}
+
+.searchResultName {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.searchStatus {
+  padding: 10px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* ===== Grades page layout ===== */
+.gradesPage {
+  margin: 0 auto;
+}
+
+.gradesHeader {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.gradesMenu {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.gradesTitle {
+  flex: 1;
+  margin: 0;
+  text-align: center;
+  color: var(--gold);
+}
+
+.gradesHeader .backButton {
+  flex: none;
+}
+
+.gradesGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 32px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .gradesGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.gradesColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  min-width: 0;
+}
+
+.sectionHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.sectionHeading h2 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.addCourseButton {
+  padding: 6px 14px;
+  font-weight: 600;
+}
+
+/* ----- Course rows ----- */
+.courseList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.courseBoxMain {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.courseCode {
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.courseProfessor {
+  color: var(--muted);
+}
+
+.courseLetter {
+  flex: none;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+/* ----- Averages panel ----- */
+.summaryPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: linear-gradient(145deg, var(--panel), var(--panel-2));
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px 22px;
+}
+
+.summaryStat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.summaryStatLabel {
+  font-size: 1rem;
+  color: var(--text);
+}
+
+.summaryStatValue {
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.summaryStatBoxed {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 2px 12px;
+}
+
+/* ----- Credits ----- */
+.creditsPanel {
+  background: linear-gradient(145deg, var(--panel), var(--panel-2));
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px 22px;
+}
+
+.creditsHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.creditsTitle {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.creditsLegend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.legendSwatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.legendDone { background: var(--gold); }
+.legendProgress { background: var(--muted); margin-left: 8px; }
+
+.creditsRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.creditsTrack {
+  position: relative;
+  flex: 1;
+  height: 34px;
+  display: flex;
+  background: var(--bg);
+  border: 1px solid #1f2a44;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.creditsFill { height: 100%; }
+.creditsDone { background: var(--gold); }
+.creditsProgress { background: var(--muted); opacity: 0.55; }
+
+.creditsTick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.creditsTickLabel {
+  position: absolute;
+  top: calc(100% + 3px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.65rem;
+  color: var(--muted);
+}
+
+.creditsPercent {
+  flex: none;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  border: 1px solid var(--gold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gold);
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.creditsRemaining {
+  margin: 18px 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* ----- Past / future years ----- */
+.yearSection h2 {
+  margin: 0 0 12px;
+  font-size: 1.4rem;
+}
+
+.yearGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.yearCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 110px;
+  padding: 14px 18px;
+  background: linear-gradient(145deg, var(--panel), var(--panel-2));
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.yearLabel { font-size: 0.9rem; }
+.yearAverage {
+  font-size: 1.6rem;
+  font-weight: 600;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ----- Not built yet ----- */
+.comingSoon {
+  border: 1px dashed #2a3854;
+  border-radius: 12px;
+  padding: 18px 20px;
+  text-align: center;
+}
+
+.comingSoonLabel {
+  display: block;
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.comingSoon p { margin: 0; }
+
+/* ===== Year drill-down ===== */
+.yearCard {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: center;
+  transition: 0.2s ease;
+}
+
+.yearCard:hover {
+  transform: translateY(-1px);
+  border-color: var(--gold);
+}
+
+.yearCardActive {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+.yearCard:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.termGroups {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.termHeading {
+  margin: 0 0 8px;
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+/* ===== Attention ===== */
+.attentionPanel {
+  background: linear-gradient(145deg, var(--panel), var(--panel-2));
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px 20px;
+}
+
+.attentionTitle {
+  margin: 0 0 12px;
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.attentionList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.attentionItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.attentionItem:hover { background: var(--bg); }
+.attentionItem:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+.attentionTag {
+  flex: none;
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  margin-top: 1px;
+}
+
+.attentionTag--missing_final { color: var(--delete); }
+.attentionTag--below_target { color: var(--gold); }
+.attentionTag--weight_problem { color: var(--muted); }
+
+.attentionBody { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.attentionCourse { font-weight: 600; font-size: 0.88rem; }
+
+.courseGradePoints {
+  margin-top: 6px;
+  font-size: 0.85rem;
+  color: var(--gold-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== Grade trend ===== */
+.trendPanel {
+  background: linear-gradient(145deg, var(--panel), var(--panel-2));
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px 20px;
+}
+
+.trendHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.trendTitle {
+  margin: 0;
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.trendLegend { display: flex; gap: 12px; font-size: 0.7rem; }
+
+.trendKey { display: flex; align-items: center; gap: 5px; color: var(--muted); }
+.trendKey::before {
+  content: "";
+  width: 12px;
+  height: 2px;
+  border-radius: 2px;
+  display: inline-block;
+}
+.trendKey--cumulative::before { background: var(--gold); }
+.trendKey--term::before { background: var(--muted); }
+
+/* A long degree scrolls rather than squashing every term together. */
+.trendScroll { overflow-x: auto; }
+.trendChart { width: 100%; min-width: 380px; height: auto; display: block; }
+
+.trendGrid { stroke: #1f2a44; stroke-width: 1; }
+.trendAxis { fill: var(--muted); font-size: 9px; }
+
+.trendLine { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.trendLine--cumulative { stroke: var(--gold); }
+.trendLine--term { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 4 3; opacity: 0.75; }
+
+.trendDot--cumulative { fill: var(--gold); }
+.trendDot--term { fill: var(--muted); }
+
+/* ===== Course flags =====
+   Each flag removes the course from a different rule, so each carries its own
+   sentence -- a checkbox labelled only "Archived" does not say which number
+   moves. */
+
+.courseFlags {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid #1f2a44;
+  border-radius: 10px;
+  text-align: left;
+}
+
+.courseFlag {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.courseFlagLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  cursor: pointer;
+}
+
+.courseFlagName {
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.courseFlagHint {
+  font-size: 0.78rem;
+  color: var(--muted);
 }

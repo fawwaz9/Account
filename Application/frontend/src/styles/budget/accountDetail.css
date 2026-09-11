@@ -1,0 +1,129 @@
+/* ===== Account detail ===== */
+.accountPage { max-width: 980px; margin: 0 auto; position: relative; }
+
+.accountHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 8px 0 26px;
+}
+
+.accountName {
+  margin: 0 0 4px;
+  font-size: 1.9rem;
+  color: var(--gold);
+}
+
+.accountBalance {
+  font-size: 1.5rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.accountBalanceNote { margin-left: 8px; }
+
+/* ----- Tiles ----- */
+.tileRow {
+  list-style: none;
+  margin: 0 0 28px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  background: linear-gradient(145deg, var(--panel), var(--panel-2));
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.tileLabel { text-transform: none; }
+
+.tileValue {
+  font-size: 1.25rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.tileValue--in { color: var(--flow-in); }
+.tileValue--out { color: var(--flow-out); }
+
+.accountTarget { margin-bottom: 28px; }
+.accountTarget .sectionHeading h2 { font-size: 1.3rem; }
+.accountTarget .progressTrack { margin-bottom: 6px; }
+
+/* ----- Charts ----- */
+/* Deliberately its own rules rather than borrowing the grade trend's, so a
+   later tweak to the grade axis never restyles money. */
+.flowPanel {
+  background: linear-gradient(145deg, var(--panel), var(--panel-2));
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px 20px;
+  margin-bottom: 28px;
+}
+
+.flowHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.flowTitle {
+  margin: 0;
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.flowLegend { display: flex; gap: 14px; }
+
+/* Identity is never carried by colour alone: the swatch is paired with a word. */
+.flowKey {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.flowKey::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.flowKey--in::before { background: var(--flow-in); }
+.flowKey--out::before { background: var(--flow-out); }
+
+.flowScroll { overflow-x: auto; }
+
+.flowChart {
+  width: 100%;
+  min-width: 420px;
+  height: auto;
+  display: block;
+}
+
+.flowGrid { stroke: #1f2a44; stroke-width: 1; }
+.flowZero { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.flowAxis { fill: var(--muted); font-size: 9px; }
+
+.flowBar--in { fill: var(--flow-in); }
+.flowBar--out { fill: var(--flow-out); }
+
+.flowLine { fill: none; stroke: var(--gold); stroke-width: 2; stroke-linejoin: round; }
+.flowDot { fill: var(--gold); }

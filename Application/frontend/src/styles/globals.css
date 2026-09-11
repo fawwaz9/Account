@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/* Tailwind's default palette has no "gold", so !bg-gold and !text-gold would
+   generate nothing while the !bg-slate-* on the button beside them worked --
+   paired Cancel/Save buttons would stop matching. Declaring it here keeps the
+   app's own accent available to utilities. */
+@theme {
+  --color-gold: #d4af37;
+  --color-gold-soft: #f5d97b;
+}
+
 /* ===== Theme Variables ===== */
 :root {
   --bg: #0b0f1a;          /* deep black-navy */
@@ -19,6 +28,12 @@
   --gold: #d4af37;
   --gold-soft: #f5d97b;
 
+  /* Chart series. Blue and gold rather than the green/red used elsewhere:
+     that pair is only ~7 ΔE apart under deuteranopia, so adjacent bars in
+     it are indistinguishable to a red-green colourblind reader. */
+  --flow-in: #4593d6;
+  --flow-out: #b5842a;
+
   --border: rgba(212, 175, 55, 0.15);
   --deep-border: 1px solid #1f2a44;
 }
@@ -35,6 +50,10 @@ body {
 /* ===== Layout helpers ===== */
 .container {
   padding: 24px;
+  /* Tailwind ships a `container` utility that sets a max-width per breakpoint.
+     This class predates it and only sets padding, so that max-width would apply
+     and clamp six pages. Unlayered CSS beats layered, so stating it here wins. */
+  max-width: none;
 }
 
 .title {

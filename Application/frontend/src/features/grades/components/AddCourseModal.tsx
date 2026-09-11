@@ -3,6 +3,7 @@ import AddCourseForm from "./AddCourseForm";
 import { createCourse } from "../api";
 import { CourseCreate, GradeCategory, Semester } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
+import Modal from "../../../shared/components/Modal";
 
 interface AddCourseModalProps {
   readonly open: boolean;
@@ -17,9 +18,15 @@ const defaultForm: CourseCreate = {
   year: 1,
   credits: 3,
   required: true,
-  professor: "",
+  professor: null,
   final_grade: 0,
+  target_grade: null,
   category_weights: {},
+  start_date: null,
+  end_date: null,
+  no_final: false,
+  transfer_credit: false,
+  archived: false,
 };
 
 export default function AddCourseModal({
@@ -57,49 +64,53 @@ export default function AddCourseModal({
         required: form.required,
         professor: form.professor,
         final_grade: form.final_grade,
+        target_grade: form.target_grade,
         category_weights: fullWeights,
+        start_date: form.start_date || null,
+        end_date: form.end_date || null,
+        no_final: form.no_final,
+        transfer_credit: form.transfer_credit,
+        archived: form.archived,
       };
       await createCourse(user.id, payload);
       setForm(defaultForm);
       onCourseAdded();
       onClose();
     } catch (err: any) {
-      const apiError =
-        err?.response?.data?.detail ||
-        err?.response?.data?.message ||
-        err?.message;
-
-      setError(getErrorMessage(apiError));
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="popup">
-      <div className="addCoursePopup">
-        <h2>Add Course</h2>
-        <AddCourseForm
-          form={form}
-          updateField={(k, v) => setForm((s) => ({ ...s, [k]: v }))}
-          onSubmit={handleSubmit}
-          submitting={loading}
-          error={error}
-          onCancel={onClose}
-          onReset={() => {
-            setForm(defaultForm);
-            setError(null);
-          }}
-        />
-      </div>
-    </div>
+    <Modal title="Add Course" onClose={onClose}>
+      <AddCourseForm
+        form={form}
+        updateField={(k, v) => setForm((s) => ({ ...s, [k]: v }))}
+        onSubmit={handleSubmit}
+        submitting={loading}
+        error={error}
+        onCancel={onClose}
+        onReset={() => {
+          setForm(defaultForm);
+          setError(null);
+        }}
+      />
+    </Modal>
   );
 }
 
-export function getErrorMessage(apiError: any): string {
+export function getErrorMessage(apiError: unknown): string {
+  // apiClient throws a plain Error whose message is already the unpacked
+  // detail, so this has to come first -- JSON.stringify(new Error("x")) is "{}".
+  if (apiError instanceof Error) {
+    return apiError.message;
+  }
+
   if (Array.isArray(apiError)) {
     return apiError
-      .map((e) => e?.msg || e?.message || JSON.stringify(e))
+      .map((e: any) => e?.msg || e?.message || JSON.stringify(e))
       .join(", ");
   }
 
@@ -107,5 +118,7 @@ export function getErrorMessage(apiError: any): string {
     return JSON.stringify(apiError);
   }
 
-  return apiError || "An unexpected error occurred.";
+  return typeof apiError === "string" && apiError
+    ? apiError
+    : "An unexpected error occurred.";
 }

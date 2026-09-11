@@ -1,13 +1,24 @@
+import logging
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import calender, finances, grades, tasks, users, auth
+from app.api.routes import calendar, finances, grades, tasks, users, auth
 from app._database.db import Base, engine
 from app._database import models
+from app._database.migrations import ensure_schema
+
+# The audit log needs somewhere to go. uvicorn configures its own loggers but not
+# the application's, so without this every audit.* call is swallowed by the root
+# logger's default WARNING threshold and successful sign-ins are never recorded.
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO"),
+    format="%(asctime)s %(levelname)-8s %(name)s %(message)s",
+)
 
 app = FastAPI()
 Base.metadata.create_all(bind=engine)
+ensure_schema()
 
 allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
 
@@ -21,7 +32,7 @@ app.add_middleware(
 
 app.include_router(grades.router, prefix="/api/grades", tags=["Grades"])
 app.include_router(users.router, prefix="/api/users", tags=["Users"])
-app.include_router(calender.router, prefix="/api/calendar", tags=["Calendar"])
+app.include_router(calendar.router, prefix="/api/calendar", tags=["Calendar"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["Tasks"])
 app.include_router(finances.router, prefix="/api/finances", tags=["Finances"])
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])

@@ -5,6 +5,7 @@ import { updateGrade, deleteGrade } from "../api";
 import { Grade, GradeUpdate } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { getErrorMessage } from "./AddCourseModal";
+import Modal from "../../../shared/components/Modal";
 
 interface EditGradeModalProps {
   readonly open: boolean;
@@ -18,8 +19,9 @@ interface EditGradeModalProps {
 function buildFormFromGrade(grade: Grade | null) {
   return {
     name: grade?.name ?? "",
-    score: grade?.score ?? 0,
+    score: grade?.score ?? null,
     max_score: grade?.max_score ?? 0,
+    due_date: grade?.due_date ?? null,
   };
 }
 
@@ -59,16 +61,14 @@ export default function EditGradeModal({
         name: form.name,
         score: form.score,
         max_score: form.max_score,
+        // Clearing this removes the task it raised; setting it moves the task.
+        due_date: form.due_date,
       };
       await updateGrade(user.id, courseId, grade.id, payload);
       onGradeUpdated();
       onClose();
     } catch (err: any) {
-      const apiError =
-        err?.response?.data?.detail ||
-        err?.response?.data?.message ||
-        err?.message;
-      setError(getErrorMessage(apiError));
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -85,20 +85,15 @@ export default function EditGradeModal({
       onGradeDeleted();
       onClose();
     } catch (err: any) {
-      const apiError =
-        err?.response?.data?.detail ||
-        err?.response?.data?.message ||
-        err?.message;
-      setDeleteError(getErrorMessage(apiError));
+      setDeleteError(getErrorMessage(err));
     } finally {
       setDeleting(false);
     }
   }
 
   return (
-    <div className="popup">
-      <div className="addCoursePopup">
-        <h2>Edit {grade.category} Grade</h2>
+    <>
+      <Modal title={`Edit ${grade.category} Grade`} onClose={onClose}>
         <EditGradeForm
           form={form}
           updateField={(k, v) => setForm((s) => ({ ...s, [k]: v }))}
@@ -118,7 +113,7 @@ export default function EditGradeModal({
             Delete this grade
           </button>
         </div>
-      </div>
+      </Modal>
 
       <DeleteConfirmModal
         open={confirmingDelete}
@@ -129,6 +124,6 @@ export default function EditGradeModal({
         submitting={deleting}
         error={deleteError}
       />
-    </div>
+    </>
   );
 }

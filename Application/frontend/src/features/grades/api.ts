@@ -1,6 +1,17 @@
 import { get, post, patch, del } from "../../services/apiClient";
 import { endpoints } from "../../services/endpoints";
-import { Course, CourseCreate, CourseUpdate,CourseDetail, Grade, GradeCreate, GradeUpdate } from "./types";
+import {
+  CategoryWeightsUpdate,
+  Course,
+  CourseCreate,
+  CourseDetail,
+  CourseUpdate,
+  Grade,
+  GradeCreate,
+  GradeUpdate,
+  RequiredFinal,
+  UserGradeDashboard,
+} from "./types";
 
 export async function fetchCourses(userId: string): Promise<Course[]> {
   return get<Course[]>(endpoints.grades.courses(userId));
@@ -11,7 +22,7 @@ export async function createCourse(userId: string, payload: CourseCreate) {
 }
 
 export async function fetchCourseDetail(userId: string, courseId: string) {
-  return get<any>(endpoints.grades.courseDetail(userId, courseId));
+  return get<CourseDetail>(endpoints.grades.courseDetail(userId, courseId));
 }
 
 export async function updateCourse(userId: string, courseId: string, payload: Partial<CourseUpdate>) {
@@ -19,7 +30,20 @@ export async function updateCourse(userId: string, courseId: string, payload: Pa
 }
 
 export async function fetchCourseCategoryWeights(userId: string, courseId: string) {
-  return get<any>(endpoints.grades.CategoryWeights(userId, courseId));
+  return get<Partial<Record<string, number>>>(
+    endpoints.grades.CategoryWeights(userId, courseId)
+  );
+}
+
+export async function updateCategoryWeights(
+  userId: string,
+  courseId: string,
+  payload: CategoryWeightsUpdate
+) {
+  return patch<Partial<Record<string, number>>>(
+    endpoints.grades.CategoryWeights(userId, courseId),
+    payload
+  );
 }
 
 export async function createGrade(userId: string, courseId: string, payload: GradeCreate) {
@@ -36,4 +60,57 @@ export async function deleteCourse(userId: string, courseId: string) {
 
 export async function deleteGrade(userId: string, courseId: string, gradeId: string) {
   return del<Grade>(endpoints.grades.gradeDetail(userId, courseId, gradeId));
+}
+/**
+ * Cross-course rollup: best and weakest course, overall and credit-weighted
+ * averages, and what is still needed on each final.
+ */
+export async function fetchDashboard(userId: string, targetGrade?: number) {
+  const path = endpoints.grades.dashboard(userId);
+  const query = targetGrade === undefined ? "" : `?target_grade=${targetGrade}`;
+  return get<UserGradeDashboard>(`${path}${query}`);
+}
+
+/** Record a score against an existing (previously ungraded) assignment. */
+export async function recordGrade(
+  userId: string,
+  courseId: string,
+  gradeId: string,
+  score: number
+) {
+  return patch<Grade>(
+    `${endpoints.grades.gradeDetail(userId, courseId, gradeId)}/score?score=${score}`,
+    null
+  );
+}
+
+/** Server-side search, for when the local list is no longer the whole set. */
+export async function searchCourses(userId: string, query: string) {
+  return get<Course[]>(
+    `${endpoints.grades.courses(userId)}/search?query=${encodeURIComponent(query)}`
+  );
+}
+
+/** What score is needed on the final to finish the course at `targetGrade`. */
+export async function fetchRequiredFinal(
+  userId: string,
+  courseId: string,
+  targetGrade: number
+) {
+  return get<RequiredFinal>(
+    `${endpoints.grades.requiredFinal(userId, courseId)}?target_grade=${targetGrade}`
+  );
+}
+
+/**
+ * Add several grades at once. The server commits them in one transaction, so
+ * either every row lands or none does -- entering a course one modal at a time
+ * meant a dozen requests that could each fail halfway.
+ */
+export async function createGradesBulk(
+  userId: string,
+  courseId: string,
+  payload: GradeCreate[]
+) {
+  return post<Grade[]>(endpoints.grades.bulkGrades(userId, courseId), payload);
 }

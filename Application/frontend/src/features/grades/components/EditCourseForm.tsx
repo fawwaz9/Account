@@ -1,4 +1,5 @@
 import { CourseCreate, GradeCategory, Semester } from "../types";
+import CourseFlags from "./CourseFlags";
 
 interface EditCourseFormProps {
   readonly form: CourseCreate;
@@ -17,8 +18,20 @@ export default function EditCourseForm({
   submitting,
   error,
 }: EditCourseFormProps) {
+  // A real <form>, so the `required` attributes below actually run. These were
+  // <div>s with a type="button" submit, which meant no constraint validation ever
+  // fired and Enter-to-submit was dead -- a blank submit went to the server and
+  // came back as an error message at the bottom of the dialog.
+  function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    onSubmit();
+  }
+
   return (
-    <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1 text-center">
+    <form
+      className="space-y-4 max-h-[70vh] overflow-y-auto pr-1 text-center"
+      onSubmit={handleSubmit}
+    >
       <div>
         <input
           id="edit-course-code"
@@ -84,7 +97,7 @@ export default function EditCourseForm({
       </div>
 
       <div>
-        <label htmlFor="edit-course-final-grade" className="block text-sm text-slate-200">Final Grade</label>
+        <label htmlFor="edit-course-final-grade" className="block text-sm text-slate-200">Final Grade (overrides your calculated average)</label>
         <input
           id="edit-course-final-grade"
           type="number"
@@ -99,11 +112,10 @@ export default function EditCourseForm({
       <div>
         <input
           id="edit-course-professor"
-          value={form.professor}
+          value={form.professor ?? ""}
           onChange={(event) => updateField("professor", event.target.value)}
           className="--input mt-1 w-full rounded-lg border border-slate-700 bg-transparent text-white"
-          placeholder="Professor"
-          required
+          placeholder="Professor (optional)"
         />
       </div>
 
@@ -119,6 +131,46 @@ export default function EditCourseForm({
           className="--input h-4 w-4 rounded border-slate-700 !bg-slate-900 !text-gold"
         />
       </div>
+
+      <div>
+        <label htmlFor="edit-course-target" className="block text-sm text-slate-200">Target Grade (blank uses your account default)</label>
+        <input
+          id="edit-course-target"
+          type="number"
+          min={0}
+          max={100}
+          value={form.target_grade ?? ""}
+          onChange={(event) =>
+            updateField("target_grade", event.target.value === "" ? null : Number(event.target.value))
+          }
+          className="--input mt-1 w-full rounded-lg border border-slate-700 bg-transparent text-white"
+        />
+      </div>
+
+      <div className="flex gap-3">
+        <div>
+          <label htmlFor="edit-course-start-date" className="block text-sm text-slate-200">Starts</label>
+          <input
+            id="edit-course-start-date"
+            type="date"
+            value={form.start_date ?? ""}
+            onChange={(event) => updateField("start_date", event.target.value || null)}
+            className="--input mt-1 rounded-lg border border-slate-700 bg-transparent text-white"
+          />
+        </div>
+        <div>
+          <label htmlFor="edit-course-end-date" className="block text-sm text-slate-200">Ends</label>
+          <input
+            id="edit-course-end-date"
+            type="date"
+            value={form.end_date ?? ""}
+            onChange={(event) => updateField("end_date", event.target.value || null)}
+            className="--input mt-1 rounded-lg border border-slate-700 bg-transparent text-white"
+          />
+        </div>
+      </div>
+
+      <CourseFlags form={form} updateField={updateField} idPrefix="edit-course" />
 
       <div className="edit_category_grid">
         {Object.values(GradeCategory).map((category) => (
@@ -163,14 +215,13 @@ export default function EditCourseForm({
         </button>
 
         <button
-          type="button"
-          onClick={() => onSubmit()}
+          type="submit"
           className="rounded-lg !bg-gold !text-slate-950"
           disabled={submitting}
         >
           {submitting ? "Saving..." : "Save Changes"}
         </button>
       </div>
-    </div>
+    </form>
   );
 }

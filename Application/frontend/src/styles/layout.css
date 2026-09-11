@@ -1,0 +1,121 @@
+/* ===== App shell ===== */
+.appShell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  flex: none;
+  width: 190px;
+  padding: 22px 14px;
+  background: var(--panel-2);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  /* Stays put while the page scrolls. Sticky rather than fixed so the sidebar
+     keeps its place in the flex row and the main column still sizes itself;
+     align-self stops the row stretching it to full height, which would leave
+     it nothing to stick within. */
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  height: 100vh;
+  overflow-y: auto;
+  z-index: 10;
+}
+
+.sidebarBrand {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--gold);
+  letter-spacing: 0.02em;
+  padding: 0 10px;
+}
+
+.sidebarNav {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebarLink {
+  display: block;
+  padding: 9px 12px;
+  border-radius: 8px;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.92rem;
+  transition: 0.15s ease;
+}
+
+.sidebarLink:hover {
+  color: var(--text);
+  background: var(--bg);
+}
+
+.sidebarLinkActive {
+  color: var(--gold);
+  background: var(--bg);
+}
+
+.sidebarLink:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.appMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.topbarUser { font-size: 0.88rem; color: var(--muted); }
+
+.topbarLogout {
+  background: transparent;
+  border: 1px solid #1f2a44;
+  border-radius: 8px;
+  padding: 5px 12px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.topbarLogout:hover { color: var(--gold); border-color: var(--border); }
+
+.appContent { flex: 1; min-width: 0; }
+
+@media (max-width: 720px) {
+  .appShell { flex-direction: column; }
+  .sidebar {
+    width: auto;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    overflow-x: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: 12px 14px;
+    /* Still pinned, but a strip across the top rather than a full column. */
+    height: auto;
+    align-self: stretch;
+    overflow-y: visible;
+  }
+  .sidebarNav { flex-direction: row; }
+  .sidebarLink { white-space: nowrap; }
+}

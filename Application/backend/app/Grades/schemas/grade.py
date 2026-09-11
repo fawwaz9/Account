@@ -1,20 +1,33 @@
+from datetime import date
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator
 
 from app.Grades.utils.enums import GradeCategory
 
+#: Kept in step with grade_service.MAX_SCORE_MULTIPLE; defined here to avoid a
+#: schema -> service import.
+MAX_SCORE_MULTIPLE = 2.0
+
 class GradeBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, description="The name of the grade (e.g., Midterm Exam, Final Project)")
-    score: float = Field(..., ge=0, description="The score obtained for the grade")
+    # Optional so an assignment can be added before it has been marked. Every
+    # averaging function already skips grades whose score is None, and the
+    # column is nullable; only this schema was forcing a score up front.
+    score: float | None = Field(default=None, ge=0, description="The score obtained, or null if not yet graded")
     max_score: float = Field(..., gt=0, description="The maximum possible score for the grade")
     category: GradeCategory = Field(..., description="The category of the grade (e.g., Assignment, Lab, Quiz, etc.)")
+    # When the work is due, as opposed to when it was marked. Setting one raises
+    # a task automatically, which closes itself once a score is recorded.
+    due_date: date | None = Field(default=None, description="When the work is due, if it has a deadline")
 
     @model_validator(mode="after")
     def validate_grade_logic(self):
         if self.name.strip() == "":
             raise ValueError("Grade name cannot be empty")
-        if self.category not in GradeCategory or self.category is None:
-            raise ValueError("Invalid grade category")
+        # Bonus marks are real, so a score may exceed its max -- but not by an
+        # implausible multiple, which catches a slipped digit.
+        if self.score is not None and self.score > self.max_score * MAX_SCORE_MULTIPLE:
+            raise ValueError(f"Score cannot exceed {MAX_SCORE_MULTIPLE:g}x the max score")
 
         return self
  
@@ -26,6 +39,7 @@ class GradeUpdate(BaseModel):
     score: float | None = Field(default=None, ge=0)
     max_score: float | None = Field(default=None, gt=0)
     category: GradeCategory | None = Field(default=None)
+    due_date: date | None = Field(default=None)
 
 class Grade(GradeBase):
     id: UUID = Field(default_factory=uuid4)

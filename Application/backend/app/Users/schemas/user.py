@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from enum import Enum
 from uuid import UUID, uuid4
@@ -6,6 +7,26 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.Grades.schemas.course import CourseDetail
+
+# Each domain label excludes the dot, so a label and the separator that follows
+# it can never match the same character. That makes the match linear; the
+# earlier `[^@\s]+\.[^@\s]+` let the engine backtrack across every dot in a
+# long non-matching address (SonarQube S8786).
+EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s.]+(?:\.[^@\s.]+)+$")
+
+
+def normalize_email(value: str) -> str:
+    """Trim, lower-case, and sanity-check an email address.
+
+    Email is the login identifier for the local auth provider, so it is
+    normalized on the way in. Lookups also use ILIKE, but storing a single
+    canonical form keeps 'A@b.com' and 'a@b.com' from reading as two
+    different accounts anywhere else in the app.
+    """
+    email = value.strip().lower()
+    if not EMAIL_PATTERN.match(email):
+        raise ValueError("Invalid email address")
+    return email
 
 
 class WeekStart(str, Enum):
@@ -43,6 +64,12 @@ class UserPreferences(BaseModel):
     date_format: DateFormat = Field(default=DateFormat.ISO)
     time_format: TimeFormat = Field(default=TimeFormat.TWENTY_FOUR_HOUR)
     default_reminder_minutes_before: int = Field(default=30, ge=0, le=10080)
+    #: Total credits the degree requires, for the credits progress bar.
+    credit_target: int = Field(default=120, ge=1, le=400)
+    #: UBC does not publish a GPA on transcripts, so this is opt-out.
+    gpa_scale_enabled: bool = Field(default=True)
+    #: Used for any course without its own target.
+    default_target_grade: float = Field(default=85.0, ge=0, le=100)
 
     @field_validator("currency")
     @classmethod
@@ -65,17 +92,25 @@ class UserBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     email: str = Field(..., min_length=3, max_length=255)
 
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        return normalize_email(value)
+
     @model_validator(mode="after")
     def validate_user_logic(self):
         if self.name.strip() == "":
             raise ValueError("User name cannot be empty")
-        if "@" not in self.email or self.email.strip() == "":
-            raise ValueError("Invalid email address")
         return self
 
 
 class UserCreate(UserBase):
-    """Used for Google OAuth signup - the only supported path for now."""
+    """Google OAuth signup.
+
+    Local email + password signup goes through
+    ``app.Auth.schemas.credentials.RegisterRequest`` instead, which carries a
+    password rather than a google_id.
+    """
     google_id: str = Field(..., min_length=1)
     preferences: UserPreferences = Field(default_factory=UserPreferences)
 
@@ -85,19 +120,32 @@ class UserUpdate(BaseModel):
     email: str | None = Field(default=None, min_length=3, max_length=255)
     preferences: UserPreferences | None = None
 
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str | None) -> str | None:
+        return None if value is None else normalize_email(value)
+
     @model_validator(mode="after")
     def validate_user_update(self):
         if self.name is not None and self.name.strip() == "":
             raise ValueError("User name cannot be empty")
-        if self.email is not None and ("@" not in self.email or self.email.strip() == ""):
-            raise ValueError("Invalid email address")
         return self
 
 
 class User(UserBase):
     id: UUID = Field(default_factory=uuid4)
+    # How the account was originally created. Ask has_password / has_google
+    # for what it can actually sign in with today.
     auth_provider: AuthProvider = AuthProvider.GOOGLE
     google_id: str | None = None
+    email_verified: bool = False
+    has_password: bool = False
+    has_google: bool = False
+    # Which term the student is in. Null until they set it, in which case every
+    # course reads as current rather than the page showing nothing.
+    current_school_year: int | None = None
+    current_semester: str | None = None
+    term_label: str | None = None
     preferences: UserPreferences = Field(default_factory=UserPreferences)
     created_at: datetime | None = None
 
