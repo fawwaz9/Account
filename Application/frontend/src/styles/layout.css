@@ -76,11 +76,23 @@
 
 .topbar {
   display: flex;
-  align-items: center;
-  justify-content: flex-end;
+  align-items: flex-start;
+  /* The omnibox takes the room and the account controls sit at the end, rather
+     than everything crowding to the right as it did when there was nothing but
+     a name and a button here. */
+  justify-content: space-between;
   gap: 14px;
   padding: 12px 24px;
   border-bottom: 1px solid var(--border);
+}
+
+.topbarRight {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  /* Aligned with the input rather than the reading line under it. */
+  padding-top: 4px;
+  flex-shrink: 0;
 }
 
 .topbarUser { font-size: 0.88rem; color: var(--muted); }
@@ -118,4 +130,111 @@
   }
   .sidebarNav { flex-direction: row; }
   .sidebarLink { white-space: nowrap; }
+}
+
+
+/* ===== Omnibox =====
+   The badge sits before the input because the module is the part a mis-file
+   turns on, and it has to be read before the text is committed. */
+
+.omnibox {
+  flex: 1;
+  min-width: 0;
+  max-width: 640px;
+}
+
+.omniRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.omniInput {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 12px;
+  border: 1px solid #1f2a44;
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+
+.omniInput:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+
+.omniInput::placeholder {
+  color: #55607a;
+}
+
+.omniKind {
+  flex-shrink: 0;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* Distinguished by hue and by weight of ground, so the three stay apart for a
+   reader who cannot separate the colours. */
+.omniKind-task { background: rgba(69, 147, 214, 0.2); color: #82bbe8; }
+.omniKind-expense { background: rgba(181, 132, 42, 0.25); color: #d8a64a; }
+.omniKind-grade { background: rgba(86, 179, 154, 0.2); color: #6fc7ac; }
+
+.omniReading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  /* Held open so the topbar does not change height on the first keystroke. */
+  min-height: 20px;
+  margin-top: 5px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.omniSummary { color: var(--text); }
+.omniDone { color: var(--gold); }
+
+.omniChip {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.14);
+}
+
+.omniWarn { color: var(--gold); }
+
+.omniLink {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--gold);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.omniHint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.omniKbd {
+  padding: 1px 5px;
+  border: 1px solid #1f2a44;
+  border-radius: 4px;
+  background: var(--panel-2);
+  font-size: 0.72rem;
+  font-family: inherit;
+}
+
+@media (max-width: 720px) {
+  .topbar { flex-direction: column; align-items: stretch; }
+  .omnibox { max-width: none; }
+  .topbarRight { justify-content: flex-end; }
 }

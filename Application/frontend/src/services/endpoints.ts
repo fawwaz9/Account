@@ -37,6 +37,10 @@ export const endpoints = {
     /** GET previews what a line means; POST creates the task it describes. */
     quickCapture: (userId: string) => `tasks/${userId}/quick-capture`,
   },
+  omnibox: {
+    /** GET previews which module a line goes to; POST files it there. */
+    base: (userId: string) => `omnibox/${userId}`,
+  },
   finances: {
     accounts: (userId: string) => `finances/${userId}/accounts`,
     account: (userId: string, accountId: string) => `finances/${userId}/accounts/${accountId}`,
