@@ -315,6 +315,9 @@ class TaskModel(Base):
     #: Set when this task was raised automatically from a dated grade. It closes
     #: itself when that grade's score lands.
     grade_id = Column(Uuid, ForeignKey("grades.id"), nullable=True)
+    #: Set when a repeating task generated this occurrence. With `due_date` it is
+    #: what stops the same occurrence being written twice.
+    recurring_id = Column(Uuid, ForeignKey("recurring_tasks.id"), nullable=True)
     title = Column(String, nullable=False)
     notes = Column(String, nullable=True)
     due_date = Column(Date, nullable=True)
@@ -334,6 +337,7 @@ class TaskModel(Base):
 
     course = relationship("CourseModel", back_populates="tasks")
     grade = relationship("GradeModel", back_populates="tasks")
+    recurring = relationship("RecurringTaskModel", back_populates="tasks")
 
 
 class RecurringTransactionModel(Base):
@@ -397,3 +401,55 @@ class RecurringTransactionModel(Base):
     to_account = relationship("AccountModel", foreign_keys=[to_account_id])
     category = relationship("SpendCategoryModel")
     transactions = relationship("TransactionModel", back_populates="recurring")
+
+
+class RecurringTaskModel(Base):
+    """A chore that comes back: readings every Monday, laundry every fortnight.
+
+    The third consumer of the recurrence engine, and the one it was written for
+    alongside class times and recurring payments.
+
+    Like a standing payment and unlike a calendar event, its occurrences have to
+    be real rows: each one is ticked off separately, and this week's reading
+    being done says nothing about next week's. A virtual occurrence has nowhere
+    to keep that.
+
+    Unlike a standing payment, an occurrence in the near future is written too.
+    A task that has not happened yet costs nothing to have sitting there -- you
+    can see Monday's reading on Sunday and tick it early -- whereas a payment
+    that has not happened would be money wrongly gone from a balance. So this
+    materialises a rolling window ahead rather than only up to today.
+    """
+
+    __tablename__ = "recurring_tasks"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False)
+    #: School work hangs off its course, so each generated task is categorised by
+    #: the course code the same way a one-off is.
+    course_id = Column(Uuid, ForeignKey("courses.id"), nullable=True)
+
+    #: The template every occurrence is stamped from.
+    title = Column(String, nullable=False)
+    notes = Column(String, nullable=True)
+    due_time = Column(Time, nullable=True)
+    estimated_minutes = Column(Integer, nullable=True)
+    tags = Column(JSON, nullable=False, default=list)
+
+    #: The rule, in the same five columns events and standing payments use.
+    starts_on = Column(Date, nullable=False)
+    recur_freq = Column(String, nullable=False, default="weekly")
+    recur_interval = Column(Integer, nullable=False, default=1)
+    recur_byday = Column(String, nullable=True)
+    recur_until = Column(Date, nullable=True)
+    recur_count = Column(Integer, nullable=True)
+    #: Occurrences cancelled individually -- a week the seminar did not run.
+    skipped_dates = Column(JSON, nullable=False, default=list)
+
+    #: Paused rather than deleted, so a term's record of what was actually done
+    #: still explains itself.
+    active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+
+    course = relationship("CourseModel")
+    tasks = relationship("TaskModel", back_populates="recurring")

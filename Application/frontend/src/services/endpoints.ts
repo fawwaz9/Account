@@ -28,6 +28,12 @@ export const endpoints = {
   tasks: {
     list: (userId: string) => `tasks/${userId}/tasks`,
     detail: (userId: string, taskId: string) => `tasks/${userId}/tasks/${taskId}`,
+    repeating: (userId: string) => `tasks/${userId}/repeating`,
+    repeatingRule: (userId: string, ruleId: string) => `tasks/${userId}/repeating/${ruleId}`,
+    /** Writes each repeat's window. Idempotent, so it is safe on every load. */
+    repeatingRun: (userId: string) => `tasks/${userId}/repeating/run`,
+    repeatingSkip: (userId: string, ruleId: string) =>
+      `tasks/${userId}/repeating/${ruleId}/skip`,
   },
   finances: {
     accounts: (userId: string) => `finances/${userId}/accounts`,

@@ -30,7 +30,8 @@ from app._database.models import (
 )
 from app.Calendar.schemas.event import Recurrence
 from app.Calendar.services.event_service import parse_date
-from app.Calendar.utils.recurrence import Rule, format_byday, occurrences, parse_byday
+from app.Calendar.utils.recurrence import occurrences
+from app.Calendar.utils.rule_columns import apply_recurrence, recurrence_of, rule_of
 from app.Finances.schemas.deposit import DepositCreate
 from app.Finances.schemas.recurring import (
     DEPOSIT,
@@ -68,24 +69,6 @@ def today() -> date:
     return date.today()
 
 
-def rule_of(instruction: RecurringTransactionModel) -> Rule:
-    return Rule(
-        freq=instruction.recur_freq,
-        interval=instruction.recur_interval or 1,
-        byday=parse_byday(instruction.recur_byday),
-        until=instruction.recur_until,
-        count=instruction.recur_count,
-    )
-
-
-def apply_recurrence(instruction: RecurringTransactionModel, recurrence: Recurrence) -> None:
-    instruction.recur_freq = recurrence.freq.value
-    instruction.recur_interval = recurrence.interval
-    instruction.recur_byday = format_byday(day.value for day in recurrence.byday)
-    instruction.recur_until = recurrence.until
-    instruction.recur_count = recurrence.count
-
-
 def attach_rule(db: Session, instruction: RecurringTransactionModel) -> RecurringTransactionModel:
     """Expose the rule columns as the nested object the schema declares.
 
@@ -93,13 +76,7 @@ def attach_rule(db: Session, instruction: RecurringTransactionModel) -> Recurrin
     grades module does it: models.py is imported by this service, so a property
     reaching back into it would be a circular import.
     """
-    instruction.recurrence = Recurrence(
-        freq=instruction.recur_freq,
-        interval=instruction.recur_interval or 1,
-        byday=parse_byday(instruction.recur_byday),
-        until=instruction.recur_until,
-        count=instruction.recur_count,
-    )
+    instruction.recurrence = recurrence_of(instruction)
     # Left as the ISO strings the column stores. Assigning parsed dates back onto
     # a JSON column marks the row dirty with values json.dumps cannot serialize,
     # and the next commit on the session fails; the schema declares list[date],
