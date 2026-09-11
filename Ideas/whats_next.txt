@@ -1,49 +1,55 @@
-Tasks:  Shows Assignments due in the next two weeks.
-        Shows midterms and exams coming up in the next 30 days.
-        Ability for each task to be checked and is then archived.
-        Ability to create tasks and reminders needed.
-        Have tags to categorize task but all school related task are categorized by course code.
-        Tasks show up in the calender if they have dates/due dates.
-        Auto-create a task from any grade that has a due date, and close it when the score lands.
-        Estimated minutes per task, so a week can be over-committed visibly rather than discovered.
+Shipped so far (do not re-propose)
+        The recurrence engine, and class times as its first consumer.
+        events and tasks tables. Anything dated renders on the calendar.
+        Due dates on grades, and the choice of what a date means: a task that
+          closes when the score lands, or a calendar block with nothing to tick off.
+        Midterm and final event kinds, themed as exams rather than class blocks.
+        Course flags: no_final, transfer_credit, archived, with the credit and
+          average rules each flag changes.
+        Recurring transactions in all four kinds, on the same engine as class times.
+        Estimated minutes, tags, course-code categorisation, check-to-archive.
+
+
+Tasks:  Shows midterms and exams coming up in the next 30 days.
+        Reminders, as opposed to tasks: something that notifies rather than waits.
         At-risk first: tasks belonging to courses below target sort to the top of the list.
         Snooze with a reason, and keep the reason. Patterns show up after a term.
         Quick capture: one text box that parses "CS221 lab due fri" into a real task.
 
 
-Grades: Courses already have start and end dates.
-        Introduce an add to Calender feature which allows you to choose class times, add a lab/discussion and choose the days during the week they occur.
-        Add a due date option when creating/editing the grades(eg assignments, labs, etc)
-        Think of other functionalities that can merge over to the other.
-        For midterms replace the class schedule card with a midterm themed card in calender.
-        For finals a different design which usually happens after the class ends.
-        Also add functionality for Transfer Credits like MATH 100 where students have the credits but did not take the class. No score should be recorded and it should only contribute to credits completed.
-        Ability to archive courses where they are searchable but do not contribute to credits completed. They still contribute to credit weighted average though.
-        Add functionality for classes without finals where maybe clicking an option prevents the course from showing up in the Attention card.
+Grades: Think of other functionalities that can merge over to the other.
+        For finals a different design from the midterm card, since a final usually
+          happens after the class has ended.
+        Archived courses in the list: the flag and its rules exist, but the course
+          list does not mark them or offer to hide them yet.
+        Bonus marks in the UI. The backend already allows a category total to 200%
+          and a score to 2x its max; nothing on screen says so, and a course sitting
+          above 100% is not shown as carrying bonus.
         Best/worst case band on every course: what you get if you ace everything left, and if you bomb it.
         Cheapest path to a target: which remaining item moves the average most per hour spent.
         Category blind spots across all courses: you may be losing marks in labs everywhere, not in one class.
-        Mark a course as no-final so it stops appearing in Attention, and as transfer-credit so it counts credits without a grade.
         Term retrospective when a term closes: what moved, what slipped, what you predicted vs got.
         Syllabus paste: drop the text in, get categories, weights and due dates proposed for review.
         Make syllabus parser the main when adding courses but add a button to do it manually.
         When editing courses the manual is the default but syllabus parser will be available under the manual grid.
 
 Calendar:
+        Repeating tasks: the third consumer the engine was written for, and the one
+          still missing. Class times and recurring payments already run on it.
         Free-block finder: the gaps between your classes, ranked by length, so study time gets scheduled instead of hoped for.
         Crunch radar: a density strip across the term showing which weeks stack up. Visible in September, not the night before.
         Reading break and term boundaries pulled from course start/end dates, blocked out automatically.
         Week load number, not a task count: sum estimated hours so "7 tasks" reads as "23 hours".
+          The task list already totals hours per group; the calendar does not.
         Term timeline: every course's span on one horizontal chart, so overlaps and gaps are obvious.
-        One recurrence engine drives class times, recurring payments and repeating tasks. Write it once. (Amazing Idea)
 
 Budget:
         Safe to spend: balance minus every commitment you already know about, shown as one number.
+          The commitments are already there to read -- /recurring/upcoming returns them.
         Sinking funds: tuition split across the months before it is due, so January is not a shock.
         Subscription audit: recurring charges detected from the ledger, with the ones you forgot flagged.
         Money Lent gets who and when, plus a nudge when it has been out too long.
         Reimbursement state on a transaction: owed, claimed, received.
-        Functionality for recurring transactions in the four different types of transactions.
         WHen you click and an account I want the first four blocks to be in a 2x2 grid and the money in and out char to be right of that.
         I also want the balance over time chart to be under the first chart while the "where it went" section to be under the 2x2 grid.
         The planned spend bar should stay where its at seperating the sections.
@@ -64,47 +70,74 @@ Quality of Life:
 Wild:
         Grade-to-effort log: record hours against each grade, then find out whether effort actually correlates with your marks.
         A what-if sandbox: change a weight, a score or a course load and see the whole term rearrange, without saving anything.
-        Add functionality for users to work together. 
-        One user can add a user to a task, assignment, project or just an evemt on the calender. 
+        Add functionality for users to work together.
+        One user can add a user to a task, assignment, project or just an evemt on the calender.
         This task/calender event will then show up for all users that are added.
 
+
 Implementation Plan
-- Start with the base features for Calender and Tasks so we can work on features with a foundation.
 
-Clear the ground first
-- Fix the two deposit bugs before anything touches the ledger again. group_id already
-  means both "transfer pair" and "deposit split"; recurring transactions would make it
-  mean a third thing on top of a bug.
-- Wire vite.config.ts and tsconfig.json. Everything below ships blind until the build
-  type-checks and Tailwind actually generates.
+The foundation is in and has two consumers proving it. What is left splits into
+one piece of plumbing that unblocks a lot, a set of derivations that need no new
+tables at all, and the things that genuinely need new storage.
 
-Foundation
-- events table plus a recurrence rule (freq, interval, byday, until/count). Materialise
-  occurrences on read for the window asked for; never store them.
-- Class times as the first consumer: a course generates lecture/lab/discussion blocks.
-  Proves the engine before two other features depend on it.
-- tasks table: title, due date, estimated minutes, course_id, tags, done/archived.
-  Anything with a date renders on the calendar.
-- Due dates on grades, then auto-create a task from any dated grade and close it when
-  the score lands.
-- Course flags in one migration: no_final, transfer_credit, archived. Tiny change,
-  unblocks the Attention panel, credits completed and the average rules at once.
+Finish the engine's third consumer
+- Repeating tasks. The engine was written for three things and drives two. Doing
+  the third now is what proves the abstraction was right rather than a guess, and
+  it is the cheapest of the three -- a rule on a task row, expanded the same way.
 
-Build on it
-- Midterm and final event kinds so the calendar can theme those cards differently.
-- Recurring transactions once group_id is untangled. Same engine as class times.
-- One tokenizer: course code, date word, duration, amount, score/max. Quick capture
-  uses it first.
-- Omnibox is that tokenizer plus a module router. Nearly free once it exists.
-- course_id on transactions unlocks every Grades x Budget idea in a single step.
-- Syllabus parser becomes the default add-course path, manual behind a button.
+One tokenizer, then two features nearly free
+- One parser: course code, date word, duration, amount, score/max. Everything
+  below reads its output; writing three parsers is how they end up disagreeing
+  about what "fri" means.
+- Quick capture uses it first, in the Tasks page, where a wrong guess is cheap to
+  correct and the feedback is immediate.
+- Omnibox is that tokenizer plus a module router. Only worth building once quick
+  capture has shown the parser is right, because an omnibox that files things
+  into the wrong module is worse than no omnibox.
+
+course_id on transactions
+- One nullable column, and every Grades x Budget idea becomes a query rather than
+  a feature: cost per course, materials by course code, the dollar figure beside
+  a dropped course, the term budget that already knows the term dates.
+- Do it before the cheap wins below, since two of them want it.
 
 Cheap wins, read-only
-- Free blocks, crunch radar, week load, term timeline, best/worst band, blind spots.
-  All derived from data already stored; no new tables, no writes.
-- Safe-to-spend and sinking funds, after recurring transactions exist to read from.
+- Free blocks, crunch radar, week load, term timeline, best/worst band, category
+  blind spots, term retrospective. All derived from data already stored: no new
+  tables, no writes, and each one is a service function plus a chart.
+- Safe-to-spend and sinking funds. /recurring/upcoming already returns the
+  commitments, so safe-to-spend is a subtraction.
+- Subscription audit reads the ledger for repeats that have no standing
+  instruction behind them -- which is only possible now that standing
+  instructions exist to compare against.
 - PDF export: a print stylesheet and window.print(). No dependency.
 - Read-only offline: cache the shell, stale-while-revalidate the GETs.
+
+Small UI debts, worth clearing in one pass
+- Archived courses marked and hideable in the course list.
+- Bonus marks surfaced: say that a category may exceed 100% and show when a
+  course is carrying bonus, rather than only permitting it silently.
+- A final's card distinct from a midterm's.
+- The account page layout: 2x2 tiles with money in/out beside them, balance over
+  time under that chart, "where it went" under the tiles, planned spend still
+  separating the sections.
+
+Needs new storage, so later
+- Reminders that notify, as opposed to tasks that wait.
+- Snooze with a reason, kept, so the pattern is readable after a term.
+- Reimbursement state, and who/when on Money Lent.
+- Grade-to-effort log.
+- What-if sandbox. Read-only in effect, but it needs the whole term recomputed
+  from hypothetical inputs, so it wants the averaging code reachable without a
+  session first.
+
+Syllabus parser
+- Deliberately late. It proposes categories, weights and due dates for review,
+  which means it depends on due dates, category weights and the course flags all
+  being settled -- they are now -- and on the tokenizer for dates.
+- Default path when adding a course, manual behind a button. When editing, manual
+  is the default and the parser sits under the grid.
 
 Collaboration, by invite
 - No shared ownership. The invitee gets their own row; every existing query keeps
@@ -122,5 +155,3 @@ Collaboration, by invite
   insert. Easy to audit.
 - Decide once: assigning a task means the other person owns it; sharing means you both
   track it. They are different rows.
-
-
