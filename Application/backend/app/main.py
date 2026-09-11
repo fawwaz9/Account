@@ -3,7 +3,9 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import calendar, finances, grades, recurring, tasks, users, auth
+from app.api.routes import (
+    calendar, finances, grades, omnibox, recurring, tasks, users, auth,
+)
 from app._database.db import Base, engine
 from app._database import models
 from app._database.migrations import ensure_schema
@@ -39,3 +41,6 @@ app.include_router(finances.router, prefix="/api/finances", tags=["Finances"])
 # client should not have to know it lives in its own module.
 app.include_router(recurring.router, prefix="/api/finances", tags=["Recurring"])
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
+# One input for every module, so it sits above all of them rather than inside
+# any one.
+app.include_router(omnibox.router, prefix="/api/omnibox", tags=["Omnibox"])
