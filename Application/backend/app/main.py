@@ -3,7 +3,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import calendar, finances, grades, tasks, users, auth
+from app.api.routes import calendar, finances, grades, recurring, tasks, users, auth
 from app._database.db import Base, engine
 from app._database import models
 from app._database.migrations import ensure_schema
@@ -35,4 +35,7 @@ app.include_router(users.router, prefix="/api/users", tags=["Users"])
 app.include_router(calendar.router, prefix="/api/calendar", tags=["Calendar"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["Tasks"])
 app.include_router(finances.router, prefix="/api/finances", tags=["Finances"])
+# Same prefix as finances: a standing instruction is a money concept, and the
+# client should not have to know it lives in its own module.
+app.include_router(recurring.router, prefix="/api/finances", tags=["Recurring"])
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])

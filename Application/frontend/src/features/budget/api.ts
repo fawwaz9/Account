@@ -7,10 +7,15 @@ import {
   BudgetSummary,
   DepositCreate,
   DepositPreview,
+  RecurringCreate,
+  RecurringRun,
+  RecurringTransaction,
+  RecurringUpdate,
   SpendCategory,
   Transaction,
   TransactionCreate,
   TransferCreate,
+  UpcomingCharge,
 } from "./types";
 
 export async function fetchAccounts(userId: string): Promise<Account[]> {
@@ -152,4 +157,53 @@ export async function previewDeposit(userId: string, amount: number) {
 
 export async function recordDeposit(userId: string, payload: DepositCreate) {
   return post<Transaction[]>(endpoints.finances.deposits(userId), payload);
+}
+
+/* ===== Standing instructions ===== */
+
+export async function fetchRecurring(userId: string, includeInactive = true) {
+  const base = endpoints.finances.recurring(userId);
+  return get<RecurringTransaction[]>(`${base}?include_inactive=${includeInactive}`);
+}
+
+export async function createRecurring(userId: string, payload: RecurringCreate) {
+  return post<RecurringTransaction>(endpoints.finances.recurring(userId), payload);
+}
+
+export async function updateRecurring(
+  userId: string,
+  ruleId: string,
+  payload: RecurringUpdate
+) {
+  return patch<RecurringTransaction>(endpoints.finances.recurringRule(userId, ruleId), payload);
+}
+
+/** Stops the instruction. Payments it already made stay — they are real. */
+export async function deleteRecurring(userId: string, ruleId: string) {
+  return del<RecurringTransaction>(endpoints.finances.recurringRule(userId, ruleId));
+}
+
+/**
+ * Write every payment that is owed and has not been written yet.
+ *
+ * Idempotent — a payment is keyed by (rule, date) — so calling it on every
+ * budget load is safe, and is what makes last month's rent already be there
+ * when you open the app, with no scheduler anywhere.
+ */
+export async function runRecurring(userId: string) {
+  return post<RecurringRun>(endpoints.finances.recurringRun(userId), {});
+}
+
+/** What is committed but has not happened. Projections, never ledger rows. */
+export async function fetchUpcoming(userId: string, start: string, end: string) {
+  const base = endpoints.finances.recurringUpcoming(userId);
+  return get<UpcomingCharge[]>(`${base}?start=${start}&end=${end}`);
+}
+
+/** Skip one payment — a month a subscription was paused — without ending it. */
+export async function skipRecurring(userId: string, ruleId: string, onDate: string) {
+  return post<RecurringTransaction>(
+    `${endpoints.finances.recurringSkip(userId, ruleId)}?on_date=${onDate}`,
+    {}
+  );
 }

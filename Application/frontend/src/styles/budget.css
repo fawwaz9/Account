@@ -372,3 +372,157 @@
 }
 
 .shareWarning { color: var(--gold); }
+
+/* ===== Standing instructions =====
+   The list is what is set up; the "coming up" block below it is what that
+   commits you to. The second is deliberately styled as a projection, not a
+   ledger -- nothing in it has moved any money yet. */
+
+.recurringSection {
+  margin-top: 24px;
+  padding: 16px;
+  background: var(--panel);
+  border: var(--deep-border);
+  border-radius: 14px;
+}
+
+.recurringList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.recurringRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--panel-2);
+  border: 1px solid #1f2a44;
+  border-radius: 10px;
+}
+
+.recurringRowPaused {
+  opacity: 0.55;
+}
+
+.recurringBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.recurringTitle {
+  margin: 0 0 3px;
+  font-size: 0.96rem;
+}
+
+.recurringPaused {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.recurringMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.recurringKind {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.14);
+}
+
+.recurringKind-expense { background: rgba(181, 132, 42, 0.2); color: #d8a64a; }
+.recurringKind-income { background: rgba(69, 147, 214, 0.18); color: #82bbe8; }
+.recurringKind-transfer { background: rgba(138, 127, 212, 0.18); color: #a79ee0; }
+.recurringKind-deposit { background: rgba(86, 179, 154, 0.18); color: #6fc7ac; }
+
+.recurringNext {
+  color: var(--gold);
+}
+
+.recurringAmount {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  font-size: 1rem;
+}
+
+.recurringActions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* ===== Coming up ===== */
+
+.upcomingBlock {
+  margin-top: 18px;
+  padding-top: 14px;
+  /* Dashed, so the break between "what has happened" and "what has not" is
+     visible without another heading. */
+  border-top: 1px dashed #2a3550;
+}
+
+.upcomingTotal {
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9rem;
+}
+
+.upcomingList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.upcomingRow {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 5px 2px;
+  font-size: 0.88rem;
+}
+
+.upcomingWhen {
+  flex: 0 0 96px;
+  color: var(--muted);
+}
+
+.upcomingWhat {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upcomingAmount {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.upcomingOut {
+  color: var(--flow-out);
+}
+
+@media (max-width: 720px) {
+  .recurringRow {
+    flex-wrap: wrap;
+  }
+
+  .recurringActions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}

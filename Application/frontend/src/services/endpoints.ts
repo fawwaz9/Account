@@ -44,5 +44,13 @@ export const endpoints = {
     budgetSummary: (userId: string) => `finances/${userId}/budget-summary`,
     deposits: (userId: string) => `finances/${userId}/deposits`,
     depositPreview: (userId: string) => `finances/${userId}/deposit-preview`,
+    recurring: (userId: string) => `finances/${userId}/recurring`,
+    recurringRule: (userId: string, ruleId: string) => `finances/${userId}/recurring/${ruleId}`,
+    /** Writes any payment that is owed. Idempotent, so it is safe on every load. */
+    recurringRun: (userId: string) => `finances/${userId}/recurring/run`,
+    /** Projections, not rows: what is committed but has not happened yet. */
+    recurringUpcoming: (userId: string) => `finances/${userId}/recurring/upcoming`,
+    recurringSkip: (userId: string, ruleId: string) =>
+      `finances/${userId}/recurring/${ruleId}/skip`,
   },
 };

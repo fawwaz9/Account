@@ -28,9 +28,17 @@ function isValidationErrorArray(detail: unknown): detail is ValidationError[] {
   );
 }
 
+/**
+ * Pydantic prefixes any message from a `ValueError` in a validator with
+ * "Value error, ", so a carefully worded rule reached the user as
+ * "Value error, A transfer needs somewhere to go". The prefix names an
+ * implementation detail of the server's validation library and tells the reader
+ * nothing, so it is dropped.
+ */
 function formatValidationError(err: ValidationError): string {
+  const message = err.msg.replace(/^Value error,\s*/, "");
   const field = err.loc.slice(1).join(".");
-  return field ? `${field}: ${err.msg}` : err.msg;
+  return field ? `${field}: ${message}` : message;
 }
 
 function extractErrorMessage(json: unknown, fallback: string): string {
