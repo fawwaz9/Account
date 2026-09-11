@@ -22,6 +22,13 @@ export function daysAgo(count: number): string {
   return isoDate(day);
 }
 
+/** A date `count` days after today, same format and same timezone rule. */
+export function daysAhead(count: number): string {
+  const day = new Date();
+  day.setDate(day.getDate() + count);
+  return isoDate(day);
+}
+
 /** First of the current month, which is how a month is keyed throughout. */
 export function currentMonth(): string {
   const now = new Date();

@@ -1,3 +1,7 @@
+// Recurrence is defined once, in the calendar feature: one repeat rule serves
+// class times and standing payments alike, and a second copy here would drift.
+import { Recurrence } from "../calender/types";
+
 export type AccountKind =
   | "spending"
   | "savings"
@@ -143,4 +147,74 @@ export interface AccountActivity {
   by_category: CategorySpend[];
   /** All time, one point per day that had movement */
   balance_history: BalancePoint[];
+}
+
+/* ===== Standing instructions ===== */
+
+/** The four shapes money moves in, matching the money dialog's tabs. */
+export type RecurringKind = "income" | "expense" | "transfer" | "deposit";
+
+/**
+ * A standing instruction: rent on the 1st, Spotify on the 14th.
+ *
+ * Stores the rule, never the payments. An occurrence on or before today is
+ * written as a real transaction; one after today stays a projection, because a
+ * balance is the sum of its rows and money that has not moved must not be in it.
+ */
+export interface RecurringTransaction {
+  id: string;
+  kind: RecurringKind;
+  amount: number;
+  description: string | null;
+  /** The pot it comes from, or the source of a transfer. Null for a deposit. */
+  account_id: string | null;
+  to_account_id: string | null;
+  category_id: string | null;
+  starts_on: string;
+  recurrence: Recurrence;
+  active: boolean;
+  skipped_dates: string[];
+  /** The most recent date already charged, or null if it never has been. */
+  last_run_on: string | null;
+  /** The next date owed, or null once the rule has run out. */
+  next_due_on: string | null;
+}
+
+export interface RecurringCreate {
+  kind: RecurringKind;
+  amount: number;
+  description: string | null;
+  account_id: string | null;
+  to_account_id: string | null;
+  category_id: string | null;
+  starts_on: string;
+  recurrence: Recurrence;
+  active: boolean;
+}
+
+export type RecurringUpdate = Partial<
+  Pick<RecurringCreate, "amount" | "description" | "category_id" | "starts_on" | "recurrence" | "active">
+>;
+
+/** A payment the rules say is coming. Never a ledger row — nothing has moved. */
+export interface UpcomingCharge {
+  recurring_id: string;
+  on_date: string;
+  kind: RecurringKind;
+  amount: number;
+  /** Negative for money leaving, so projections and balances sum alike. */
+  signed_amount: number;
+  description: string | null;
+  account_id: string | null;
+  account_name: string | null;
+  to_account_id: string | null;
+  category_id: string | null;
+}
+
+/** What materialising due payments actually did. */
+export interface RecurringRun {
+  created: number;
+  transactions: Transaction[];
+  /** Rules that could not run, and why. One broken rule does not stop the rest. */
+  skipped: string[];
 }

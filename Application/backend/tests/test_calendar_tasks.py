@@ -14,6 +14,7 @@ import pytest
 from app._database.models import EventModel, TaskModel
 from app.Calendar.schemas.event import (
     ClassMeeting,
+    Event,
     ClassScheduleCreate,
     EventCreate,
     EventKind,
@@ -127,6 +128,34 @@ def test_skipping_one_date_leaves_the_rest_of_the_series(db, user):
     assert date(2026, 9, 15) not in dates
     assert date(2026, 9, 22) in dates
     assert len(dates) == 12
+
+
+def test_an_event_with_a_cancelled_date_can_still_be_edited(db, user):
+    """A JSON column will not take date objects.
+
+    attach_recurrence used to parse skipped_dates onto the instance for display.
+    That marks a real JSON column dirty with values json.dumps cannot serialize,
+    so the next commit on the session died with "Object of type date is not JSON
+    serializable" -- meaning any edit to an event that had one cancelled date
+    failed. Empty lists serialize fine, which is why it stayed hidden.
+    """
+    event = create_event(db, user.id, EventCreate(
+        title="Lecture", starts_on=TERM_START,
+        recurrence=Recurrence(freq="weekly", until=TERM_END),
+    ))
+    skip_occurrence(db, user.id, event.id, date(2026, 9, 15))
+
+    renamed = update_event(db, user.id, event.id, EventUpdate(title="Lecture (moved)"))
+
+    assert renamed.title == "Lecture (moved)"
+    # The column keeps ISO strings, and the schema is what turns them into dates
+    # on the way out -- which is precisely why the service must not write parsed
+    # dates back onto it.
+    assert renamed.skipped_dates == ["2026-09-15"]
+    assert Event.model_validate(renamed).skipped_dates == [date(2026, 9, 15)]
+    # And the cancellation survived the edit.
+    dates = [item.on_date for item in list_occurrences(db, user.id, TERM_START, TERM_END)]
+    assert date(2026, 9, 15) not in dates
 
 
 def test_a_one_off_cannot_be_skipped(db, user):

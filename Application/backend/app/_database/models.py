@@ -196,9 +196,15 @@ class TransactionModel(Base):
     #: What the money went on, as opposed to which pot it came from. Only
     #: meaningful for expenses, so nullable.
     category_id = Column(Uuid, ForeignKey("spend_categories.id"), nullable=True)
+    #: Set when a standing instruction generated this row. Together with
+    #: `occurred_on` it is what stops the same payment being written twice, and
+    #: it is a separate column from `group_id` on purpose: that one already
+    #: carries two meanings and must not take a third.
+    recurring_id = Column(Uuid, ForeignKey("recurring_transactions.id"), nullable=True)
 
     account = relationship("AccountModel", back_populates="transactions")
     category = relationship("SpendCategoryModel", back_populates="transactions")
+    recurring = relationship("RecurringTransactionModel", back_populates="transactions")
 
 
 class SpendCategoryModel(Base):
@@ -321,3 +327,66 @@ class TaskModel(Base):
 
     course = relationship("CourseModel", back_populates="tasks")
     grade = relationship("GradeModel", back_populates="tasks")
+
+
+class RecurringTransactionModel(Base):
+    """A standing instruction: rent on the 1st, Spotify on the 14th.
+
+    Stores the rule and a template, never the payments themselves. The same
+    recurrence engine that drives class times expands it -- written once, as the
+    project notes asked.
+
+    Where this parts company with a calendar event is that its occurrences
+    cannot stay virtual. A balance is the sum of its rows, so a payment that has
+    actually happened has to *be* a row; and a payment that has not happened yet
+    must not be one, or the balance reports money that is still in the account
+    as gone. So an occurrence on or before today is materialised into a real
+    transaction, exactly once, and an occurrence after today stays a projection
+    that only the upcoming-commitments view reads.
+
+    Deliberately not hung off `group_id`. That column already means "transfer
+    pair" or "deposit split" depending on `kind`, and a third meaning is what
+    the two deposit bugs were made of. Generated rows point back here through
+    `transactions.recurring_id` instead, which means one thing only.
+    """
+
+    __tablename__ = "recurring_transactions"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False)
+    #: income | expense | transfer | deposit -- the same four the money dialog
+    #: offers, so a standing instruction can be any of them.
+    kind = Column(String, nullable=False)
+    #: Which pot. The source for a transfer; null for a deposit, which splits
+    #: across every account by income share rather than landing in one.
+    account_id = Column(Uuid, ForeignKey("accounts.id"), nullable=True)
+    #: Transfers only: where the money goes.
+    to_account_id = Column(Uuid, ForeignKey("accounts.id"), nullable=True)
+    #: Always positive. The sign is applied when the payment is written, by the
+    #: same code that signs a manual one.
+    amount = Column(Float, nullable=False)
+    description = Column(String, nullable=True)
+    #: Expenses only, matching the rule on a one-off expense.
+    category_id = Column(Uuid, ForeignKey("spend_categories.id"), nullable=True)
+
+    #: The rule, in the same shape events use, so one engine reads both.
+    starts_on = Column(Date, nullable=False)
+    recur_freq = Column(String, nullable=False, default="monthly")
+    recur_interval = Column(Integer, nullable=False, default=1)
+    recur_byday = Column(String, nullable=True)
+    recur_until = Column(Date, nullable=True)
+    recur_count = Column(Integer, nullable=True)
+    #: Dates the rule generates that were cancelled -- a month the subscription
+    #: was paused. Without these, skipping one payment could only mean ending
+    #: the whole standing instruction.
+    skipped_dates = Column(JSON, nullable=False, default=list)
+
+    #: Paused rather than deleted: a cancelled subscription is worth keeping, so
+    #: last term's spending still explains itself.
+    active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+
+    account = relationship("AccountModel", foreign_keys=[account_id])
+    to_account = relationship("AccountModel", foreign_keys=[to_account_id])
+    category = relationship("SpendCategoryModel")
+    transactions = relationship("TransactionModel", back_populates="recurring")

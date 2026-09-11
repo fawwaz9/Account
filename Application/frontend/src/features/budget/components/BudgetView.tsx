@@ -6,26 +6,47 @@ import PlannedSpend from "./PlannedSpend";
 import WhereItWent from "./WhereItWent";
 import EditTransactionModal from "./EditTransactionModal";
 import EditAccountModal from "./EditAccountModal";
+import Recurring from "./Recurring";
+import RecurringModal from "./RecurringModal";
 import { useBudget } from "../hooks/useBudget";
 import { useTransactionDelete } from "../hooks/useTransactionDelete";
 import DeleteConfirmModal from "../../grades/components/DeleteConfirmModal";
-import { setBudgetTarget } from "../api";
-import { Account, Transaction } from "../types";
+import { deleteRecurring, setBudgetTarget } from "../api";
+import { Account, RecurringTransaction, Transaction } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
 
 export default function BudgetView() {
   const { user } = useAuth();
-  const { accounts, transactions, categories, summary, month, setMonth, loading, error, reload } =
-    useBudget();
+  const {
+    accounts, transactions, categories, summary, recurring, upcoming,
+    month, setMonth, loading, error, reload,
+  } = useBudget();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
+  const [editingRule, setEditingRule] = useState<RecurringTransaction | null>(null);
+  const [addingRule, setAddingRule] = useState(false);
+  const [ruleBusy, setRuleBusy] = useState(false);
   const remove = useTransactionDelete(reload);
 
   async function handleSetTarget(accountId: string, planned: number) {
     if (!user) return;
     await setBudgetTarget(user.id, accountId, month, planned);
     await reload();
+  }
+
+  async function handleStopRule(rule: RecurringTransaction) {
+    if (!user) return;
+
+    setRuleBusy(true);
+    try {
+      // Stops the instruction only. The payments it already made are real money
+      // that really moved, so they stay in the ledger.
+      await deleteRecurring(user.id, rule.id);
+      await reload();
+    } finally {
+      setRuleBusy(false);
+    }
   }
 
   const spendByCategory = summary?.by_category ?? [];
@@ -80,6 +101,15 @@ export default function BudgetView() {
 
             {spendByCategory.length > 0 && <WhereItWent entries={spendByCategory} />}
           </div>
+
+          <Recurring
+            rules={recurring}
+            upcoming={upcoming}
+            onAdd={() => { setEditingRule(null); setAddingRule(true); }}
+            onEdit={(rule) => { setEditingRule(rule); setAddingRule(true); }}
+            onDelete={handleStopRule}
+            busy={ruleBusy}
+          />
         </>
       )}
 
@@ -112,6 +142,15 @@ export default function BudgetView() {
         transaction={editing}
         categories={categories}
         onClose={() => setEditing(null)}
+        onSaved={reload}
+      />
+
+      <RecurringModal
+        open={addingRule}
+        rule={editingRule}
+        accounts={accounts}
+        categories={categories}
+        onClose={() => { setAddingRule(false); setEditingRule(null); }}
         onSaved={reload}
       />
 

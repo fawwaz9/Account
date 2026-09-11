@@ -76,7 +76,12 @@ def attach_recurrence(event: EventModel) -> EventModel:
     else:
         event.recurrence = None
 
-    event.skipped_dates = [parse_date(value) for value in (event.skipped_dates or [])]
+    # Deliberately *not* parsed onto the instance. `skipped_dates` is a real JSON
+    # column, and assigning date objects to it marks the row dirty with values
+    # json.dumps cannot serialize -- so the next commit on that session dies with
+    # "Object of type date is not JSON serializable". Editing an event that had a
+    # cancelled date did exactly that. The column holds ISO strings and the schema
+    # declares list[date], so Pydantic converts them on the way out instead.
     return event
 
 
