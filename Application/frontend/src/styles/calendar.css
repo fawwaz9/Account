@@ -370,3 +370,206 @@
     font-size: 1.1rem;
   }
 }
+
+/* ===== View switch =====
+   The header sits above both grids rather than inside either, because its step
+   buttons mean a month or a week depending on which is showing. */
+
+.calViewSwitch {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid #1f2a44;
+  border-radius: 9px;
+  background: var(--panel-2);
+}
+
+.calViewTab {
+  padding: 5px 14px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.84rem;
+  cursor: pointer;
+}
+
+.calViewTab:hover { color: var(--text); }
+
+.calViewTabActive {
+  background: rgba(212, 175, 55, 0.16);
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.calGridLoading {
+  display: block;
+  margin-bottom: 8px;
+}
+
+/* ===== Week view =====
+   A time axis, because the useful thing on a timetable is as often the gap
+   between two classes as the classes themselves. */
+
+.weekWrap {
+  background: var(--panel);
+  border: var(--deep-border);
+  border-radius: 14px;
+  padding: 12px;
+  box-shadow: 0 10px 30px var(--shadow);
+  overflow-x: auto;
+}
+
+.weekGrid {
+  display: grid;
+  /* A fixed gutter for the hour labels, then seven equal days. */
+  grid-template-columns: 52px repeat(7, minmax(90px, 1fr));
+  /* Header, all-day strip, then the scrolling body. */
+  grid-template-rows: auto auto 1fr;
+  gap: 0;
+  min-width: 680px;
+}
+
+.weekCorner {
+  border-bottom: 1px solid #1f2a44;
+}
+
+.weekHead {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 4px;
+  border-bottom: 1px solid #1f2a44;
+  border-left: 1px solid #1f2a44;
+}
+
+.weekHeadDay {
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.weekHeadDate {
+  min-width: 26px;
+  padding: 1px 7px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.96rem;
+  cursor: pointer;
+}
+
+.weekHeadDate:hover,
+.weekHeadDate:focus-visible {
+  background: rgba(212, 175, 55, 0.12);
+}
+
+.weekHeadToday .weekHeadDate {
+  background: rgba(212, 175, 55, 0.18);
+  color: var(--gold);
+  font-weight: 700;
+}
+
+/* All-day items live above the grid: they have no position on a time axis, and
+   pinning them to midnight would say something false about when they happen. */
+.weekAllDayLabel {
+  padding: 4px 6px;
+  border-bottom: 1px solid #1f2a44;
+  font-size: 0.68rem;
+  text-align: right;
+  color: var(--muted);
+}
+
+.weekAllDay {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 22px;
+  padding: 3px;
+  border-bottom: 1px solid #1f2a44;
+  border-left: 1px solid #1f2a44;
+}
+
+.weekHours {
+  position: relative;
+}
+
+.weekHour {
+  position: relative;
+  border-bottom: 1px solid rgba(31, 42, 68, 0.55);
+}
+
+.weekHourLabel {
+  position: absolute;
+  top: -7px;
+  right: 6px;
+  font-size: 0.68rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.weekColumn {
+  position: relative;
+  border-left: 1px solid #1f2a44;
+}
+
+.weekSlot {
+  border-bottom: 1px solid rgba(31, 42, 68, 0.55);
+}
+
+.weekBlock {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
+  padding: 2px 5px;
+  border: none;
+  border-left: 3px solid var(--muted);
+  border-radius: 5px;
+  background: rgba(148, 163, 184, 0.18);
+  color: var(--text);
+  font-size: 0.73rem;
+  line-height: 1.2;
+  text-align: left;
+  cursor: pointer;
+}
+
+.weekBlock:hover {
+  filter: brightness(1.25);
+}
+
+/* Same hues as the month chips, so a lecture reads as a lecture in both. */
+.weekBlock.calChip-lecture { border-left-color: #4593d6; background: rgba(69, 147, 214, 0.22); }
+.weekBlock.calChip-lab { border-left-color: #56b39a; background: rgba(86, 179, 154, 0.22); }
+.weekBlock.calChip-discussion { border-left-color: #8a7fd4; background: rgba(138, 127, 212, 0.22); }
+.weekBlock.calChip-deadline { border-left-color: var(--gold); background: rgba(212, 175, 55, 0.22); }
+.weekBlock.calChip-personal { border-left-color: #94a3b8; }
+
+.weekBlockExam {
+  border-left-width: 5px;
+  border-left-color: #e0685f;
+  background: rgba(224, 104, 95, 0.28);
+  font-weight: 600;
+}
+
+.weekBlockTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.weekBlockWhere {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .calHeader { gap: 8px; }
+  .weekWrap { padding: 8px; }
+}

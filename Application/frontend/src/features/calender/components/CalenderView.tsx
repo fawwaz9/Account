@@ -2,21 +2,15 @@ import { CalendarDay } from "../hooks/useCalender";
 import { EventOccurrence } from "../types";
 import { Task } from "../../tasks/types";
 import { EventChip, TaskChip } from "./EventCard";
-import {
-  addMonths,
-  fromIso,
-  isSameMonth,
-  monthLabel,
-  today,
-} from "../../../shared/utils/dateUtils";
+import { fromIso, isSameMonth, today } from "../../../shared/utils/dateUtils";
 
 const WEEKDAY_HEADINGS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 interface CalenderViewProps {
+  /** Any date inside the month being drawn. */
   readonly month: string;
   readonly days: CalendarDay[];
   readonly loading: boolean;
-  readonly onMonthChange: (month: string) => void;
   readonly onSelectOccurrence: (occurrence: EventOccurrence) => void;
   readonly onToggleTask: (task: Task) => void;
   readonly onAddOnDay: (date: string) => void;
@@ -34,7 +28,6 @@ export default function CalenderView({
   month,
   days,
   loading,
-  onMonthChange,
   onSelectOccurrence,
   onToggleTask,
   onAddOnDay,
@@ -43,36 +36,9 @@ export default function CalenderView({
 
   return (
     <section className="calShell" aria-label="Month view">
-      <header className="calHeader">
-        <div className="calNav">
-          <button
-            type="button"
-            className="calButton"
-            onClick={() => onMonthChange(addMonths(month, -1))}
-            aria-label="Previous month"
-          >
-            ‹
-          </button>
-          <h2 className="calMonth">{monthLabel(month)}</h2>
-          <button
-            type="button"
-            className="calButton"
-            onClick={() => onMonthChange(addMonths(month, 1))}
-            aria-label="Next month"
-          >
-            ›
-          </button>
-        </div>
-
-        <div className="calHeaderActions">
-          <button type="button" className="calButton" onClick={() => onMonthChange(`${now.slice(0, 7)}-01`)}>
-            Today
-          </button>
-          {/* A spinner rather than an empty grid: the month's shape stays put
-              while the new one loads, so paging does not flash. */}
-          {loading && <span className="calMuted" role="status">Loading…</span>}
-        </div>
-      </header>
+      {/* A spinner rather than an empty grid: the month's shape stays put while
+          the new one loads, so paging does not flash. */}
+      {loading && <span className="calMuted calGridLoading" role="status">Loading…</span>}
 
       <div className="calWeekdays" aria-hidden="true">
         {WEEKDAY_HEADINGS.map((label) => (

@@ -4,7 +4,14 @@ import { EventOccurrence } from "../types";
 import { fetchTasks } from "../../tasks/api";
 import { Task } from "../../tasks/types";
 import { useAuth } from "../../../app/auth/AuthContext";
-import { firstOfMonth, monthGrid, today } from "../../../shared/utils/dateUtils";
+import {
+  addDays,
+  addMonths,
+  firstOfMonth,
+  monthGrid,
+  today,
+  weekGrid,
+} from "../../../shared/utils/dateUtils";
 
 export interface CalendarDay {
   date: string;
@@ -12,9 +19,12 @@ export interface CalendarDay {
   tasks: Task[];
 }
 
+/** A month of dates, or one week laid out against the clock. */
+export type CalendarView = "month" | "week";
+
 /**
- * One month of the calendar: events expanded by the API, plus the tasks due in
- * the same window.
+ * One window of the calendar -- a month or a week -- with events expanded by the
+ * API and the tasks due in the same span.
  *
  * Two requests rather than one combined endpoint, because a deadline is edited
  * on the task and a lecture is edited on the event -- merging them server-side
@@ -23,16 +33,20 @@ export interface CalendarDay {
  */
 export function useCalender() {
   const { user } = useAuth();
-  const [month, setMonth] = useState(firstOfMonth(today()));
+  const [view, setView] = useState<CalendarView>("month");
+  // One anchor for both views, so switching between them stays where you were
+  // rather than jumping back to today.
+  const [cursor, setCursor] = useState(today());
   const [occurrences, setOccurrences] = useState<EventOccurrence[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // The grid runs from the Monday before the 1st to the Sunday after the last,
-  // so the window has to cover those overflow days or the first and last rows
-  // come back empty.
-  const days = monthGrid(month);
+  // The month grid runs from the Monday before the 1st to the Sunday after the
+  // last, so the window has to cover those overflow days or the first and last
+  // rows come back empty. A week is simply its own seven days -- the agenda
+  // endpoint takes any window, so neither view needs anything of its own.
+  const days = view === "month" ? monthGrid(cursor) : weekGrid(cursor);
   const windowStart = days[0];
   const windowEnd = days[days.length - 1];
 
@@ -41,6 +55,18 @@ export function useCalender() {
   // after November leaves October's events under November's heading -- the same
   // bug the budget month picker had (audit #12).
   const latestRequest = useRef(0);
+
+  /** Step a month or a week, whichever is on screen. */
+  const step = useCallback(
+    (direction: number) => {
+      setCursor((current) =>
+        view === "month"
+          ? addMonths(firstOfMonth(current), direction)
+          : addDays(current, direction * 7)
+      );
+    },
+    [view]
+  );
 
   const load = useCallback(async () => {
     if (!user) {
@@ -73,8 +99,11 @@ export function useCalender() {
   }, [load]);
 
   return {
-    month,
-    setMonth,
+    view,
+    setView,
+    cursor,
+    setCursor,
+    step,
     days: groupByDay(days, occurrences, tasks),
     occurrences,
     tasks,

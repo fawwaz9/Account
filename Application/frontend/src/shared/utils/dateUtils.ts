@@ -89,6 +89,30 @@ export function monthGrid(month: string): string[] {
   return Array.from({ length: 42 }, (_, index) => addDays(start, index));
 }
 
+/** The seven days of the week `value` falls in, Monday first. */
+export function weekGrid(value: string): string[] {
+  const start = startOfWeek(value);
+  return Array.from({ length: 7 }, (_, index) => addDays(start, index));
+}
+
+/**
+ * "HH:MM[:SS]" as minutes since midnight, which is what a timed grid positions
+ * against. Null for an all-day item, which has no position on that axis.
+ */
+export function minutesOfDay(value: string | null): number | null {
+  if (!value) return null;
+
+  const [hours, minutes] = value.split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+/** "9am", "1pm" — an hour label for a time axis, where minutes are always zero. */
+export function hourLabel(hour: number): string {
+  const suffix = hour < 12 ? "am" : "pm";
+  const display = hour % 12 === 0 ? 12 : hour % 12;
+  return `${display}${suffix}`;
+}
+
 export function isSameMonth(value: string, month: string): boolean {
   return value.slice(0, 7) === month.slice(0, 7);
 }
@@ -106,6 +130,27 @@ export function monthName(value: string, short = false): string {
 /** "September 2026", for a calendar heading. */
 export function monthLabel(value: string): string {
   return `${monthName(value)} ${fromIso(value).getFullYear()}`;
+}
+
+/**
+ * "8 – 14 Sep 2026", collapsing whatever the two ends share.
+ *
+ * A week that straddles a month or a year has to say so; one that does not
+ * should not repeat itself.
+ */
+export function weekLabel(value: string): string {
+  const days = weekGrid(value);
+  const start = fromIso(days[0]);
+  const end = fromIso(days[6]);
+
+  const endPart = `${end.getDate()} ${monthName(days[6], true)} ${end.getFullYear()}`;
+  if (start.getFullYear() !== end.getFullYear()) {
+    return `${start.getDate()} ${monthName(days[0], true)} ${start.getFullYear()} – ${endPart}`;
+  }
+  if (start.getMonth() !== end.getMonth()) {
+    return `${start.getDate()} ${monthName(days[0], true)} – ${endPart}`;
+  }
+  return `${start.getDate()} – ${endPart}`;
 }
 
 /** "09:30" -> "9:30 am". Times arrive from the API as HH:MM or HH:MM:SS. */
