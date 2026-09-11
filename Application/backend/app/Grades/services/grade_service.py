@@ -4,6 +4,7 @@ from app._database.models import CourseModel, CourseCategoryWeightModel, GradeMo
 from app.Grades.schemas.grade import GradeCreate, GradeUpdate, Grade as GradeSchema
 from app.Grades.utils.enums import GradeCategory
 from app.Grades.utils.terms import course_result_grade
+from app.Tasks.services.grade_tasks import sync_task_for_grade
 
 
 MAX_COURSE_PERCENT = 100.0
@@ -88,12 +89,16 @@ def add_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_data:
         score=grade_data.score,
         max_score=grade_data.max_score,
         weight=weights.get(category_value, 0.0),
+        due_date=grade_data.due_date,
     )
     db.add(grade)
     db.flush()
     db.refresh(course)
 
     course.average = calculate_current_average(course)
+    # Inside this transaction, so a grade that fails to save leaves no task
+    # behind for work that was never recorded.
+    sync_task_for_grade(db, course, grade)
     db.commit()
     db.refresh(grade)
     return grade
@@ -128,6 +133,7 @@ def add_grades_bulk(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade
                 score=grade_data.score,
                 max_score=grade_data.max_score,
                 weight=weights.get(category_value, 0.0),
+                due_date=grade_data.due_date,
             )
             db.add(grade)
             created.append(grade)
@@ -135,6 +141,8 @@ def add_grades_bulk(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade
         db.flush()
         db.refresh(course)
         course.average = calculate_current_average(course)
+        for grade in created:
+            sync_task_for_grade(db, course, grade)
         db.commit()
     except Exception:
         db.rollback()
@@ -177,6 +185,10 @@ def update_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id
         raise ValueError(f"Score cannot exceed {MAX_SCORE_MULTIPLE:g}x the max score")
 
     course.average = calculate_current_average(course)
+    # Covers all four of the ways an edit moves the task: a renamed grade, a
+    # moved deadline, a deadline removed, and a score arriving by edit rather
+    # than through record_grade.
+    sync_task_for_grade(db, course, grade)
     db.commit()
     db.refresh(grade)
     return grade
@@ -222,6 +234,8 @@ def record_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id
 
     grade.score = score
     course.average = calculate_current_average(course)
+    # The score landing is what closes the task.
+    sync_task_for_grade(db, course, grade)
     db.commit()
     db.refresh(grade)
     return grade

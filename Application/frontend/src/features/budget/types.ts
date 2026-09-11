@@ -40,6 +40,8 @@ export interface Transaction {
   occurred_on: string;
   /** Present on both halves of a transfer */
   group_id: string | null;
+  /** How many rows share this group; 1 when ungrouped */
+  group_size: number;
 }
 
 export interface TransactionCreate {
@@ -109,4 +111,36 @@ export interface DepositCreate {
   description: string | null;
   /** Empty means split by each account's income share */
   allocations: DepositAllocation[];
+}
+
+export interface DayFlow {
+  /** YYYY-MM-DD */
+  day: string;
+  money_in: number;
+  money_out: number;
+}
+
+export interface BalancePoint {
+  day: string;
+  balance: number;
+}
+
+export interface AccountActivity {
+  account_id: string;
+  account_name: string;
+  month: string;
+  /** All-time, matching the account card */
+  balance: number;
+  total_in: number;
+  total_out: number;
+  net: number;
+  transaction_count: number;
+  planned: number;
+  remaining: number;
+  used_percent: number;
+  /** One entry per day of the month, zero-filled */
+  daily: DayFlow[];
+  by_category: CategorySpend[];
+  /** All time, one point per day that had movement */
+  balance_history: BalancePoint[];
 }

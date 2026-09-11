@@ -9,6 +9,7 @@ import CourseDetailPage from "../pages/grades/CourseDetailPage";
 import CalendarPage from "../pages/CalendarPage";
 import TasksPage from "../pages/TasksPage";
 import BudgetPage from "../pages/BudgetPage";
+import AccountDetailPage from "../pages/budget/AccountDetailPage";
 import SettingsPage from "../pages/SettingsPage";
 
 export default function App() {
@@ -33,6 +34,7 @@ export default function App() {
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/tasks" element={<TasksPage />} />
             <Route path="/budget" element={<BudgetPage />} />
+            <Route path="/budget/accounts/:accountId" element={<AccountDetailPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
         </Routes>

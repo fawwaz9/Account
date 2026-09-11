@@ -32,6 +32,20 @@
   gap: 0.75rem;
 }
 
+/* One labelled cell per category, so the grid keeps its 4x2 shape now that each
+   input is wrapped alongside its label rather than sitting in the grid directly. */
+.categoryWeightItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.categoryWeightLabel {
+  font-size: 0.75rem;
+  color: var(--text);
+  text-transform: capitalize;
+}
+
 .categoryWeightInput {
   width: 100%;
   min-width: 0; /* prevents inputs from overflowing their grid cell */
@@ -651,3 +665,42 @@
 
 .trendDot--cumulative { fill: var(--gold); }
 .trendDot--term { fill: var(--muted); }
+
+/* ===== Course flags =====
+   Each flag removes the course from a different rule, so each carries its own
+   sentence -- a checkbox labelled only "Archived" does not say which number
+   moves. */
+
+.courseFlags {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid #1f2a44;
+  border-radius: 10px;
+  text-align: left;
+}
+
+.courseFlag {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.courseFlagLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  cursor: pointer;
+}
+
+.courseFlagName {
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.courseFlagHint {
+  font-size: 0.78rem;
+  color: var(--muted);
+}

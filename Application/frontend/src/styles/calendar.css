@@ -1,0 +1,372 @@
+/* Calendar: a month grid, its day cells, and the dialogs that edit them.
+   Variables come from globals.css so the page matches Grades and Budget. */
+
+.calTopbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.calShell {
+  background: var(--panel);
+  border: var(--deep-border);
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 10px 30px var(--shadow);
+}
+
+.calHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.calNav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.calMonth {
+  margin: 0;
+  font-size: 1.3rem;
+  color: var(--gold);
+  min-width: 190px;
+  text-align: center;
+}
+
+.calHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ===== Grid ===== */
+
+.calWeekdays,
+.calGrid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.calWeekday {
+  padding: 6px 4px;
+  text-align: center;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.calCell {
+  /* A fixed minimum so the grid keeps its shape whether a day holds nothing or
+     six lectures; the cell scrolls rather than the month changing height. */
+  min-height: 104px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #1f2a44;
+  border-radius: 8px;
+  background: var(--panel-2);
+  overflow: hidden;
+}
+
+.calCellOutside {
+  /* Still legible: a deadline on the 1st matters while you are looking at the
+     month before it. */
+  opacity: 0.45;
+}
+
+.calCellToday {
+  border-color: var(--gold);
+  box-shadow: inset 0 0 0 1px rgba(212, 175, 55, 0.25);
+}
+
+.calCellDate {
+  align-self: flex-start;
+  min-width: 26px;
+  padding: 2px 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.calCellDate:hover,
+.calCellDate:focus-visible {
+  background: rgba(212, 175, 55, 0.12);
+  color: var(--text);
+}
+
+.calCellToday .calCellDate {
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.calCellItems {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow-y: auto;
+}
+
+/* ===== Chips ===== */
+
+.calChip {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  width: 100%;
+  padding: 3px 6px;
+  border: none;
+  border-left: 3px solid var(--muted);
+  border-radius: 5px;
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text);
+  font-size: 0.76rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.calChip:hover {
+  background: rgba(148, 163, 184, 0.22);
+}
+
+.calChipTime {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.calChipTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Kinds are distinguished by hue *and* by the left bar's weight, so the grid
+   still reads for someone who cannot separate the colours. */
+.calChip-lecture { border-left-color: #4593d6; background: rgba(69, 147, 214, 0.14); }
+.calChip-lab { border-left-color: #56b39a; background: rgba(86, 179, 154, 0.14); }
+.calChip-discussion { border-left-color: #8a7fd4; background: rgba(138, 127, 212, 0.14); }
+.calChip-deadline { border-left-color: var(--gold); background: rgba(212, 175, 55, 0.14); }
+.calChip-personal { border-left-color: #94a3b8; }
+.calChip-task { border-left-color: var(--gold-soft); background: rgba(245, 217, 123, 0.1); }
+
+/* An exam is not another class block: heavier bar, stronger ground, so the week
+   that matters is visible without reading a single title. */
+.calChipExam {
+  border-left-width: 5px;
+  border-left-color: #e0685f;
+  background: rgba(224, 104, 95, 0.2);
+  font-weight: 600;
+}
+
+.calChipDone .calChipTitle {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.calChipMark {
+  flex-shrink: 0;
+  color: var(--gold);
+}
+
+/* ===== Detail and forms ===== */
+
+.calDetail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+
+.calDetailWhen {
+  margin: 0;
+  font-size: 1.05rem;
+  color: var(--gold);
+}
+
+.calDetailMeta,
+.calDetailNotes {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.calDetailNotes {
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+.calDetailActions,
+.calFormActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.calForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: left;
+  /* Tall dialogs had no scroll container, so their submit buttons were
+     unreachable below the fold (audit #5). */
+  max-height: 70vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.calRow {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.calField,
+.calInlineField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+.calInlineField {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.calFieldLabel {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.calInput {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #1f2a44;
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 0.92rem;
+  font-family: inherit;
+}
+
+.calInput:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+
+.calInputNarrow {
+  width: 74px;
+  flex: 0 0 auto;
+}
+
+.calRecurrence {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid #1f2a44;
+  border-radius: 10px;
+}
+
+.calDayPicker {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.calDay {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #1f2a44;
+  border-radius: 50%;
+  background: var(--panel-2);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.calDaySelected {
+  border-color: var(--gold);
+  background: rgba(212, 175, 55, 0.18);
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.calButton {
+  padding: 8px 14px;
+  border: 1px solid #1f2a44;
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.calButton:hover:not(:disabled) {
+  border-color: var(--gold);
+}
+
+.calButton:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.calButtonPrimary {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: #0b0f1a;
+  font-weight: 600;
+}
+
+/* Destructive controls must not look like Cancel (audit #17). */
+.calButtonDanger {
+  border-color: var(--delete);
+  color: var(--delete);
+}
+
+.calButtonDanger:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.12);
+  border-color: var(--delete);
+}
+
+.calHint,
+.calMuted {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.calError {
+  margin: 0 0 12px;
+  color: var(--delete);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 720px) {
+  .calCell {
+    min-height: 72px;
+  }
+
+  .calMonth {
+    min-width: 0;
+    font-size: 1.1rem;
+  }
+}

@@ -1,12 +1,15 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Sectors from "./Sectors";
 import Transactions from "./Transactions";
 import AddMoneyModal from "./AddMoneyModal";
 import PlannedSpend from "./PlannedSpend";
+import WhereItWent from "./WhereItWent";
 import EditTransactionModal from "./EditTransactionModal";
 import EditAccountModal from "./EditAccountModal";
 import { useBudget } from "../hooks/useBudget";
-import { deleteTransaction, setBudgetTarget } from "../api";
+import { useTransactionDelete } from "../hooks/useTransactionDelete";
+import DeleteConfirmModal from "../../grades/components/DeleteConfirmModal";
+import { setBudgetTarget } from "../api";
 import { Account, Transaction } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
 
@@ -14,36 +17,10 @@ export default function BudgetView() {
   const { user } = useAuth();
   const { accounts, transactions, categories, summary, month, setMonth, loading, error, reload } =
     useBudget();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
-
-  const visible = useMemo(
-    () =>
-      selectedId === null
-        ? transactions
-        : transactions.filter((transaction) => transaction.account_id === selectedId),
-    [transactions, selectedId]
-  );
-
-  async function handleDelete(transaction: Transaction) {
-    if (!user) return;
-
-    setDeletingId(transaction.id);
-    setDeleteError(null);
-    try {
-      await deleteTransaction(user.id, transaction.id);
-      // Balances are derived, so the accounts have to be re-read too.
-      await reload();
-    } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : "Could not delete that");
-    } finally {
-      setDeletingId(null);
-    }
-  }
+  const remove = useTransactionDelete(reload);
 
   async function handleSetTarget(accountId: string, planned: number) {
     if (!user) return;
@@ -51,7 +28,7 @@ export default function BudgetView() {
     await reload();
   }
 
-  const selectedName = accounts.find((account) => account.id === selectedId)?.name;
+  const spendByCategory = summary?.by_category ?? [];
 
   return (
     <div className="container budgetPage">
@@ -72,46 +49,57 @@ export default function BudgetView() {
 
       {!loading && !error && (
         <>
-          <Sectors
-            accounts={accounts}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            onEdit={setEditingAccount}
-          />
+          <Sectors accounts={accounts} onEdit={setEditingAccount} />
 
-          <PlannedSpend
-            summary={summary}
-            month={month}
-            onMonthChange={setMonth}
-            onSetTarget={handleSetTarget}
-          />
+          <div className={spendByCategory.length > 0 ? "budgetGrid" : ""}>
+            <div className="budgetColumn">
+              <PlannedSpend
+                summary={summary}
+                month={month}
+                onMonthChange={setMonth}
+                onSetTarget={handleSetTarget}
+              />
 
-          <section className="ledgerSection">
-            <div className="sectionHeading">
-              <h2>{selectedName ? `${selectedName} activity` : "Recent activity"}</h2>
-              {selectedId && (
-                <button
-                  type="button"
-                  className="buttons addCourseButton"
-                  onClick={() => setSelectedId(null)}
-                >
-                  All accounts
-                </button>
-              )}
+              <section className="ledgerSection">
+                <div className="sectionHeading">
+                  <h2>Recent activity</h2>
+                </div>
+
+                {remove.error && <p className="muted">{remove.error}</p>}
+
+                <Transactions
+                  transactions={transactions}
+                  accounts={accounts}
+                  onDelete={remove.requestDelete}
+                  onEdit={setEditing}
+                  deletingId={remove.deletingId}
+                  emptyMessage="Nothing recorded today or yesterday."
+                />
+              </section>
             </div>
 
-            {deleteError && <p className="muted">{deleteError}</p>}
-
-            <Transactions
-              transactions={visible}
-              accounts={accounts}
-              onDelete={handleDelete}
-              onEdit={setEditing}
-              deletingId={deletingId}
-            />
-          </section>
+            {spendByCategory.length > 0 && <WhereItWent entries={spendByCategory} />}
+          </div>
         </>
       )}
+
+      <DeleteConfirmModal
+        open={remove.pending !== null}
+        title="Remove which part?"
+        message={
+          remove.pending
+            ? `"${remove.pending.description || "This deposit"}" was split across ` +
+              `${remove.pending.group_size} accounts. Remove only this account's ` +
+              `share, or the whole deposit?`
+            : ""
+        }
+        confirmLabel="Whole deposit"
+        secondaryAction={{ label: "Just this share", onConfirm: remove.deleteRow }}
+        onConfirm={remove.deleteGroup}
+        onCancel={remove.cancel}
+        submitting={remove.deletingId !== null}
+        error={remove.error}
+      />
 
       <EditAccountModal
         account={editingAccount}

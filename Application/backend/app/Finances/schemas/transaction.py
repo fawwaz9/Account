@@ -52,6 +52,9 @@ class Transaction(TransactionBase):
     signed_amount: float = 0.0
     #: Present on both halves of a transfer, tying them together.
     group_id: UUID | None = None
+    #: How many rows share this group, so a caller can tell a split deposit from
+    #: a single allocation without fetching the siblings. 1 when ungrouped.
+    group_size: int = 1
     category_id: UUID | None = None
 
     class Config:

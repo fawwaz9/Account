@@ -17,8 +17,20 @@ export default function AddGradeForm({
   submitting,
   error,
 }: AddGradeFormProps) {
+  // A real <form>, so the `required` attributes below actually run. These were
+  // <div>s with a type="button" submit, which meant no constraint validation ever
+  // fired and Enter-to-submit was dead -- a blank submit went to the server and
+  // came back as an error message at the bottom of the dialog.
+  function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    onSubmit();
+  }
+
   return (
-    <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1 text-center">
+    <form
+      className="space-y-4 max-h-[70vh] overflow-y-auto pr-1 text-center"
+      onSubmit={handleSubmit}
+    >
       <div>
         <input
           id="grade-name"
@@ -26,11 +38,16 @@ export default function AddGradeForm({
           onChange={(event) => updateField("name", event.target.value)}
           className="--input mt-1 w-full rounded-lg border border-slate-700 bg-transparent px-3 py-2 text-white text-center"
           placeholder="Grade Name (e.g. Quiz 1)"
+          aria-label="Grade name"
           required
         />
       </div>
 
       <div className="flex gap-3 justify-center">
+        {/* Score is deliberately not `required`: a grade with no score yet is a
+            supported state, and the placeholder says so. It carried `required`
+            while this form was an inert <div>, where the attribute did nothing;
+            now that the form is real, keeping it would break that behaviour. */}
         <input
           id="grade-score"
           type="number"
@@ -42,7 +59,7 @@ export default function AddGradeForm({
           }
           className="--input mt-1 w-[45%] rounded-lg border border-slate-700 bg-transparent px-3 py-2 text-white text-center"
           placeholder="Score (blank = not graded yet)"
-          required
+          aria-label="Score, blank if not graded yet"
         />
         <input
           id="grade-max-score"
@@ -52,7 +69,21 @@ export default function AddGradeForm({
           onChange={(event) => updateField("max_score", Number(event.target.value))}
           className="--input mt-1 w-[45%] rounded-lg border border-slate-700 bg-transparent px-3 py-2 text-white text-center"
           placeholder="Max Score"
+          aria-label="Max score"
           required
+        />
+      </div>
+
+      <div>
+        <label htmlFor="grade-due-date" className="block text-sm text-slate-200">
+          Due date (optional — setting one adds it to your tasks and calendar)
+        </label>
+        <input
+          id="grade-due-date"
+          type="date"
+          value={form.due_date ?? ""}
+          onChange={(event) => updateField("due_date", event.target.value || null)}
+          className="--input mt-1 w-full rounded-lg border border-slate-700 bg-transparent px-3 py-2 text-white text-center"
         />
       </div>
 
@@ -73,14 +104,13 @@ export default function AddGradeForm({
         </button>
 
         <button
-          type="button"
-          onClick={() => onSubmit()}
+          type="submit"
           className="rounded-lg !bg-gold !text-slate-950"
           disabled={submitting}
         >
           {submitting ? "Saving..." : "Add Grade"}
         </button>
       </div>
-    </div>
+    </form>
   );
 }

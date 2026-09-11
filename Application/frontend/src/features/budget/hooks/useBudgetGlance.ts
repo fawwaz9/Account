@@ -1,12 +1,8 @@
 import { useEffect, useState } from "react";
 import { fetchAccounts, fetchBudgetSummary } from "../api";
 import { Account, BudgetSummary } from "../types";
+import { currentMonth } from "../dates";
 import { useAuth } from "../../../app/auth/AuthContext";
-
-function currentMonth() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-}
 
 /**
  * Just what the dashboard shows: balances and this month's plan against spend.

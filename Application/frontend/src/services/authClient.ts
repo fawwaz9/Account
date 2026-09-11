@@ -20,10 +20,13 @@ export function registerWithEmail(name: string, email: string, password: string)
 /**
  * Add a first password, or change an existing one, for the signed-in user.
  * `currentPassword` is required only when the account already has one.
- * Returns 204, so there is no body.
+ *
+ * Returns a **replacement token**, because succeeding here invalidates every
+ * session the account had -- including this one. The caller must hand the new
+ * token to AuthContext, or its very next request is a 401.
  */
 export function setPassword(newPassword: string, currentPassword?: string) {
-  return post<null>("auth/password", {
+  return post<TokenResponse>("auth/password", {
     new_password: newPassword,
     current_password: currentPassword ?? null,
   });

@@ -4,7 +4,14 @@ A full-stack personal productivity application built for self-use, covering acad
 
 **Repository:** [github.com/fawwaz9/Account](https://github.com/fawwaz9/Account)
 
-> **Status:** Active development on `grades-branch`. The **Grades** module is the only end-to-end vertical slice (DB → service → API → typed client → UI). Calendar, Tasks, and Finances are wired end-to-end but return hardcoded sample data from the backend. Notes, Goals, Study Analytics, and Settings are not started.
+> **Status:** Active development on `grades-branch`. **Auth**, **Grades** and
+> **Finances/Budget** are complete end-to-end vertical slices (DB → service → API →
+> typed client → UI). **Calendar** and **Tasks** still return hardcoded sample dicts
+> from the backend. Notes, Goals and Study Analytics are not started; Settings is
+> partly built (academic status, credit target, GPA scale, password).
+>
+> Open defects and their priority live in `Ideas/audit.md`; the feature backlog and
+> its build order live in `Ideas/whats_next.txt`.
 
 ---
 
@@ -31,7 +38,11 @@ Dashboard
 └── Settings
 ```
 
-The project is built around UBC-specific context: UBC does not use a GPA scale, so there is **no `GPAScale` model** by design. `calculate_letter_grade` maps percentages onto UBC's letter scale instead.
+The project is built around UBC-specific context. `calculate_letter_grade` maps
+percentages onto UBC's letter scale. An earlier version of this file said there was
+deliberately no GPA scale; that has since been reversed — **CGPA exists on a
+switchable scale**, defaulting to UBC's 4.33 and turned off in Settings for anyone
+who does not want it.
 
 ---
 
@@ -105,8 +116,13 @@ Application/backend/
 
 ```
 users ──< courses ──< grades
-              └────< course_category_weights
+      │        └────< course_category_weights
+      ├──< accounts ──< transactions >── spend_categories
+      └──< budget_targets
 ```
+
+Eight tables, not the four this section used to list: the Budget module added
+`accounts`, `transactions`, `spend_categories` and `budget_targets`.
 
 | Table | Notes |
 |---|---|
@@ -125,12 +141,12 @@ Every router is mounted under `/api`, and every route except `POST /api/auth/goo
 
 | Router | Base path | State |
 |---|---|---|
-| Auth | `/api/auth` | `POST /google`, `POST /register`, `POST /login` — all return the same 7-day app JWT |
-| Users | `/api/users` | `GET /me`, `GET/PATCH/DELETE /{user_id}` |
+| Auth | `/api/auth` | `POST /google`, `POST /register`, `POST /login`, `POST /password` — all return the same 7-day app JWT |
+| Users | `/api/users` | `GET /me`, `GET/PATCH/DELETE /{user_id}`, academic status |
 | Grades | `/api/grades` | Full CRUD — see below |
-| Calendar | `/api/calendar` | `GET /{user_id}/events` — **returns a hardcoded sample event** |
-| Tasks | `/api/tasks` | `GET /{user_id}/tasks` — **returns a hardcoded sample task** |
-| Finances | `/api/finances` | `GET /{user_id}/budgets`, `GET /{user_id}/goals` — **hardcoded samples** |
+| Finances | `/api/finances` | **Complete** — accounts, transactions, transfers, deposits, spend categories, budget targets, per-account activity |
+| Calendar | `/api/calendar` | `GET /{user_id}/events` — **still returns a hardcoded sample event** |
+| Tasks | `/api/tasks` | `GET /{user_id}/tasks` — **still returns a hardcoded sample task** |
 
 Grades endpoints (all prefixed `/api/grades/{user_id}`):
 
@@ -169,7 +185,7 @@ frontend's bearer header — is provider-agnostic.
 | `POST /api/auth/google` | — | `{ id_token }` | 200 + JWT |
 | `POST /api/auth/register` | — | `{ name, email, password }` | 201 + JWT |
 | `POST /api/auth/login` | — | `{ email, password }` | 200 + JWT |
-| `POST /api/auth/password` | bearer | `{ new_password, current_password? }` | 204 |
+| `POST /api/auth/password` | bearer | `{ new_password, current_password? }` | 200 + **replacement JWT** |
 
 **One account, both sign-in methods.** Signing in with Google on an address that
 already has a local account links the two rather than erroring — same user id,
@@ -221,26 +237,34 @@ Application/frontend/
     │   ├── App.tsx                      # AuthProvider + BrowserRouter + all routes
     │   ├── auth/AuthContext.tsx         # token, user, isAuthenticated, isLoading, login, logout
     │   ├── auth/ProtectedRoute.tsx
-    │   └── layout/                      # MainLayout, Sidebar, Topbar — EMPTY STUBS
+    │   └── layout/                      # MainLayout, Sidebar, Topbar — all populated
     ├── services/
     │   ├── apiClient.ts                 # fetch wrapper: base URL, bearer header, 401 handling
     │   ├── authClient.ts                # loginWithGoogle
     │   ├── currentUserClient.ts         # getCurrentUser
     │   └── endpoints.ts                 # centralized path builders
     ├── features/
-    │   ├── grades/                      # api.ts, types.ts, hooks/useCourses.ts, 11 components
+    │   ├── grades/                      # api.ts, types.ts, hooks, ~19 components
+    │   ├── budget/                      # api.ts, types.ts, hooks, ~12 components
     │   ├── calender/                    # api.ts + types.ts only; components are EMPTY STUBS
-    │   ├── tasks/                       # api.ts + types.ts only; components are EMPTY STUBS
-    │   └── budget/                      # api.ts + types.ts only; components are EMPTY STUBS
+    │   └── tasks/                       # api.ts + types.ts only; components are EMPTY STUBS
     ├── pages/                           # Dashboard, LoginPage, Calendar, Tasks, Budget,
     │   └── grades/                      #   GradesPage, CourseDetailPage
-    ├── shared/                          # components, hooks, utils — ALL EMPTY STUBS
+    ├── shared/                          # components/Modal.tsx is real; the rest are EMPTY STUBS
     └── styles/                          # globals.css, dashboard.css, grades/*.css
 ```
 
 **Auth flow:** `index.html` loads the Google Identity Services script → `LoginPage` renders the Google button and polls up to ~10s for the script → the Google credential is POSTed to `/api/auth/google` → the returned app JWT goes into `AuthContext` and `sessionStorage` → the effect fetches `/api/users/me` to populate `user`. `isLoading` exists specifically so `ProtectedRoute` doesn't bounce to `/login` before auth state has resolved on first load.
 
-**API client:** `apiClient.ts` is a hand-written `fetch` wrapper (not axios — `axios` is listed in `package.json` but is unused). It reads `VITE_API_BASE_URL` (default `http://localhost:8000/api`), attaches the bearer token from `sessionStorage`, unpacks FastAPI's 422 `detail` arrays into readable messages, and on a 401 clears the token and redirects to `/login`.
+**API client:** `apiClient.ts` is a hand-written `fetch` wrapper — `axios` has been
+removed from `package.json`. It reads `VITE_API_BASE_URL`, attaches the bearer token
+from `sessionStorage`, unpacks FastAPI's 422 `detail` arrays into readable messages,
+and on a 401 clears the token and redirects to `/login`.
+
+Its fallback is `http://localhost:8000/api`, which does **not** match the backend's
+default port of 8001 — so `dev.run.sh` derives `VITE_API_BASE_URL` from `BACKEND_PORT`
+and exports it, and the two cannot disagree. That fallback is now only reached by
+running Vite by hand with no `.env`.
 
 ---
 
@@ -331,7 +355,21 @@ JWT_SECRET=<same-secret>
 VITE_GOOGLE_CLIENT_ID=<same-client-id>
 ```
 
-Optional overrides: `JWT_ALGORITHM` (default `HS256`), `JWT_EXPIRE_MINUTES` (default 7 days), `DATABASE_URL` (default `sqlite:///./app.db`), `ALLOWED_ORIGINS` (default `http://localhost:5173`), `VITE_API_BASE_URL` (default `http://localhost:8000/api`).
+Each of those three directories carries a committed **`.env.example`** — copy it and
+fill it in. `JWT_SECRET` must be at least 32 characters or the backend refuses to start;
+generate one with `python3 -c "import secrets; print(secrets.token_hex(32))"`.
+
+Optional overrides: `JWT_EXPIRE_MINUTES` (default 7 days), `DATABASE_URL` (default
+`backend/data/app.db`, an absolute path anchored to the backend directory),
+`ALLOWED_ORIGINS` (default `http://localhost:5173`), `LOG_LEVEL` (default `INFO`).
+
+`JWT_ALGORITHM` is **no longer configurable** — it is a module constant. Read from the
+environment it could be set to `none`, which PyJWT accepts as the unsigned algorithm,
+and every token would then verify.
+
+`VITE_API_BASE_URL` is derived by `dev.run.sh` from `BACKEND_PORT` and exported, so the
+frontend cannot end up pointing at a port the backend is not on. Set it yourself only to
+reach a backend the script did not start; an explicit value in your environment wins.
 
 All `.env` files are gitignored and must be created locally.
 
@@ -389,43 +427,93 @@ npm run dev
 cd Application/backend
 python3 -m app._database.check_state
 ```
-Prints every user with their course count, and every course with its per-category weights, flagging any whose weights sum over 100.
+Prints every user with their course count, and every course with its per-category
+weights, flagging any whose weights sum over 100.
+
+Note it does this **at import time**, and prints every user's id, name and email — so
+importing it for any other reason also dumps that to stdout.
+
+**Back up `data/app.db` before any migration.** Several `app.db.backup-*` files exist and
+are gitignored.
+
+---
+
+## Testing
+
+The project had no automated tests of any kind, which is the single fact that best
+explained the shape of `Ideas/audit.md`: nearly every defect in it is one a test would
+have pinned down, and several were re-runs of bugs already fixed once elsewhere.
+
+```bash
+cd Application/backend
+.venv/bin/python -m pytest tests/ -q
+```
+
+Coverage is deliberately narrow and aimed at the defects most likely to be
+reintroduced by a later refactor — the money-integrity and account-takeover paths, and
+the session/throttle mechanisms:
+
+| File | Covers |
+|---|---|
+| `tests/test_money_integrity.py` | Deposit and transfer group semantics |
+| `tests/test_auth_integrity.py` | The email-change takeover chain |
+| `tests/test_session_integrity.py` | Revocation, required token claims, login throttling |
+
+`tests/conftest.py` gives every test a fresh in-memory database and deliberately does
+**not** import `app._database.db`, whose engine is bound to the real `data/app.db`. A
+test that can reach the live ledger is worse than no test.
 
 ---
 
 ## Known Gaps
 
 ### Not yet built
-- **Calendar, Tasks, and Finances** have no database models, schemas, or service layers — their routes return hardcoded sample dicts. The target schema for `events`, `tasks`, `goals`, `classes`, and `budget` is already sketched in `app/_database/design.txt`, including recurrence rules and "ends by" dates.
-- **Notes, Goals, Study Analytics, and Settings** are not started.
-- **Layout shell** — `MainLayout.tsx`, `Sidebar.tsx`, and `Topbar.tsx` are empty files, so every page renders bare with no persistent navigation.
-- **Shared UI kit** — `shared/components/{Button,Card,Checkbox,Input,Modal}.tsx`, `shared/hooks/{useDebounce,useLocalStorage}.ts`, and `shared/utils/{dateUtils,formatters,mathUtils}.ts` are all empty. The grades modals each roll their own markup as a result.
-- `SchedulePage.tsx`, `app/router.tsx`, and `features/grades/hooks/UseAssignments.ts` are empty; routing lives inline in `App.tsx`.
-- `AcademicStatus` schemas exist but have no model, service, or route.
+- **Calendar and Tasks** have no database models, schemas, or service layers — their
+  routes return hardcoded sample dicts. The target schema for `events`, `tasks`, `goals`
+  and `classes` is sketched in `app/_database/design.txt` (which is Postgres DDL for a
+  SQLite app, so read it as intent rather than as something to run), including
+  recurrence rules and "ends by" dates. Recurrence was deliberately deferred to
+  Calendar so **one engine** serves it, repeating tasks and recurring payments alike.
+- **Notes, Goals and Study Analytics** are not started.
+- **Shared UI kit** — `shared/components/Modal.tsx` is now real and all ten dialogs use
+  it. `{Button,Card,Checkbox,Input}.tsx`, `shared/hooks/{useDebounce,useLocalStorage}.ts`
+  and `shared/utils/{dateUtils,formatters,mathUtils}.ts` are still empty, so everything
+  other than the dialog shell is still hand-rolled.
+- `SchedulePage.tsx`, `app/router.tsx` and `features/grades/hooks/UseAssignments.ts` are
+  empty; routing lives inline in `App.tsx`. `features/calender/` is **misspelled**, and
+  Calendar is the next module to build — worth renaming before imports exist.
+- Roughly 21 zero-byte files remain across the frontend. They read as existing
+  scaffolding when nothing is there.
 
 ### Wired but incomplete
-- **Tailwind is declared but never active.** `package.json` lists `tailwindcss` and
-  `@tailwindcss/vite`, and `globals.css` starts with `@import "tailwindcss"`, but there
-  is **no `vite.config.ts`** anywhere in the frontend, so the plugin is never registered.
-  Vite still resolves the import and ships ~31 KB of Tailwind's theme variables, but
-  generates **no utility classes** — every Tailwind class in `GradesPage.tsx`
-  (`rounded-lg`, `bg-slate-900`, …) is inert.
+- **Tailwind is now wired.** `vite.config.ts` registers `@tailwindcss/vite` and
+  `@vitejs/plugin-react`, so utility classes are generated and Fast Refresh works.
+  For four sessions this section claimed the decision was being deferred because
+  registering the plugin *would* switch on Preflight. That premise was false:
+  Preflight was already shipping and already active, because Vite resolved the bare
+  `@import "tailwindcss"` and inlined the package's raw CSS verbatim. The app's
+  appearance already incorporated the reset, so the option described as "safe" —
+  deleting the import — was the one that would have changed how it looked.
 
-  This is deliberately left as-is because both fixes change something visible.
-  Registering the plugin would also switch on Tailwind's Preflight reset, which
-  rewrites default margins, headings, and list styles across an app whose CSS was
-  written assuming browser defaults — likely reworking the whole look, not just the
-  Grades page. Deleting the `@import` and the two dependencies drops the 31 KB and
-  keeps the current appearance, but abandons Tailwind. Worth a deliberate choice
-  rather than a silent one.
-- `features/grades/api.ts` is missing `updateCategoryWeights`, `recordGrade`, `searchCourses`, and `fetchDashboard`, even though all four backend endpoints exist. The dashboard types are already defined in `types.ts` but nothing calls the endpoint — `Dashboard.tsx` is just four navigation tiles.
-- Course search is done client-side in `useFilteredCourses`; the server-side `/courses/search` endpoint is unused.
+  Registering the plugin turned 332 previously-inert utility classes live, and fixed
+  a real bug for free: `max-h-[70vh] overflow-y-auto` on the Add/Edit Course forms was
+  the only scroll container those dialogs had, and it did not exist, so on a
+  1366×768 laptop the submit button sat off-screen and could not be clicked.
+- `features/grades/api.ts` now has `updateCategoryWeights`, `recordGrade`,
+  `searchCourses` and `fetchDashboard`; the dashboard endpoint is wired and
+  `CourseSearch` uses the server-side `/courses/search` typeahead.
 - There is **no email verification flow**, so a local account's `email_verified`
   only ever becomes true by linking Google. A real verification email would let
   local accounts stand on their own and would remove the password-drop on link.
-- There is no password *reset* (forgot-password) flow, and no session
-  revocation for either provider — a leaked JWT stays valid for its full 7 days.
-- `axios` is a dependency but unused. `requirements.txt` looks like a full `pip freeze` and carries `firebase_admin`, `openai`, `google-cloud-storage`, `google-cloud-firestore`, and `grpcio` — none of which appear anywhere in the code.
+- There is no password *reset* (forgot-password) flow.
+- **Session revocation exists now**, but only in one direction: changing a password
+  invalidates every token outstanding at that moment. There is still no refresh
+  mechanism and no per-device session list, so the expiry remains 7 days. See
+  *Sessions and revocation* below.
+- `axios` has been removed. `requirements.txt` is still a full `pip freeze` and carries
+  `firebase_admin`, `openai`, `google-cloud-storage`, `google-cloud-firestore` and
+  `grpcio` — none of which appear anywhere in the code, and which add hundreds of MB to
+  every virtualenv and image.
 - `app/temp_data/store.py` and the empty `Grades/utils/errors.py`, `Users/utils/errors.py`, and `api/api.txt` are leftovers from before the database existed.
 
 ### Data integrity
@@ -449,26 +537,103 @@ started from, so a local run and `docker-compose` (which bind-mounts
 `backend/data`) silently used two different database files.
 
 ### Repository hygiene
-`node_modules` was committed before `.gitignore` existed, so **1150 of the repo's 1278 tracked files are dependencies**. Compiled `__pycache__/*.pyc` files and the built `frontend/dist/` output are also tracked. `.gitignore` currently covers only `node_modules` and `.env`; it should also cover `__pycache__/`, `*.pyc`, `dist/`, `.DS_Store`, and `data/*.db`, and the already-tracked files need `git rm -r --cached` to stop being versioned.
+**Fixed.** The repo tracks **156 files**: no `node_modules`, no `__pycache__`, no
+`.pyc`, no `dist/`. An earlier version of this section said 1150 of 1278 tracked files
+were dependencies and told you to run `git rm -r --cached` — following that now would
+do damage, so it has been removed.
+
+`.gitignore` needs **both** `*.db` and `*.db.backup*`; do not "simplify" that away, as
+a backup filename does not end in `.db`. `backend/.dockerignore` needs the same care
+and previously lacked it, which baked nine real database backups into the image.
+
+A stray `npm create vite` scaffold at the repository root — `package.json`,
+`package-lock.json` and a 51 MB `node_modules`, with no `index.html` and no `src/` —
+has been removed. It declared `typescript@6.0.3` against the frontend's `5.9.3`, and
+because Node resolution walks upward, a pruned `frontend/node_modules` would have
+silently resolved a different TypeScript major.
 
 ---
 
-## Security Backlog
+## Security
 
-`Ideas/fix.txt` holds a full security audit. The highest-priority items, none of which are addressed yet:
+`Ideas/audit.md` is the current, verified list; `Ideas/fix.txt` was an earlier pass and
+has been folded into it (including seven findings that did not survive re-checking).
+
+### Closed
+
+| Issue | What it was |
+|---|---|
+| Account takeover via email change | `update_user` wrote `email` through a blanket `setattr` loop and never cleared `email_verified`, so the Google-link guard was bypassable. Changing the address now clears the flag. |
+| Empty `JWT_SECRET` accepted | Compose substitutes `""` for an unset variable and Pydantic accepted it for a required `str`, so the server booted and signed every token with a zero-length HMAC key. Now `Field(min_length=32)`, and the algorithm is a module constant rather than an env-overridable setting — `JWT_ALGORITHM=none` was otherwise reachable. |
+| Deposit corruption (two bugs) | `group_id` meant both "transfer pair" and "deposit split". Deleting one leg of a split deposit deleted all of them; editing one negated a sibling into an impossible negative-income row that vanished from every view while still moving the balance. Both paths now branch on `kind`. |
+| Cross-tenant category write | `create`/`update_transaction` trusted the client's `category_id`, and `delete_category`'s `UPDATE` had no `user_id` filter — so deleting your category rewrote someone else's row. Ownership is checked on write and the delete is scoped. |
+| Transfer halves desynchronising | The date/description carry-over sat inside `if new_amount is not None`, so editing only a transfer's date moved one leg and left the other in a different month. |
+| No rate limiting on `/login` | One bcrypt verification per request, unbounded. Now throttled — see below. |
+| No session revocation | See *Sessions and revocation* below. |
+| No logging of any kind | Authentication attempts and deletions are now recorded — see below. |
+| Real data baked into the Docker image | `.dockerignore` matched `*.db` but not `app.db.backup-*`, so nine backups of real financial data landed in an image layer, invisible behind the runtime bind mount. |
+
+### Sessions and revocation
+
+Each token carries the **session epoch** it was minted under, and the account carries
+its current epoch. A mismatch is refused. Changing a password bumps the epoch, which
+invalidates every token outstanding at that moment, and returns a replacement token for
+the caller — so a stolen token elsewhere dies immediately while the person who just
+proved they know the old password is not thrown out of the page they are standing on.
+
+A counter rather than a timestamp, deliberately. Comparing a token's `iat` against a
+revocation *time* cannot distinguish a token minted just before the revocation from one
+minted just after, because `iat` has whole-second granularity — signing straight back in
+could be refused. This was not theoretical: it is what the first implementation did, and
+its own regression test caught it. Integer equality has no such window, no timezone
+handling, and nothing to prune. A `jti` denylist was the other option; it buys
+per-token revocation, which is worth nothing without a per-device session list to
+revoke from.
+
+The check lives in `get_current_user`, where the user row is already loaded — every
+authenticated route reaches it through `CurrentUser` or `VerifiedUserId` — so
+revocation costs no extra query.
+
+Tokens minted before the epoch claim existed read as epoch 0, which is every account's
+starting epoch, so they stay valid until something actually revokes them.
+
+### Login throttling
+
+A sliding window per `(address, client)` and a looser one per client alone, checked
+*before* the password is verified so a blocked caller costs no bcrypt work. Eight
+failures per address per 15 minutes; a success clears that address's history, so one
+forgotten password followed by the right one does not leave the account half-locked.
+Returns 429 with `Retry-After`. Knobs are at the top of
+`Auth/services/login_throttle.py`.
+
+Hand-rolled rather than adding a dependency, and its limits are worth stating: the state
+is in this process's memory, so it resets on restart and is not shared between workers.
+More than one worker, or several instances, needs a shared store instead.
+
+Note the trade-off: while an address is throttled, **the correct password is also
+refused**. That is what makes guessing expensive, and it is what lockout means, but it
+can lock you out of your own app for up to 15 minutes after eight fat-fingered attempts.
+
+### Logging
+
+`app/shared/audit.py`. Two kinds of event are recorded: every authentication attempt
+(successes at INFO, failures at WARNING) and every deletion of a course, grade, account,
+transaction, category or user. Never a password, a hash, or a token. Emails *are*
+recorded on authentication, because an auth log that cannot say which account was
+attacked is not much use — so the log deserves the same care as the database.
+
+### Still open
 
 | Issue | Severity | Impact |
 |---|---|---|
-| JWT stored in `sessionStorage` | Critical | Any XSS steals a token valid for 7 days; the backend has no revocation or refresh mechanism |
-| No rate limiting on `/api/auth/login`, `/register`, or `/google` | High | `/login` now accepts unlimited password guesses; bcrypt's cost is the only brake |
-| Cascading hard deletes, no soft delete or audit trail | High | An account compromise permanently destroys all course and grade history |
-| Unbounded `query` length in `search_courses` | Medium | A very large search string burns CPU; needs a length cap |
-| `allow_methods=["*"]` / `allow_headers=["*"]` with `allow_credentials=True` | Medium | Should be narrowed to the methods and headers actually used |
-| No HTTPS/HSTS in `nginx.conf` | Medium | Tokens travel in plaintext outside localhost |
-| No access or auth-failure logging | Medium | Deletions and failed logins leave no trace |
-| SQLite in production, no vacuum or maintenance | Medium | Lock contention and corruption risk under concurrent load |
-
----
+| JWT in `sessionStorage` | Medium | Any XSS steals a token. There is no XSS vector today — no `dangerouslySetInnerHTML`, no `innerHTML`, no `eval` anywhere in `src/` — but this is the payload if one appears. Moving it to an httpOnly cookie is what would *introduce* a CSRF requirement, which is why it has not been done casually. |
+| 7-day expiry, no refresh | Medium | Shortening it without a refresh mechanism just means signing in more often. Needs a deliberate decision about session length. |
+| Cascading hard deletes, no soft delete | High | Deleting an account wipes every course and grade immediately. The cascades are also *incomplete* — `spend_categories` and `budget_targets` are orphaned rather than removed, and SQLite does not enforce foreign keys without `PRAGMA foreign_keys=ON`. Both halves want fixing together. |
+| `allow_methods=["*"]` / `allow_headers=["*"]` with `allow_credentials=True` | Medium | Authentication is a bearer header and no cookie is ever set, so the flag grants nothing and only widens what a misconfigured `ALLOWED_ORIGINS` would expose. |
+| No HTTPS/HSTS in `nginx.conf` | Medium | Listens on 80 with no redirect. Tokens cross the network in plaintext, which makes the 7-day lifetime considerably worse anywhere but localhost. |
+| No indexes, no unique constraints | Medium | Every hot query is a full scan. `(user_id, code)`, `(user_id, name)` and `(user_id, account_id, month)` are enforced only by check-then-insert in Python, so all of them race. |
+| SQLite unconfigured for concurrency | Medium | No WAL, no busy timeout, against a 40-thread threadpool. Two simultaneous writes surface as `database is locked` → an uncaught 500. |
+| No rate limiting on `/register` or `/google` | Low | `/google` is bounded by Google verifying the token; `/register` is account-spam rather than credential guessing. |
 
 ## Repository & Branches
 
@@ -479,15 +644,22 @@ origin  https://github.com/fawwaz9/Account.git
 - **`main`** — the integration branch; PRs merge here.
 - **`grades-branch`** — the active working branch, currently ahead of local `main`.
 
-Note that `origin` currently publishes only `main`; the remote `grades-branch` was deleted after PR #1 merged, so any local `origin/grades-branch` reference is stale and can be cleared with `git remote prune origin`. A large amount of work — the entire `Auth/` module, `_database/`, `config.py`, the Docker and docker-compose setup, `LoginPage.tsx`, and the auth clients — is currently **untracked and has never been pushed**.
+`origin/grades-branch` is **live**, with local commits ahead of it that have not been
+pushed. An earlier version of this section said the remote branch had been deleted and
+suggested `git remote prune origin`; that was wrong and the advice has been removed.
+The branch has never been merged back into `main`.
 
-### Progress log (`Ideas/to_do.txt`)
-- ✅ Course editing feature
-- ✅ Saving mechanism / database
-- ✅ User backend
-- ✅ Standardized colors with CSS variables
-- ✅ User auth (Google OAuth + JWT)
-- ⬜ Docker functionality (files written; not yet verified end-to-end)
+### Where the planning lives
+`Ideas/to_do.txt` and `Ideas/fix.txt` have been folded into the files below and deleted:
+
+| File | Holds |
+|---|---|
+| `Ideas/audit.md` | Every known defect, tiered by severity, with what was verified how |
+| `Ideas/whats_next.txt` | The feature backlog per module, and the order to build it in |
+| `Ideas/session-handoff.md` | Current state, settled decisions, and gotchas found the hard way |
+| `Ideas/core.txt`, `features.txt` | The original goal and the target module tree |
+
+Docker remains the one thing written but never run end to end.
 
 ---
 

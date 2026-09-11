@@ -1,4 +1,5 @@
 import {CourseCreate, GradeCategory, Semester } from "../types"
+import CourseFlags from "./CourseFlags";
 
 interface AddCourseFormProps {
   readonly form: CourseCreate;
@@ -19,8 +20,20 @@ export default function AddCourseForm({
   submitting,
   error,
 }: AddCourseFormProps) {
+  // A real <form>, so the `required` attributes below actually run. These were
+  // <div>s with a type="button" submit, which meant no constraint validation ever
+  // fired and Enter-to-submit was dead -- a blank submit went to the server and
+  // came back as an error message at the bottom of the dialog.
+  function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    onSubmit();
+  }
+
   return (
-    <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1 text-center">
+    <form
+      className="space-y-4 max-h-[70vh] overflow-y-auto pr-1 text-center"
+      onSubmit={handleSubmit}
+    >
       <div>
         <input
           id="course-code"
@@ -159,24 +172,36 @@ export default function AddCourseForm({
         </div>
       </div>
 
+      <CourseFlags form={form} updateField={updateField} idPrefix="add-course" />
+
       <div className="category_grid">
+        {/* A real label per box, as EditCourseForm already does. The placeholder
+            used to be the only thing naming these eight inputs, and it vanishes on
+            the first keystroke -- leaving eight identical boxes with nothing to say
+            which category each one weights, and eight bare spin buttons to a
+            screen reader. */}
         {Object.values(GradeCategory).map((category) => (
-          <input
-            key={category}
-            type="number"
-            className="categoryWeightInput"
-            placeholder={category}
-            min={0}
-            max={100}
-            value={form.category_weights?.[category] ?? ""}
-            onChange={(e) => {
-              const raw = e.target.value;
-              updateField("category_weights", {
-                ...form.category_weights,
-                [category]: raw === "" ? undefined : Number(raw),
-              });
-            }}
-          />
+          <div key={category} className="categoryWeightItem">
+            <label htmlFor={`add-category-weight-${category}`} className="categoryWeightLabel">
+              {category}
+            </label>
+            <input
+              id={`add-category-weight-${category}`}
+              type="number"
+              className="categoryWeightInput"
+              placeholder="0"
+              min={0}
+              max={100}
+              value={form.category_weights?.[category] ?? ""}
+              onChange={(e) => {
+                const raw = e.target.value;
+                updateField("category_weights", {
+                  ...form.category_weights,
+                  [category]: raw === "" ? undefined : Number(raw),
+                });
+              }}
+            />
+          </div>
         ))}
       </div>
 
@@ -206,14 +231,13 @@ export default function AddCourseForm({
         </button>
 
         <button
-          type="button"
-          onClick={() => onSubmit()}
+          type="submit"
           className="rounded-lg !bg-gold !text-slate-950"
           disabled={submitting}
         >
           {submitting ? "Saving..." : "Add Course"}
         </button>
       </div>
-    </div>
+    </form>
   );
 }

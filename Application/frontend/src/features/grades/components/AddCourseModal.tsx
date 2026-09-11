@@ -3,6 +3,7 @@ import AddCourseForm from "./AddCourseForm";
 import { createCourse } from "../api";
 import { CourseCreate, GradeCategory, Semester } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
+import Modal from "../../../shared/components/Modal";
 
 interface AddCourseModalProps {
   readonly open: boolean;
@@ -23,6 +24,9 @@ const defaultForm: CourseCreate = {
   category_weights: {},
   start_date: null,
   end_date: null,
+  no_final: false,
+  transfer_credit: false,
+  archived: false,
 };
 
 export default function AddCourseModal({
@@ -64,6 +68,9 @@ export default function AddCourseModal({
         category_weights: fullWeights,
         start_date: form.start_date || null,
         end_date: form.end_date || null,
+        no_final: form.no_final,
+        transfer_credit: form.transfer_credit,
+        archived: form.archived,
       };
       await createCourse(user.id, payload);
       setForm(defaultForm);
@@ -77,23 +84,20 @@ export default function AddCourseModal({
   }
 
   return (
-    <div className="popup">
-      <div className="addCoursePopup">
-        <h2>Add Course</h2>
-        <AddCourseForm
-          form={form}
-          updateField={(k, v) => setForm((s) => ({ ...s, [k]: v }))}
-          onSubmit={handleSubmit}
-          submitting={loading}
-          error={error}
-          onCancel={onClose}
-          onReset={() => {
-            setForm(defaultForm);
-            setError(null);
-          }}
-        />
-      </div>
-    </div>
+    <Modal title="Add Course" onClose={onClose}>
+      <AddCourseForm
+        form={form}
+        updateField={(k, v) => setForm((s) => ({ ...s, [k]: v }))}
+        onSubmit={handleSubmit}
+        submitting={loading}
+        error={error}
+        onCancel={onClose}
+        onReset={() => {
+          setForm(defaultForm);
+          setError(null);
+        }}
+      />
+    </Modal>
   );
 }
 

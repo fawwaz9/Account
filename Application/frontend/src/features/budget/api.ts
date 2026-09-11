@@ -2,6 +2,7 @@ import { del, get, patch, post, put } from "../../services/apiClient";
 import { endpoints } from "../../services/endpoints";
 import {
   Account,
+  AccountActivity,
   AccountCreate,
   BudgetSummary,
   DepositCreate,
@@ -32,9 +33,35 @@ export async function deleteAccount(userId: string, accountId: string) {
   return del<Account>(endpoints.finances.account(userId, accountId));
 }
 
-export async function fetchTransactions(userId: string, accountId?: string) {
+/**
+ * `start`/`end` bound occurred_on inclusively.
+ *
+ * Windowing on the server rather than filtering a fetched page matters: the
+ * endpoint caps at 500 rows *after* ordering newest-first, so a client-side
+ * filter would silently lose the oldest rows in the range.
+ */
+export async function fetchTransactions(
+  userId: string,
+  options: { accountId?: string; start?: string; end?: string } = {}
+) {
+  const query = [
+    options.accountId ? `account_id=${options.accountId}` : null,
+    options.start ? `start=${options.start}` : null,
+    options.end ? `end=${options.end}` : null,
+  ].filter(Boolean);
+
   const base = endpoints.finances.transactions(userId);
-  return get<Transaction[]>(accountId ? `${base}?account_id=${accountId}` : base);
+  return get<Transaction[]>(query.length ? `${base}?${query.join("&")}` : base);
+}
+
+/** One account's month: daily flow, totals, categories and its target. */
+export async function fetchAccountActivity(
+  userId: string,
+  accountId: string,
+  month: string
+) {
+  const base = endpoints.finances.accountActivity(userId, accountId);
+  return get<AccountActivity>(`${base}?month=${month}`);
 }
 
 export async function createTransaction(userId: string, payload: TransactionCreate) {
@@ -62,8 +89,18 @@ export async function updateTransaction(
   );
 }
 
-export async function deleteTransaction(userId: string, transactionId: string) {
-  return del<Transaction>(endpoints.finances.transaction(userId, transactionId));
+/**
+ * `scope` decides how much of a grouped movement goes: "row" removes this one,
+ * "group" removes every row sharing its group. Ignored for a transfer, which the
+ * server always removes whole.
+ */
+export async function deleteTransaction(
+  userId: string,
+  transactionId: string,
+  scope: "row" | "group" = "group"
+) {
+  const base = endpoints.finances.transaction(userId, transactionId);
+  return del<Transaction>(`${base}?scope=${scope}`);
 }
 
 export async function fetchCategories(userId: string) {

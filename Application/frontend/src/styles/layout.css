@@ -13,6 +13,16 @@
   display: flex;
   flex-direction: column;
   gap: 22px;
+  /* Stays put while the page scrolls. Sticky rather than fixed so the sidebar
+     keeps its place in the flex row and the main column still sizes itself;
+     align-self stops the row stretching it to full height, which would leave
+     it nothing to stick within. */
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  height: 100vh;
+  overflow-y: auto;
+  z-index: 10;
 }
 
 .sidebarBrand {
@@ -101,6 +111,10 @@
     border-right: none;
     border-bottom: 1px solid var(--border);
     padding: 12px 14px;
+    /* Still pinned, but a strip across the top rather than a full column. */
+    height: auto;
+    align-self: stretch;
+    overflow-y: visible;
   }
   .sidebarNav { flex-direction: row; }
   .sidebarLink { white-space: nowrap; }

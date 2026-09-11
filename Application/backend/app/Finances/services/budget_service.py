@@ -2,7 +2,7 @@ import uuid
 from calendar import monthrange
 from datetime import date
 
-from sqlalchemy import func
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from app._database.models import (
@@ -24,7 +24,22 @@ from app.Finances.schemas.budget import (
 from app.Finances.schemas.transaction import TransactionKind
 
 #: Seeded once so the first expense has somewhere to go.
-DEFAULT_CATEGORIES = ["Groceries", "Rent", "Transport", "Eating out", "Subscriptions"]
+DEFAULT_CATEGORIES = [
+    "Groceries",
+    "Sports",
+    "Health/medical",
+    "Home",
+    "Transportation",
+    "Personal",
+    "Eating out",
+    "Utilities",
+    "Gifts",
+    "Debt",
+    "Technology",
+    "Charity",
+    "Investments",
+    "School fees",
+]
 
 
 def month_bounds(month: date) -> tuple[date, date]:
@@ -116,9 +131,12 @@ def delete_category(db: Session, user_id: uuid.UUID, category_id: uuid.UUID):
     if category is None:
         return None
 
-    db.query(TransactionModel).filter(TransactionModel.category_id == category_id).update(
-        {TransactionModel.category_id: None}, synchronize_session=False
-    )
+    # Scoped to the owner: without the user_id filter this UPDATE reaches every
+    # row carrying the id, including other people's.
+    db.query(TransactionModel).filter(
+        TransactionModel.category_id == category_id,
+        TransactionModel.user_id == user_id,
+    ).update({TransactionModel.category_id: None}, synchronize_session=False)
     db.delete(category)
     db.commit()
     return category
@@ -184,15 +202,24 @@ def get_budget_summary(db: Session, user_id: uuid.UUID, month: date):
         .all()
     }
 
-    # Expenses only. A transfer moves money between pots rather than spending
-    # it, so counting it would make every transfer look like overspending.
+    # Expenses, plus the outgoing half of a transfer: money moved out of a pot
+    # has left it just as surely as money spent from it, so a target that
+    # ignored transfers would quietly under-report. Only the negative leg
+    # counts -- the matching positive leg lands on the receiving account, where
+    # it is money arriving, not spending.
     spend_rows = (
         db.query(TransactionModel.account_id, func.sum(TransactionModel.amount))
         .filter(
             TransactionModel.user_id == user_id,
-            TransactionModel.kind == TransactionKind.EXPENSE.value,
             TransactionModel.occurred_on >= start,
             TransactionModel.occurred_on <= end,
+            or_(
+                TransactionModel.kind == TransactionKind.EXPENSE.value,
+                and_(
+                    TransactionModel.kind == TransactionKind.TRANSFER.value,
+                    TransactionModel.amount < 0,
+                ),
+            ),
         )
         .group_by(TransactionModel.account_id)
         .all()

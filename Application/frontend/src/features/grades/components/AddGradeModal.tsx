@@ -4,6 +4,7 @@ import { createGrade } from "../api";
 import { GradeCreate, GradeCategory } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { getErrorMessage } from "./AddCourseModal";
+import Modal from "../../../shared/components/Modal";
 
 interface AddGradeModalProps {
   readonly open: boolean;
@@ -21,6 +22,9 @@ function buildDefaultForm(category: GradeCategory | null): GradeCreate {
     score: null,
     max_score: 0,
     category: category ?? GradeCategory.OTHER,
+    // No deadline by default. Setting one raises a task for the assignment,
+    // which closes itself when the score lands.
+    due_date: null,
   };
 }
 
@@ -60,18 +64,15 @@ export default function AddGradeModal({
   }
 
   return (
-    <div className="popup">
-      <div className="addCoursePopup">
-        <h2>Add Grade — {category}</h2>
-        <AddGradeForm
-          form={form}
-          updateField={(k, v) => setForm((s) => ({ ...s, [k]: v }))}
-          onSubmit={handleSubmit}
-          submitting={loading}
-          error={error}
-          onCancel={onClose}
-        />
-      </div>
-    </div>
+    <Modal title={`Add Grade — ${category}`} onClose={onClose}>
+      <AddGradeForm
+        form={form}
+        updateField={(k, v) => setForm((s) => ({ ...s, [k]: v }))}
+        onSubmit={handleSubmit}
+        submitting={loading}
+        error={error}
+        onCancel={onClose}
+      />
+    </Modal>
   );
 }

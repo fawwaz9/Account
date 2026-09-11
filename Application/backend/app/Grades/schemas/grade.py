@@ -1,3 +1,4 @@
+from datetime import date
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator
 
@@ -15,6 +16,9 @@ class GradeBase(BaseModel):
     score: float | None = Field(default=None, ge=0, description="The score obtained, or null if not yet graded")
     max_score: float = Field(..., gt=0, description="The maximum possible score for the grade")
     category: GradeCategory = Field(..., description="The category of the grade (e.g., Assignment, Lab, Quiz, etc.)")
+    # When the work is due, as opposed to when it was marked. Setting one raises
+    # a task automatically, which closes itself once a score is recorded.
+    due_date: date | None = Field(default=None, description="When the work is due, if it has a deadline")
 
     @model_validator(mode="after")
     def validate_grade_logic(self):
@@ -35,6 +39,7 @@ class GradeUpdate(BaseModel):
     score: float | None = Field(default=None, ge=0)
     max_score: float | None = Field(default=None, gt=0)
     category: GradeCategory | None = Field(default=None)
+    due_date: date | None = Field(default=None)
 
 class Grade(GradeBase):
     id: UUID = Field(default_factory=uuid4)

@@ -9,6 +9,28 @@
   margin-bottom: 26px;
 }
 
+/* Planned spend and the ledger stack on the left; "Where it went" sits alone
+   on the right. Collapses to one column on narrow screens. */
+.budgetGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 32px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .budgetGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.budgetColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  min-width: 0;
+}
+
 /* ----- Accounts ----- */
 .sectors { margin-bottom: 32px; }
 
@@ -23,8 +45,8 @@
 .sectorsHeader h2 { margin: 0; font-size: 1.3rem; }
 
 .sectorsTotal {
-  font-size: 0.95rem;
-  color: var(--gold);
+  font-size: 1.25rem;
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 
@@ -52,7 +74,6 @@
 }
 
 .sectorCard:hover { transform: translateY(-1px); border-color: var(--gold); }
-.sectorCardActive { border-color: var(--gold); box-shadow: 0 0 0 1px var(--border); }
 .sectorCard:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 
 /* A colour band per kind, so the four pots stay distinguishable at a glance. */
@@ -80,7 +101,6 @@
 .sectorShare { margin-top: 2px; }
 
 /* ----- Ledger ----- */
-.ledgerSection { margin-top: 8px; }
 
 .ledger {
   list-style: none;
@@ -184,7 +204,6 @@
 }
 
 /* ===== Planned spend ===== */
-.plannedSpend { margin-bottom: 32px; }
 .plannedSpend .sectionHeading h2 { font-size: 1.3rem; }
 
 .monthPicker { width: auto; padding: 6px 10px; }
@@ -243,16 +262,8 @@
 .progressFill--none { background: transparent; }
 
 /* ----- Where it went ----- */
-.categorySpend { margin-top: 22px; }
-
-.categorySpendTitle {
-  margin: 0 0 8px;
-  font-size: 0.75rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--muted);
-  font-weight: 500;
-}
+.categorySpend { min-width: 0; }
+.categorySpend .sectionHeading h2 { font-size: 1.3rem; }
 
 .categoryList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 
@@ -325,6 +336,7 @@
   color: inherit;
   font: inherit;
   text-align: left;
+  text-decoration: none;
   cursor: pointer;
 }
 

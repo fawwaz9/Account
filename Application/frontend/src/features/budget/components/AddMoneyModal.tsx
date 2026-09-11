@@ -4,6 +4,8 @@ import { useDebounce } from "../../../shared/hooks/useDebounce";
 import { Account, DepositAllocation, SpendCategory } from "../types";
 import { getErrorMessage } from "../../grades/components/AddCourseModal";
 import { useAuth } from "../../../app/auth/AuthContext";
+import { localToday } from "../dates";
+import Modal from "../../../shared/components/Modal";
 
 interface AddMoneyModalProps {
   readonly open: boolean;
@@ -14,8 +16,6 @@ interface AddMoneyModalProps {
 }
 
 type Mode = "expense" | "income" | "transfer" | "deposit";
-
-const today = () => new Date().toISOString().slice(0, 10);
 
 export default function AddMoneyModal({
   open,
@@ -30,7 +30,7 @@ export default function AddMoneyModal({
   const [toAccountId, setToAccountId] = useState("");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
-  const [occurredOn, setOccurredOn] = useState(today());
+  const [occurredOn, setOccurredOn] = useState(localToday());
   const [categoryId, setCategoryId] = useState("");
   const [allocations, setAllocations] = useState<DepositAllocation[]>([]);
   const [needsShares, setNeedsShares] = useState(false);
@@ -46,7 +46,7 @@ export default function AddMoneyModal({
     setToAccountId(accounts[1]?.id ?? accounts[0].id);
     setAmount("");
     setDescription("");
-    setOccurredOn(today());
+    setOccurredOn(localToday());
     setCategoryId("");
     setAllocations([]);
     setError(null);
@@ -103,8 +103,6 @@ export default function AddMoneyModal({
           amount: Number(amount),
           description: description || null,
           occurred_on: occurredOn,
-          // Only expenses carry a category; the server ignores it on income.
-          category_id: mode === "expense" && categoryId ? categoryId : null,
         });
       } else {
         await createTransaction(user.id, {
@@ -113,6 +111,8 @@ export default function AddMoneyModal({
           amount: Number(amount),
           description: description || null,
           occurred_on: occurredOn,
+          // Only expenses carry a category; the server ignores it on income.
+          category_id: mode === "expense" && categoryId ? categoryId : null,
         });
       }
       onSaved();
@@ -125,176 +125,173 @@ export default function AddMoneyModal({
   }
 
   return (
-    <div className="popup">
-      <div className="addCoursePopup">
-        <h2>Record Money</h2>
+    <Modal title="Record Money" onClose={onClose}>
 
-        <div className="moneyTabs">
-          {(["expense", "income", "transfer", "deposit"] as Mode[]).map((option) => (
-            <button
-              type="button"
-              key={option}
-              className={mode === option ? "moneyTab moneyTabActive" : "moneyTab"}
-              onClick={() => {
-                setMode(option);
-                setError(null);
-              }}
-            >
-              {option}
-            </button>
-          ))}
+      <div className="moneyTabs">
+        {(["expense", "income", "transfer", "deposit"] as Mode[]).map((option) => (
+          <button
+            type="button"
+            key={option}
+            className={mode === option ? "moneyTab moneyTabActive" : "moneyTab"}
+            onClick={() => {
+              setMode(option);
+              setError(null);
+            }}
+          >
+            {option}
+          </button>
+        ))}
+      </div>
+
+      <form className="loginForm" onSubmit={handleSubmit}>
+        {mode !== "deposit" && (
+        <div className="loginField">
+          <label htmlFor="money-account">
+            {mode === "transfer" ? "From" : "Account"}
+          </label>
+          <select
+            id="money-account"
+            className="loginInput"
+            value={accountId}
+            onChange={(event) => setAccountId(event.target.value)}
+          >
+            {accounts.map((account) => (
+              <option key={account.id} value={account.id}>{account.name}</option>
+            ))}
+          </select>
         </div>
+        )}
 
-        <form className="loginForm" onSubmit={handleSubmit}>
-          {mode !== "deposit" && (
+        {mode === "transfer" && (
           <div className="loginField">
-            <label htmlFor="money-account">
-              {mode === "transfer" ? "From" : "Account"}
-            </label>
+            <label htmlFor="money-to">To</label>
             <select
-              id="money-account"
+              id="money-to"
               className="loginInput"
-              value={accountId}
-              onChange={(event) => setAccountId(event.target.value)}
+              value={toAccountId}
+              onChange={(event) => setToAccountId(event.target.value)}
             >
               {accounts.map((account) => (
                 <option key={account.id} value={account.id}>{account.name}</option>
               ))}
             </select>
           </div>
-          )}
+        )}
 
-          {mode === "transfer" && (
-            <div className="loginField">
-              <label htmlFor="money-to">To</label>
-              <select
-                id="money-to"
-                className="loginInput"
-                value={toAccountId}
-                onChange={(event) => setToAccountId(event.target.value)}
-              >
-                {accounts.map((account) => (
-                  <option key={account.id} value={account.id}>{account.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
+        <div className="loginField">
+          <label htmlFor="money-amount">Amount</label>
+          <input
+            id="money-amount"
+            className="loginInput"
+            type="number"
+            min={0.01}
+            step="0.01"
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+            required
+          />
+        </div>
 
-          <div className="loginField">
-            <label htmlFor="money-amount">Amount</label>
-            <input
-              id="money-amount"
-              className="loginInput"
-              type="number"
-              min={0.01}
-              step="0.01"
-              value={amount}
-              onChange={(event) => setAmount(event.target.value)}
-              required
-            />
-          </div>
-
-          {mode === "deposit" && (
-            <div className="depositSplit">
-              <span className="depositSplitTitle">Split across accounts</span>
-              {needsShares && (
-                <p className="small-text muted">
-                  No account has an income share yet. Set one on each account, or
-                  type the amounts below.
-                </p>
-              )}
-              {allocations.map((allocation) => {
-                const account = accounts.find((item) => item.id === allocation.account_id);
-                return (
-                  <div className="depositRow" key={allocation.account_id}>
-                    <span className="depositRowName">{account?.name ?? "Account"}</span>
-                    <input
-                      className="loginInput depositRowInput"
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      value={allocation.amount}
-                      aria-label={`Amount for ${account?.name ?? "account"}`}
-                      onChange={(event) =>
-                        setAllocations((current) =>
-                          current.map((entry) =>
-                            entry.account_id === allocation.account_id
-                              ? { ...entry, amount: Number(event.target.value) }
-                              : entry
-                          )
+        {mode === "deposit" && (
+          <div className="depositSplit">
+            <span className="depositSplitTitle">Split across accounts</span>
+            {needsShares && (
+              <p className="small-text muted">
+                No account has an income share yet. Set one on each account, or
+                type the amounts below.
+              </p>
+            )}
+            {allocations.map((allocation) => {
+              const account = accounts.find((item) => item.id === allocation.account_id);
+              return (
+                <div className="depositRow" key={allocation.account_id}>
+                  <span className="depositRowName">{account?.name ?? "Account"}</span>
+                  <input
+                    className="loginInput depositRowInput"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={allocation.amount}
+                    aria-label={`Amount for ${account?.name ?? "account"}`}
+                    onChange={(event) =>
+                      setAllocations((current) =>
+                        current.map((entry) =>
+                          entry.account_id === allocation.account_id
+                            ? { ...entry, amount: Number(event.target.value) }
+                            : entry
                         )
-                      }
-                    />
-                  </div>
-                );
-              })}
-              {allocations.length > 0 && (
-                <span className="small-text muted depositSum">
-                  Allocated{" "}
-                  {allocations.reduce((sum, entry) => sum + entry.amount, 0).toFixed(2)} of{" "}
-                  {(Number(amount) || 0).toFixed(2)}
-                </span>
-              )}
-            </div>
-          )}
-
-          {mode === "expense" && categories.length > 0 && (
-            <div className="loginField">
-              <label htmlFor="money-category">Category</label>
-              <select
-                id="money-category"
-                className="loginInput"
-                value={categoryId}
-                onChange={(event) => setCategoryId(event.target.value)}
-              >
-                <option value="">Uncategorised</option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>{category.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <div className="loginField">
-            <label htmlFor="money-description">Description</label>
-            <input
-              id="money-description"
-              className="loginInput"
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              placeholder={mode === "transfer" ? "Optional" : "e.g. Groceries"}
-            />
+                      )
+                    }
+                  />
+                </div>
+              );
+            })}
+            {allocations.length > 0 && (
+              <span className="small-text muted depositSum">
+                Allocated{" "}
+                {allocations.reduce((sum, entry) => sum + entry.amount, 0).toFixed(2)} of{" "}
+                {(Number(amount) || 0).toFixed(2)}
+              </span>
+            )}
           </div>
+        )}
 
+        {mode === "expense" && categories.length > 0 && (
           <div className="loginField">
-            <label htmlFor="money-date">Date</label>
-            <input
-              id="money-date"
+            <label htmlFor="money-category">Category</label>
+            <select
+              id="money-category"
               className="loginInput"
-              type="date"
-              value={occurredOn}
-              onChange={(event) => setOccurredOn(event.target.value)}
-              required
-            />
-          </div>
-
-          {error && <p className="loginError">{error}</p>}
-
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border border-slate-700 !bg-slate-900 !text-slate-200"
-              disabled={submitting}
+              value={categoryId}
+              onChange={(event) => setCategoryId(event.target.value)}
             >
-              Cancel
-            </button>
-            <button type="submit" className="loginSubmit" disabled={submitting}>
-              {submitting ? "Saving..." : "Record"}
-            </button>
+              <option value="">Uncategorised</option>
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>{category.name}</option>
+              ))}
+            </select>
           </div>
-        </form>
-      </div>
-    </div>
+        )}
+
+        <div className="loginField">
+          <label htmlFor="money-description">Description</label>
+          <input
+            id="money-description"
+            className="loginInput"
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+            placeholder={mode === "transfer" ? "Optional" : "e.g. Groceries"}
+          />
+        </div>
+
+        <div className="loginField">
+          <label htmlFor="money-date">Date</label>
+          <input
+            id="money-date"
+            className="loginInput"
+            type="date"
+            value={occurredOn}
+            onChange={(event) => setOccurredOn(event.target.value)}
+            required
+          />
+        </div>
+
+        {error && <p className="loginError">{error}</p>}
+
+        <div className="flex justify-end gap-3 pt-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-slate-700 !bg-slate-900 !text-slate-200"
+            disabled={submitting}
+          >
+            Cancel
+          </button>
+          <button type="submit" className="loginSubmit" disabled={submitting}>
+            {submitting ? "Saving..." : "Record"}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }

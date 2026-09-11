@@ -3,6 +3,7 @@ import { createGradesBulk } from "../api";
 import { GradeCategory, GradeCreate } from "../types";
 import { getErrorMessage } from "./AddCourseModal";
 import { useAuth } from "../../../app/auth/AuthContext";
+import Modal from "../../../shared/components/Modal";
 
 interface BulkGradesModalProps {
   readonly open: boolean;
@@ -61,6 +62,9 @@ export default function BulkGradesModal({
       // Blank score means the work is not marked yet, not a zero.
       score: row.score === "" ? null : Number(row.score),
       max_score: Number(row.max_score),
+      // Bulk entry is for catching a course up on marks already awarded, so
+      // there is no deadline to raise a task from. Dates are set per grade.
+      due_date: null,
     }));
 
     setSubmitting(true);
@@ -78,59 +82,56 @@ export default function BulkGradesModal({
   }
 
   return (
-    <div className="popup">
-      <div className="addCoursePopup bulkPopup">
-        <h2>Add Several Grades</h2>
-        <p className="muted small-text">
-          Leave a score blank for work that isn&apos;t marked yet. Blank rows are ignored.
-        </p>
+    <Modal title="Add Several Grades" onClose={onClose} panelClassName="bulkPopup">
+      <p className="muted small-text">
+        Leave a score blank for work that isn&apos;t marked yet. Blank rows are ignored.
+      </p>
 
-        <form onSubmit={handleSubmit}>
-          <div className="bulkGrid">
-            <span className="bulkHead">Name</span>
-            <span className="bulkHead">Category</span>
-            <span className="bulkHead">Score</span>
-            <span className="bulkHead">Out of</span>
-            <span />
+      <form onSubmit={handleSubmit}>
+        <div className="bulkGrid">
+          <span className="bulkHead">Name</span>
+          <span className="bulkHead">Category</span>
+          <span className="bulkHead">Score</span>
+          <span className="bulkHead">Out of</span>
+          <span />
 
-            {rows.map((row, index) => (
-              <BulkRow
-                key={index}
-                row={row}
-                index={index}
-                onChange={(patch) => updateRow(index, patch)}
-                onRemove={() => setRows((current) => current.filter((_, i) => i !== index))}
-                removable={rows.length > 1}
-              />
-            ))}
-          </div>
+          {rows.map((row, index) => (
+            <BulkRow
+              key={index}
+              row={row}
+              index={index}
+              onChange={(patch) => updateRow(index, patch)}
+              onRemove={() => setRows((current) => current.filter((_, i) => i !== index))}
+              removable={rows.length > 1}
+            />
+          ))}
+        </div>
 
+        <button
+          type="button"
+          className="buttons bulkAddRow"
+          onClick={() => setRows((current) => [...current, emptyRow()])}
+        >
+          + Add row
+        </button>
+
+        {error && <p className="error">{error}</p>}
+
+        <div className="flex justify-end gap-3 pt-2">
           <button
             type="button"
-            className="buttons bulkAddRow"
-            onClick={() => setRows((current) => [...current, emptyRow()])}
+            onClick={onClose}
+            className="rounded-lg border border-slate-700 !bg-slate-900 !text-slate-200"
+            disabled={submitting}
           >
-            + Add row
+            Cancel
           </button>
-
-          {error && <p className="error">{error}</p>}
-
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border border-slate-700 !bg-slate-900 !text-slate-200"
-              disabled={submitting}
-            >
-              Cancel
-            </button>
-            <button type="submit" className="rounded-lg !bg-gold !text-slate-950" disabled={submitting}>
-              {submitting ? "Saving..." : "Save all"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+          <button type="submit" className="rounded-lg !bg-gold !text-slate-950" disabled={submitting}>
+            {submitting ? "Saving..." : "Save all"}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

@@ -15,6 +15,12 @@ export interface Course {
   average: number;
   start_date: string | null;
   end_date: string | null;
+  /** No final exam, so a missing final grade is not flagged in Attention. */
+  no_final: boolean;
+  /** Credit granted without taking the course: counts credits, carries no grade. */
+  transfer_credit: boolean;
+  /** Searchable and still in the average, but out of credits completed. */
+  archived: boolean;
   /** Letter for the course's result; "" when nothing is recorded yet. */
   letter_grade: string;
   /** Grade points on the configured scale */
@@ -40,10 +46,18 @@ export interface CourseCreate {
   required: boolean;
   professor: string | null;
   final_grade: number;
+  /** The grade you are aiming for; null falls back to the account default */
+  target_grade: number | null;
   category_weights: Partial<Record<GradeCategory, number>>;
   // ISO yyyy-mm-dd, or null for a course with no set term dates
   start_date: string | null;
   end_date: string | null;
+  /** No final exam, so a missing final grade is not flagged in Attention. */
+  no_final: boolean;
+  /** Credit granted without taking the course: counts credits, carries no grade. */
+  transfer_credit: boolean;
+  /** Searchable and still in the average, but out of credits completed. */
+  archived: boolean;
 }
 
 export interface CourseDetail {
@@ -64,6 +78,12 @@ export interface CourseDetail {
   grades: Grade[];
   start_date: string | null;
   end_date: string | null;
+  /** No final exam, so a missing final grade is not flagged in Attention. */
+  no_final: boolean;
+  /** Credit granted without taking the course: counts credits, carries no grade. */
+  transfer_credit: boolean;
+  /** Searchable and still in the average, but out of credits completed. */
+  archived: boolean;
   // Point-weighted average per category, computed by the API. Render these
   // rather than recomputing -- the component used to do its own arithmetic and
   // disagreed with the course average on the same screen.
@@ -83,6 +103,9 @@ export interface CourseUpdate{
   category_weights: Partial<Record<GradeCategory, number>> | null;
   start_date: string | null;
   end_date: string | null;
+  no_final: boolean | null;
+  transfer_credit: boolean | null;
+  archived: boolean | null;
 }
 
 
@@ -95,6 +118,11 @@ export interface Grade {
   max_score: number;
   category: GradeCategory;
   weight: number;
+  /**
+   * When the work is due. Setting one raises a task automatically, and that
+   * task closes itself once a score is recorded.
+   */
+  due_date: string | null;
 }
 
 export enum GradeCategory {
@@ -128,6 +156,8 @@ export interface GradeCreate{
   score: number | null;
   max_score: number;
   category: GradeCategory;
+  /** Setting a date raises a task for this assignment. */
+  due_date: string | null;
 }
 
 export interface GradeUpdate{
@@ -135,6 +165,7 @@ export interface GradeUpdate{
   score: number | null;
   max_score: number | null;
   category: GradeCategory | null;
+  due_date: string | null;
 }
 
 

@@ -8,6 +8,7 @@ from app._database.dependencies import DBSession
 from app.shared.errors import error_user, responses
 from app.Users.schemas.academic_status import AcademicStatusUpdate
 from app.Users.schemas.user import User, UserDetail, UserUpdate
+from app.shared import audit
 from app.Users.services.user_service import (
     delete_user,
     get_user,
@@ -79,4 +80,7 @@ def remove_user(user_id: VerifiedUserId, db: DBSession):
     if deleted_user is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
 
+    # Cascades through every course, grade and account the person owned, with no
+    # soft delete behind it. If any single line in this log matters, it is this one.
+    audit.deletion("user", user_id=user_id, target_id=user_id, detail=deleted_user.email)
     return deleted_user

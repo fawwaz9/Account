@@ -1,0 +1,127 @@
+import { CalendarDay } from "../hooks/useCalender";
+import { EventOccurrence } from "../types";
+import { Task } from "../../tasks/types";
+import { EventChip, TaskChip } from "./EventCard";
+import {
+  addMonths,
+  fromIso,
+  isSameMonth,
+  monthLabel,
+  today,
+} from "../../../shared/utils/dateUtils";
+
+const WEEKDAY_HEADINGS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+interface CalenderViewProps {
+  readonly month: string;
+  readonly days: CalendarDay[];
+  readonly loading: boolean;
+  readonly onMonthChange: (month: string) => void;
+  readonly onSelectOccurrence: (occurrence: EventOccurrence) => void;
+  readonly onToggleTask: (task: Task) => void;
+  readonly onAddOnDay: (date: string) => void;
+}
+
+/**
+ * The month grid.
+ *
+ * Always six rows: a month needing five would otherwise make the page jump in
+ * height as you page through a term. Days outside the month stay visible but
+ * muted, because a deadline on the 1st matters while you are still looking at
+ * the previous month.
+ */
+export default function CalenderView({
+  month,
+  days,
+  loading,
+  onMonthChange,
+  onSelectOccurrence,
+  onToggleTask,
+  onAddOnDay,
+}: CalenderViewProps) {
+  const now = today();
+
+  return (
+    <section className="calShell" aria-label="Month view">
+      <header className="calHeader">
+        <div className="calNav">
+          <button
+            type="button"
+            className="calButton"
+            onClick={() => onMonthChange(addMonths(month, -1))}
+            aria-label="Previous month"
+          >
+            ‹
+          </button>
+          <h2 className="calMonth">{monthLabel(month)}</h2>
+          <button
+            type="button"
+            className="calButton"
+            onClick={() => onMonthChange(addMonths(month, 1))}
+            aria-label="Next month"
+          >
+            ›
+          </button>
+        </div>
+
+        <div className="calHeaderActions">
+          <button type="button" className="calButton" onClick={() => onMonthChange(`${now.slice(0, 7)}-01`)}>
+            Today
+          </button>
+          {/* A spinner rather than an empty grid: the month's shape stays put
+              while the new one loads, so paging does not flash. */}
+          {loading && <span className="calMuted" role="status">Loading…</span>}
+        </div>
+      </header>
+
+      <div className="calWeekdays" aria-hidden="true">
+        {WEEKDAY_HEADINGS.map((label) => (
+          <span key={label} className="calWeekday">{label}</span>
+        ))}
+      </div>
+
+      <div className="calGrid">
+        {days.map((day) => {
+          const inMonth = isSameMonth(day.date, month);
+          const isToday = day.date === now;
+
+          return (
+            <div
+              key={day.date}
+              className={[
+                "calCell",
+                inMonth ? "" : "calCellOutside",
+                isToday ? "calCellToday" : "",
+              ].filter(Boolean).join(" ")}
+            >
+              {/* The number is the add control: clicking an empty day is the
+                  fastest way to put something on it, and a separate "+" in
+                  every cell would be 42 buttons of visual noise. */}
+              <button
+                type="button"
+                className="calCellDate"
+                onClick={() => onAddOnDay(day.date)}
+                aria-label={`Add an event on ${fromIso(day.date).toDateString()}`}
+              >
+                {fromIso(day.date).getDate()}
+              </button>
+
+              <div className="calCellItems">
+                {day.occurrences.map((occurrence) => (
+                  <EventChip
+                    key={`${occurrence.event_id}-${occurrence.on_date}`}
+                    occurrence={occurrence}
+                    onSelect={onSelectOccurrence}
+                  />
+                ))}
+                {day.tasks.map((task) => (
+                  <TaskChip key={task.id} task={task} onToggle={onToggleTask} />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}

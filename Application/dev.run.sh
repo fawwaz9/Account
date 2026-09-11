@@ -83,10 +83,29 @@ check_backend_env() {
     env_has "$f" JWT_SECRET       || die "backend/.env is missing JWT_SECRET."
 }
 
-check_frontend_env() {
+# Checks what the frontend needs, and pins the one value that must agree with
+# this script's own choice of backend port.
+prepare_frontend_env() {
     local f="$FRONTEND/.env"
     if ! env_has "$f" VITE_GOOGLE_CLIENT_ID; then
         warn "frontend/.env has no VITE_GOOGLE_CLIENT_ID — the Google sign-in button will not render."
+    fi
+
+    # apiClient.ts falls back to port 8000 when this is unset, while the backend
+    # defaults to 8001 — so a fresh clone (frontend/.env is gitignored) loads,
+    # renders its shell, and fails every fetch with no useful diagnostic. Deriving
+    # it from BACKEND_PORT means the two cannot disagree. Vite lets the process
+    # environment win over .env files, so this also corrects a stale .env; an
+    # explicit value in the caller's environment still wins over both.
+    local derived="http://localhost:$BACKEND_PORT/api"
+    if [ -n "${VITE_API_BASE_URL:-}" ]; then
+        info "Using VITE_API_BASE_URL from the environment: $VITE_API_BASE_URL"
+    else
+        if env_has "$f" VITE_API_BASE_URL \
+           && ! grep -Eq "^[[:space:]]*VITE_API_BASE_URL[[:space:]]*=[[:space:]]*${derived}[[:space:]]*$" "$f"; then
+            warn "frontend/.env sets a different VITE_API_BASE_URL; using $derived to match the backend port."
+        fi
+        export VITE_API_BASE_URL="$derived"
     fi
 }
 
@@ -164,7 +183,7 @@ start_backend() {
 }
 
 start_frontend() {
-    check_frontend_env
+    prepare_frontend_env
     require_port "$FRONTEND_PORT" FRONTEND
     setup_frontend
     info "Frontend → http://localhost:$FRONTEND_PORT"
@@ -201,8 +220,6 @@ on_signal() {
 # Block until any service exits, then tear the rest down. bash 3.2 (the macOS
 # system bash) has no `wait -n`, so poll instead.
 supervise() {
-    trap on_signal INT TERM
-    trap cleanup EXIT
     printf '%sReady — press Ctrl+C to stop.%s\n\n' "$C_BOLD" "$C_RESET"
     local pid
     while :; do
@@ -236,6 +253,15 @@ run_docker() {
 }
 
 # ------------------------------------------------------------------- main ---
+
+# Installed before any service starts, not inside supervise: start_frontend can
+# spend minutes in `npm ci`, and a port clash, a missing node, a failed install or
+# a Ctrl+C in that window all used to exit with uvicorn already running and
+# unreaped — leaving the next run to die on "Port 8001 is already in use".
+# cleanup is a no-op while nothing has been started, so this is safe for every
+# target, including install and --help.
+trap on_signal INT TERM
+trap cleanup EXIT
 
 case "${1:-all}" in
     all|'')

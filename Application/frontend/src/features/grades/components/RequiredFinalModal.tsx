@@ -3,6 +3,7 @@ import { fetchRequiredFinal } from "../api";
 import { RequiredFinal } from "../types";
 import { getErrorMessage } from "./AddCourseModal";
 import { useAuth } from "../../../app/auth/AuthContext";
+import Modal from "../../../shared/components/Modal";
 
 interface RequiredFinalModalProps {
   readonly open: boolean;
@@ -58,60 +59,57 @@ export default function RequiredFinalModal({
   }
 
   return (
-    <div className="popup">
-      <div className="addCoursePopup">
-        <h2>Required Final Grade</h2>
-        <p className="muted small-text">
-          What do you want to finish {courseCode} with?
-        </p>
+    <Modal title="Required Final Grade" onClose={onClose}>
+      <p className="muted small-text">
+        What do you want to finish {courseCode} with?
+      </p>
 
-        <form className="requiredFinalForm" onSubmit={handleSubmit}>
-          <div className="requiredFinalRow">
-            <input
-              id="target-grade"
-              className="--input requiredFinalInput"
-              type="number"
-              min={0}
-              max={100}
-              step="0.01"
-              value={target}
-              onChange={(event) => setTarget(event.target.value)}
-              placeholder="Desired grade"
-              aria-label="Desired final grade"
-              required
-            />
-            <button type="submit" className="finalGradeButton" disabled={loading}>
-              {loading ? "Working..." : "Calculate"}
-            </button>
-          </div>
-        </form>
-
-        {error && <p className="error">{error}</p>}
-
-        {result && askedFor !== null && (
-          <div className="requiredFinalResult">
-            <RequiredFinalAnswer result={result} target={askedFor} />
-
-            {result.unfinished_categories.length > 0 && (
-              <p className="muted small-text requiredFinalCaveat">
-                Not counted yet, because nothing in{" "}
-                {result.unfinished_categories.join(", ")} has been marked.
-              </p>
-            )}
-          </div>
-        )}
-
-        <div className="flex justify-end gap-3 pt-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-slate-700 !bg-slate-900 !text-slate-200"
-          >
-            Close
+      <form className="requiredFinalForm" onSubmit={handleSubmit}>
+        <div className="requiredFinalRow">
+          <input
+            id="target-grade"
+            className="--input requiredFinalInput"
+            type="number"
+            min={0}
+            max={100}
+            step="0.01"
+            value={target}
+            onChange={(event) => setTarget(event.target.value)}
+            placeholder="Desired grade"
+            aria-label="Desired final grade"
+            required
+          />
+          <button type="submit" className="finalGradeButton" disabled={loading}>
+            {loading ? "Working..." : "Calculate"}
           </button>
         </div>
+      </form>
+
+      {error && <p className="error">{error}</p>}
+
+      {result && askedFor !== null && (
+        <div className="requiredFinalResult">
+          <RequiredFinalAnswer result={result} target={askedFor} />
+
+          {result.unfinished_categories.length > 0 && (
+            <p className="muted small-text requiredFinalCaveat">
+              Not counted yet, because nothing in{" "}
+              {result.unfinished_categories.join(", ")} has been marked.
+            </p>
+          )}
+        </div>
+      )}
+
+      <div className="flex justify-end gap-3 pt-4">
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-lg border border-slate-700 !bg-slate-900 !text-slate-200"
+        >
+          Close
+        </button>
       </div>
-    </div>
+    </Modal>
   );
 }
 

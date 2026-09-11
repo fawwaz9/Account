@@ -1,4 +1,5 @@
 import { CourseCreate, GradeCategory, Semester } from "../types";
+import CourseFlags from "./CourseFlags";
 
 interface EditCourseFormProps {
   readonly form: CourseCreate;
@@ -17,8 +18,20 @@ export default function EditCourseForm({
   submitting,
   error,
 }: EditCourseFormProps) {
+  // A real <form>, so the `required` attributes below actually run. These were
+  // <div>s with a type="button" submit, which meant no constraint validation ever
+  // fired and Enter-to-submit was dead -- a blank submit went to the server and
+  // came back as an error message at the bottom of the dialog.
+  function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    onSubmit();
+  }
+
   return (
-    <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1 text-center">
+    <form
+      className="space-y-4 max-h-[70vh] overflow-y-auto pr-1 text-center"
+      onSubmit={handleSubmit}
+    >
       <div>
         <input
           id="edit-course-code"
@@ -157,6 +170,8 @@ export default function EditCourseForm({
         </div>
       </div>
 
+      <CourseFlags form={form} updateField={updateField} idPrefix="edit-course" />
+
       <div className="edit_category_grid">
         {Object.values(GradeCategory).map((category) => (
             <div key={category} className="editCategoryWeightItem">
@@ -200,14 +215,13 @@ export default function EditCourseForm({
         </button>
 
         <button
-          type="button"
-          onClick={() => onSubmit()}
+          type="submit"
           className="rounded-lg !bg-gold !text-slate-950"
           disabled={submitting}
         >
           {submitting ? "Saving..." : "Save Changes"}
         </button>
       </div>
-    </div>
+    </form>
   );
 }

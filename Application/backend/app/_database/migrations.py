@@ -22,9 +22,16 @@ ADDED_COLUMNS: dict[str, dict[str, str]] = {
         "current_school_year": "INTEGER",
         "current_semester": "VARCHAR",
         "term_label": "VARCHAR",
+        "session_epoch": "INTEGER NOT NULL DEFAULT 0",
     },
     "courses": {
         "target_grade": "FLOAT",
+        "no_final": "BOOLEAN NOT NULL DEFAULT 0",
+        "transfer_credit": "BOOLEAN NOT NULL DEFAULT 0",
+        "archived": "BOOLEAN NOT NULL DEFAULT 0",
+    },
+    "grades": {
+        "due_date": "DATE",
     },
     "transactions": {
         "category_id": "CHAR(32)",

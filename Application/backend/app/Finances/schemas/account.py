@@ -1,7 +1,10 @@
+from datetime import date
 from enum import Enum
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, model_validator
+
+from app.Finances.schemas.budget import CategorySpend
 
 
 class AccountKind(str, Enum):
@@ -59,3 +62,58 @@ class Account(AccountBase):
 
     class Config:
         from_attributes = True
+
+
+# ------------------------------------------------------------------ activity --
+
+class DayFlow(BaseModel):
+    """One calendar day of an account's movement, split by direction."""
+
+    day: date
+    money_in: float = 0.0
+    money_out: float = 0.0
+
+
+class BalancePoint(BaseModel):
+    """The account's running balance as of the end of a day that had activity.
+
+    One point per active date rather than per calendar day: the line is a step
+    function either way, and a quiet year should not cost 365 points.
+    """
+
+    day: date
+    balance: float
+
+
+class AccountActivity(BaseModel):
+    """Everything the account page shows, for one month, in one response.
+
+    Composed server-side for the same reason the deposit preview is: the
+    direction rule that decides what counts as money out lives in one place,
+    and a chart assembled from a capped page of rows would quietly lose the
+    oldest ones.
+    """
+
+    account_id: UUID
+    account_name: str
+    month: date
+
+    #: All-time, matching what the account card shows.
+    balance: float = 0.0
+
+    #: The selected month only.
+    total_in: float = 0.0
+    total_out: float = 0.0
+    net: float = 0.0
+    transaction_count: int = 0
+
+    #: This account's target for the selected month.
+    planned: float = 0.0
+    remaining: float = 0.0
+    used_percent: float = 0.0
+
+    #: One entry per day of the month, zero-filled, so the axis is a true
+    #: calendar rather than only the days that happened to have movement.
+    daily: list[DayFlow] = []
+    by_category: list[CategorySpend] = []
+    balance_history: list[BalancePoint] = []

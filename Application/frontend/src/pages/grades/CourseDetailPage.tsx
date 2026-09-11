@@ -11,6 +11,8 @@ import RequiredFinalModal from "../../features/grades/components/RequiredFinalMo
 import BulkGradesModal from "../../features/grades/components/BulkGradesModal";
 import { getErrorMessage } from "../../features/grades/components/AddCourseModal";
 import GradeCategoryColumn from "../../features/grades/components/GradeCategoryColumn";
+import ClassScheduleModal from "../../features/calender/components/ClassScheduleModal";
+import "../../styles/calendar.css";
 
 
 export default function CourseDetailPage() {
@@ -19,11 +21,14 @@ export default function CourseDetailPage() {
   const { user } = useAuth();
   const [course, setCourse] = useState<CourseDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadNonce, setReloadNonce] = useState(0);
   const [addGradeCategory, setAddGradeCategory] = useState<GradeCategory | null>(null);
   const [editGrade, setEditGrade] = useState<Grade | null>(null);
   const [editingCourse, setEditingCourse] = useState(false);
   const [showRequiredFinal, setShowRequiredFinal] = useState(false);
   const [showBulkAdd, setShowBulkAdd] = useState(false);
+  const [showClassTimes, setShowClassTimes] = useState(false);
 
   const [deleteGradeTarget, setDeleteGradeTarget] = useState<Grade | null>(null);
   const [deletingGrade, setDeletingGrade] = useState(false);
@@ -43,11 +48,16 @@ export default function CourseDetailPage() {
       }
 
       setLoading(true);
+      setLoadError(null);
       try {
         const c = await fetchCourseDetail(user.id, courseId);
         if (mounted) setCourse(c);
       } catch (err) {
-        console.error(err);
+        // The message matters: a dropped connection or a 500 used to fall through
+        // to "Course not found", telling you your course had been deleted when it
+        // had not. The backend sends "Course not found" as its own 404 detail, so
+        // the genuine case still reads correctly here.
+        if (mounted) setLoadError(getErrorMessage(err));
       } finally {
         if (mounted) setLoading(false);
       }
@@ -57,7 +67,7 @@ export default function CourseDetailPage() {
     return () => {
       mounted = false;
     };
-  }, [courseId, user, navigate]);
+  }, [courseId, user, navigate, reloadNonce]);
 
   const gradesByCategory = useMemo(() => {
     if (!course) return {} as Record<GradeCategory, Grade[]>;
@@ -156,6 +166,16 @@ export default function CourseDetailPage() {
   }
 
   if (loading) return <div className="p-4">Loading...</div>;
+  if (loadError) {
+    return (
+      <div className="p-4">
+        <p className="loginError" role="alert">{loadError}</p>
+        <button type="button" onClick={() => setReloadNonce((n) => n + 1)}>
+          Try again
+        </button>
+      </div>
+    );
+  }
   if (!course || !courseId) return <div className="p-4">Course not found</div>;
 
   return (
@@ -248,6 +268,14 @@ export default function CourseDetailPage() {
         <button
           type="button"
           className="editCourseButton"
+          onClick={() => setShowClassTimes(true)}
+        >
+          Class Times
+        </button>
+
+        <button
+          type="button"
+          className="editCourseButton"
           onClick={() => setEditingCourse(true)}
         >
           Edit Course
@@ -287,6 +315,16 @@ export default function CourseDetailPage() {
         course={course}
         onClose={() => setEditingCourse(false)}
         onCourseUpdated={refreshCourse}
+      />
+
+      <ClassScheduleModal
+        open={showClassTimes}
+        courseId={courseId}
+        courseCode={course.code}
+        startDate={course.start_date}
+        endDate={course.end_date}
+        onClose={() => setShowClassTimes(false)}
+        onSaved={refreshCourse}
       />
 
       <BulkGradesModal

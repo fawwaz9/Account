@@ -31,6 +31,7 @@ from app.Grades.services.grade_service import (
     update_grade,
 )
 from app.Grades.services.dash_services import DEFAULT_TARGET_GRADE, get_dashboard
+from app.shared import audit
 
 router = APIRouter()
 
@@ -111,6 +112,11 @@ def remove_course(user_id: VerifiedUserId, course_id: UUID, db: DBSession):
     if deleted_course is None:
         raise HTTPException(status_code=404, detail=error_course["not_found"])
 
+    # A course takes its grades with it, so this is the most destructive mutation
+    # in the Grades module.
+    audit.deletion(
+        "course", user_id=user_id, target_id=course_id, detail=deleted_course.code,
+    )
     return deleted_course
 
 @router.get("/{user_id}/courses/{course_id}/statistics", response_model=dict, responses=responses["course_404"])
@@ -241,6 +247,10 @@ def remove_grade(user_id: VerifiedUserId, course_id: UUID, grade_id: UUID, db: D
     if deleted_grade is None:
         raise HTTPException(status_code=404, detail=error_grade["not_found"])
 
+    audit.deletion(
+        "grade", user_id=user_id, target_id=grade_id,
+        detail=f"course={course_id} name={deleted_grade.name}",
+    )
     return deleted_grade
 
 @router.patch("/{user_id}/courses/{course_id}/grades/{grade_id}/score", response_model=Grade, responses=responses["grade_both"])

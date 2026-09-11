@@ -146,6 +146,10 @@ def set_password(db: Session, user: UserModel, new_password: str, current_passwo
             raise ValueError(error_auth["wrong_current_password"])
 
     user.password_hash = hash_password(new_password)
+    # Every outstanding session dies with the old password. Someone who changes
+    # their password *because* they think they were compromised would otherwise
+    # stay compromised for the rest of the token's seven-day life.
+    user.session_epoch = (user.session_epoch or 0) + 1
     db.commit()
     db.refresh(user)
     return user
@@ -166,6 +170,13 @@ def update_user(db: Session, user_id: UUID, data: UserUpdate):
         )
         if existing:
             raise ValueError(error_user["already_exists"])
+
+    # A changed address is an unproven address. Without this the verified flag
+    # survives the change, which defeats the pre-hijacking guard in
+    # link_google_to_account: an attacker could point their verified account at
+    # someone else's email and keep their password through the link.
+    if new_email is not None and new_email != user.email:
+        user.email_verified = False
 
     # Preferences are a JSON column, so a partial patch must merge rather than
     # replace -- otherwise setting one preference silently clears the rest.

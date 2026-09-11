@@ -62,7 +62,7 @@ These were argued through and settled. Reversing one needs a reason, not a fresh
 | **Grades may exceed their category max** | Bonus marks are real. Capped at 2× to still catch a slipped digit. |
 | **`below_target` fires only for current courses** | A finished course under target is history, not something to act on. |
 | **Transfers are two linked rows** | Sharing a `group_id`; deleting either removes both, editing moves both. |
-| **Budget "actual" counts expenses only** | A transfer moves money rather than spending it; income would otherwise offset a target it has nothing to do with. |
+| **Budget "actual" counts expenses and transfers out** | Reverses the earlier expenses-only rule, on your call. Money that has left a pot has left it, however it left; the 14,000 target on the account that distributes income is only meaningful if the distributions count against it. Only the *outgoing* leg counts -- the matching leg lands on the receiving account, where it is money arriving. Income still never offsets a target. |
 | **Recurring deferred to Calendar** | One recurrence engine, written once. |
 
 ---

@@ -1,0 +1,204 @@
+/* Tasks. Shares the buttons, inputs and error styling from calendar.css, which
+   the page also imports, so only what is particular to a task list lives here. */
+
+.taskForm {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 14px;
+  background: var(--panel);
+  border: var(--deep-border);
+  border-radius: 12px;
+}
+
+.taskInput {
+  flex: 1 1 140px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid #1f2a44;
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 0.92rem;
+  font-family: inherit;
+}
+
+.taskInput:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+
+.taskInputWide { flex: 3 1 240px; }
+.taskInputNarrow { flex: 0 0 84px; }
+
+.taskToggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.taskGroup {
+  margin-bottom: 24px;
+}
+
+.taskGroupHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #1f2a44;
+  margin-bottom: 10px;
+}
+
+.taskGroupTitle {
+  margin: 0;
+  font-size: 1.05rem;
+  color: var(--gold);
+}
+
+/* Hours, not just a count: "7 tasks" says nothing about whether the week fits. */
+.taskGroupCount {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.taskItems {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.taskRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid #1f2a44;
+  border-radius: 10px;
+}
+
+.taskRowOverdue {
+  border-left: 3px solid var(--delete);
+}
+
+.taskRowDone {
+  opacity: 0.6;
+}
+
+.taskRowDone .taskTitle {
+  text-decoration: line-through;
+}
+
+.taskCheck {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  margin-top: 2px;
+  border: 1px solid var(--muted);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--gold);
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.taskCheck[aria-pressed="true"] {
+  border-color: var(--gold);
+  background: rgba(212, 175, 55, 0.15);
+}
+
+.taskBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.taskTitle {
+  margin: 0 0 4px;
+  font-size: 0.98rem;
+}
+
+.taskMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.taskTag {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.14);
+  color: var(--muted);
+}
+
+/* Coursework is categorised by its course code rather than by a typed tag, so
+   that one is the tag that reads as primary. */
+.taskTagCourse {
+  background: rgba(212, 175, 55, 0.15);
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.taskTagAuto {
+  background: rgba(69, 147, 214, 0.15);
+  color: #82bbe8;
+}
+
+.taskDue { font-variant-numeric: tabular-nums; }
+.taskDueOverdue { color: var(--delete); font-weight: 600; }
+.taskEstimate { font-variant-numeric: tabular-nums; }
+
+.taskNotes {
+  margin: 6px 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  white-space: pre-wrap;
+}
+
+/* Outside the row's own controls, so one click never means two things. */
+.taskDelete {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--delete);
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.taskDelete:hover:not(:disabled) {
+  border-color: var(--delete);
+  background: rgba(248, 113, 113, 0.1);
+}
+
+.taskDelete:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.taskMuted {
+  flex-shrink: 0;
+  color: var(--muted);
+  padding: 4px 10px;
+}
+
+.taskEmpty {
+  margin: 0;
+  padding: 10px 2px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}

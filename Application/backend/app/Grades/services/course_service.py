@@ -77,6 +77,9 @@ def create_course(db: Session, user_id: uuid.UUID, course_data: CourseCreate):
         target_grade=course_data.target_grade,
         start_date=course_data.start_date,
         end_date=course_data.end_date,
+        no_final=course_data.no_final,
+        transfer_credit=course_data.transfer_credit,
+        archived=course_data.archived,
     )
     db.add(course)
     db.flush()  # gets course.id available before commit if needed

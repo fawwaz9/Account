@@ -20,6 +20,30 @@ from app.Users.services.user_service import get_preferences, get_user
 DEFAULT_TARGET_GRADE = 90.0
 
 
+def is_graded(course) -> bool:
+    """Whether this course has a mark that belongs in an average.
+
+    False only for a transfer credit, which by definition carries credits and no
+    score. Left in an average it would count as a zero, which is the whole
+    reason the flag exists.
+    """
+    return not course.transfer_credit
+
+
+def counts_toward_credits(course) -> bool:
+    """Archived courses keep their grade but stop counting toward the degree."""
+    return not course.archived
+
+
+def expects_a_final(course) -> bool:
+    """Whether "finished, but no final grade recorded" is worth saying.
+
+    A course with no final exam is finished when the term ends, and a transfer
+    credit was never going to be marked. Neither is something to act on.
+    """
+    return not course.no_final and not course.transfer_credit
+
+
 def get_dashboard(db: Session, user_id: uuid.UUID, target_grade: float = DEFAULT_TARGET_GRADE):
     """Roll every course up into one view.
 
@@ -35,6 +59,11 @@ def get_dashboard(db: Session, user_id: uuid.UUID, target_grade: float = DEFAULT
 
     entries: list[CourseDashboardEntry] = []
     for course in course_list:
+        # A transfer credit has no grades to summarise, so it contributes
+        # credits and stays out of every list on this page.
+        if not is_graded(course):
+            continue
+
         weights = course.category_weights
         # Read the stored column, same as the course list and course page, so
         # every surface reports one number per course.
@@ -48,7 +77,7 @@ def get_dashboard(db: Session, user_id: uuid.UUID, target_grade: float = DEFAULT
         ]
 
         needed_final_score = None
-        if weights.get(GradeCategory.FINAL.value, 0.0) > 0:
+        if expects_a_final(course) and weights.get(GradeCategory.FINAL.value, 0.0) > 0:
             try:
                 required_final = calculate_required_final(db, user_id, course.id, target_grade)
                 needed_final_score = required_final.get("needed")
@@ -140,7 +169,7 @@ def calculate_cumulative_average(courses):
 
     for course in courses:
         final = course.final_grade
-        if final and final > 0 and course.credits > 0:
+        if is_graded(course) and final and final > 0 and course.credits > 0:
             total_quality_points += final * course.credits
             total_credits += course.credits
 
@@ -162,7 +191,7 @@ def calculate_cgpa(courses) -> float | None:
 
     for course in courses:
         final = course.final_grade
-        if not final or final <= 0 or not course.credits:
+        if not is_graded(course) or not final or final <= 0 or not course.credits:
             continue
         total_points += calculate_gpa_points(final) * course.credits
         total_credits += course.credits
@@ -178,20 +207,21 @@ def credits_by_state(courses) -> tuple[float, float]:
 
     Completed is every past-term credit plus current-term courses that already
     have a final grade recorded -- a course finished mid-year should not sit in
-    "in progress" until the whole term rolls over.
+    "in progress" until the whole term rolls over. Archived courses count
+    toward neither, which is the point of archiving one.
     """
     completed = 0.0
     in_progress = 0.0
 
     for course in courses:
+        if not counts_toward_credits(course):
+            continue
+
         credits = course.credits or 0.0
-        if course.term_bucket == PAST:
+        if is_completed(course):
             completed += credits
         elif course.term_bucket == CURRENT:
-            if course.final_grade and course.final_grade > 0:
-                completed += credits
-            else:
-                in_progress += credits
+            in_progress += credits
 
     return completed, in_progress
 
@@ -234,10 +264,16 @@ def collect_attention(courses, default_target: float) -> list[AttentionItem]:
     weights: list[AttentionItem] = []
 
     for course in courses:
+        # Nothing here applies to a credit that was never marked.
+        if not is_graded(course):
+            continue
+
         common = {"course_id": course.id, "course_code": course.code}
 
         # A finished course with no final silently drops out of the cumulative.
-        if course.term_bucket == PAST and not (course.final_grade and course.final_grade > 0):
+        if expects_a_final(course) and course.term_bucket == PAST and not (
+            course.final_grade and course.final_grade > 0
+        ):
             missing.append(AttentionItem(
                 kind="missing_final", **common,
                 message="finished, but no final grade recorded",
@@ -268,7 +304,7 @@ def completed_credits_by_kind(courses) -> tuple[float, float]:
     """
     required = elective = 0.0
     for course in courses:
-        if not is_completed(course):
+        if not is_completed(course) or not counts_toward_credits(course):
             continue
         if course.required:
             required += course.credits or 0.0
@@ -279,7 +315,14 @@ def completed_credits_by_kind(courses) -> tuple[float, float]:
 
 
 def is_completed(course) -> bool:
-    """Past terms, plus current courses that already carry a final grade."""
+    """Past terms, plus current courses that already carry a final grade.
+
+    A transfer credit is complete the moment it exists: the credit has already
+    been granted, and waiting for a term it was never enrolled in to roll over
+    would leave it in "in progress" forever.
+    """
+    if course.transfer_credit:
+        return True
     if course.term_bucket == PAST:
         return True
     return course.term_bucket == CURRENT and bool(course.final_grade and course.final_grade > 0)

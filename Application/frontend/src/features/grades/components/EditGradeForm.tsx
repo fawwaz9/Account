@@ -3,6 +3,8 @@ interface EditGradeFormState {
   /** null while the work has not been marked */
   score: number | null;
   max_score: number;
+  /** null for an assignment with no deadline */
+  due_date: string | null;
 }
 
 interface EditGradeFormProps {
@@ -22,8 +24,20 @@ export default function EditGradeForm({
   submitting,
   error,
 }: EditGradeFormProps) {
+  // A real <form>, so the `required` attributes below actually run. These were
+  // <div>s with a type="button" submit, which meant no constraint validation ever
+  // fired and Enter-to-submit was dead -- a blank submit went to the server and
+  // came back as an error message at the bottom of the dialog.
+  function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    onSubmit();
+  }
+
   return (
-    <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1 text-center">
+    <form
+      className="space-y-4 max-h-[70vh] overflow-y-auto pr-1 text-center"
+      onSubmit={handleSubmit}
+    >
       <div>
         <input
           id="edit-grade-name"
@@ -31,11 +45,15 @@ export default function EditGradeForm({
           onChange={(event) => updateField("name", event.target.value)}
           className="--input mt-1 w-full rounded-lg border border-slate-700 bg-transparent px-3 py-2 text-white text-center"
           placeholder="Grade Name"
+          aria-label="Grade name"
           required
         />
       </div>
 
       <div className="flex gap-3 justify-center">
+        {/* Not `required`, same as AddGradeForm: clearing a score back to
+            "not graded yet" is a supported edit, and matters more here than on
+            the add form. */}
         <input
           id="edit-grade-score"
           type="number"
@@ -47,7 +65,7 @@ export default function EditGradeForm({
           }
           className="--input mt-1 w-[45%] rounded-lg border border-slate-700 bg-transparent px-3 py-2 text-white text-center"
           placeholder="Score (blank = not graded yet)"
-          required
+          aria-label="Score, blank if not graded yet"
         />
         <input
           id="edit-grade-max-score"
@@ -57,7 +75,21 @@ export default function EditGradeForm({
           onChange={(event) => updateField("max_score", Number(event.target.value))}
           className="--input mt-1 w-[45%] rounded-lg border border-slate-700 bg-transparent px-3 py-2 text-white text-center"
           placeholder="Max Score"
+          aria-label="Max score"
           required
+        />
+      </div>
+
+      <div>
+        <label htmlFor="edit-grade-due-date" className="block text-sm text-slate-200">
+          Due date (optional — setting one adds it to your tasks and calendar)
+        </label>
+        <input
+          id="edit-grade-due-date"
+          type="date"
+          value={form.due_date ?? ""}
+          onChange={(event) => updateField("due_date", event.target.value || null)}
+          className="--input mt-1 w-full rounded-lg border border-slate-700 bg-transparent px-3 py-2 text-white text-center"
         />
       </div>
 
@@ -77,14 +109,13 @@ export default function EditGradeForm({
           Cancel
         </button>
         <button
-          type="button"
-          onClick={() => onSubmit()}
+          type="submit"
           className="rounded-lg !bg-gold !text-slate-950"
           disabled={submitting}
         >
           {submitting ? "Saving..." : "Save Changes"}
         </button>
       </div>
-    </div>
+    </form>
   );
 }

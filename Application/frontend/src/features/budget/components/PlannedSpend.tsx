@@ -112,20 +112,6 @@ export default function PlannedSpend({
               </li>
             ))}
           </ul>
-
-          {summary.by_category.length > 0 && (
-            <div className="categorySpend">
-              <h3 className="categorySpendTitle">Where it went</h3>
-              <ul className="categoryList">
-                {summary.by_category.map((entry) => (
-                  <li key={entry.category_id ?? "none"}>
-                    <span>{entry.category_name}</span>
-                    <span className="categoryAmount">{formatMoney(entry.actual)}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
         </>
       )}
     </section>

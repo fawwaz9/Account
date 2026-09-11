@@ -5,7 +5,7 @@ import { updateAcademicStatus, updatePreferences } from "../services/currentUser
 import "../styles/login.css";
 
 export default function SettingsPage() {
-  const { user, refreshUser } = useAuth();
+  const { user, login, refreshUser } = useAuth();
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -71,9 +71,20 @@ export default function SettingsPage() {
     setSubmitting(true);
 
     try {
-      await setPassword(newPassword, hasPassword ? currentPassword : undefined);
-      await refreshUser();
-      setSuccess(hasPassword ? "Password changed." : "Password set. You can now sign in with your email.");
+      // The old token is dead the moment this returns -- changing a password
+      // invalidates every session the account had. Adopt the replacement before
+      // anything else calls the API, or refreshUser() below 401s and bounces to
+      // the login page with the password already changed and nothing said.
+      const { access_token } = await setPassword(
+        newPassword,
+        hasPassword ? currentPassword : undefined
+      );
+      await login(access_token);
+      setSuccess(
+        hasPassword
+          ? "Password changed. Any other signed-in device has been signed out."
+          : "Password set. You can now sign in with your email."
+      );
       setCurrentPassword("");
       setNewPassword("");
     } catch (err) {

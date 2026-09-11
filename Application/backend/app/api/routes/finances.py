@@ -1,11 +1,17 @@
 from datetime import date
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query
 
 from app._database.dependencies import DBSession
 from app.Auth.services.access import VerifiedUserId
-from app.Finances.schemas.account import Account, AccountCreate, AccountUpdate
+from app.Finances.schemas.account import (
+    Account,
+    AccountActivity,
+    AccountCreate,
+    AccountUpdate,
+)
 from app.Finances.schemas.budget import (
     BudgetSummary,
     BudgetTargetUpsert,
@@ -43,8 +49,10 @@ from app.Finances.services.budget_service import (
     set_target,
     update_category,
 )
+from app.Finances.services.activity_service import get_account_activity
 from app.Finances.services.deposit_service import preview_deposit, record_deposit
 from app.shared.errors import error_user, responses
+from app.shared import audit
 
 router = APIRouter()
 
@@ -86,6 +94,30 @@ def get_single_account(user_id: VerifiedUserId, account_id: UUID, db: DBSession)
     return account
 
 
+@router.get(
+    "/{user_id}/accounts/{account_id}/activity",
+    response_model=AccountActivity,
+    responses=ACCOUNT_404,
+)
+def account_activity(
+    user_id: VerifiedUserId,
+    account_id: UUID,
+    db: DBSession,
+    month: date | None = None,
+):
+    """One account's month: daily flow, totals, categories and its target.
+
+    Served whole rather than assembled in the browser so the rule for what
+    counts as money leaving an account is stated once, here and in the budget
+    summary, and cannot drift between the two pages.
+    """
+    activity = get_account_activity(db, user_id, account_id, month or date.today())
+    if activity is None:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    return activity
+
+
 @router.patch("/{user_id}/accounts/{account_id}", response_model=Account, responses=ACCOUNT_404)
 def edit_account(user_id: VerifiedUserId, account_id: UUID, account: AccountUpdate, db: DBSession):
     try:
@@ -110,6 +142,7 @@ def remove_account(user_id: VerifiedUserId, account_id: UUID, db: DBSession):
     if removed is None:
         raise HTTPException(status_code=404, detail="Account not found")
 
+    audit.deletion("account", user_id=user_id, target_id=account_id, detail=removed.name)
     return removed
 
 
@@ -120,9 +153,12 @@ def list_user_transactions(
     user_id: VerifiedUserId,
     db: DBSession,
     account_id: UUID | None = None,
+    start: date | None = None,
+    end: date | None = None,
     limit: int = Query(100, ge=1, le=500),
 ):
-    return list_transactions(db, user_id, account_id, limit)
+    """Movements, newest first. `start`/`end` bound `occurred_on` inclusively."""
+    return list_transactions(db, user_id, account_id, limit, start, end)
 
 
 @router.post("/{user_id}/transactions", response_model=Transaction, responses=ACCOUNT_404)
@@ -173,11 +209,24 @@ def edit_transaction(
 
 
 @router.delete("/{user_id}/transactions/{transaction_id}", response_model=Transaction, responses=TRANSACTION_404)
-def remove_transaction(user_id: VerifiedUserId, transaction_id: UUID, db: DBSession):
-    removed = delete_transaction(db, user_id, transaction_id)
+def remove_transaction(
+    user_id: VerifiedUserId,
+    transaction_id: UUID,
+    db: DBSession,
+    scope: Literal["row", "group"] = "group",
+):
+    """Remove a movement. `scope` decides how much of a grouped one goes.
+
+    Ignored for a transfer, which is always removed whole.
+    """
+    removed = delete_transaction(db, user_id, transaction_id, scope)
     if removed is None:
         raise HTTPException(status_code=404, detail="Transaction not found")
 
+    audit.deletion(
+        "transaction", user_id=user_id, target_id=transaction_id,
+        detail=f"scope={scope} amount={removed.amount}",
+    )
     return removed
 
 
@@ -224,6 +273,7 @@ def remove_category(user_id: VerifiedUserId, category_id: UUID, db: DBSession):
     if removed is None:
         raise HTTPException(status_code=404, detail="Category not found")
 
+    audit.deletion("category", user_id=user_id, target_id=category_id, detail=removed.name)
     return removed
 
 

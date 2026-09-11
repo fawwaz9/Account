@@ -4,16 +4,16 @@ from uuid import UUID
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app._database.dependencies import DBSession 
-from app.Auth.services.session_service import decode_access_token
+from app._database.dependencies import DBSession
+from app.Auth.services.session_service import TokenClaims, decode_access_token, is_revoked
 from app.Users.services import user_service
 
 bearer_scheme = HTTPBearer(auto_error=True)
 
 
-def get_current_user_id(
+def get_token_claims(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
-) -> UUID:
+) -> TokenClaims:
     try:
         return decode_access_token(credentials.credentials)
     except ValueError as exc:
@@ -22,13 +22,29 @@ def get_current_user_id(
         ) from exc
 
 
+def get_current_user_id(
+    claims: Annotated[TokenClaims, Depends(get_token_claims)],
+) -> UUID:
+    return claims.user_id
+
+
 def get_current_user(
     db: DBSession,
-    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    claims: Annotated[TokenClaims, Depends(get_token_claims)],
 ):
-    user = user_service.get_user(db, user_id)
+    user = user_service.get_user(db, claims.user_id)
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+    # Checked here rather than in get_current_user_id because this is where the
+    # user row is already loaded -- every authenticated route reaches it through
+    # CurrentUser or VerifiedUserId, so revocation costs no extra query.
+    if is_revoked(claims.session_epoch, user.session_epoch):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session revoked. Please sign in again.",
+        )
+
     return user
 
 
