@@ -1,9 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import TaskList from "../features/tasks/components/TaskList";
 import TaskForm from "../features/tasks/components/TaskForm";
+import Repeating from "../features/tasks/components/Repeating";
+import RepeatingModal from "../features/tasks/components/RepeatingModal";
 import { useTasks } from "../features/tasks/hooks/useTasks";
-import { createTask, deleteTask, setTaskDone } from "../features/tasks/api";
-import { Task, TaskCreate } from "../features/tasks/types";
+import {
+  createTask,
+  deleteRepeating,
+  deleteTask,
+  setTaskDone,
+} from "../features/tasks/api";
+import { RecurringTask, Task, TaskCreate } from "../features/tasks/types";
 import { fetchCourses } from "../features/grades/api";
 import { Course } from "../features/grades/types";
 import { useAuth } from "../app/auth/AuthContext";
@@ -23,7 +30,7 @@ const ASSIGNMENT_HORIZON = 14;
 export default function TasksPage() {
   const { user } = useAuth();
   const [showDone, setShowDone] = useState(false);
-  const { tasks, loading, error, reload } = useTasks({
+  const { tasks, repeating, loading, error, reload } = useTasks({
     includeDone: showDone,
     includeArchived: showDone,
   });
@@ -31,6 +38,8 @@ export default function TasksPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [editingRule, setEditingRule] = useState<RecurringTask | null>(null);
+  const [addingRule, setAddingRule] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -73,6 +82,15 @@ export default function TasksPage() {
   async function handleDelete(task: Task) {
     if (!user) return;
     await withBusy(() => deleteTask(user.id, task.id), "Could not delete the task");
+  }
+
+  async function handleStopRepeat(rule: RecurringTask) {
+    if (!user) return;
+    // Occurrences already ticked off stay: they record work actually done.
+    await withBusy(
+      () => deleteRepeating(user.id, rule.id),
+      "Could not stop that repeat"
+    );
   }
 
   return (
@@ -127,6 +145,22 @@ export default function TasksPage() {
         busy={busy}
         emptyMessage="Nothing without a date."
       />
+      <Repeating
+        rules={repeating}
+        onAdd={() => { setEditingRule(null); setAddingRule(true); }}
+        onEdit={(rule) => { setEditingRule(rule); setAddingRule(true); }}
+        onStop={handleStopRepeat}
+        busy={busy}
+      />
+
+      <RepeatingModal
+        open={addingRule}
+        rule={editingRule}
+        courses={courses}
+        onClose={() => { setAddingRule(false); setEditingRule(null); }}
+        onSaved={reload}
+      />
+
       {showDone && (
         <TaskList
           title="Done"

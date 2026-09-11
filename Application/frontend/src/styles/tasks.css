@@ -202,3 +202,35 @@
   color: var(--muted);
   font-size: 0.88rem;
 }
+
+/* ===== Repeats =====
+   Listed apart from the tasks they produce: the list above is what to do this
+   week, this is what keeps coming back. Inline among its own occurrences a rule
+   would look like one more thing to tick off. */
+
+.repeatingSection {
+  margin-top: 28px;
+}
+
+.repeatingHeaderRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.repeatingActions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.taskRepeatRule {
+  color: var(--gold);
+}
+
+@media (max-width: 720px) {
+  .repeatingActions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}

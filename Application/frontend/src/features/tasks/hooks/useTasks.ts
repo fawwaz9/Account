@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { fetchTasks } from "../api";
-import { Task } from "../types";
+import { fetchRepeating, fetchTasks, runRepeating } from "../api";
+import { RecurringTask, Task } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
 
 interface UseTasksOptions {
@@ -14,6 +14,7 @@ interface UseTasksOptions {
 export function useTasks({ includeDone, includeArchived, courseId }: UseTasksOptions = {}) {
   const { user } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [repeating, setRepeating] = useState<RecurringTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,9 +33,21 @@ export function useTasks({ includeDone, includeArchived, courseId }: UseTasksOpt
     setError(null);
 
     try {
-      const next = await fetchTasks(user.id, { includeDone, includeArchived, courseId });
+      // Any repeat whose turn has come is written before anything is read, or a
+      // chore due today would not appear until some later page load. Idempotent
+      // on (rule, due date), so this writes nothing twice. Failures are
+      // swallowed deliberately: not being able to materialise must not stop the
+      // list the student already has from rendering.
+      await runRepeating(user.id).catch(() => undefined);
+      if (ticket !== latestRequest.current) return;
+
+      const [next, nextRepeating] = await Promise.all([
+        fetchTasks(user.id, { includeDone, includeArchived, courseId }),
+        fetchRepeating(user.id),
+      ]);
       if (ticket !== latestRequest.current) return;
       setTasks(next);
+      setRepeating(nextRepeating);
     } catch (err) {
       if (ticket !== latestRequest.current) return;
       setError(err instanceof Error ? err.message : "Could not load your tasks");
@@ -47,5 +60,5 @@ export function useTasks({ includeDone, includeArchived, courseId }: UseTasksOpt
     load();
   }, [load]);
 
-  return { tasks, loading, error, reload: load };
+  return { tasks, repeating, loading, error, reload: load };
 }

@@ -18,44 +18,12 @@ from app.Calendar.schemas.event import (
     EventUpdate,
     Recurrence,
 )
-from app.Calendar.utils.recurrence import (
-    Rule,
-    format_byday,
-    occurrences,
-    parse_byday,
-)
+from app.Calendar.utils.recurrence import occurrences
+from app.Calendar.utils.rule_columns import apply_recurrence, recurrence_of, rule_of
 
 #: Longest window one read may ask for. A year of a daily event is already
 #: within MAX_OCCURRENCES; beyond that a caller is scanning, not rendering.
 MAX_WINDOW_DAYS = 400
-
-
-def rule_of(event: EventModel) -> Rule:
-    """The stored columns as the engine's rule."""
-    return Rule(
-        freq=event.recur_freq,
-        interval=event.recur_interval or 1,
-        byday=parse_byday(event.recur_byday),
-        until=event.recur_until,
-        count=event.recur_count,
-    )
-
-
-def apply_recurrence(event: EventModel, recurrence: Recurrence | None) -> None:
-    """Write a recurrence onto an event, or clear it back to a one-off."""
-    if recurrence is None:
-        event.recur_freq = None
-        event.recur_interval = 1
-        event.recur_byday = None
-        event.recur_until = None
-        event.recur_count = None
-        return
-
-    event.recur_freq = recurrence.freq.value
-    event.recur_interval = recurrence.interval
-    event.recur_byday = format_byday(day.value for day in recurrence.byday)
-    event.recur_until = recurrence.until
-    event.recur_count = recurrence.count
 
 
 def attach_recurrence(event: EventModel) -> EventModel:
@@ -65,16 +33,7 @@ def attach_recurrence(event: EventModel) -> EventModel:
     grades module does it: models.py is imported by this service, so a property
     reaching back into it would be a circular import.
     """
-    if event.recur_freq:
-        event.recurrence = Recurrence(
-            freq=event.recur_freq,
-            interval=event.recur_interval or 1,
-            byday=parse_byday(event.recur_byday),
-            until=event.recur_until,
-            count=event.recur_count,
-        )
-    else:
-        event.recurrence = None
+    event.recurrence = recurrence_of(event)
 
     # Deliberately *not* parsed onto the instance. `skipped_dates` is a real JSON
     # column, and assigning date objects to it marks the row dirty with values

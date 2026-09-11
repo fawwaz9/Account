@@ -37,6 +37,9 @@ ADDED_COLUMNS: dict[str, dict[str, str]] = {
     "events": {
         "grade_id": "CHAR(32)",
     },
+    "tasks": {
+        "recurring_id": "CHAR(32)",
+    },
     "transactions": {
         "category_id": "CHAR(32)",
         "recurring_id": "CHAR(32)",

@@ -1,6 +1,14 @@
 import { del, get, patch, post } from "../../services/apiClient";
 import { endpoints } from "../../services/endpoints";
-import { Task, TaskCreate, TaskUpdate } from "./types";
+import {
+  RecurringTask,
+  RecurringTaskCreate,
+  RecurringTaskRun,
+  RecurringTaskUpdate,
+  Task,
+  TaskCreate,
+  TaskUpdate,
+} from "./types";
 
 interface TaskQuery {
   /** Checked-off tasks are archived, so both flags are needed to see history. */
@@ -40,4 +48,54 @@ export async function setTaskDone(userId: string, taskId: string, done: boolean)
 
 export async function deleteTask(userId: string, taskId: string) {
   return del<Task>(endpoints.tasks.detail(userId, taskId));
+}
+
+/* ===== Repeating tasks ===== */
+
+export async function fetchRepeating(userId: string, includeInactive = true) {
+  const base = endpoints.tasks.repeating(userId);
+  return get<RecurringTask[]>(`${base}?include_inactive=${includeInactive}`);
+}
+
+export async function createRepeating(userId: string, payload: RecurringTaskCreate) {
+  return post<RecurringTask>(endpoints.tasks.repeating(userId), payload);
+}
+
+export async function updateRepeating(
+  userId: string,
+  ruleId: string,
+  payload: RecurringTaskUpdate
+) {
+  return patch<RecurringTask>(endpoints.tasks.repeatingRule(userId, ruleId), payload);
+}
+
+/**
+ * Stops the repeat.
+ *
+ * `dropPending` false keeps the occurrences not yet ticked off. Ones already
+ * done always stay — they are a record of work actually done.
+ */
+export async function deleteRepeating(userId: string, ruleId: string, dropPending = true) {
+  return del<RecurringTask>(
+    `${endpoints.tasks.repeatingRule(userId, ruleId)}?drop_pending=${dropPending}`
+  );
+}
+
+/**
+ * Write each repeat's occurrences for the rolling window.
+ *
+ * Idempotent on (rule, due date), so calling it on every task or calendar load
+ * is safe, and is what makes a repeating chore simply be there with no
+ * scheduler running anywhere.
+ */
+export async function runRepeating(userId: string) {
+  return post<RecurringTaskRun>(endpoints.tasks.repeatingRun(userId), {});
+}
+
+/** Cancel one occurrence without ending the repeat. */
+export async function skipRepeating(userId: string, ruleId: string, onDate: string) {
+  return post<RecurringTask>(
+    `${endpoints.tasks.repeatingSkip(userId, ruleId)}?on_date=${onDate}`,
+    {}
+  );
 }
