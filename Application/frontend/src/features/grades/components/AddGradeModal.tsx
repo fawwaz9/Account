@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import AddGradeForm from "./AddGradeForm";
 import { createGrade } from "../api";
-import { GradeCreate, GradeCategory } from "../types";
+import { GradeCreate, GradeCategory, GradeSchedule } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { getErrorMessage } from "./AddCourseModal";
 import Modal from "../../../shared/components/Modal";
@@ -22,9 +22,14 @@ function buildDefaultForm(category: GradeCategory | null): GradeCreate {
     score: null,
     max_score: 0,
     category: category ?? GradeCategory.OTHER,
-    // No deadline by default. Setting one raises a task for the assignment,
-    // which closes itself when the score lands.
+    // No deadline by default; the choice below only matters once there is one.
     due_date: null,
+    // A midterm or a final is something you sit rather than tick off, so those
+    // start on the calendar side and everything else starts as work to do.
+    schedule_as:
+      category === GradeCategory.MIDTERM || category === GradeCategory.FINAL
+        ? GradeSchedule.EVENT
+        : GradeSchedule.TASK,
   };
 }
 

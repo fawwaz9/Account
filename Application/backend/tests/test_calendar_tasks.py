@@ -36,6 +36,7 @@ from app.Grades.services.grade_service import (
     record_grade,
     update_grade,
 )
+from app.Grades.utils.enums import GradeSchedule
 from app.Tasks.schemas.task import TaskCreate, TaskUpdate
 from app.Tasks.services.task_service import (
     create_task,
@@ -450,3 +451,160 @@ def test_an_estimate_you_set_survives_the_grade_being_edited(db, user):
 
     [task] = list_tasks(db, user.id)
     assert (task.estimated_minutes, task.notes) == (180, "Start early")
+
+
+# ------------------------------------- a date means one of two things ---
+
+def scheduled_grade(db, user, schedule, category="Assignment", due=date(2026, 9, 25), score=None):
+    course = make_course(db, user.id, "CPSC 221")
+    grade = add_grade(db, user.id, course.id, GradeCreate(
+        name="Assignment 1", category=category, max_score=100,
+        score=score, due_date=due, schedule_as=schedule,
+    ))
+    return course, grade
+
+
+def test_a_date_raises_a_task_by_default(db, user):
+    """What every dated grade did before the choice existed."""
+    scheduled_grade(db, user, GradeSchedule.TASK)
+
+    assert len(list_tasks(db, user.id)) == 1
+    assert db.query(EventModel).count() == 0
+
+
+def test_scheduling_as_an_event_draws_a_block_and_no_task(db, user):
+    """A midterm is something you sit, not a chore that never quite closes."""
+    scheduled_grade(db, user, GradeSchedule.EVENT)
+
+    assert list_tasks(db, user.id) == []
+    [event] = db.query(EventModel).all()
+    assert event.title == "Assignment 1"
+    assert event.starts_on == date(2026, 9, 25)
+
+
+def test_a_grade_event_shows_on_the_calendar_with_its_course(db, user):
+    course, _ = scheduled_grade(db, user, GradeSchedule.EVENT)
+
+    [occurrence] = list_occurrences(db, user.id, date(2026, 9, 1), date(2026, 9, 30))
+
+    assert occurrence.title == "Assignment 1"
+    assert occurrence.course_code == "CPSC 221"
+    assert occurrence.course_id == course.id
+
+
+def test_a_midterm_scheduled_as_an_event_gets_a_midterm_card(db, user):
+    scheduled_grade(db, user, GradeSchedule.EVENT, category="Midterm")
+
+    [event] = db.query(EventModel).all()
+    assert event.kind == EventKind.MIDTERM.value
+
+
+def test_a_final_scheduled_as_an_event_gets_a_final_card(db, user):
+    scheduled_grade(db, user, GradeSchedule.EVENT, category="Final")
+
+    [event] = db.query(EventModel).all()
+    assert event.kind == EventKind.FINAL.value
+
+
+def test_anything_else_scheduled_as_an_event_reads_as_a_deadline(db, user):
+    scheduled_grade(db, user, GradeSchedule.EVENT, category="Lab")
+
+    [event] = db.query(EventModel).all()
+    assert event.kind == EventKind.DEADLINE.value
+
+
+def test_a_score_does_not_close_a_grade_event(db, user):
+    """A sat exam is history, not an unfinished chore -- that is the point."""
+    course, grade = scheduled_grade(db, user, GradeSchedule.EVENT, category="Midterm")
+
+    record_grade(db, user.id, course.id, grade.id, 78.0)
+
+    assert db.query(EventModel).count() == 1
+    assert list_tasks(db, user.id, include_done=True, include_archived=True) == []
+
+
+def test_switching_from_task_to_event_leaves_no_task_behind(db, user):
+    """Or the deadline would show twice: once to tick off, once to attend."""
+    course, grade = scheduled_grade(db, user, GradeSchedule.TASK)
+
+    update_grade(db, user.id, course.id, grade.id,
+                 GradeUpdate(schedule_as=GradeSchedule.EVENT))
+
+    assert list_tasks(db, user.id) == []
+    assert db.query(TaskModel).count() == 0
+    assert db.query(EventModel).count() == 1
+
+
+def test_switching_from_event_to_task_removes_the_block(db, user):
+    course, grade = scheduled_grade(db, user, GradeSchedule.EVENT)
+
+    update_grade(db, user.id, course.id, grade.id,
+                 GradeUpdate(schedule_as=GradeSchedule.TASK))
+
+    assert db.query(EventModel).count() == 0
+    assert [task.title for task in list_tasks(db, user.id)] == ["Assignment 1"]
+
+
+def test_clearing_the_date_removes_the_event_too(db, user):
+    course, grade = scheduled_grade(db, user, GradeSchedule.EVENT)
+
+    update_grade(db, user.id, course.id, grade.id, GradeUpdate(due_date=None))
+
+    assert db.query(EventModel).count() == 0
+
+
+def test_moving_the_date_moves_the_event(db, user):
+    course, grade = scheduled_grade(db, user, GradeSchedule.EVENT)
+
+    update_grade(db, user.id, course.id, grade.id, GradeUpdate(due_date=date(2026, 10, 2)))
+
+    [event] = db.query(EventModel).all()
+    assert event.starts_on == date(2026, 10, 2)
+
+
+def test_changing_the_category_rethemes_the_event(db, user):
+    course, grade = scheduled_grade(db, user, GradeSchedule.EVENT, category="Assignment")
+
+    update_grade(db, user.id, course.id, grade.id, GradeUpdate(category="Final"))
+
+    [event] = db.query(EventModel).all()
+    assert event.kind == EventKind.FINAL.value
+
+
+def test_deleting_the_grade_takes_its_event_with_it(db, user):
+    course, grade = scheduled_grade(db, user, GradeSchedule.EVENT)
+
+    delete_grade(db, user.id, course.id, grade.id)
+
+    assert db.query(EventModel).count() == 0
+
+
+def test_a_time_you_set_on_the_block_survives_the_grade_being_edited(db, user):
+    """The gradebook does not know when the exam starts; once you say, it is yours."""
+    course, grade = scheduled_grade(db, user, GradeSchedule.EVENT, category="Midterm")
+    [event] = db.query(EventModel).all()
+    update_event(db, user.id, event.id, EventUpdate(
+        start_time=time(18, 0), end_time=time(20, 0), location="SRC A",
+    ))
+
+    update_grade(db, user.id, course.id, grade.id, GradeUpdate(name="Midterm 1"))
+
+    [event] = db.query(EventModel).all()
+    assert event.title == "Midterm 1"
+    assert (event.start_time, event.end_time, event.location) == (time(18, 0), time(20, 0), "SRC A")
+
+
+def test_an_undated_grade_schedules_nothing_whichever_is_chosen(db, user):
+    scheduled_grade(db, user, GradeSchedule.EVENT, due=None)
+
+    assert db.query(EventModel).count() == 0
+    assert db.query(TaskModel).count() == 0
+
+
+def test_a_grade_never_produces_both(db, user):
+    """The invariant the switching rules exist to keep."""
+    course, grade = scheduled_grade(db, user, GradeSchedule.TASK)
+
+    for schedule in (GradeSchedule.EVENT, GradeSchedule.TASK, GradeSchedule.EVENT):
+        update_grade(db, user.id, course.id, grade.id, GradeUpdate(schedule_as=schedule))
+        assert db.query(TaskModel).count() + db.query(EventModel).count() == 1

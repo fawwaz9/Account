@@ -1,3 +1,6 @@
+import { GradeCategory, GradeSchedule } from "../types";
+import ScheduleChoice from "./ScheduleChoice";
+
 interface EditGradeFormState {
   name: string;
   /** null while the work has not been marked */
@@ -5,10 +8,14 @@ interface EditGradeFormState {
   max_score: number;
   /** null for an assignment with no deadline */
   due_date: string | null;
+  /** What the date means: work to tick off, or a block on the calendar. */
+  schedule_as: GradeSchedule;
 }
 
 interface EditGradeFormProps {
   readonly form: EditGradeFormState;
+  /** Only used to word the calendar option for a midterm or a final. */
+  readonly category: GradeCategory | null;
   readonly updateField: <K extends keyof EditGradeFormState>(key: K, value: EditGradeFormState[K]) => void;
   readonly onSubmit: () => void;
   readonly onCancel: () => void;
@@ -18,6 +25,7 @@ interface EditGradeFormProps {
 
 export default function EditGradeForm({
   form,
+  category,
   updateField,
   onSubmit,
   onCancel,
@@ -92,6 +100,15 @@ export default function EditGradeForm({
           className="--input mt-1 w-full rounded-lg border border-slate-700 bg-transparent px-3 py-2 text-white text-center"
         />
       </div>
+
+      {form.due_date && (
+        <ScheduleChoice
+          value={form.schedule_as}
+          onChange={(value) => updateField("schedule_as", value)}
+          category={category}
+          idPrefix="edit-grade"
+        />
+      )}
 
       {error && (
         <div className="space-y-1">

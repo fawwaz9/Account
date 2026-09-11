@@ -300,6 +300,7 @@ def list_occurrences(
                     course_id=event.course_id,
                     course_code=codes.get(event.course_id),
                     repeats=rule.repeats,
+                    grade_id=event.grade_id,
                 )
             )
 

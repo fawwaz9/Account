@@ -1,4 +1,5 @@
 import { GradeCreate } from "../types";
+import ScheduleChoice from "./ScheduleChoice";
 
 interface AddGradeFormProps {
   readonly form: GradeCreate;
@@ -86,6 +87,15 @@ export default function AddGradeForm({
           className="--input mt-1 w-full rounded-lg border border-slate-700 bg-transparent px-3 py-2 text-white text-center"
         />
       </div>
+
+      {form.due_date && (
+        <ScheduleChoice
+          value={form.schedule_as}
+          onChange={(value) => updateField("schedule_as", value)}
+          category={form.category}
+          idPrefix="add-grade"
+        />
+      )}
 
       {error && (
         <div className="space-y-1">

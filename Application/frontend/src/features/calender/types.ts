@@ -75,6 +75,12 @@ export interface EventOccurrence {
   course_id: string | null;
   course_code: string | null;
   repeats: boolean;
+  /**
+   * Set when a dated grade produced this block. The gradebook owns it, so there
+   * is no delete here — removing it would only bring it back the next time the
+   * grade was saved.
+   */
+  grade_id: string | null;
 }
 
 export interface EventCreate {

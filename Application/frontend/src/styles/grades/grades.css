@@ -704,3 +704,42 @@
   font-size: 0.78rem;
   color: var(--muted);
 }
+
+/* ===== What a due date does =====
+   Shown only once a date exists. Each option carries its own sentence, because
+   the labels alone do not say that the calendar option loses the tick-off,
+   which is the whole trade being offered. */
+
+.scheduleChoice {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid #1f2a44;
+  border-radius: 10px;
+  text-align: left;
+}
+
+.scheduleOption {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.scheduleOptionLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  cursor: pointer;
+}
+
+.scheduleOptionName {
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.scheduleOptionHint {
+  font-size: 0.78rem;
+  color: var(--muted);
+}

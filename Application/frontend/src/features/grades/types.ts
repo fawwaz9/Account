@@ -118,11 +118,24 @@ export interface Grade {
   max_score: number;
   category: GradeCategory;
   weight: number;
-  /**
-   * When the work is due. Setting one raises a task automatically, and that
-   * task closes itself once a score is recorded.
-   */
+  /** When the work is due, as opposed to when it was marked. */
   due_date: string | null;
+  /** What that date means. Ignored when there is no date. */
+  schedule_as: GradeSchedule;
+}
+
+/**
+ * How a dated grade shows up outside the gradebook.
+ *
+ * Two different things wear a date: an assignment due Friday is work you tick
+ * off, a midterm on the 15th is something you sit. Forcing both through a task
+ * made the second read as a chore that never quite closes.
+ */
+export enum GradeSchedule {
+  /** Raises a task that closes itself when the score lands. */
+  TASK = "task",
+  /** Draws a block on the calendar and nothing else. */
+  EVENT = "event",
 }
 
 export enum GradeCategory {
@@ -156,8 +169,8 @@ export interface GradeCreate{
   score: number | null;
   max_score: number;
   category: GradeCategory;
-  /** Setting a date raises a task for this assignment. */
   due_date: string | null;
+  schedule_as: GradeSchedule;
 }
 
 export interface GradeUpdate{
@@ -166,6 +179,7 @@ export interface GradeUpdate{
   max_score: number | null;
   category: GradeCategory | null;
   due_date: string | null;
+  schedule_as: GradeSchedule | null;
 }
 
 
