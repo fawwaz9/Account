@@ -2,9 +2,9 @@ import uuid
 from sqlalchemy.orm import Session, joinedload
 from app._database.models import CourseModel, CourseCategoryWeightModel, GradeModel
 from app.Grades.schemas.grade import GradeCreate, GradeUpdate, Grade as GradeSchema
-from app.Grades.utils.enums import GradeCategory
+from app.Grades.utils.enums import GradeCategory, GradeSchedule
 from app.Grades.utils.terms import course_result_grade
-from app.Tasks.services.grade_tasks import sync_task_for_grade
+from app.Grades.services.grade_schedule import sync_schedule_for_grade
 
 
 MAX_COURSE_PERCENT = 100.0
@@ -90,6 +90,7 @@ def add_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_data:
         max_score=grade_data.max_score,
         weight=weights.get(category_value, 0.0),
         due_date=grade_data.due_date,
+        schedule_as=grade_data.schedule_as.value,
     )
     db.add(grade)
     db.flush()
@@ -98,7 +99,7 @@ def add_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_data:
     course.average = calculate_current_average(course)
     # Inside this transaction, so a grade that fails to save leaves no task
     # behind for work that was never recorded.
-    sync_task_for_grade(db, course, grade)
+    sync_schedule_for_grade(db, course, grade)
     db.commit()
     db.refresh(grade)
     return grade
@@ -134,6 +135,7 @@ def add_grades_bulk(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade
                 max_score=grade_data.max_score,
                 weight=weights.get(category_value, 0.0),
                 due_date=grade_data.due_date,
+                schedule_as=grade_data.schedule_as.value,
             )
             db.add(grade)
             created.append(grade)
@@ -142,7 +144,7 @@ def add_grades_bulk(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade
         db.refresh(course)
         course.average = calculate_current_average(course)
         for grade in created:
-            sync_task_for_grade(db, course, grade)
+            sync_schedule_for_grade(db, course, grade)
         db.commit()
     except Exception:
         db.rollback()
@@ -172,6 +174,15 @@ def update_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id
         cat = update_data["category"]
         update_data["category"] = cat.value if isinstance(cat, GradeCategory) else cat
 
+    if update_data.get("schedule_as") is not None:
+        schedule = update_data["schedule_as"]
+        update_data["schedule_as"] = (
+            schedule.value if isinstance(schedule, GradeSchedule) else schedule
+        )
+    else:
+        # A partial update that does not mention it must not null the column.
+        update_data.pop("schedule_as", None)
+
     for key, value in update_data.items():
         setattr(grade, key, value)
 
@@ -188,7 +199,7 @@ def update_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id
     # Covers all four of the ways an edit moves the task: a renamed grade, a
     # moved deadline, a deadline removed, and a score arriving by edit rather
     # than through record_grade.
-    sync_task_for_grade(db, course, grade)
+    sync_schedule_for_grade(db, course, grade)
     db.commit()
     db.refresh(grade)
     return grade
@@ -235,7 +246,7 @@ def record_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id
     grade.score = score
     course.average = calculate_current_average(course)
     # The score landing is what closes the task.
-    sync_task_for_grade(db, course, grade)
+    sync_schedule_for_grade(db, course, grade)
     db.commit()
     db.refresh(grade)
     return grade

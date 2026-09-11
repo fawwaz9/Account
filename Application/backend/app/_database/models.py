@@ -136,13 +136,16 @@ class GradeModel(Base):
     score = Column(Float, nullable=True)
     max_score = Column(Float, nullable=False)
     weight = Column(Float, default=0.0)
-    #: When the work is due, as opposed to when it was marked. A grade that has
-    #: one raises a task automatically, and that task closes when the score
-    #: lands.
+    #: When the work is due, as opposed to when it was marked.
     due_date = Column(Date, nullable=True)
+    #: What that date means: "task" for work to tick off, "event" for something
+    #: to attend. Only consulted when there is a date. Defaults to task, which
+    #: is what every dated grade did before the choice existed.
+    schedule_as = Column(String, nullable=False, default="task", server_default="task")
 
     course = relationship("CourseModel", back_populates="grades")
     tasks = relationship("TaskModel", back_populates="grade", cascade=cascade)
+    events = relationship("EventModel", back_populates="grade", cascade=cascade)
 
 class AccountModel(Base):
     """One pot money sits in.
@@ -259,6 +262,9 @@ class EventModel(Base):
     #: Set when the event belongs to a course -- a lecture, a lab, a midterm.
     #: Null for anything personal.
     course_id = Column(Uuid, ForeignKey("courses.id"), nullable=True)
+    #: Set when a dated grade scheduled as an event produced this block. The
+    #: gradebook entry stays the record; this follows it.
+    grade_id = Column(Uuid, ForeignKey("grades.id"), nullable=True)
     title = Column(String, nullable=False)
     #: lecture | lab | discussion | midterm | final | deadline | personal.
     #: Drives how the card is themed, not what it does.
@@ -289,6 +295,7 @@ class EventModel(Base):
 
     user = relationship("UserModel")
     course = relationship("CourseModel", back_populates="events")
+    grade = relationship("GradeModel", back_populates="events")
 
 
 class TaskModel(Base):

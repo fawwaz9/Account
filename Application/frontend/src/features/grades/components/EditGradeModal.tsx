@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import EditGradeForm from "./EditGradeForm";
 import DeleteConfirmModal from "./DeleteConfirmModal";
 import { updateGrade, deleteGrade } from "../api";
-import { Grade, GradeUpdate } from "../types";
+import { Grade, GradeSchedule, GradeUpdate } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { getErrorMessage } from "./AddCourseModal";
 import Modal from "../../../shared/components/Modal";
@@ -22,6 +22,7 @@ function buildFormFromGrade(grade: Grade | null) {
     score: grade?.score ?? null,
     max_score: grade?.max_score ?? 0,
     due_date: grade?.due_date ?? null,
+    schedule_as: grade?.schedule_as ?? GradeSchedule.TASK,
   };
 }
 
@@ -61,8 +62,10 @@ export default function EditGradeModal({
         name: form.name,
         score: form.score,
         max_score: form.max_score,
-        // Clearing this removes the task it raised; setting it moves the task.
+        // Clearing this removes whatever the date raised; setting it moves it.
         due_date: form.due_date,
+        // Switching removes the other kind, so a grade never produces both.
+        schedule_as: form.schedule_as,
       };
       await updateGrade(user.id, courseId, grade.id, payload);
       onGradeUpdated();
@@ -96,6 +99,7 @@ export default function EditGradeModal({
       <Modal title={`Edit ${grade.category} Grade`} onClose={onClose}>
         <EditGradeForm
           form={form}
+          category={grade.category}
           updateField={(k, v) => setForm((s) => ({ ...s, [k]: v }))}
           onSubmit={handleSubmit}
           onCancel={onClose}

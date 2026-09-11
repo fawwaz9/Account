@@ -155,6 +155,10 @@ class EventOccurrence(BaseModel):
     #: True when this came from a rule, so the UI can say "every Monday" and ask
     #: whether an edit means this date or all of them.
     repeats: bool = False
+    #: Set when a dated grade produced this block. The gradebook owns it, so the
+    #: calendar offers no delete: removing it here would only bring it back the
+    #: next time the grade was saved.
+    grade_id: UUID | None = None
 
 
 class ClassMeeting(BaseModel):

@@ -87,23 +87,32 @@ export default function EventCard({
       {occurrence.location && <p className="calDetailMeta">{occurrence.location}</p>}
       {occurrence.notes && <p className="calDetailNotes">{occurrence.notes}</p>}
 
-      <div className="calDetailActions">
-        <button type="button" className="calButton" onClick={onEdit} disabled={busy}>
-          Edit series
-        </button>
-
-        {/* Only a repeat can lose one date; a one-off has nothing left
-            afterwards, so there the honest verb is delete. */}
-        {occurrence.repeats && (
-          <button type="button" className="calButton" onClick={onSkip} disabled={busy}>
-            Cancel this one
+      {/* A block the gradebook owns is edited there, not here: deleting it on the
+          calendar would only bring it back the next time the grade was saved. */}
+      {occurrence.grade_id ? (
+        <p className="calDetailMeta">
+          From a grade with a due date. Change the date, or switch it back to a
+          task, on the course page.
+        </p>
+      ) : (
+        <div className="calDetailActions">
+          <button type="button" className="calButton" onClick={onEdit} disabled={busy}>
+            Edit series
           </button>
-        )}
 
-        <button type="button" className="calButton calButtonDanger" onClick={onDelete} disabled={busy}>
-          {occurrence.repeats ? "Delete series" : "Delete"}
-        </button>
-      </div>
+          {/* Only a repeat can lose one date; a one-off has nothing left
+              afterwards, so there the honest verb is delete. */}
+          {occurrence.repeats && (
+            <button type="button" className="calButton" onClick={onSkip} disabled={busy}>
+              Cancel this one
+            </button>
+          )}
+
+          <button type="button" className="calButton calButtonDanger" onClick={onDelete} disabled={busy}>
+            {occurrence.repeats ? "Delete series" : "Delete"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

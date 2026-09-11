@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createGradesBulk } from "../api";
-import { GradeCategory, GradeCreate } from "../types";
+import { GradeCategory, GradeCreate, GradeSchedule } from "../types";
 import { getErrorMessage } from "./AddCourseModal";
 import { useAuth } from "../../../app/auth/AuthContext";
 import Modal from "../../../shared/components/Modal";
@@ -63,8 +63,10 @@ export default function BulkGradesModal({
       score: row.score === "" ? null : Number(row.score),
       max_score: Number(row.max_score),
       // Bulk entry is for catching a course up on marks already awarded, so
-      // there is no deadline to raise a task from. Dates are set per grade.
+      // there is no deadline, and with no date the choice below decides nothing.
+      // Both are set per grade afterwards.
       due_date: null,
+      schedule_as: GradeSchedule.TASK,
     }));
 
     setSubmitting(true);
