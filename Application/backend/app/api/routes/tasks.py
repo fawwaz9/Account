@@ -5,6 +5,11 @@ from fastapi import APIRouter, HTTPException, Query
 
 from app._database.dependencies import DBSession
 from app.Auth.services.access import VerifiedUserId
+from app.Tasks.schemas.quick_capture import (
+    QuickCapturePreview,
+    QuickCaptureRequest,
+    QuickCaptureResult,
+)
 from app.Tasks.schemas.recurring_task import (
     RecurringTask,
     RecurringTaskCreate,
@@ -21,6 +26,7 @@ from app.Tasks.services.recurring_task_service import (
     skip_occurrence,
     update_rule,
 )
+from app.Tasks.services.quick_capture_service import build_preview, capture
 from app.Tasks.services.task_service import (
     create_task,
     delete_task,
@@ -80,6 +86,38 @@ def add_task(user_id: VerifiedUserId, task: TaskCreate, db: DBSession):
         raise HTTPException(status_code=404, detail=error_user["not_found"])
 
     return created
+
+
+@router.get("/{user_id}/quick-capture", response_model=QuickCapturePreview, responses=responses["user_404"])
+def preview_quick_capture(
+    user_id: VerifiedUserId,
+    db: DBSession,
+    text: str = Query(..., min_length=1, max_length=300),
+):
+    """What one typed line would become, without writing anything.
+
+    A read, so the client can call it as the student types and show the guess
+    while it is still cheap to reword.
+    """
+    preview = build_preview(db, user_id, text)
+    if preview is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+
+    return preview
+
+
+@router.post("/{user_id}/quick-capture", response_model=QuickCaptureResult, responses=responses["user_both"])
+def create_from_quick_capture(user_id: VerifiedUserId, request: QuickCaptureRequest, db: DBSession):
+    """Create the task one line describes, and say how it was read."""
+    try:
+        task, preview = capture(db, user_id, request.text)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if task is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+
+    return QuickCaptureResult(task=task, preview=preview)
 
 
 @router.get("/{user_id}/repeating", response_model=list[RecurringTask], responses=responses["user_404"])

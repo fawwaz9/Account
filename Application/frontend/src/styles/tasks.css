@@ -234,3 +234,68 @@
     justify-content: flex-end;
   }
 }
+
+/* ===== Quick capture =====
+   The reading sits directly under the box, because the failure mode here is not
+   a refused line but an accepted one filed somewhere you did not mean. */
+
+.captureForm {
+  margin-bottom: 12px;
+  padding: 14px;
+  background: var(--panel);
+  border: var(--deep-border);
+  border-radius: 12px;
+}
+
+.captureRow {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.captureReading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  /* Reserved whether or not there is a reading, so the page does not jump on
+     the first keystroke. */
+  min-height: 22px;
+  margin: 8px 2px 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.captureTitle {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.captureChip {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.14);
+}
+
+.captureWarn {
+  color: var(--gold);
+}
+
+.captureDetails {
+  margin-bottom: 20px;
+}
+
+.captureSummary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.85rem;
+  padding: 4px 2px;
+}
+
+.captureSummary:hover {
+  color: var(--text);
+}
+
+.captureDetails[open] .captureSummary {
+  margin-bottom: 8px;
+}

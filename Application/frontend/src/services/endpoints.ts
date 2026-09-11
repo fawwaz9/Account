@@ -34,6 +34,8 @@ export const endpoints = {
     repeatingRun: (userId: string) => `tasks/${userId}/repeating/run`,
     repeatingSkip: (userId: string, ruleId: string) =>
       `tasks/${userId}/repeating/${ruleId}/skip`,
+    /** GET previews what a line means; POST creates the task it describes. */
+    quickCapture: (userId: string) => `tasks/${userId}/quick-capture`,
   },
   finances: {
     accounts: (userId: string) => `finances/${userId}/accounts`,
