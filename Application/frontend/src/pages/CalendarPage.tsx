@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import CalenderView from "../features/calender/components/CalenderView";
+import WeekView from "../features/calender/components/WeekView";
 import EventCard from "../features/calender/components/EventCard";
 import EventModal from "../features/calender/components/EventModal";
 import Modal from "../shared/components/Modal";
@@ -15,12 +16,13 @@ import { Task } from "../features/tasks/types";
 import { fetchCourses } from "../features/grades/api";
 import { Course } from "../features/grades/types";
 import { useAuth } from "../app/auth/AuthContext";
-import { shortDate, today } from "../shared/utils/dateUtils";
+import { monthLabel, shortDate, today, weekLabel } from "../shared/utils/dateUtils";
 import "../styles/calendar.css";
 
 export default function CalendarPage() {
   const { user } = useAuth();
-  const { month, setMonth, days, loading, error, reload } = useCalender();
+  const { view, setView, cursor, setCursor, step, days, loading, error, reload } =
+    useCalender();
 
   const [courses, setCourses] = useState<Course[]>([]);
   const [selected, setSelected] = useState<EventOccurrence | null>(null);
@@ -132,18 +134,74 @@ export default function CalendarPage() {
         </button>
       </div>
 
+      {/* One header for both views: the step buttons mean a month or a week
+          depending on which is showing, so they belong above the switch rather
+          than inside either grid. */}
+      <header className="calHeader">
+        <div className="calNav">
+          <button
+            type="button"
+            className="calButton"
+            onClick={() => step(-1)}
+            aria-label={view === "month" ? "Previous month" : "Previous week"}
+          >
+            ‹
+          </button>
+          <h2 className="calMonth">
+            {view === "month" ? monthLabel(cursor) : weekLabel(cursor)}
+          </h2>
+          <button
+            type="button"
+            className="calButton"
+            onClick={() => step(1)}
+            aria-label={view === "month" ? "Next month" : "Next week"}
+          >
+            ›
+          </button>
+        </div>
+
+        <div className="calHeaderActions">
+          <button type="button" className="calButton" onClick={() => setCursor(today())}>
+            Today
+          </button>
+
+          <div className="calViewSwitch" role="group" aria-label="Calendar view">
+            {(["month", "week"] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={view === option ? "calViewTab calViewTabActive" : "calViewTab"}
+                onClick={() => setView(option)}
+                aria-pressed={view === option}
+              >
+                {option === "month" ? "Month" : "Week"}
+              </button>
+            ))}
+          </div>
+        </div>
+      </header>
+
       {error && <p className="calError">{error}</p>}
       {actionError && <p className="calError">{actionError}</p>}
 
-      <CalenderView
-        month={month}
-        days={days}
-        loading={loading}
-        onMonthChange={setMonth}
-        onSelectOccurrence={setSelected}
-        onToggleTask={handleToggleTask}
-        onAddOnDay={openNewEvent}
-      />
+      {view === "month" ? (
+        <CalenderView
+          month={cursor}
+          days={days}
+          loading={loading}
+          onSelectOccurrence={setSelected}
+          onToggleTask={handleToggleTask}
+          onAddOnDay={openNewEvent}
+        />
+      ) : (
+        <WeekView
+          days={days}
+          loading={loading}
+          onSelectOccurrence={setSelected}
+          onToggleTask={handleToggleTask}
+          onAddOnDay={openNewEvent}
+        />
+      )}
 
       {selected && (
         <Modal
