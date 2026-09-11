@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import TaskList from "../features/tasks/components/TaskList";
 import TaskForm from "../features/tasks/components/TaskForm";
+import QuickCapture from "../features/tasks/components/QuickCapture";
 import Repeating from "../features/tasks/components/Repeating";
 import RepeatingModal from "../features/tasks/components/RepeatingModal";
 import { useTasks } from "../features/tasks/hooks/useTasks";
@@ -107,7 +108,14 @@ export default function TasksPage() {
         </label>
       </div>
 
-      <TaskForm courses={courses} onSubmit={handleAdd} busy={busy} />
+      {/* The fast path first, the full form under it: most tasks are a line
+          of text, and the ones that are not still have every field. */}
+      <QuickCapture onCaptured={reload} />
+
+      <details className="captureDetails">
+        <summary className="captureSummary">Add with all the fields</summary>
+        <TaskForm courses={courses} onSubmit={handleAdd} busy={busy} />
+      </details>
 
       {error && <p className="calError">{error}</p>}
       {actionError && <p className="calError">{actionError}</p>}

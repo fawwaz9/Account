@@ -91,3 +91,35 @@ export interface RecurringTaskRun {
   created: number;
   tasks: Task[];
 }
+
+/* ===== Quick capture ===== */
+
+/**
+ * What one typed line was understood to mean, before anything is written.
+ *
+ * Read as the student types, so the guess is visible while it is still cheap to
+ * reword. A capture box that files things silently is worse than a form,
+ * because nothing on screen says what it did.
+ */
+export interface QuickCapturePreview {
+  text: string;
+  title: string;
+  due_date: string | null;
+  estimated_minutes: number | null;
+  course_id: string | null;
+  course_code: string | null;
+  /**
+   * A code was typed but matches no course of yours, or matches several. It
+   * stays in the title rather than being swallowed.
+   */
+  unmatched_course: string | null;
+  /** Which kinds parsed: course, date, duration, amount, score. */
+  matched: string[];
+  /** False when there is nothing left to make a task from. */
+  can_create: boolean;
+}
+
+export interface QuickCaptureResult {
+  task: Task;
+  preview: QuickCapturePreview;
+}

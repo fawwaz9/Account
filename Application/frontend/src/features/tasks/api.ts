@@ -1,6 +1,8 @@
 import { del, get, patch, post } from "../../services/apiClient";
 import { endpoints } from "../../services/endpoints";
 import {
+  QuickCapturePreview,
+  QuickCaptureResult,
   RecurringTask,
   RecurringTaskCreate,
   RecurringTaskRun,
@@ -98,4 +100,17 @@ export async function skipRepeating(userId: string, ruleId: string, onDate: stri
     `${endpoints.tasks.repeatingSkip(userId, ruleId)}?on_date=${onDate}`,
     {}
   );
+}
+
+/* ===== Quick capture ===== */
+
+/** What a line would become. A read: it writes nothing. */
+export async function previewCapture(userId: string, text: string) {
+  const base = endpoints.tasks.quickCapture(userId);
+  return get<QuickCapturePreview>(`${base}?text=${encodeURIComponent(text)}`);
+}
+
+/** Create the task a line describes, and say how it was read. */
+export async function captureTask(userId: string, text: string) {
+  return post<QuickCaptureResult>(endpoints.tasks.quickCapture(userId), { text });
 }
