@@ -171,6 +171,21 @@
   font-weight: 600;
 }
 
+/* A final is not a heavier midterm. It usually falls after teaching has ended,
+   when nothing else is on the calendar to give it context, and it is the one
+   date on the term that cannot be made up -- so it gets its own weight rather
+   than sharing the midterm's. Ringed rather than merely darker, because by then
+   it is often the only thing in the week and has nothing to contrast against.
+
+   `calChip-final` is already emitted beside `calChipExam`, so this needs no
+   change to any component. */
+.calChipExam.calChip-final {
+  border-left-color: #c9453c;
+  background: rgba(201, 69, 60, 0.26);
+  box-shadow: inset 0 0 0 1px rgba(201, 69, 60, 0.55);
+  font-weight: 700;
+}
+
 .calChipDone .calChipTitle {
   text-decoration: line-through;
   color: var(--muted);
@@ -581,6 +596,15 @@
   border-left-color: #e0685f;
   background: rgba(224, 104, 95, 0.28);
   font-weight: 600;
+}
+
+/* Same distinction in the week grid, where a final and a midterm would
+   otherwise be the same block in the same colour. */
+.weekBlockExam.calChip-final {
+  border-left-color: #c9453c;
+  background: rgba(201, 69, 60, 0.34);
+  box-shadow: inset 0 0 0 1px rgba(201, 69, 60, 0.6);
+  font-weight: 700;
 }
 
 .weekBlockTitle {

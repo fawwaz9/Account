@@ -22,13 +22,28 @@ export default function GradesPage() {
   const { summary, reload: reloadSummary } = useDashboard();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
   const { user } = useAuth();
+
+  // Archived means "done with, keep the record": it still counts toward the
+  // average and stays searchable, it just should not crowd the lists you read
+  // every day. Filtered once here so the current term, the year groups and the
+  // empty-state copy all agree about what is on screen.
+  const archivedCount = useMemo(
+    () => courses.filter((course) => course.archived).length,
+    [courses]
+  );
+
+  const visibleCourses = useMemo(
+    () => (showArchived ? courses : courses.filter((course) => !course.archived)),
+    [courses, showArchived]
+  );
 
   // The default list is the current term only. Everything else is reached
   // through a year card or the search box, which spans every term.
   const currentCourses = useMemo(
-    () => courses.filter((course) => course.term_bucket === "current"),
-    [courses]
+    () => visibleCourses.filter((course) => course.term_bucket === "current"),
+    [visibleCourses]
   );
 
   // The API returns courses sorted by year, then term order, then code, so
@@ -38,7 +53,7 @@ export default function GradesPage() {
     if (selectedYear === null) return [];
 
     const groups: TermGroup[] = [];
-    for (const course of courses) {
+    for (const course of visibleCourses) {
       if (course.year !== selectedYear) continue;
 
       const last = groups[groups.length - 1];
@@ -49,7 +64,7 @@ export default function GradesPage() {
       }
     }
     return groups;
-  }, [courses, selectedYear]);
+  }, [visibleCourses, selectedYear]);
 
   function handleCourseAdded() {
     reload();
@@ -91,6 +106,22 @@ export default function GradesPage() {
                 )}
               </div>
 
+              {/* Offered only when archived courses exist. A permanent switch
+                  for a state most people never use is just another control to
+                  read past. */}
+              {archivedCount > 0 && (
+                <button
+                  type="button"
+                  className="archivedToggle"
+                  onClick={() => setShowArchived((shown) => !shown)}
+                  aria-pressed={showArchived}
+                >
+                  {showArchived
+                    ? `Hide archived (${archivedCount})`
+                    : `Show archived (${archivedCount})`}
+                </button>
+              )}
+
               {loading && <p className="muted">Loading courses...</p>}
               {error && <p className="muted">{error}</p>}
 
@@ -107,10 +138,10 @@ export default function GradesPage() {
 
               {!loading && !error && !viewingYear && (
                 <>
-                  {courses.length === 0 && (
+                  {visibleCourses.length === 0 && (
                     <p className="muted">No courses yet. Use Add Course to create one.</p>
                   )}
-                  {courses.length > 0 && currentCourses.length === 0 && (
+                  {visibleCourses.length > 0 && currentCourses.length === 0 && (
                     <p className="muted">
                       No courses in your current term. Pick a year below to see those
                       courses, or set your term in Settings.
