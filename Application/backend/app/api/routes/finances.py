@@ -14,6 +14,7 @@ from app.Finances.schemas.account import (
 )
 from app.Finances.schemas.budget import (
     BudgetSummary,
+    TermBudget,
     BudgetTargetUpsert,
     SpendCategory,
     SpendCategoryCreate,
@@ -47,6 +48,7 @@ from app.Finances.services.tuition_service import (
     get_tuition,
     preview_tuition,
     record_tuition,
+    term_budget,
     update_tuition,
 )
 from app.Finances.services.transaction_service import (
@@ -407,3 +409,9 @@ def remove_tuition_payment(user_id: VerifiedUserId, payment_id: UUID, db: DBSess
     if delete_tuition(db, user_id, payment_id) is None:
         raise HTTPException(status_code=404, detail="Tuition payment not found")
     return None
+
+
+@router.get("/{user_id}/term-budget", response_model=TermBudget, responses=responses["user_404"])
+def get_term_budget(user_id: VerifiedUserId, db: DBSession):
+    """What the current term has cost, measured over the term's own dates."""
+    return term_budget(db, user_id)

@@ -305,3 +305,29 @@ export interface CourseCost {
   materials_total: number;
   total: number;
 }
+
+/**
+ * What a term cost, measured over the term rather than a calendar month.
+ *
+ * A month is the wrong unit for a student: tuition lands once and textbooks land
+ * in the first fortnight. Grades knows when a term runs, per course, so the span
+ * is assembled from the courses in it.
+ */
+export interface TermBudget {
+  term_name: string;
+  /** null when no course in the term carries dates; `reason` then says why. */
+  starts_on: string | null;
+  ends_on: string | null;
+  dated_courses: number;
+  undated_courses: number;
+  spent: number;
+  received: number;
+  net: number;
+  /** Spend tagged to a course in this term, tuition included. */
+  on_courses: number;
+  by_category: CategorySpend[];
+  days_elapsed: number;
+  days_total: number;
+  can_measure: boolean;
+  reason: string | null;
+}

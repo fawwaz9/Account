@@ -26,6 +26,7 @@ from app._database.models import (
     UserModel,
 )
 from app.Finances.schemas.transaction import TransactionCreate, TransactionKind
+from app.Finances.schemas.budget import CategorySpend, TermBudget
 from app.Finances.schemas.tuition import (
     CourseCost,
     CourseCostLine,
@@ -383,3 +384,101 @@ def delete_tuition(db: Session, user_id: uuid.UUID, payment_id: uuid.UUID):
     # nothing left to remove and cannot recurse.
     delete_transaction(db, user_id, transaction_id, scope="row")
     return True
+
+
+def term_span(courses) -> tuple[date | None, date | None]:
+    """The dates a term actually runs, taken from the courses in it.
+
+    Grades is the only part of the app that knows when a term starts and stops,
+    and it knows it per course rather than centrally -- so the span is the
+    earliest start and the latest end across the term. A year-long course
+    stretches it, which is correct: that is genuinely how long you are paying
+    for those books.
+
+    Courses with no dates contribute nothing rather than defaulting to today,
+    which would quietly shrink the span to nothing.
+    """
+    starts = [c.start_date for c in courses if c.start_date]
+    ends = [c.end_date for c in courses if c.end_date]
+    if not starts or not ends:
+        return None, None
+    return min(starts), max(ends)
+
+
+def term_budget(db: Session, user_id: uuid.UUID, today: date | None = None) -> TermBudget:
+    """What the current term has cost, over the term's own dates.
+
+    A calendar month is the wrong unit for a student: tuition lands once,
+    textbooks land in the first fortnight, and neither is a monthly rhythm.
+    """
+    today = today or date.today()
+    courses = billable_courses(db, user_id)
+    dated = [c for c in courses if c.start_date and c.end_date]
+    starts_on, ends_on = term_span(courses)
+
+    budget = TermBudget(
+        term_name=term_name(db, user_id),
+        starts_on=starts_on,
+        ends_on=ends_on,
+        dated_courses=len(dated),
+        undated_courses=len(courses) - len(dated),
+    )
+
+    if starts_on is None or ends_on is None:
+        budget.reason = (
+            "No course in this term has start and end dates, so there is no term "
+            "to measure. Add them when editing a course."
+            if courses else
+            "No courses in your current term. Add them, or set your term in Settings."
+        )
+        return budget
+
+    budget.can_measure = True
+    budget.days_total = (ends_on - starts_on).days + 1
+    # Clamped, so a term not started reads 0 and a finished one reads its whole
+    # length rather than counting on past the end.
+    budget.days_elapsed = max(0, min((today - starts_on).days + 1, budget.days_total))
+
+    rows = (
+        db.query(TransactionModel)
+        .filter(
+            TransactionModel.user_id == user_id,
+            TransactionModel.occurred_on >= starts_on,
+            TransactionModel.occurred_on <= ends_on,
+            # Transfers move money between pots without spending it, so counting
+            # them would double the total and call a savings top-up an expense.
+            TransactionModel.kind != TransactionKind.TRANSFER.value,
+        )
+        .all()
+    )
+
+    spent = sum(abs(r.amount) for r in rows if r.kind == TransactionKind.EXPENSE.value)
+    received = sum(abs(r.amount) for r in rows if r.kind == TransactionKind.INCOME.value)
+    course_ids = {c.id for c in courses}
+    on_courses = sum(
+        abs(r.amount) for r in rows
+        if r.kind == TransactionKind.EXPENSE.value and r.course_id in course_ids
+    )
+
+    names = {
+        category.id: category.name
+        for category in db.query(SpendCategoryModel)
+        .filter(SpendCategoryModel.user_id == user_id)
+        .all()
+    }
+    by_label: dict[str, float] = {}
+    for row in rows:
+        if row.kind != TransactionKind.EXPENSE.value:
+            continue
+        label = names.get(row.category_id, "Uncategorised")
+        by_label[label] = round(by_label.get(label, 0.0) + abs(row.amount), 2)
+
+    budget.spent = round(spent, 2)
+    budget.received = round(received, 2)
+    budget.net = round(received - spent, 2)
+    budget.on_courses = round(on_courses, 2)
+    budget.by_category = [
+        CategorySpend(category_id=None, category_name=label, actual=amount)
+        for label, amount in sorted(by_label.items(), key=lambda pair: -pair[1])
+    ]
+    return budget

@@ -634,3 +634,104 @@
   margin-top: 2px;
   flex-shrink: 0;
 }
+
+/* ===== Term budget =====
+   A calendar month is the wrong unit for a student: tuition lands once and
+   textbooks land in the first fortnight, so a month-by-month view shows one
+   enormous September and four quiet months. The span comes from Grades, which
+   knows when a term runs. */
+
+.termBudget {
+  margin: 0 0 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.termBudgetHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.termBudgetHead h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.termBudgetDates {
+  font-size: 0.75rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.termBudgetTrack {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+
+.termBudgetFill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--gold-soft), var(--gold));
+}
+
+.termBudgetFigures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(120px, 100%), 1fr));
+  gap: 12px;
+}
+
+.termBudgetFigures div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.termBudgetFigures strong {
+  font-size: 1.05rem;
+  color: var(--gold);
+}
+
+.termBudgetNegative {
+  color: var(--delete) !important;
+}
+
+.termBudgetLabel {
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.termBudgetEmpty,
+.termBudgetNote {
+  margin: 8px 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.termBudgetCategories {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 12px 0 0;
+  border-top: 1px dashed var(--border);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+  gap: 4px 18px;
+}
+
+.termBudgetCategories li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.85rem;
+}

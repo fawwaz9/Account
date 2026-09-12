@@ -13,6 +13,7 @@ import {
   RecurringUpdate,
   CourseCost,
   SpendCategory,
+  TermBudget,
   Transaction,
   TransactionCreate,
   TransferCreate,
@@ -263,4 +264,9 @@ export async function updateTuition(
 /** Remove a payment and the ledger row it owns. */
 export async function deleteTuition(userId: string, paymentId: string) {
   return del(endpoints.finances.tuitionPayment(userId, paymentId));
+}
+
+/** What the current term has cost, over the term's own dates. */
+export async function fetchTermBudget(userId: string) {
+  return get<TermBudget>(endpoints.finances.termBudget(userId));
 }
