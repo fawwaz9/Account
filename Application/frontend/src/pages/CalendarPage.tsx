@@ -6,6 +6,7 @@ import EventModal from "../features/calender/components/EventModal";
 import Modal from "../shared/components/Modal";
 import { useCalender } from "../features/calender/hooks/useCalender";
 import TimeInsights from "../features/calender/components/TimeInsights";
+import BlackoutsModal from "../features/calender/components/BlackoutsModal";
 import {
   deleteEvent,
   fetchEvents,
@@ -34,6 +35,7 @@ export default function CalendarPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   // Bumped with reload so the insights follow an edit.
   const [insightNonce, setInsightNonce] = useState(0);
+  const [blackoutsOpen, setBlackoutsOpen] = useState(false);
 
   // Courses are only needed to label the dropdown in the event form, so they
   // load once here rather than on every month change.
@@ -171,6 +173,16 @@ export default function CalendarPage() {
             Today
           </button>
 
+          {/* Entered once and applied to every class, rather than cancelling the
+              same week on each of six courses. */}
+          <button
+            type="button"
+            className="calButton"
+            onClick={() => setBlackoutsOpen(true)}
+          >
+            Blocked periods
+          </button>
+
           <div className="calViewSwitch" role="group" aria-label="Calendar view">
             {(["month", "week"] as const).map((option) => (
               <button
@@ -247,6 +259,16 @@ export default function CalendarPage() {
         onClose={() => { setComposing(false); setEditing(null); }}
         onSaved={reload}
       />
+
+      <BlackoutsModal
+        open={blackoutsOpen}
+        onClose={() => setBlackoutsOpen(false)}
+        onSaved={() => {
+          reload();
+          setInsightNonce((value) => value + 1);
+        }}
+      />
+
     </div>
   );
 }

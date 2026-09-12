@@ -1,6 +1,6 @@
 import { del, get, post, patch, put } from "../../services/apiClient";
 import { endpoints } from "../../services/endpoints";
-import { CrunchStrip, FreeBlock, WeekLoad,
+import { TermBlackout, TermBlackoutCreate, CrunchStrip, FreeBlock, WeekLoad,
   CalendarEvent,
   ClassScheduleCreate,
   EventCreate,
@@ -85,4 +85,17 @@ export async function fetchWeekLoad(userId: string, start: string, end: string) 
 
 export async function fetchCrunch(userId: string, start: string, end: string) {
   return get<CrunchStrip>(endpoints.calendar.crunch(userId) + window(start, end));
+}
+
+/** Stretches of term when classes do not run. */
+export async function fetchBlackouts(userId: string) {
+  return get<TermBlackout[]>(endpoints.calendar.blackouts(userId));
+}
+
+export async function createBlackout(userId: string, data: TermBlackoutCreate) {
+  return post<TermBlackout>(endpoints.calendar.blackouts(userId), data);
+}
+
+export async function deleteBlackout(userId: string, id: string) {
+  return del(endpoints.calendar.blackout(userId, id));
 }
