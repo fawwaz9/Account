@@ -158,3 +158,61 @@ def test_existing_grades_default_to_counting(db, user):
 
     assert course.grades[0].excluded is False
     assert calculate_current_average(course) == 75.0
+
+
+# ------------------------------------------------------- exact arithmetic --
+
+def test_category_points_are_scaled_from_the_exact_average(db, user):
+    """236.5 of 240 at a weight of 12 is exactly 11.825, so it reads 11.83.
+
+    Scaled from the *displayed* 98.54 instead it comes out 11.8248 and shows
+    11.82 -- a hundredth light, against arithmetic the student can do on the
+    page in front of them.
+    """
+    from app.Grades.services.grade_service import category_points
+
+    course = make_course(db, user.id, "COSC 111",
+                         category_weights={"Assignment": 12.0, "Final": 88.0})
+    score(db, course, "Assignment", "Assignments", 236.5, 240.0)
+
+    assert category_points(course, "Assignment") == 11.83
+
+
+def test_category_points_round_half_up_despite_binary(db, user):
+    """A midpoint that no float can hold.
+
+    47.3/80 x 100 is exactly 59.125 and should read 59.13. The nearest double to
+    59.125 sits below it, so anything scaled through a float rounds to 59.12 --
+    which is why this figure is computed in Decimal from the recorded marks.
+    """
+    from app.Grades.services.grade_service import category_points
+
+    course = make_course(db, user.id, "COSC 199", category_weights={"Quiz": 100.0})
+    score(db, course, "Quiz", "Q1", 47.3, 80.0)
+
+    assert category_points(course, "Quiz") == 59.13
+
+
+def test_category_points_ignore_a_dropped_mark(db, user):
+    from app.Grades.services.grade_service import category_points
+
+    course = make_course(db, user.id, "COSC 198", category_weights={"Quiz": 10.0})
+    score(db, course, "Quiz", "Q1", 10.0, 10.0)
+    score(db, course, "Quiz", "Q2", 0.0, 10.0, excluded=True)
+
+    assert category_points(course, "Quiz") == 10.0
+
+
+def test_category_points_leave_the_course_average_alone(db, user):
+    """The engine is deliberately untouched: this is a display figure only."""
+    from app.Grades.services.grade_service import (
+        calculate_current_average, category_points)
+
+    course = make_course(db, user.id, "COSC 197",
+                         category_weights={"Assignment": 12.0, "Final": 88.0})
+    score(db, course, "Assignment", "Assignments", 236.5, 240.0)
+    score(db, course, "Final", "Final", 80.0, 100.0)
+
+    assert category_points(course, "Assignment") == 11.83
+    # Unchanged by the Decimal path above.
+    assert calculate_current_average(course) == 82.22

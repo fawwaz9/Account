@@ -88,6 +88,10 @@ export interface CourseDetail {
   // rather than recomputing -- the component used to do its own arithmetic and
   // disagreed with the course average on the same screen.
   category_averages: Partial<Record<GradeCategory, number>>;
+  // What each category contributes, in marks out of its weight. Sent rather
+  // than derived: multiplying the rounded average above by the weight rounds a
+  // second time, and showed 11.82 for a figure that is exactly 11.825.
+  category_points: Partial<Record<GradeCategory, number>>;
 }
 
 export interface CourseUpdate{

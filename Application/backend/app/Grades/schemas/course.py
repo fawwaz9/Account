@@ -145,6 +145,13 @@ class CourseDetail(Course):
         default_factory=dict,
         description="Current average per category, 0-100",
     )
+    #: What each category contributes, in marks out of its weight. Sent rather
+    #: than derived: deriving it meant multiplying the rounded average above by
+    #: the weight, a second rounding that showed 11.82 for an exact 11.825.
+    category_points: dict[GradeCategory, float] = Field(
+        default_factory=dict,
+        description="Marks each category contributes, out of its weight",
+    )
 
     class Config:
         from_attributes = True

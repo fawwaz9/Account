@@ -5,6 +5,7 @@ from app.Grades.schemas.course import CourseCreate, CourseUpdate
 from app.Grades.services.grade_service import (
     calculate_gpa_points,
     calculate_grade_category_average,
+    category_points,
     calculate_letter_grade,
     update_category_weights as apply_category_weights,
 )
@@ -40,6 +41,14 @@ def attach_category_averages(course: CourseModel) -> CourseModel:
     """
     course.category_averages = {
         category: calculate_grade_category_average(course, category)
+        for category in course.category_weights
+    }
+    # What each category contributes, in marks out of its weight. Sent rather
+    # than derived, because deriving it meant multiplying the rounded average
+    # above by the weight -- a second rounding, which showed 11.82 for a figure
+    # that is exactly 11.825.
+    course.category_points = {
+        category: category_points(course, category)
         for category in course.category_weights
     }
     return course
