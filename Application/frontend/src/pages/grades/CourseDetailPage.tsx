@@ -247,12 +247,14 @@ export default function CourseDetailPage() {
 
       {/* Under the average, because it is the same number with its uncertainty
           still attached. Hides itself once nothing is outstanding. */}
+      {/* Cost on the left, the band on the right. Both hide themselves when
+          they have nothing to say, so the row collapses rather than leaving a
+          gap -- see .courseInsights:empty. */}
       {user && courseId && (
-        <GradeBand userId={user.id} courseId={courseId} nonce={reloadNonce} />
-      )}
-
-      {user && courseId && (
-        <CourseCost userId={user.id} courseId={courseId} nonce={reloadNonce} />
+        <div className="courseInsights">
+          <CourseCost userId={user.id} courseId={courseId} nonce={reloadNonce} />
+          <GradeBand userId={user.id} courseId={courseId} nonce={reloadNonce} />
+        </div>
       )}
 
       <div className="categoriesGrid">
