@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { TaskCreate } from "../types";
+import { END_OF_DAY } from "../dueTime";
 import { Course } from "../../grades/types";
 
 interface TaskFormProps {
@@ -7,16 +8,6 @@ interface TaskFormProps {
   readonly onSubmit: (task: TaskCreate) => Promise<void>;
   readonly busy: boolean;
 }
-
-/**
- * What a due date means when no time is given: the end of that day.
- *
- * A deadline with no time is really "by the end of Friday", and leaving it null
- * made every task an all-day item on the calendar however specific the student
- * actually was. Pre-filled rather than forced, so anything due at 14:00 is one
- * edit away.
- */
-const END_OF_DAY = "23:59";
 
 function blankTask(): TaskCreate {
   return {
