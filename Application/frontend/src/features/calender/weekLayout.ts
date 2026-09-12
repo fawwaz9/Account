@@ -1,4 +1,5 @@
 import { EventOccurrence } from "./types";
+import { Task } from "../tasks/types";
 import { minutesOfDay } from "../../shared/utils/dateUtils";
 
 /** Pixels per hour. Tall enough that a 50-minute class can show its title. */
@@ -23,6 +24,9 @@ export const ASSUMED_MINUTES = 60;
 
 /** Shortest block that still has room for a title. */
 const MINIMUM_MINUTES = 20;
+
+/** Deadlines closer together than this are drawn side by side, not stacked. */
+const NEARBY_MINUTES = 30;
 
 export interface Placed {
   occurrence: EventOccurrence;
@@ -96,6 +100,60 @@ export function place(occurrences: EventOccurrence[]): Placed[] {
 
   return placed;
 }
+
+export interface PlacedTask {
+  task: Task;
+  minutes: number;
+  /** Which sub-column of its cluster of simultaneous deadlines this sits in. */
+  column: number;
+  /** How many sub-columns that cluster needs. */
+  columns: number;
+}
+
+/**
+ * Put a day's timed tasks on the clock.
+ *
+ * Deliberately not `place`. An event occupies a span and is drawn as a box with
+ * a height; a task is due *at* a moment and has no duration at all, so giving it
+ * one would draw an hour of work that was never claimed. These are markers on
+ * the time axis, and they are laid out separately so they can sit above the
+ * blocks rather than fight them for a column.
+ *
+ * Deadlines within `NEARBY_MINUTES` of each other share a cluster and split the
+ * width, so two things due at the same hour stay legible instead of stacking
+ * exactly on top of one another.
+ */
+export function placeTasks(tasks: Task[]): PlacedTask[] {
+  const timed = tasks
+    .map((task) => {
+      const minutes = minutesOfDay(task.due_time);
+      return minutes === null ? null : { task, minutes };
+    })
+    .filter((item): item is { task: Task; minutes: number } => item !== null)
+    .sort((a, b) => a.minutes - b.minutes);
+
+  const placed: PlacedTask[] = [];
+  let cluster: PlacedTask[] = [];
+
+  function closeCluster() {
+    for (const item of cluster) item.columns = cluster.length;
+    cluster = [];
+  }
+
+  for (const item of timed) {
+    if (cluster.length > 0 && item.minutes - cluster[0].minutes >= NEARBY_MINUTES) {
+      closeCluster();
+    }
+
+    const entry: PlacedTask = { ...item, column: cluster.length, columns: 1 };
+    cluster.push(entry);
+    placed.push(entry);
+  }
+  closeCluster();
+
+  return placed;
+}
+
 /** The hours the grid draws, as a list. */
 export const HOURS = Array.from(
   { length: DAY_END - DAY_START },

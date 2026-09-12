@@ -42,17 +42,28 @@ interface TaskChipProps {
  *
  * Checkable from here: a deadline you can see is one you want to tick off
  * without first navigating to another page.
+ *
+ * Shows the time when it has one. The month grid has no time axis to place it
+ * on, so the alternative is a due time that is stored, entered and then never
+ * shown anywhere -- which is how it went unnoticed that the calendar ignored it
+ * entirely. The week view puts the same task on the clock instead.
  */
 export function TaskChip({ task, onToggle }: TaskChipProps) {
+  const due = clockTime(task.due_time);
+
   return (
     <button
       type="button"
       className={`calChip calChip-task${task.done ? " calChipDone" : ""}`}
       onClick={() => onToggle(task)}
-      title={`${task.title}${task.course_code ? ` - ${task.course_code}` : ""}`}
-      aria-label={`${task.done ? "Reopen" : "Complete"} ${task.title}`}
+      title={[task.title, due, task.course_code].filter(Boolean).join(" · ")}
+      aria-label={
+        `${task.done ? "Reopen" : "Complete"} ${task.title}` +
+        (due ? `, due ${due}` : "")
+      }
     >
       <span className="calChipMark" aria-hidden="true">{task.done ? "✓" : "○"}</span>
+      {due && <span className="calChipWhen">{due}</span>}
       <span className="calChipTitle">{task.title}</span>
     </button>
   );

@@ -3,7 +3,7 @@ import { CalendarDay } from "../hooks/useCalender";
 import { EventOccurrence, EXAM_KINDS } from "../types";
 import { Task } from "../../tasks/types";
 import { TaskChip } from "./EventCard";
-import { DAY_START, HOUR_HEIGHT, HOURS, OPENING_HOUR, place } from "../weekLayout";
+import { DAY_START, HOUR_HEIGHT, HOURS, OPENING_HOUR, place, placeTasks } from "../weekLayout";
 import { clockTime, fromIso, hourLabel, today } from "../../../shared/utils/dateUtils";
 
 const WEEKDAY_HEADINGS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -30,7 +30,9 @@ interface WeekViewProps {
  *
  * All-day items sit in that header rather than in the grid. They have no
  * position on a time axis, and pinning them to midnight would say something
- * false about when they happen.
+ * false about when they happen. A task carrying a due time is not one of them:
+ * it belongs on the clock at the minute it is due, which is what the header
+ * cannot show.
  */
 export default function WeekView({
   days,
@@ -90,9 +92,13 @@ export default function WeekView({
                   <span className="calChipTitle">{occurrence.title}</span>
                 </button>
               ))}
-            {day.tasks.map((task) => (
-              <TaskChip key={task.id} task={task} onToggle={onToggleTask} />
-            ))}
+            {/* Only the ones with no time of their own. A task due at 14:00
+                has a place in the grid below and does not belong up here. */}
+            {day.tasks
+              .filter((task) => !task.due_time)
+              .map((task) => (
+                <TaskChip key={task.id} task={task} onToggle={onToggleTask} />
+              ))}
           </div>
         ))}
       </div>
@@ -143,6 +149,39 @@ export default function WeekView({
                     {height >= HOUR_HEIGHT && item.occurrence.location && (
                       <span className="weekBlockWhere">{item.occurrence.location}</span>
                     )}
+                  </button>
+                );
+              })}
+
+              {/* Drawn after the blocks so a deadline inside a lecture is not
+                  hidden behind it. A marker rather than a box: a task is due at
+                  a moment and claims no span of the day. */}
+              {placeTasks(day.tasks).map((item) => {
+                const top = ((item.minutes - DAY_START * 60) / 60) * HOUR_HEIGHT;
+                const width = 100 / item.columns;
+
+                return (
+                  <button
+                    key={`due-${item.task.id}`}
+                    type="button"
+                    className={`weekDue${item.task.done ? " weekDueDone" : ""}`}
+                    style={{
+                      top,
+                      left: `${item.column * width}%`,
+                      width: `calc(${width}% - 2px)`,
+                    }}
+                    onClick={() => onToggleTask(item.task)}
+                    title={[
+                      item.task.title,
+                      clockTime(item.task.due_time),
+                      item.task.course_code,
+                    ].filter(Boolean).join(" · ")}
+                    aria-label={`${item.task.done ? "Reopen" : "Complete"} ${item.task.title}, due ${clockTime(item.task.due_time)}`}
+                  >
+                    <span className="weekDueMark" aria-hidden="true">
+                      {item.task.done ? "✓" : "○"}
+                    </span>
+                    <span className="weekDueTitle">{item.task.title}</span>
                   </button>
                 );
               })}

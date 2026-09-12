@@ -8,6 +8,16 @@ interface TaskFormProps {
   readonly busy: boolean;
 }
 
+/**
+ * What a due date means when no time is given: the end of that day.
+ *
+ * A deadline with no time is really "by the end of Friday", and leaving it null
+ * made every task an all-day item on the calendar however specific the student
+ * actually was. Pre-filled rather than forced, so anything due at 14:00 is one
+ * edit away.
+ */
+const END_OF_DAY = "23:59";
+
 function blankTask(): TaskCreate {
   return {
     title: "",
@@ -33,6 +43,15 @@ export default function TaskForm({ courses, onSubmit, busy }: TaskFormProps) {
 
   function update<K extends keyof TaskCreate>(key: K, value: TaskCreate[K]) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  /** The two move together: a time of day with no date is rejected on save. */
+  function setDueDate(value: string | null) {
+    setForm((current) => ({
+      ...current,
+      due_date: value,
+      due_time: value === null ? null : current.due_time ?? END_OF_DAY,
+    }));
   }
 
   async function handleSubmit(event: React.FormEvent) {
@@ -75,9 +94,21 @@ export default function TaskForm({ courses, onSubmit, busy }: TaskFormProps) {
         type="date"
         className="taskInput"
         value={form.due_date ?? ""}
-        onChange={(event) => update("due_date", event.target.value || null)}
+        onChange={(event) => setDueDate(event.target.value || null)}
         aria-label="Due date"
       />
+
+      {/* Only once there is a date to attach it to. A time on its own is not a
+          deadline, and the API refuses one. */}
+      {form.due_date && (
+        <input
+          type="time"
+          className="taskInput taskInputNarrow"
+          value={form.due_time ?? ""}
+          onChange={(event) => update("due_time", event.target.value || null)}
+          aria-label="Due time"
+        />
+      )}
 
       <input
         type="number"
