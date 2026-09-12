@@ -309,6 +309,14 @@
 }
 
 .calDay {
+  /* Flexed and unpadded, or the label sits off-centre in its own circle: the
+     size is fixed at 34px while the padding came from the base button rule,
+     which pushed the letter down and to the right. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  box-sizing: border-box;
   width: 34px;
   height: 34px;
   border: 1px solid #1f2a44;
@@ -317,22 +325,23 @@
   color: var(--muted);
   cursor: pointer;
   font-weight: 600;
+  line-height: 1;
   transition: 0.15s ease;
 }
 
 .calDay:hover {
   border-color: var(--gold);
-  color: var(--text);
 }
 
-/* Solid rather than a tint. At 18% opacity the gold was there but unreadable on
-   a 34px circle, so a chosen day looked no different from an unchosen one --
-   which on a repeat rule is the difference between meeting on Tuesdays and not. */
+/* A gold ring rather than a gold fill. The fill inverted the text to dark and
+   made the row read as a set of badges; the ring keeps every day looking like
+   the same control and lets the border alone carry which ones are chosen.
+   Two pixels because a 1px ring on a 34px circle is easy to miss. */
 .calDaySelected,
 .calDaySelected:hover {
-  border-color: var(--gold);
-  background: var(--gold);
-  color: var(--bg);
+  border: 2px solid var(--gold);
+  background: var(--panel-2);
+  color: var(--muted);
 }
 
 .calButton {
