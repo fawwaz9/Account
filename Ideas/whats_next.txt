@@ -7,14 +7,18 @@ Shipped so far (do not re-propose)
         Course flags: no_final, transfer_credit, archived, with the credit and
           average rules each flag changes.
         Recurring transactions in all four kinds, on the same engine as class times.
+        Repeating tasks -- the engine's third consumer, so all three now run on it.
         Estimated minutes, tags, course-code categorisation, check-to-archive.
+        One tokenizer: course code, date word, duration, amount, score/max.
+        Quick capture on the Tasks page, and the omnibox on top of the same parser.
+        A week view on the calendar: 24 hours, overlapping classes side by side.
+        The account page in two columns, with the target bar dividing them.
 
 
 Tasks:  Shows midterms and exams coming up in the next 30 days.
         Reminders, as opposed to tasks: something that notifies rather than waits.
         At-risk first: tasks belonging to courses below target sort to the top of the list.
         Snooze with a reason, and keep the reason. Patterns show up after a term.
-        Quick capture: one text box that parses "CS221 lab due fri" into a real task.
 
 
 Grades: Think of other functionalities that can merge over to the other.
@@ -34,8 +38,6 @@ Grades: Think of other functionalities that can merge over to the other.
         When editing courses the manual is the default but syllabus parser will be available under the manual grid.
 
 Calendar:
-        Repeating tasks: the third consumer the engine was written for, and the one
-          still missing. Class times and recurring payments already run on it.
         Free-block finder: the gaps between your classes, ranked by length, so study time gets scheduled instead of hoped for.
         Crunch radar: a density strip across the term showing which weeks stack up. Visible in September, not the night before.
         Reading break and term boundaries pulled from course start/end dates, blocked out automatically.
@@ -50,9 +52,6 @@ Budget:
         Subscription audit: recurring charges detected from the ledger, with the ones you forgot flagged.
         Money Lent gets who and when, plus a nudge when it has been out too long.
         Reimbursement state on a transaction: owed, claimed, received.
-        WHen you click and an account I want the first four blocks to be in a 2x2 grid and the money in and out char to be right of that.
-        I also want the balance over time chart to be under the first chart while the "where it went" section to be under the 2x2 grid.
-        The planned spend bar should stay where its at seperating the sections.
 
 Grades x Budget (nothing else does this):
         Cost per course: tuition and materials divided across enrolled courses, shown on the course page.
@@ -63,7 +62,6 @@ Grades x Budget (nothing else does this):
 Quality of Life:
         Weekly digest on the dashboard: what is due, what moved, what you spent.
         Keyboard shortcuts for the four things you do twenty times a day.
-        Omnibox: one input, anywhere. "coffee 4.50" or "CS221 midterm 78/100" and it files itself.
         Offline-capable, because campus wifi. Only read-only offline should be implemented.
         Export a term as a PDF worth keeping.
 
@@ -77,35 +75,24 @@ Wild:
 
 Implementation Plan
 
-The foundation is in and has two consumers proving it. What is left splits into
-one piece of plumbing that unblocks a lot, a set of derivations that need no new
-tables at all, and the things that genuinely need new storage.
+The engine now has all three consumers it was written for, and the tokenizer has
+two. What is left splits into one piece of plumbing that unblocks a whole
+section, a set of derivations that need no new tables at all, a short list of UI
+debts, and the things that genuinely need new storage.
 
-Finish the engine's third consumer
-- Repeating tasks. The engine was written for three things and drives two. Doing
-  the third now is what proves the abstraction was right rather than a guess, and
-  it is the cheapest of the three -- a rule on a task row, expanded the same way.
-
-One tokenizer, then two features nearly free
-- One parser: course code, date word, duration, amount, score/max. Everything
-  below reads its output; writing three parsers is how they end up disagreeing
-  about what "fri" means.
-- Quick capture uses it first, in the Tasks page, where a wrong guess is cheap to
-  correct and the feedback is immediate.
-- Omnibox is that tokenizer plus a module router. Only worth building once quick
-  capture has shown the parser is right, because an omnibox that files things
-  into the wrong module is worse than no omnibox.
-
-course_id on transactions
+course_id on transactions -- next
 - One nullable column, and every Grades x Budget idea becomes a query rather than
   a feature: cost per course, materials by course code, the dollar figure beside
   a dropped course, the term budget that already knows the term dates.
-- Do it before the cheap wins below, since two of them want it.
+- First, because two of the cheap wins below want it and because it is the last
+  bit of plumbing anything is waiting on.
 
 Cheap wins, read-only
 - Free blocks, crunch radar, week load, term timeline, best/worst band, category
   blind spots, term retrospective. All derived from data already stored: no new
   tables, no writes, and each one is a service function plus a chart.
+- Free blocks is the closest to free of them: the week view already lays the day
+  out against the clock, so the gaps are arithmetic on data it holds.
 - Safe-to-spend and sinking funds. /recurring/upcoming already returns the
   commitments, so safe-to-spend is a subtraction.
 - Subscription audit reads the ledger for repeats that have no standing
@@ -118,16 +105,15 @@ Small UI debts, worth clearing in one pass
 - Archived courses marked and hideable in the course list.
 - Bonus marks surfaced: say that a category may exceed 100% and show when a
   course is carrying bonus, rather than only permitting it silently.
-- A final's card distinct from a midterm's.
-- The account page layout: 2x2 tiles with money in/out beside them, balance over
-  time under that chart, "where it went" under the tiles, planned spend still
-  separating the sections.
+- A final's card distinct from a midterm's. Both currently share one exam style.
 
 Needs new storage, so later
 - Reminders that notify, as opposed to tasks that wait.
 - Snooze with a reason, kept, so the pattern is readable after a term.
 - Reimbursement state, and who/when on Money Lent.
 - Grade-to-effort log.
+- At-risk-first task sorting needs no storage, but it does need the dashboard's
+  below-target rule reachable from the task list, so it belongs with these.
 - What-if sandbox. Read-only in effect, but it needs the whole term recomputed
   from hypothetical inputs, so it wants the averaging code reachable without a
   session first.
@@ -135,9 +121,19 @@ Needs new storage, so later
 Syllabus parser
 - Deliberately late. It proposes categories, weights and due dates for review,
   which means it depends on due dates, category weights and the course flags all
-  being settled -- they are now -- and on the tokenizer for dates.
+  being settled -- they are -- and on the tokenizer for dates, which now exists.
 - Default path when adding a course, manual behind a button. When editing, manual
   is the default and the parser sits under the grid.
+
+Worth knowing before picking anything up
+- 224 backend tests. The frontend has none: the week view's overlap maths was
+  checked with a one-off esbuild harness, not by anything that runs on its own.
+  Vitest would slot in beside Vite cheaply if that starts to bite.
+- Repeat rules live in five columns shared by events, standing payments and
+  repeating tasks, read and written through Calendar/utils/rule_columns.py.
+- A repeat materialises differently per module, and the differences are the
+  point: class times never become rows, payments become rows only once they have
+  happened, tasks become rows a little way ahead so each can be ticked off.
 
 Collaboration, by invite
 - No shared ownership. The invitee gets their own row; every existing query keeps
