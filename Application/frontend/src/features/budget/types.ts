@@ -247,6 +247,8 @@ export interface TuitionCourse {
 export interface TuitionPreview {
   school_year: number | null;
   semester: string | null;
+  /** The term as a person would write it; school_year is a year of standing. */
+  term_name: string;
   courses: TuitionCourse[];
   credits_counted: number;
   cost_per_credit: number;

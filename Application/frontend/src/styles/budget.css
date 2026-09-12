@@ -526,3 +526,91 @@
     justify-content: flex-end;
   }
 }
+
+/* ===== Pay Tuition =====
+   A tuition bill is a rate times a number of credits, plus fees belonging to no
+   course, less deductions that never touched the account. Both totals are shown
+   because they answer different questions: what leaves the account, and what the
+   term is worth. */
+
+.tuitionCourses,
+.tuitionDeductions {
+  margin: 14px 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.tuitionCoursesHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.tuitionCourseList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tuitionCourseList li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 12px;
+  padding: 4px 0;
+  border-bottom: 1px dashed var(--border);
+  font-size: 0.88rem;
+}
+
+.tuitionCourseList li:last-child { border-bottom: none; }
+
+.tuitionCourseCredits { color: var(--muted); }
+
+.tuitionEmpty,
+.tuitionNote {
+  margin: 6px 0 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.tuitionTotals {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+}
+
+.tuitionLine {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+  font-size: 0.9rem;
+}
+
+.tuitionLineMinus { color: var(--gold-soft); }
+
+.tuitionLinePayable {
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 1rem;
+}
+
+.tuitionLinePayable strong { color: var(--gold); }
+
+/* Shown under a course picker when the course came from the description. */
+.courseHint {
+  margin: 4px 0 0;
+  font-size: 0.72rem;
+  color: var(--gold-soft);
+}

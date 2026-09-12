@@ -5,6 +5,7 @@ import { fetchCourseDetail, deleteCourse, deleteGrade } from "../../features/gra
 import { GradeCategory, Grade, CourseDetail } from "../../features/grades/types";
 import { bonusLast, carriesBonus, isAdditive } from "../../features/grades/bonus";
 import GradeBand from "../../features/grades/components/GradeBand";
+import CourseCost from "../../features/grades/components/CourseCost";
 import AddGradeModal from "../../features/grades/components/AddGradeModal";
 import EditGradeModal from "../../features/grades/components/EditGradeModal";
 import EditCourseModal from "../../features/grades/components/EditCourseModal";
@@ -248,6 +249,10 @@ export default function CourseDetailPage() {
           still attached. Hides itself once nothing is outstanding. */}
       {user && courseId && (
         <GradeBand userId={user.id} courseId={courseId} nonce={reloadNonce} />
+      )}
+
+      {user && courseId && (
+        <CourseCost userId={user.id} courseId={courseId} nonce={reloadNonce} />
       )}
 
       <div className="categoriesGrid">

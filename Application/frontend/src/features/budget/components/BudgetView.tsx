@@ -10,6 +10,7 @@ import Recurring from "./Recurring";
 import RecurringModal from "./RecurringModal";
 import { useBudget } from "../hooks/useBudget";
 import { useCourses } from "../../grades/hooks/useCourses";
+import TuitionModal from "./TuitionModal";
 import { useTransactionDelete } from "../hooks/useTransactionDelete";
 import DeleteConfirmModal from "../../grades/components/DeleteConfirmModal";
 import { deleteRecurring, setBudgetTarget } from "../api";
@@ -26,6 +27,7 @@ export default function BudgetView() {
   // Grades page already loads.
   const { courses } = useCourses();
   const [modalOpen, setModalOpen] = useState(false);
+  const [tuitionOpen, setTuitionOpen] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [editingRule, setEditingRule] = useState<RecurringTransaction | null>(null);
@@ -66,6 +68,16 @@ export default function BudgetView() {
           disabled={accounts.length === 0}
         >
           Record Money
+        </button>
+        {/* Its own action rather than a fifth tab in Record Money: tuition
+            happens twice a year and is shaped nothing like the other four. */}
+        <button
+          type="button"
+          className="buttons addCourseButton"
+          onClick={() => setTuitionOpen(true)}
+          disabled={accounts.length === 0}
+        >
+          Pay Tuition
         </button>
       </div>
 
@@ -165,6 +177,13 @@ export default function BudgetView() {
         categories={categories}
         courses={courses}
         onClose={() => setModalOpen(false)}
+        onSaved={reload}
+      />
+
+      <TuitionModal
+        open={tuitionOpen}
+        accounts={accounts}
+        onClose={() => setTuitionOpen(false)}
         onSaved={reload}
       />
     </div>
