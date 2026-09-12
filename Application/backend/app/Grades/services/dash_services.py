@@ -10,7 +10,11 @@ from app.Grades.schemas.dashboard import (
     UserGradeDashboard,
     YearSummary,
 )
-from app.Grades.services.grade_service import calculate_gpa_points, calculate_required_final
+from app.Grades.services.grade_service import (
+    calculate_gpa_points,
+    calculate_required_final,
+    counts_toward_average,
+)
 from app.Grades.utils.terms import CURRENT, FUTURE, PAST, course_result_grade, year_average
 from app.Grades.utils.weights import weight_problems
 from app.Grades.services.course_service import get_all_courses
@@ -77,7 +81,9 @@ def get_dashboard(db: Session, user_id: uuid.UUID, target_grade: float = DEFAULT
             and not is_additive(category)
             and weight > 0
             and not any(
-                grade.category == category and grade.score is not None
+                grade.category == category
+                and grade.score is not None
+                and counts_toward_average(grade)
                 for grade in course.grades
             )
         ]

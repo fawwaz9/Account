@@ -33,6 +33,7 @@ ADDED_COLUMNS: dict[str, dict[str, str]] = {
     "grades": {
         "due_date": "DATE",
         "schedule_as": "VARCHAR NOT NULL DEFAULT 'task'",
+        "excluded": "BOOLEAN NOT NULL DEFAULT 0",
     },
     "events": {
         "grade_id": "CHAR(32)",

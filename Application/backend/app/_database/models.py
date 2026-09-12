@@ -135,6 +135,11 @@ class GradeModel(Base):
     category = Column(String, nullable=False)
     score = Column(Float, nullable=True)
     max_score = Column(Float, nullable=False)
+    #: Kept on the course but out of the arithmetic, for when a professor drops
+    #: the two lowest quizzes or similar. Not the same as deleting it: the mark
+    #: happened, you may want to see it, and which ones were dropped can change
+    #: as more work is marked.
+    excluded = Column(Boolean, nullable=False, default=False)
     weight = Column(Float, default=0.0)
     #: When the work is due, as opposed to when it was marked.
     due_date = Column(Date, nullable=True)

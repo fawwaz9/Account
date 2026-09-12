@@ -11,6 +11,8 @@ interface EditGradeFormState {
   due_date: string | null;
   /** What the date means: work to tick off, or a block on the calendar. */
   schedule_as: GradeSchedule;
+  /** Kept on the course but out of every average, e.g. a dropped quiz. */
+  excluded: boolean;
 }
 
 interface EditGradeFormProps {
@@ -92,6 +94,23 @@ export default function EditGradeForm({
       </div>
 
       <BonusNote score={form.score ?? null} maxScore={form.max_score} />
+
+      {/* For when a professor drops the two lowest quizzes. Deleting the grade
+          would work too, but the mark happened and which ones are dropped
+          changes as more work comes back, so it has to be reversible. */}
+      <label className="dropGradeToggle">
+        <input
+          type="checkbox"
+          checked={form.excluded}
+          onChange={(event) => updateField("excluded", event.target.checked)}
+        />
+        <span>
+          Don't count this toward the course
+          <span className="dropGradeHint">
+            Stays on the course, out of every average — for a mark your professor dropped.
+          </span>
+        </span>
+      </label>
 
       <ScheduleChoice
         dueDate={form.due_date}

@@ -592,3 +592,60 @@
   color: var(--muted);
   line-height: 1.5;
 }
+
+/* ===== Dropped marks =====
+   A mark a professor has dropped stays on the course -- you want to see what was
+   dropped, and which ones are dropped changes as more work comes back -- but it
+   must not look like it is counting toward anything. */
+
+.gradeRowDropped {
+  opacity: 0.55;
+}
+
+.gradeRowDropped span:first-child {
+  text-decoration: line-through;
+}
+
+.gradeRowDropped:hover {
+  opacity: 0.8;
+}
+
+.droppedTag {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  vertical-align: middle;
+}
+
+/* The control in the edit modal. Reads as a statement about the mark rather
+   than a destructive action, because it is reversible and not a delete. */
+.dropGradeToggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  text-align: left;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.dropGradeToggle input {
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
+.dropGradeHint {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.72rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
