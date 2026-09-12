@@ -4,6 +4,7 @@ import { useAuth } from "../../app/auth/AuthContext";
 import { fetchCourseDetail, deleteCourse, deleteGrade } from "../../features/grades/api";
 import { GradeCategory, Grade, CourseDetail } from "../../features/grades/types";
 import { bonusLast, carriesBonus, isAdditive } from "../../features/grades/bonus";
+import { trimNumber } from "../../shared/utils/numberUtils";
 import GradeBand from "../../features/grades/components/GradeBand";
 import CourseCost from "../../features/grades/components/CourseCost";
 import AddGradeModal from "../../features/grades/components/AddGradeModal";
@@ -208,7 +209,9 @@ export default function CourseDetailPage() {
               // Straight from the API. Recomputing it here counted ungraded work
               // as a zero, so this strip disagreed with the average beside it.
               const average = course.category_averages?.[category as GradeCategory] ?? 0;
-              const weightage = ((weight * average) / 100).toFixed(2);
+              // Trimmed rather than padded: most of these are whole numbers,
+              // and "18.00/20" spent two characters saying nothing.
+              const weightage = trimNumber((weight * average) / 100);
               // An additive category is not marks out of a total, so showing it
               // as "2.50/5" read as three marks lost. It is points gained.
               const additive = isAdditive(category);
@@ -219,7 +222,9 @@ export default function CourseDetailPage() {
                 >
                   <span style={{ textTransform: "capitalize" }}>{category}</span>
                   <span>
-                    {additive ? `+${weightage}` : `${weightage}/${weight}`}
+                    {additive
+                      ? `+${weightage}`
+                      : `${weightage}/${trimNumber(weight)}`}
                   </span>
                 </div>
               );
