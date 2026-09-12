@@ -9,7 +9,8 @@ from datetime import date
 import pytest
 
 from app._database.models import TaskModel
-from app.Tasks.services.quick_capture_service import build_preview, capture, resolve_course
+from app.Grades.services.course_lookup import resolve_course
+from app.Tasks.services.quick_capture_service import build_preview, capture
 from conftest import make_course, make_user
 
 

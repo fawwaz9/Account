@@ -31,6 +31,7 @@ from app.Grades.services.grade_service import (
     update_category_weights,
     update_grade,
 )
+from app.Grades.services.course_lookup import resolve_course
 from app.Grades.services.dash_services import DEFAULT_TARGET_GRADE, get_dashboard
 from app.shared import audit
 
@@ -79,6 +80,25 @@ def search_course_list(
         raise HTTPException(status_code=404, detail=error_user["not_found"])
 
     return courses
+
+@router.get("/{user_id}/courses/resolve", responses=responses["user_404"])
+def resolve_course_from_text(
+    user_id: VerifiedUserId,
+    db: DBSession,
+    text: str = Query(..., min_length=1, max_length=200),
+):
+    """Which course a typed line means, if any.
+
+    Server-side because the matching rules -- letters as a prefix so "cpsc 210"
+    finds "CPSC_V 210", and an ambiguous prefix resolving to nothing rather than
+    guessing -- must not be reimplemented in TypeScript and allowed to drift
+    from the ones quick capture and the omnibox use.
+    """
+    course = resolve_course(db, user_id, text)
+    if course is None:
+        return {"course_id": None, "code": None, "name": None}
+    return {"course_id": course.id, "code": course.code, "name": course.name}
+
 
 @router.get("/{user_id}/courses/{course_id}", response_model=CourseDetail, responses=responses["course_404"])
 def get_single_course(user_id: VerifiedUserId, course_id: UUID, db: DBSession):

@@ -253,3 +253,22 @@ def test_another_users_account_is_never_used(db, user):
     preview = build_preview(db, user.id, "coffee 4.50 theirs")
 
     assert preview.can_create is False
+
+
+def test_an_expense_keeps_the_course_it_names(db, user):
+    """"textbook cpsc 210 $80" filed the money and used to lose what it was for.
+
+    The course was already resolved to build the preview, then dropped at the
+    create_transaction call -- so the expense landed correctly and forgot what
+    it was for.
+    """
+    setup_account(db, user)
+    course = make_course(db, user.id, "CPSC 210")
+
+    preview = build_preview(db, user.id, "textbook cpsc 210 $80")
+    assert preview.kind == OmniboxKind.EXPENSE
+    assert "CPSC 210" in preview.summary
+
+    result = file_it(db, user.id, "textbook cpsc 210 $80")
+    row = db.query(TransactionModel).filter(TransactionModel.id == result.id).first()
+    assert row.course_id == course.id
