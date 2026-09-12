@@ -104,7 +104,11 @@ export default function RepeatingModal({
   }
 
   return (
-    <Modal title={rule ? "Edit repeating task" : "New repeating task"} onClose={onClose}>
+    <Modal
+      title={rule ? "Edit repeating task" : "New repeating task"}
+      onClose={onClose}
+      panelClassName="widePopup"
+    >
       <form className="calForm" onSubmit={handleSubmit}>
         <label className="calField">
           <span className="calFieldLabel">Task</span>

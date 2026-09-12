@@ -138,7 +138,7 @@ export default function ClassScheduleModal({
   const hasTermDates = Boolean(startDate && endDate);
 
   return (
-    <Modal title={`${courseCode} class times`} onClose={onClose}>
+    <Modal title={`${courseCode} class times`} onClose={onClose} panelClassName="widePopup">
       <form className="calForm" onSubmit={handleSubmit}>
         {hasTermDates ? (
           <p className="calHint">

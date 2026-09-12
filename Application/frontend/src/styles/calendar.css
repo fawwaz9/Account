@@ -301,13 +301,23 @@
   background: var(--panel-2);
   color: var(--muted);
   cursor: pointer;
+  font-weight: 600;
+  transition: 0.15s ease;
 }
 
-.calDaySelected {
+.calDay:hover {
   border-color: var(--gold);
-  background: rgba(212, 175, 55, 0.18);
-  color: var(--gold);
-  font-weight: 600;
+  color: var(--text);
+}
+
+/* Solid rather than a tint. At 18% opacity the gold was there but unreadable on
+   a 34px circle, so a chosen day looked no different from an unchosen one --
+   which on a repeat rule is the difference between meeting on Tuesdays and not. */
+.calDaySelected,
+.calDaySelected:hover {
+  border-color: var(--gold);
+  background: var(--gold);
+  color: var(--bg);
 }
 
 .calButton {
@@ -420,14 +430,31 @@
   overflow-x: auto;
 }
 
+/* The header and the body are separate grids so the dates can stay put while
+   the hours scroll. They share this column template, which is the only thing
+   keeping their columns lined up -- change one and you must change the other. */
+.weekHeader,
 .weekGrid {
   display: grid;
   /* A fixed gutter for the hour labels, then seven equal days. */
   grid-template-columns: 52px repeat(7, minmax(90px, 1fr));
-  /* Header, all-day strip, then the scrolling body. */
-  grid-template-rows: auto auto 1fr;
   gap: 0;
   min-width: 680px;
+}
+
+.weekHeader {
+  grid-template-rows: auto auto;
+  /* Above the scrolling body, so a block cannot appear to slide over the dates. */
+  position: relative;
+  z-index: 1;
+}
+
+.weekBody {
+  /* All 24 hours exist; about thirteen of them are on screen, opened at the
+     morning. Without a ceiling the grid is 1100px tall and pushes the page. */
+  max-height: 70vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .weekCorner {

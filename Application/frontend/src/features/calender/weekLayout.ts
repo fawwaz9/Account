@@ -4,9 +4,19 @@ import { minutesOfDay } from "../../shared/utils/dateUtils";
 /** Pixels per hour. Tall enough that a 50-minute class can show its title. */
 export const HOUR_HEIGHT = 46;
 
-/** The hours always drawn, whether or not anything is in them. */
-export const DEFAULT_START_HOUR = 8;
-export const DEFAULT_END_HOUR = 21;
+/**
+ * The whole day, always.
+ *
+ * This used to draw 8am–9pm and widen only to fit outlying events, which keeps
+ * the grid short but means the hours on screen change as the week's contents
+ * change — so the same 9am sat in a different place from one week to the next.
+ * A fixed 24 hours in a scrolling body is steadier, and nothing can be clipped.
+ */
+export const DAY_START = 0;
+export const DAY_END = 24;
+
+/** Where the body is scrolled to on open: early enough to catch a 8am lecture. */
+export const OPENING_HOUR = 7;
 
 /** How long a block with no end time is drawn as. */
 export const ASSUMED_MINUTES = 60;
@@ -86,23 +96,8 @@ export function place(occurrences: EventOccurrence[]): Placed[] {
 
   return placed;
 }
-
-/** The hour range to draw: the usual day, widened to fit anything outside it. */
-export function hourRange(
-  days: { occurrences: EventOccurrence[] }[]
-): [number, number] {
-  let start = DEFAULT_START_HOUR;
-  let end = DEFAULT_END_HOUR;
-
-  for (const day of days) {
-    for (const occurrence of day.occurrences) {
-      const from = minutesOfDay(occurrence.start_time);
-      if (from === null) continue;
-      const to = minutesOfDay(occurrence.end_time) ?? from + ASSUMED_MINUTES;
-      start = Math.min(start, Math.floor(from / 60));
-      end = Math.max(end, Math.ceil(to / 60));
-    }
-  }
-
-  return [start, Math.max(end, start + 1)];
-}
+/** The hours the grid draws, as a list. */
+export const HOURS = Array.from(
+  { length: DAY_END - DAY_START },
+  (_, index) => DAY_START + index
+);

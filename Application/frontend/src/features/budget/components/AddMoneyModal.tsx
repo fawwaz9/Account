@@ -125,7 +125,7 @@ export default function AddMoneyModal({
   }
 
   return (
-    <Modal title="Record Money" onClose={onClose}>
+    <Modal title="Record Money" onClose={onClose} panelClassName="widePopup">
 
       <div className="moneyTabs">
         {(["expense", "income", "transfer", "deposit"] as Mode[]).map((option) => (

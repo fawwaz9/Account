@@ -1,8 +1,9 @@
+import { useEffect, useRef } from "react";
 import { CalendarDay } from "../hooks/useCalender";
 import { EventOccurrence, EXAM_KINDS } from "../types";
 import { Task } from "../../tasks/types";
 import { TaskChip } from "./EventCard";
-import { HOUR_HEIGHT, hourRange, place } from "../weekLayout";
+import { DAY_START, HOUR_HEIGHT, HOURS, OPENING_HOUR, place } from "../weekLayout";
 import { clockTime, fromIso, hourLabel, today } from "../../../shared/utils/dateUtils";
 
 const WEEKDAY_HEADINGS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -16,13 +17,18 @@ interface WeekViewProps {
 }
 
 /**
- * One week against the clock.
+ * One week against the clock, all twenty-four hours of it.
  *
  * The month grid answers "what is coming"; this answers "what does Tuesday
  * actually look like" — which needs the time axis, because the useful thing on
  * a timetable is as often the gaps as the blocks.
  *
- * All-day items sit in a strip above rather than in the grid. They have no
+ * Two grids rather than one, sharing a column template: the dates and the
+ * all-day strip stay put while the hours scroll under them. CSS grid cannot
+ * scroll a subset of its own rows, and a header that scrolls away takes with it
+ * the only thing saying which column is which day.
+ *
+ * All-day items sit in that header rather than in the grid. They have no
  * position on a time axis, and pinning them to midnight would say something
  * false about when they happen.
  */
@@ -34,14 +40,21 @@ export default function WeekView({
   onAddOnDay,
 }: WeekViewProps) {
   const now = today();
-  const [startHour, endHour] = hourRange(days);
-  const hours = Array.from({ length: endHour - startHour }, (_, index) => startHour + index);
-  const gridHeight = hours.length * HOUR_HEIGHT;
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const gridHeight = HOURS.length * HOUR_HEIGHT;
+
+  // Opened at the morning rather than at midnight. A full day is honest about
+  // what exists, but nobody's week starts at 00:00, and eight empty hours is a
+  // poor first impression of a timetable.
+  useEffect(() => {
+    if (bodyRef.current) {
+      bodyRef.current.scrollTop = (OPENING_HOUR - DAY_START) * HOUR_HEIGHT;
+    }
+  }, []);
 
   return (
     <div className="weekWrap">
-      <div className="weekGrid">
-        {/* Header: the seven dates, with the all-day strip under them. */}
+      <div className="weekHeader">
         <div className="weekCorner" aria-hidden="true" />
         {days.map((day, index) => (
           <div
@@ -61,11 +74,11 @@ export default function WeekView({
         ))}
 
         <div className="weekAllDayLabel">all day</div>
-        {days.map((day) => {
-          const allDay = day.occurrences.filter((item) => !item.start_time);
-          return (
-            <div key={`allday-${day.date}`} className="weekAllDay">
-              {allDay.map((occurrence) => (
+        {days.map((day) => (
+          <div key={`allday-${day.date}`} className="weekAllDay">
+            {day.occurrences
+              .filter((item) => !item.start_time)
+              .map((occurrence) => (
                 <button
                   key={`${occurrence.event_id}-${occurrence.on_date}`}
                   type="button"
@@ -77,63 +90,65 @@ export default function WeekView({
                   <span className="calChipTitle">{occurrence.title}</span>
                 </button>
               ))}
-              {day.tasks.map((task) => (
-                <TaskChip key={task.id} task={task} onToggle={onToggleTask} />
-              ))}
-            </div>
-          );
-        })}
+            {day.tasks.map((task) => (
+              <TaskChip key={task.id} task={task} onToggle={onToggleTask} />
+            ))}
+          </div>
+        ))}
+      </div>
 
-        {/* Body: the time axis and seven columns of blocks. */}
-        <div className="weekHours" style={{ height: gridHeight }}>
-          {hours.map((hour) => (
-            <div key={hour} className="weekHour" style={{ height: HOUR_HEIGHT }}>
-              <span className="weekHourLabel">{hourLabel(hour)}</span>
+      <div className="weekBody" ref={bodyRef}>
+        <div className="weekGrid">
+          <div className="weekHours" style={{ height: gridHeight }}>
+            {HOURS.map((hour) => (
+              <div key={hour} className="weekHour" style={{ height: HOUR_HEIGHT }}>
+                <span className="weekHourLabel">{hourLabel(hour)}</span>
+              </div>
+            ))}
+          </div>
+
+          {days.map((day) => (
+            <div key={`col-${day.date}`} className="weekColumn" style={{ height: gridHeight }}>
+              {HOURS.map((hour) => (
+                <div key={hour} className="weekSlot" style={{ height: HOUR_HEIGHT }} />
+              ))}
+
+              {place(day.occurrences).map((item) => {
+                const top = ((item.startMinutes - DAY_START * 60) / 60) * HOUR_HEIGHT;
+                const height = ((item.endMinutes - item.startMinutes) / 60) * HOUR_HEIGHT;
+                const width = 100 / item.columns;
+                const exam = EXAM_KINDS.includes(item.occurrence.kind);
+
+                return (
+                  <button
+                    key={`${item.occurrence.event_id}-${item.occurrence.on_date}`}
+                    type="button"
+                    className={`weekBlock calChip-${item.occurrence.kind}${exam ? " weekBlockExam" : ""}`}
+                    style={{
+                      top,
+                      height: Math.max(height, 18),
+                      left: `${item.column * width}%`,
+                      width: `calc(${width}% - 2px)`,
+                    }}
+                    onClick={() => onSelectOccurrence(item.occurrence)}
+                    title={[
+                      item.occurrence.title,
+                      clockTime(item.occurrence.start_time),
+                      item.occurrence.location,
+                    ].filter(Boolean).join(" · ")}
+                  >
+                    <span className="weekBlockTitle">{item.occurrence.title}</span>
+                    {/* Only when the block is tall enough to hold a second line;
+                        otherwise the room pushes the title out of its own box. */}
+                    {height >= HOUR_HEIGHT && item.occurrence.location && (
+                      <span className="weekBlockWhere">{item.occurrence.location}</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           ))}
         </div>
-
-        {days.map((day) => (
-          <div key={`col-${day.date}`} className="weekColumn" style={{ height: gridHeight }}>
-            {hours.map((hour) => (
-              <div key={hour} className="weekSlot" style={{ height: HOUR_HEIGHT }} />
-            ))}
-
-            {place(day.occurrences).map((item) => {
-              const top = ((item.startMinutes - startHour * 60) / 60) * HOUR_HEIGHT;
-              const height = ((item.endMinutes - item.startMinutes) / 60) * HOUR_HEIGHT;
-              const width = 100 / item.columns;
-              const exam = EXAM_KINDS.includes(item.occurrence.kind);
-
-              return (
-                <button
-                  key={`${item.occurrence.event_id}-${item.occurrence.on_date}`}
-                  type="button"
-                  className={`weekBlock calChip-${item.occurrence.kind}${exam ? " weekBlockExam" : ""}`}
-                  style={{
-                    top,
-                    height: Math.max(height, 18),
-                    left: `${item.column * width}%`,
-                    width: `calc(${width}% - 2px)`,
-                  }}
-                  onClick={() => onSelectOccurrence(item.occurrence)}
-                  title={[
-                    item.occurrence.title,
-                    clockTime(item.occurrence.start_time),
-                    item.occurrence.location,
-                  ].filter(Boolean).join(" · ")}
-                >
-                  <span className="weekBlockTitle">{item.occurrence.title}</span>
-                  {/* Only when the block is tall enough to hold a second line;
-                      otherwise the room pushes the title out of its own box. */}
-                  {height >= HOUR_HEIGHT && item.occurrence.location && (
-                    <span className="weekBlockWhere">{item.occurrence.location}</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        ))}
       </div>
 
       {loading && <p className="calMuted" role="status">Loading…</p>}

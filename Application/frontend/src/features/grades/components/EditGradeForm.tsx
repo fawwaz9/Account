@@ -88,27 +88,16 @@ export default function EditGradeForm({
         />
       </div>
 
-      <div>
-        <label htmlFor="edit-grade-due-date" className="block text-sm text-slate-200">
-          Due date (optional — setting one adds it to your tasks and calendar)
-        </label>
-        <input
-          id="edit-grade-due-date"
-          type="date"
-          value={form.due_date ?? ""}
-          onChange={(event) => updateField("due_date", event.target.value || null)}
-          className="--input mt-1 w-full rounded-lg border border-slate-700 bg-transparent px-3 py-2 text-white text-center"
-        />
-      </div>
-
-      {form.due_date && (
-        <ScheduleChoice
-          value={form.schedule_as}
-          onChange={(value) => updateField("schedule_as", value)}
-          category={category}
-          idPrefix="edit-grade"
-        />
-      )}
+      <ScheduleChoice
+        dueDate={form.due_date}
+        scheduleAs={form.schedule_as}
+        onChange={(next) => {
+          updateField("due_date", next.due_date);
+          updateField("schedule_as", next.schedule_as);
+        }}
+        category={category}
+        idPrefix="edit-grade"
+      />
 
       {error && (
         <div className="space-y-1">

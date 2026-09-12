@@ -84,7 +84,7 @@ export default function AddCourseModal({
   }
 
   return (
-    <Modal title="Add Course" onClose={onClose}>
+    <Modal title="Add Course" onClose={onClose} panelClassName="widePopup">
       <AddCourseForm
         form={form}
         updateField={(k, v) => setForm((s) => ({ ...s, [k]: v }))}

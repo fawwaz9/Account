@@ -23,12 +23,28 @@
  border-radius: 14px;
  padding: 16px;
  text-align: center;
+ /* The panel had no ceiling of its own: each form capped itself at 70vh, so
+    anything a dialog rendered *outside* its form escaped that -- the delete
+    link under the grade editor, the mode tabs on the money dialog, and the
+    money dialog's deposit rows, which have no cap at all and grow with the
+    number of accounts. Containing it here covers every dialog at once. */
+ max-height: 90vh;
+ overflow-y: auto;
+}
+
+/* For the dialogs that are genuinely form-heavy. Wider is worth more than it
+   looks: .calField is `flex: 1 1 140px`, so a wider panel turns every .calRow
+   from two columns into three with no change to any component. */
+.widePopup {
+  max-width: min(48rem, 94vw);
 }
 
 .category_grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  grid-template-rows: repeat(2, auto);
+  /* Auto-fit rather than a fixed 4x2: in the wide panel all eight categories
+     fit on one line, and on a phone they fall to two or three per row without
+     a media query. */
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
   gap: 0.75rem;
 }
 
@@ -53,33 +69,41 @@
   text-align: center;
 }
 
-.container button {
-  background: var(--bg);
-  color: var(--gold);
-  border: var(--panel);
-  padding: 3px 5px;
-  margin: 5px;
-  border-radius: 10px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: 0.2s ease;
-}
-
-.container button:hover {
-  opacity: 0.7;
-  transform: translateY(-1px);
-}
-
-.addCoursePopup button {
+/* The fallback look for a button that carries no class of its own.
+ *
+ * Kept in `base` deliberately. As a plain `.container button` rule this had
+ * specificity (0,1,1) and so outranked *every* single-class button rule in the
+ * project -- .buttons, .yearCard, .attentionItem, .searchResult -- painting all
+ * of them `var(--bg)`, the exact colour of the page behind them, and crushing
+ * their padding to 3px 5px. An unlayered class rule beats a layered one whatever
+ * its specificity, so putting the blanket rule in a layer lets each component's
+ * own styling win without anyone having to out-specify it.
+ *
+ * The background is no longer `var(--bg)` for the same reason: a button the
+ * same colour as `body` is invisible, and fading it on hover changes nothing.
+ */
+@layer base {
+  .container button,
+  .addCoursePopup button {
     background: linear-gradient(145deg, var(--panel), var(--panel-2));
     color: var(--gold);
-    border: var(--panel);
-    padding: 3px 5px;
+    border: 1px solid var(--border);
+    padding: 7px 14px;
     margin: 5px;
     border-radius: 10px;
     font-weight: 600;
     cursor: pointer;
     transition: 0.2s ease;
+  }
+
+  /* The popup rule had a transition and no :hover at all, so every modal button
+     animated nothing. */
+  .container button:hover,
+  .addCoursePopup button:hover {
+    transform: translateY(-1px);
+    border-color: var(--gold);
+    filter: brightness(1.25);
+  }
 }
 
 .courses .courseBox {
@@ -102,11 +126,14 @@
   justify-content: space-between;
   gap: 12px;
   padding: 10px 14px;
+  /* Without this the hover below snapped rather than moved. */
+  transition: 0.2s ease;
 }
 
 .courses .courseBox:hover {
   transform: translateY(-1px);
-  opacity: 0.8;
+  border-color: var(--gold);
+  filter: brightness(1.2);
 }
 .courses {
   display: flex;
@@ -194,6 +221,13 @@
   color: var(--text);
   cursor: pointer;
   font: inherit;
+  transition: 0.15s ease;
+}
+
+/* A row you are about to pick had no hover state at all, so nothing tracked the
+   pointer through the list. */
+.searchResult:hover {
+  background: var(--bg);
 }
 
 .searchResultActive,
@@ -475,7 +509,25 @@
   background: linear-gradient(145deg, var(--panel), var(--panel-2));
   border: 1px solid var(--border);
   border-radius: 12px;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: center;
+  transition: 0.2s ease;
 }
+.yearCard:hover {
+  transform: translateY(-1px);
+  border-color: var(--gold);
+}
+.yearCardActive {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--border);
+}
+.yearCard:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
 
 .yearLabel { font-size: 0.9rem; }
 .yearAverage {
@@ -505,28 +557,6 @@
 .comingSoon p { margin: 0; }
 
 /* ===== Year drill-down ===== */
-.yearCard {
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-  text-align: center;
-  transition: 0.2s ease;
-}
-
-.yearCard:hover {
-  transform: translateY(-1px);
-  border-color: var(--gold);
-}
-
-.yearCardActive {
-  border-color: var(--gold);
-  box-shadow: 0 0 0 1px var(--border);
-}
-
-.yearCard:focus-visible {
-  outline: 2px solid var(--gold);
-  outline-offset: 2px;
-}
 
 .termGroups {
   display: flex;
@@ -742,4 +772,13 @@
 .scheduleOptionHint {
   font-size: 0.78rem;
   color: var(--muted);
+}
+
+/* Indented under the options, so it reads as belonging to the one chosen
+   rather than as a fourth field of its own. */
+.scheduleDate {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-left: 26px;
 }

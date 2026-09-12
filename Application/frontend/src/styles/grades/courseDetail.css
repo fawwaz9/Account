@@ -93,6 +93,31 @@
   display: flex;
 }
 
+/* This class was on the "+" in every category heading but defined in no
+   stylesheet, so the control fell through to Tailwind's reset: transparent,
+   zero padding, inherited colour -- a bare glyph that did not look clickable. */
+.addGradeButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--gold);
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.addGradeButton:hover {
+  background: rgba(212, 175, 55, 0.14);
+  border-color: var(--gold);
+}
+
 .editHint {
   font-size: 0.75rem;
   opacity: 0.6;
@@ -132,7 +157,9 @@
 }
 
 .editCourseButton {
-  background: var(--bg);
+  /* Was `var(--bg)` -- the same colour as the page behind it, so the button was
+     a gold label floating on nothing and its opacity hover changed nothing. */
+  background: linear-gradient(145deg, var(--panel), var(--panel-2));
   color: var(--gold);
   border: 1px solid var(--border);
   padding: 8px 16px;
@@ -143,12 +170,15 @@
 }
 
 .editCourseButton:hover {
-  opacity: 0.7;
   transform: translateY(-1px);
+  border-color: var(--gold);
+  filter: brightness(1.25);
 }
 
 .finalGradeButton {
-  background: var(--bg);
+  /* Was `var(--bg)` -- the same colour as the page behind it, so the button was
+     a gold label floating on nothing and its opacity hover changed nothing. */
+  background: linear-gradient(145deg, var(--panel), var(--panel-2));
   color: var(--gold);
   border: 1px solid var(--border);
   padding: 8px 16px;
@@ -159,13 +189,15 @@
 }
 
 .finalGradeButton:hover {
-  opacity: 0.7;
   transform: translateY(-1px);
+  border-color: var(--gold);
+  filter: brightness(1.25);
 }
 
 .edit_category_grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  /* Matches .category_grid: as many per row as the panel width allows. */
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
   gap: 0.75rem;
 }
 
@@ -211,14 +243,30 @@
   line-height: 1;
   padding: 0 0.4rem;
   cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.deleteGradeButton:hover {
+  filter: brightness(1.3);
+  transform: scale(1.1);
 }
 
 .deleteCourseButton {
   border-radius: 0.5rem;
-  border: 1px solid var(error); /* red-800 */
+  /* Was `var(error)` -- missing the `--`, so the whole declaration was invalid
+     and dropped, leaving the most destructive button on the page borderless. */
+  border: 1px solid var(--delete);
   background: transparent;
   color: var(--delete);
   padding: 0.5rem 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.deleteCourseButton:hover {
+  background: rgba(248, 113, 113, 0.12);
+  transform: translateY(-1px);
 }
 
 .deleteGradeLinkButton {
@@ -229,6 +277,11 @@
   text-decoration: underline;
   cursor: pointer;
   padding: 0.25rem 0.5rem;
+  transition: 0.2s ease;
+}
+
+.deleteGradeLinkButton:hover {
+  filter: brightness(1.3);
 }
 /* ===== Final grade actions ===== */
 .finalGradeActions {
@@ -241,8 +294,10 @@
 .requiredFinalButton {
   background: transparent;
   color: var(--muted);
-  border: 1px solid var(--deep-border);
-  border-color: #1f2a44;
+  /* `--deep-border` already expands to `1px solid #1f2a44`, so writing
+     `1px solid var(--deep-border)` produced `1px solid 1px solid #1f2a44` --
+     invalid, and dropped, so this button had no border at all. */
+  border: var(--deep-border);
   padding: 8px 16px;
   border-radius: 10px;
   font-weight: 600;

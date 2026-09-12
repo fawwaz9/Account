@@ -100,7 +100,11 @@ export default function EventModal({
   }
 
   return (
-    <Modal title={event ? "Edit event" : "New event"} onClose={onClose}>
+    <Modal
+      title={event ? "Edit event" : "New event"}
+      onClose={onClose}
+      panelClassName="widePopup"
+    >
       <form className="calForm" onSubmit={handleSubmit}>
         <label className="calField">
           <span className="calFieldLabel">Title</span>
