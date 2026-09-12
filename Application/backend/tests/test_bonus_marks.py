@@ -211,3 +211,83 @@ def test_banked_bonus_lowers_what_the_final_needs(db, user):
     # two roundings and can land a cent off a flat equality.
     assert abs((plain["needed"] - lifted["needed"]) - 5.0 / 0.6) < 0.02
     assert lifted["needed"] < plain["needed"]
+
+
+# --------------------------------------------------------------- the band --
+
+def test_the_band_closes_once_everything_is_marked(db, user):
+    """With nothing outstanding, best and worst have met and agree with now."""
+    from app.Grades.services.grade_service import calculate_grade_band
+
+    course = make_course(db, user.id, "CPSC 312",
+                         category_weights={"Assignment": 100.0})
+    score(db, course, "Assignment", "A1", 80.0, 100.0)
+
+    band = calculate_grade_band(db, user.id, course.id)
+
+    assert band["best"] == band["worst"] == band["current"] == 80.0
+    assert band["settled"] is True
+
+
+def test_an_unmarked_item_opens_the_band(db, user):
+    """An assignment added before it is marked is known work worth known marks."""
+    from app.Grades.services.grade_service import calculate_grade_band
+
+    course = make_course(db, user.id, "CPSC 313",
+                         category_weights={"Assignment": 100.0})
+    score(db, course, "Assignment", "A1", 40.0, 50.0)
+    score(db, course, "Assignment", "A2", None, 50.0)
+
+    band = calculate_grade_band(db, user.id, course.id)
+
+    # 40/100 at worst, 90/100 at best -- the outstanding 50 marks are the width.
+    assert (band["worst"], band["best"]) == (40.0, 90.0)
+    assert band["settled"] is False
+    assert band["outstanding_items"] == 1
+
+
+def test_an_empty_category_is_unknown_not_zero(db, user):
+    from app.Grades.services.grade_service import calculate_grade_band
+
+    course = make_course(db, user.id, "CPSC 314",
+                         category_weights={"Assignment": 50.0, "Final": 50.0})
+    score(db, course, "Assignment", "A1", 100.0, 100.0)
+
+    band = calculate_grade_band(db, user.id, course.id)
+
+    assert (band["worst"], band["best"]) == (50.0, 100.0)
+    assert "Final" in band["empty_categories"]
+
+
+def test_the_band_carries_bonus_at_both_ends(db, user):
+    """Best assumes the bonus is earned; worst keeps only what already is."""
+    from app.Grades.services.grade_service import calculate_grade_band
+
+    course = make_course(db, user.id, "CPSC 315", category_weights={
+        "Assignment": 100.0, "Bonus": 5.0,
+    })
+    score(db, course, "Assignment", "A1", 70.0, 100.0)
+    score(db, course, "Bonus", "Extra credit", None, 10.0)
+
+    band = calculate_grade_band(db, user.id, course.id)
+
+    # Worst: 70 and no bonus. Best: 70 plus the full 5.
+    assert (band["worst"], band["best"]) == (70.0, 75.0)
+
+
+def test_the_band_agrees_with_the_live_average(db, user):
+    """A projection that disagreed at the ends would be a second opinion."""
+    from app.Grades.services.grade_service import (
+        calculate_current_average, calculate_grade_band,
+    )
+
+    course = make_course(db, user.id, "CPSC 316", category_weights={
+        "Assignment": 40.0, "Final": 60.0, "Bonus": 5.0,
+    })
+    score(db, course, "Assignment", "A1", 85.0, 100.0)
+    score(db, course, "Final", "Final exam", 75.0, 100.0)
+    score(db, course, "Bonus", "Extra credit", 10.0, 10.0)
+
+    band = calculate_grade_band(db, user.id, course.id)
+
+    assert band["best"] == band["worst"] == calculate_current_average(course)

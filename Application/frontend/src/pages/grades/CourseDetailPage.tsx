@@ -4,6 +4,7 @@ import { useAuth } from "../../app/auth/AuthContext";
 import { fetchCourseDetail, deleteCourse, deleteGrade } from "../../features/grades/api";
 import { GradeCategory, Grade, CourseDetail } from "../../features/grades/types";
 import { bonusLast, carriesBonus, isAdditive } from "../../features/grades/bonus";
+import GradeBand from "../../features/grades/components/GradeBand";
 import AddGradeModal from "../../features/grades/components/AddGradeModal";
 import EditGradeModal from "../../features/grades/components/EditGradeModal";
 import EditCourseModal from "../../features/grades/components/EditCourseModal";
@@ -242,6 +243,12 @@ export default function CourseDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Under the average, because it is the same number with its uncertainty
+          still attached. Hides itself once nothing is outstanding. */}
+      {user && courseId && (
+        <GradeBand userId={user.id} courseId={courseId} nonce={reloadNonce} />
+      )}
 
       <div className="categoriesGrid">
         {weightedCategories.map((category) => (

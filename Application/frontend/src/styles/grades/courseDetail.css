@@ -467,3 +467,69 @@
   white-space: nowrap;
   border: 0;
 }
+
+/* ===== Best / worst band =====
+   A running average cannot say whether 78% is a result or a question. The track
+   is the full 0-100 so the band's position reads absolutely -- a narrow band
+   high up and a narrow band low down should not look alike. */
+
+.gradeBand {
+  margin: 0 0 24px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.gradeBandHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.gradeBandLabel {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.gradeBandRange {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--gold);
+}
+
+.gradeBandTrack {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.gradeBandFill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, var(--delete), var(--gold));
+  border-radius: 999px;
+}
+
+/* Where the course actually sits inside what is still possible. */
+.gradeBandNow {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: var(--text);
+}
+
+.gradeBandNote {
+  margin: 8px 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}

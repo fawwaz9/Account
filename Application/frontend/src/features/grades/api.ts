@@ -1,6 +1,6 @@
 import { get, post, patch, del } from "../../services/apiClient";
 import { endpoints } from "../../services/endpoints";
-import {
+import { GradeBand,
   CategoryWeightsUpdate,
   Course,
   CourseCreate,
@@ -92,6 +92,10 @@ export async function searchCourses(userId: string, query: string) {
 }
 
 /** What score is needed on the final to finish the course at `targetGrade`. */
+export async function fetchGradeBand(userId: string, courseId: string) {
+  return get<GradeBand>(endpoints.grades.gradeBand(userId, courseId));
+}
+
 export async function fetchRequiredFinal(
   userId: string,
   courseId: string,

@@ -353,6 +353,114 @@ def calculate_gpa_points(average: float | None) -> float:
     return grade_scale_row(average or 0.0)[1]
 
 
+def category_average_assuming(course: CourseModel, category, unmarked: float) -> float | None:
+    """A category's average if every unmarked item scored `unmarked` of its max.
+
+    `unmarked` is a fraction: 1.0 for the optimistic case, 0.0 for the grim one.
+    Returns None when the category holds nothing at all, which the caller has to
+    treat differently -- an empty category is unknown, not zero.
+
+    The granularity matters. An assignment added before it is marked already
+    carries its max_score, so a course that has been kept up to date knows
+    exactly how much work is outstanding and how much it is worth. Projecting a
+    whole category as all-or-nothing would throw that away and give a band so
+    wide it says nothing.
+    """
+    category_value = category.value if isinstance(category, GradeCategory) else category
+    items = [g for g in course.grades if g.category == category_value and g.max_score > 0]
+    if not items:
+        return None
+
+    possible = sum(g.max_score for g in items)
+    if possible == 0:
+        return None
+
+    earned = sum(
+        g.score if g.score is not None else unmarked * g.max_score
+        for g in items
+    )
+    return round(earned / possible * 100, 2)
+
+
+def project_average(course: CourseModel, unmarked: float) -> float:
+    """The course average if everything still outstanding went `unmarked` way.
+
+    Same shape as calculate_current_average, and deliberately so: a projection
+    that did not agree with the live number at the ends -- all marked, or none --
+    would be a second opinion about the same course.
+    """
+    weights = course.category_weights
+
+    scoring = [
+        (category, weight) for category, weight in weights.items()
+        if weight > 0 and not is_additive(category)
+    ]
+    total_weight = sum(weight for _, weight in scoring)
+
+    earned = 0.0
+    if total_weight > 0:
+        weighted_sum = 0.0
+        for category, weight in scoring:
+            average = category_average_assuming(course, category, unmarked)
+            # A weighted category with nothing in it yet is unknown rather than
+            # zero, so it takes the assumption whole: full marks at best, none at
+            # worst. That is the honest width of not having entered anything.
+            if average is None:
+                average = unmarked * 100.0
+            weighted_sum += average * weight
+        denominator = min(total_weight, MAX_COURSE_PERCENT)
+        earned = weighted_sum / denominator
+
+    bonus = 0.0
+    for category, weight in weights.items():
+        if not is_additive(category) or weight <= 0:
+            continue
+        average = category_average_assuming(course, category, unmarked)
+        if average is None:
+            average = unmarked * 100.0
+        bonus += average * weight / 100.0
+
+    return min(round(earned + bonus, 2), MAX_COURSE_PERCENT)
+
+
+def calculate_grade_band(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
+    """Where this course can still finish: best case, worst case, and now.
+
+    The question a running average cannot answer. 78% with everything marked is
+    a result; 78% with the final still to come is anywhere between a fail and an
+    A, and which one it is decides whether this is the course to spend the
+    weekend on.
+    """
+    course = get_user_course(db, user_id, course_id)
+    if course is None:
+        raise ValueError("Course not found.")
+
+    best = project_average(course, 1.0)
+    worst = project_average(course, 0.0)
+    current = calculate_current_average(course)
+
+    outstanding = sum(
+        1 for g in course.grades if g.score is None and g.max_score > 0
+    )
+    empty_categories = [
+        category for category, weight in course.category_weights.items()
+        if weight > 0
+        and not is_additive(category)
+        and category_average_assuming(course, category, 1.0) is None
+    ]
+
+    return {
+        "best": best,
+        "worst": worst,
+        "current": current,
+        # Nothing left to mark means the band has closed: best and worst have met
+        # and the course simply is what it is.
+        "settled": outstanding == 0 and not empty_categories,
+        "outstanding_items": outstanding,
+        "empty_categories": empty_categories,
+    }
+
+
 def calculate_required_final(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, target_grade: float):
     course = get_user_course(db, user_id, course_id)
     if course is None:
