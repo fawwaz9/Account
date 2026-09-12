@@ -46,6 +46,8 @@ export interface Transaction {
   group_id: string | null;
   /** How many rows share this group; 1 when ungrouped */
   group_size: number;
+  /** What it was bought for, on expenses. Tuition never sets this. */
+  course_id: string | null;
 }
 
 export interface TransactionCreate {
@@ -56,6 +58,8 @@ export interface TransactionCreate {
   occurred_on: string;
   /** Only meaningful on expenses; the server ignores it on income */
   category_id: string | null;
+  /** Which course this was bought for. Expense-only, like the category. */
+  course_id: string | null;
 }
 
 export interface SpendCategory {
@@ -217,4 +221,66 @@ export interface RecurringRun {
   transactions: Transaction[];
   /** Rules that could not run, and why. One broken rule does not stop the rest. */
   skipped: string[];
+}
+
+/** One deduction on a tuition bill: money that lowered it without being income. */
+export interface TuitionDeduction {
+  description: string;
+  amount: number;
+}
+
+export interface TuitionCourse {
+  course_id: string;
+  code: string;
+  name: string;
+  credits: number;
+  share: number;
+}
+
+/**
+ * The arithmetic of a tuition payment, before anything is written.
+ *
+ * Both totals are here on purpose. `gross` is what the term is worth and is what
+ * the course pages will report; `payable` is what leaves the account. They are
+ * different numbers and the form shows both rather than implying one.
+ */
+export interface TuitionPreview {
+  school_year: number | null;
+  semester: string | null;
+  courses: TuitionCourse[];
+  credits_counted: number;
+  cost_per_credit: number;
+  gross: number;
+  fees: number;
+  deductions_total: number;
+  payable: number;
+  /** Rate already recorded this term, so instalments are visibly additive. */
+  already_recorded_per_credit: number;
+  can_record: boolean;
+  reason: string | null;
+}
+
+export interface TuitionCreate {
+  account_id: string;
+  occurred_on: string;
+  cost_per_credit: number;
+  fees: number;
+  description: string | null;
+  deductions: TuitionDeduction[];
+}
+
+export interface CourseCostLine {
+  label: string;
+  amount: number;
+}
+
+/** What a course cost: gross tuition share plus anything bought for it. */
+export interface CourseCost {
+  course_id: string;
+  credits: number;
+  cost_per_credit: number;
+  tuition_share: number;
+  materials: CourseCostLine[];
+  materials_total: number;
+  total: number;
 }

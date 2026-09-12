@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { updateTransaction } from "../api";
 import { SpendCategory, Transaction } from "../types";
+import { Course } from "../../grades/types";
+import CoursePicker from "./CoursePicker";
 import { getErrorMessage } from "../../grades/components/AddCourseModal";
 import { useAuth } from "../../../app/auth/AuthContext";
 import Modal from "../../../shared/components/Modal";
@@ -8,6 +10,7 @@ import Modal from "../../../shared/components/Modal";
 interface EditTransactionModalProps {
   readonly transaction: Transaction | null;
   readonly categories: readonly SpendCategory[];
+  readonly courses: readonly Course[];
   readonly onClose: () => void;
   readonly onSaved: () => void;
 }
@@ -15,6 +18,7 @@ interface EditTransactionModalProps {
 export default function EditTransactionModal({
   transaction,
   categories,
+  courses,
   onClose,
   onSaved,
 }: EditTransactionModalProps) {
@@ -23,6 +27,7 @@ export default function EditTransactionModal({
   const [description, setDescription] = useState("");
   const [occurredOn, setOccurredOn] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [courseId, setCourseId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,6 +39,7 @@ export default function EditTransactionModal({
     setDescription(transaction.description ?? "");
     setOccurredOn(transaction.occurred_on);
     setCategoryId(transaction.category_id ?? "");
+    setCourseId(transaction.course_id ?? "");
     setError(null);
   }, [transaction]);
 
@@ -53,8 +59,9 @@ export default function EditTransactionModal({
         amount: Number(amount),
         description: description || null,
         occurred_on: occurredOn,
-        // Only expenses carry a category, so don't send one for anything else.
-        ...(isExpense ? { category_id: categoryId || null } : {}),
+        // Only expenses carry a category or a course, so don't send either
+        // for anything else.
+        ...(isExpense ? { category_id: categoryId || null, course_id: courseId || null } : {}),
       });
       onSaved();
       onClose();
@@ -115,6 +122,17 @@ export default function EditTransactionModal({
               ))}
             </select>
           </div>
+        )}
+
+        {isExpense && user && (
+          <CoursePicker
+            userId={user.id}
+            courses={courses}
+            value={courseId}
+            onChange={setCourseId}
+            description={description}
+            idPrefix="edit"
+          />
         )}
 
         <div className="loginField">

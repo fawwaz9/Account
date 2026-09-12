@@ -8,6 +8,7 @@ import ProgressBar from "../../features/budget/components/ProgressBar";
 import Transactions from "../../features/budget/components/Transactions";
 import WhereItWent from "../../features/budget/components/WhereItWent";
 import { useAccountActivity } from "../../features/budget/hooks/useAccountActivity";
+import { useCourses } from "../../features/grades/hooks/useCourses";
 import { useTransactionDelete } from "../../features/budget/hooks/useTransactionDelete";
 import { formatMoney } from "../../features/budget/money";
 import { Transaction } from "../../features/budget/types";
@@ -19,6 +20,7 @@ export default function AccountDetailPage() {
   const { accountId } = useParams<{ accountId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { courses } = useCourses();
   const { activity, transactions, categories, month, setMonth, loading, error, reload } =
     useAccountActivity(accountId);
   const [editing, setEditing] = useState<Transaction | null>(null);
@@ -152,6 +154,7 @@ export default function AccountDetailPage() {
       <EditTransactionModal
         transaction={editing}
         categories={categories}
+        courses={courses}
         onClose={() => setEditing(null)}
         onSaved={reload}
       />
