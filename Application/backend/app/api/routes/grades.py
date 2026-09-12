@@ -21,6 +21,7 @@ from app.Grades.services.grade_service import (
     add_grades_bulk,
     calculate_current_average,
     calculate_letter_grade,
+    calculate_grade_band,
     calculate_required_final,
     delete_grade,
     get_all_grades,
@@ -172,6 +173,21 @@ def get_course_letter_grade(user_id: VerifiedUserId, course_id: UUID, db: DBSess
         "average": course.average,
         "letter_grade": calculate_letter_grade(course),
     }
+
+@router.get("/{user_id}/courses/{course_id}/grade-band", responses=responses["course_both"])
+def get_grade_band(
+    user_id: VerifiedUserId,
+    course_id: UUID,
+    db: DBSession,
+):
+    """Best case, worst case and where the course sits between them."""
+    try:
+        return calculate_grade_band(db, user_id, course_id)
+    except ValueError as exc:
+        message = str(exc)
+        status_code = 404 if "not found" in message.lower() else 400
+        raise HTTPException(status_code=status_code, detail=message)
+
 
 @router.get("/{user_id}/courses/{course_id}/required-final", responses=responses["course_both"])
 def get_required_final_score(

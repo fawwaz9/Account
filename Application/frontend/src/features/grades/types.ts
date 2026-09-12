@@ -151,6 +151,26 @@ export enum GradeCategory {
   BONUS = "Bonus"
 }
 
+/**
+ * Where a course can still finish.
+ *
+ * A running average cannot answer this: 78% with everything marked is a result,
+ * 78% with the final still to come is anywhere between a fail and an A.
+ */
+export interface GradeBand {
+  /** Every outstanding item at full marks. */
+  best: number;
+  /** Every outstanding item at nothing. */
+  worst: number;
+  /** The live average, which sits between them. */
+  current: number;
+  /** Nothing left to mark, so best and worst have met. */
+  settled: boolean;
+  outstanding_items: number;
+  /** Weighted categories with nothing entered at all. */
+  empty_categories: string[];
+}
+
 /** Answer from the "what do I need on the final" calculation. */
 export interface RequiredFinal {
   /** Score needed on the final, as a percentage. Can fall outside 0-100. */
