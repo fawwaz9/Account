@@ -1,17 +1,19 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import AccountBalanceChart from "../../features/budget/components/AccountBalanceChart";
 import AccountFlowChart from "../../features/budget/components/AccountFlowChart";
 import DeleteConfirmModal from "../../features/grades/components/DeleteConfirmModal";
 import EditTransactionModal from "../../features/budget/components/EditTransactionModal";
+import TuitionModal from "../../features/budget/components/TuitionModal";
 import ProgressBar from "../../features/budget/components/ProgressBar";
 import Transactions from "../../features/budget/components/Transactions";
 import WhereItWent from "../../features/budget/components/WhereItWent";
 import { useAccountActivity } from "../../features/budget/hooks/useAccountActivity";
 import { useCourses } from "../../features/grades/hooks/useCourses";
+import { fetchAccounts } from "../../features/budget/api";
 import { useTransactionDelete } from "../../features/budget/hooks/useTransactionDelete";
 import { formatMoney } from "../../features/budget/money";
-import { Transaction } from "../../features/budget/types";
+import { Account, Transaction } from "../../features/budget/types";
 import { useAuth } from "../../app/auth/AuthContext";
 import "../../styles/budget.css";
 import "../../styles/budget/accountDetail.css";
@@ -21,6 +23,29 @@ export default function AccountDetailPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { courses } = useCourses();
+  const [editingTuition, setEditingTuition] = useState<string | null>(null);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+
+  // Only the tuition editor's "paid from" select needs the full account
+  // list, so it is fetched when one is opened rather than on every visit.
+  useEffect(() => {
+    if (!user || editingTuition === null) return;
+    let cancelled = false;
+    fetchAccounts(user.id)
+      .then((rows) => { if (!cancelled) setAccounts(rows); })
+      .catch(() => { if (!cancelled) setAccounts([]); });
+    return () => { cancelled = true; };
+  }, [user, editingTuition]);
+
+  // A tuition row's amount is derived from its per-credit rate, so it opens the
+  // tuition editor. The plain one refuses that edit, by design.
+  function editTransaction(transaction: Transaction) {
+    if (transaction.tuition_payment_id) {
+      setEditingTuition(transaction.tuition_payment_id);
+      return;
+    }
+    setEditing(transaction);
+  }
   const { activity, transactions, categories, month, setMonth, loading, error, reload } =
     useAccountActivity(accountId);
   const [editing, setEditing] = useState<Transaction | null>(null);
@@ -125,7 +150,7 @@ export default function AccountDetailPage() {
               transactions={transactions}
               accounts={activity ? [{ id: activity.account_id, name: activity.account_name }] : []}
               onDelete={remove.requestDelete}
-              onEdit={setEditing}
+              onEdit={editTransaction}
               deletingId={remove.deletingId}
               emptyMessage={`Nothing moved through this account in ${label}.`}
             />
@@ -150,6 +175,27 @@ export default function AccountDetailPage() {
         submitting={remove.deletingId !== null}
         error={remove.error}
       />
+
+      <TuitionModal
+
+
+        open={editingTuition !== null}
+
+
+        accounts={accounts}
+
+
+        paymentId={editingTuition}
+
+
+        onClose={() => setEditingTuition(null)}
+
+
+        onSaved={reload}
+
+
+      />
+
 
       <EditTransactionModal
         transaction={editing}

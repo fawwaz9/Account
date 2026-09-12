@@ -4,7 +4,14 @@ from datetime import date
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app._database.models import AccountModel, CourseModel, SpendCategoryModel, TransactionModel
+from app._database.models import (
+    AccountModel,
+    CourseModel,
+    SpendCategoryModel,
+    TransactionModel,
+    TuitionDeductionModel,
+    TuitionPaymentModel,
+)
 from app.Finances.schemas.transaction import (
     Transaction,
     TransactionCreate,
@@ -48,6 +55,22 @@ def owned_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
     )
 
 
+def tuition_payment_ids(db: Session, user_id: uuid.UUID) -> dict[uuid.UUID, uuid.UUID]:
+    """transaction id -> tuition payment id, for the rows a tuition payment owns.
+
+    One query for the whole ledger rather than one per row, the same way
+    group_sizes works. The client needs it to send a tuition row to its own
+    editor: editing the amount directly would leave the rate saying one thing
+    and the ledger another.
+    """
+    rows = (
+        db.query(TuitionPaymentModel.transaction_id, TuitionPaymentModel.id)
+        .filter(TuitionPaymentModel.user_id == user_id)
+        .all()
+    )
+    return {transaction_id: payment_id for transaction_id, payment_id in rows}
+
+
 def group_sizes(db: Session, user_id: uuid.UUID) -> dict[uuid.UUID, int]:
     """How many rows share each group, in one grouped query rather than one per row."""
     rows = (
@@ -68,7 +91,11 @@ def signed(kind: TransactionKind, amount: float) -> float:
     return amount if kind == TransactionKind.INCOME else -amount
 
 
-def as_schema(transaction: TransactionModel, group_size: int = 1) -> Transaction:
+def as_schema(
+    transaction: TransactionModel,
+    group_size: int = 1,
+    tuition_payment_id: uuid.UUID | None = None,
+) -> Transaction:
     """Build the API shape without touching the mapped instance.
 
     An earlier version flipped transaction.amount to its magnitude for display,
@@ -89,6 +116,7 @@ def as_schema(transaction: TransactionModel, group_size: int = 1) -> Transaction
         group_size=group_size,
         category_id=transaction.category_id,
         course_id=transaction.course_id,
+        tuition_payment_id=tuition_payment_id,
     )
 
 
@@ -121,7 +149,11 @@ def list_transactions(
         .all()
     )
     sizes = group_sizes(db, user_id)
-    return [as_schema(row, sizes.get(row.group_id, 1)) for row in rows]
+    tuition = tuition_payment_ids(db, user_id)
+    return [
+        as_schema(row, sizes.get(row.group_id, 1), tuition.get(row.id))
+        for row in rows
+    ]
 
 
 def create_transaction(db: Session, user_id: uuid.UUID, data: TransactionCreate):
@@ -234,6 +266,25 @@ def update_transaction(
 
     update_data = data.model_dump(exclude_unset=True)
 
+    # A tuition row's amount is derived: credits x rate, plus fees, less
+    # deductions. Editing it here would leave the ledger saying one thing and the
+    # course pages another, with nothing to say which was right -- so that edit
+    # belongs in the tuition editor, which moves both together.
+    if "amount" in update_data:
+        owned_by_tuition = (
+            db.query(TuitionPaymentModel)
+            .filter(
+                TuitionPaymentModel.user_id == user_id,
+                TuitionPaymentModel.transaction_id == transaction_id,
+            )
+            .first()
+        )
+        if owned_by_tuition is not None:
+            raise ValueError(
+                "Edit this through Pay Tuition, so the per-credit rate and the "
+                "amount stay in step"
+            )
+
     course_id = update_data.get("course_id")
     if course_id is not None and owned_course(db, user_id, course_id) is None:
         raise ValueError("That course does not exist")
@@ -305,6 +356,24 @@ def delete_transaction(
 
     removed = as_schema(transaction)
     is_transfer = transaction.kind == TransactionKind.TRANSFER.value
+
+    # A tuition payment owns its ledger row, so removing the row must remove the
+    # record of what it was for. Left behind, the payment row still answered
+    # "what did this course cost" for a payment that no longer exists, and
+    # nothing in the UI could reach it to clear it.
+    doomed_payments = (
+        db.query(TuitionPaymentModel)
+        .filter(
+            TuitionPaymentModel.user_id == user_id,
+            TuitionPaymentModel.transaction_id == transaction.id,
+        )
+        .all()
+    )
+    for payment in doomed_payments:
+        db.query(TuitionDeductionModel).filter(
+            TuitionDeductionModel.tuition_payment_id == payment.id
+        ).delete(synchronize_session=False)
+        db.delete(payment)
 
     if transaction.group_id is not None and (is_transfer or scope == "group"):
         db.query(TransactionModel).filter(

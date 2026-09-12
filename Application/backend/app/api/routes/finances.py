@@ -25,6 +25,7 @@ from app.Finances.schemas.tuition import (
     TuitionCreate,
     TuitionPayment,
     TuitionPreview,
+    TuitionUpdate,
 )
 from app.Finances.schemas.transaction import (
     Transaction,
@@ -42,8 +43,11 @@ from app.Finances.services.account_service import (
 from app.Finances.services.tuition_service import (
     billable_courses,
     course_cost,
+    delete_tuition,
+    get_tuition,
     preview_tuition,
     record_tuition,
+    update_tuition,
 )
 from app.Finances.services.transaction_service import (
     create_transaction,
@@ -373,3 +377,33 @@ def get_course_cost(user_id: VerifiedUserId, course_id: UUID, db: DBSession):
     if cost is None:
         raise HTTPException(status_code=404, detail="Course not found")
     return cost
+
+
+@router.get("/{user_id}/tuition/{payment_id}", response_model=TuitionPayment, responses=responses["user_404"])
+def read_tuition_payment(user_id: VerifiedUserId, payment_id: UUID, db: DBSession):
+    payment = get_tuition(db, user_id, payment_id)
+    if payment is None:
+        raise HTTPException(status_code=404, detail="Tuition payment not found")
+    return payment
+
+
+@router.patch("/{user_id}/tuition/{payment_id}", response_model=TuitionPayment, responses=responses["user_400"])
+def edit_tuition_payment(
+    user_id: VerifiedUserId, payment_id: UUID, data: TuitionUpdate, db: DBSession
+):
+    """Correct a payment, moving its ledger row to match."""
+    try:
+        payment = update_tuition(db, user_id, payment_id, data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if payment is None:
+        raise HTTPException(status_code=404, detail="Tuition payment not found")
+    return payment
+
+
+@router.delete("/{user_id}/tuition/{payment_id}", status_code=204, responses=responses["user_404"])
+def remove_tuition_payment(user_id: VerifiedUserId, payment_id: UUID, db: DBSession):
+    """Remove a payment and the ledger row it owns."""
+    if delete_tuition(db, user_id, payment_id) is None:
+        raise HTTPException(status_code=404, detail="Tuition payment not found")
+    return None
