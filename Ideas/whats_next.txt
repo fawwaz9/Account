@@ -37,6 +37,8 @@ Shipped so far (do not re-propose)
           for when a professor drops the two lowest.
         Term budget: what a term has cost, measured over the term's own dates
           rather than a calendar month.
+        Free blocks, week load and the crunch radar: three readings of one
+          window, with a study-hours window you set in Settings.
 
 
 Tasks:  Shows midterms and exams coming up in the next 30 days.
@@ -54,11 +56,7 @@ Grades: Think of other functionalities that can merge over to the other.
         When editing courses the manual is the default but syllabus parser will be available under the manual grid.
 
 Calendar:
-        Free-block finder: the gaps between your classes, ranked by length, so study time gets scheduled instead of hoped for.
-        Crunch radar: a density strip across the term showing which weeks stack up. Visible in September, not the night before.
         Reading break and term boundaries pulled from course start/end dates, blocked out automatically.
-        Week load number, not a task count: sum estimated hours so "7 tasks" reads as "23 hours".
-          The task list already totals hours per group; the calendar does not.
         Term timeline: every course's span on one horizontal chart, so overlaps and gaps are obvious.
 
 Budget:
@@ -94,8 +92,10 @@ plumbing that unblocks a whole section, a set of derivations that need no new
 tables at all, and the things that genuinely need new storage.
 
 Cheap wins, read-only -- next
-- Free blocks first: the week view already lays a day out against the clock, so
-  the gaps between classes are arithmetic on data it already holds.
+- Term timeline and category blind spots are the two left on the Grades side,
+  and the term retrospective wants a term to have closed first.
+- Safe-to-spend and sinking funds next on the money side: /recurring/upcoming
+  already returns the commitments, so safe-to-spend is a subtraction.
 
 Still open from Grades x Budget
 - A dropped course's dollar figure. Two questions before it is worth building:
@@ -105,14 +105,12 @@ Still open from Grades x Budget
   flag, only archived.
 
 Cheap wins, read-only
-- Free blocks, crunch radar, week load, term timeline, category blind spots,
-  term retrospective. All derived from data already stored: no new tables, no
-  writes, and each one is a service function plus a chart.
+- Term timeline, category blind spots, term retrospective. All derived from data
+  already stored: no new tables, no writes, and each one is a service function
+  plus a chart.
 - The band that shipped is the pattern for the rest of them: project_average in
   grade_service.py shows the shape, including the rule that a projection must
   agree with the live number at the ends or it is a second opinion.
-- Free blocks is the closest to free of them: the week view already lays the day
-  out against the clock, so the gaps are arithmetic on data it holds.
 - Safe-to-spend and sinking funds. /recurring/upcoming already returns the
   commitments, so safe-to-spend is a subtraction.
 - Subscription audit reads the ledger for repeats that have no standing
@@ -150,7 +148,7 @@ Worth knowing before picking anything up
 - gh is not installed and no token is exported. git push works because the
   credential sits in the macOS keychain, but opening a PR means the browser, or
   installing gh first.
-- 297 backend tests. The frontend has none: the week view's overlap maths was
+- 317 backend tests. The frontend has none: the week view's overlap maths was
   checked with a one-off esbuild harness, not by anything that runs on its own.
   Vitest would slot in beside Vite cheaply if that starts to bite.
 - Repeat rules live in five columns shared by events, standing payments and
@@ -177,6 +175,14 @@ Worth knowing before picking anything up
   is min(start_date), max(end_date) across the term's courses. Most courses carry
   no dates, so anything built on the span has to say when it is measuring from
   only some of them.
+- Free blocks, week load and the crunch radar live in one service
+  (Calendar/services/load_service.py) because they are one question asked three
+  ways, off a single list_occurrences call. Overlapping classes are merged before
+  the gaps are walked, or the end of one and the start of the next look like a
+  gap that never existed.
+- The study window (08:00-22:00, 30-minute floor) lives in UserPreferences, which
+  is a JSON column parsed through a Pydantic model -- new keys are additive and
+  need no migration.
 - The figure beside a category on the course page is computed in Decimal from the
   recorded marks. 11.825 has no binary representation -- the nearest double sits
   below it -- so scaling through a float loses the hundredth before any rounding

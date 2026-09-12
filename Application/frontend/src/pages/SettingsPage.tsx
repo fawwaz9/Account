@@ -4,6 +4,16 @@ import { setPassword } from "../services/authClient";
 import { updateAcademicStatus, updatePreferences } from "../services/currentUserClient";
 import "../styles/login.css";
 
+/**
+ * "08:00:00" from the API, "08:00" for an <input type="time">.
+ *
+ * The server stores a time and serialises seconds; the input binds by exact
+ * string, so an unsliced value can render as blank in some browsers.
+ */
+function clockValue(value: unknown, fallback: string): string {
+  return typeof value === "string" ? value.slice(0, 5) : fallback;
+}
+
 export default function SettingsPage() {
   const { user, login, refreshUser } = useAuth();
 
@@ -20,6 +30,9 @@ export default function SettingsPage() {
   const [creditTarget, setCreditTarget] = useState(String(user?.preferences?.credit_target ?? 120));
   const [gpaEnabled, setGpaEnabled] = useState(user?.preferences?.gpa_scale_enabled ?? true);
   const [defaultTarget, setDefaultTarget] = useState(String(user?.preferences?.default_target_grade ?? 85));
+  const [studyStart, setStudyStart] = useState(clockValue(user?.preferences?.study_day_start, "08:00"));
+  const [studyEnd, setStudyEnd] = useState(clockValue(user?.preferences?.study_day_end, "22:00"));
+  const [minBlock, setMinBlock] = useState(String(user?.preferences?.min_free_block_minutes ?? 30));
   const [academicError, setAcademicError] = useState<string | null>(null);
   const [academicSaved, setAcademicSaved] = useState(false);
   const [savingAcademic, setSavingAcademic] = useState(false);
@@ -33,6 +46,9 @@ export default function SettingsPage() {
     setCreditTarget(String(user.preferences?.credit_target ?? 120));
     setGpaEnabled(user.preferences?.gpa_scale_enabled ?? true);
     setDefaultTarget(String(user.preferences?.default_target_grade ?? 85));
+    setStudyStart(clockValue(user.preferences?.study_day_start, "08:00"));
+    setStudyEnd(clockValue(user.preferences?.study_day_end, "22:00"));
+    setMinBlock(String(user.preferences?.min_free_block_minutes ?? 30));
   }, [user]);
 
   async function handleAcademicSubmit(event: React.FormEvent) {
@@ -54,6 +70,9 @@ export default function SettingsPage() {
         credit_target: Number(creditTarget),
         gpa_scale_enabled: gpaEnabled,
         default_target_grade: Number(defaultTarget),
+        study_day_start: studyStart,
+        study_day_end: studyEnd,
+        min_free_block_minutes: Number(minBlock),
       });
       await refreshUser();
       setAcademicSaved(true);
@@ -187,6 +206,53 @@ export default function SettingsPage() {
               />
               <span className="loginHint">
                 Used for any course without its own target.
+              </span>
+            </div>
+
+            {/* What counts as usable study time. 03:00 is technically free and
+                is not it, so the gaps between classes are only offered inside
+                these hours. */}
+            <div className="loginField">
+              <label htmlFor="study-start">Study hours</label>
+              <div className="studyHoursRow">
+                <input
+                  id="study-start"
+                  className="loginInput"
+                  type="time"
+                  value={studyStart}
+                  onChange={(event) => setStudyStart(event.target.value)}
+                  required
+                />
+                <span className="studyHoursTo">to</span>
+                <input
+                  id="study-end"
+                  className="loginInput"
+                  type="time"
+                  value={studyEnd}
+                  onChange={(event) => setStudyEnd(event.target.value)}
+                  aria-label="Study hours end"
+                  required
+                />
+              </div>
+              <span className="loginHint">
+                The hours free blocks are offered in.
+              </span>
+            </div>
+
+            <div className="loginField">
+              <label htmlFor="min-block">Shortest useful gap</label>
+              <input
+                id="min-block"
+                className="loginInput"
+                type="number"
+                min={5}
+                max={240}
+                value={minBlock}
+                onChange={(event) => setMinBlock(event.target.value)}
+                required
+              />
+              <span className="loginHint">
+                Minutes. Below this a gap is walking time, not study time.
               </span>
             </div>
 

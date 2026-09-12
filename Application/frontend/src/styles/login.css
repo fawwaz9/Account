@@ -237,3 +237,21 @@
   margin-top: 3px;
   accent-color: var(--gold);
 }
+
+/* The study-hours pair, which reads as one setting rather than two fields. */
+.studyHoursRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.studyHoursRow .loginInput {
+  flex: 1;
+  min-width: 0;
+}
+
+.studyHoursTo {
+  color: var(--muted);
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}

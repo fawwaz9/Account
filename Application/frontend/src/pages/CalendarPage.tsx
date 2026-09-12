@@ -5,6 +5,7 @@ import EventCard from "../features/calender/components/EventCard";
 import EventModal from "../features/calender/components/EventModal";
 import Modal from "../shared/components/Modal";
 import { useCalender } from "../features/calender/hooks/useCalender";
+import TimeInsights from "../features/calender/components/TimeInsights";
 import {
   deleteEvent,
   fetchEvents,
@@ -16,7 +17,7 @@ import { Task } from "../features/tasks/types";
 import { fetchCourses } from "../features/grades/api";
 import { Course } from "../features/grades/types";
 import { useAuth } from "../app/auth/AuthContext";
-import { monthLabel, shortDate, today, weekLabel } from "../shared/utils/dateUtils";
+import { addDays, monthLabel, shortDate, today, weekLabel } from "../shared/utils/dateUtils";
 import "../styles/calendar.css";
 
 export default function CalendarPage() {
@@ -31,6 +32,8 @@ export default function CalendarPage() {
   const [composeDate, setComposeDate] = useState(today());
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  // Bumped with reload so the insights follow an edit.
+  const [insightNonce, setInsightNonce] = useState(0);
 
   // Courses are only needed to label the dropdown in the event form, so they
   // load once here rather than on every month change.
@@ -59,6 +62,7 @@ export default function CalendarPage() {
     try {
       await setTaskDone(user.id, task.id, !task.done);
       await reload();
+      setInsightNonce((value) => value + 1);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Could not update the task");
     } finally {
@@ -98,6 +102,7 @@ export default function CalendarPage() {
       await skipOccurrence(user.id, selected.event_id, selected.on_date);
       setSelected(null);
       await reload();
+      setInsightNonce((value) => value + 1);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Could not cancel that date");
     } finally {
@@ -114,6 +119,7 @@ export default function CalendarPage() {
       await deleteEvent(user.id, selected.event_id);
       setSelected(null);
       await reload();
+      setInsightNonce((value) => value + 1);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Could not delete the event");
     } finally {
@@ -194,13 +200,28 @@ export default function CalendarPage() {
           onAddOnDay={openNewEvent}
         />
       ) : (
-        <WeekView
-          days={days}
-          loading={loading}
-          onSelectOccurrence={setSelected}
-          onToggleTask={handleToggleTask}
-          onAddOnDay={openNewEvent}
-        />
+        <>
+          <WeekView
+            days={days}
+            loading={loading}
+            onSelectOccurrence={setSelected}
+            onToggleTask={handleToggleTask}
+            onAddOnDay={openNewEvent}
+          />
+
+          {/* Week view only: the gaps between classes only mean something
+              against a time axis, and a month of free blocks is a list nobody
+              reads. */}
+          {user && days.length > 0 && (
+            <TimeInsights
+              userId={user.id}
+              weekStart={days[0].date}
+              weekEnd={days[days.length - 1].date}
+              horizonEnd={addDays(days[0].date, 12 * 7)}
+              nonce={insightNonce}
+            />
+          )}
+        </>
       )}
 
       {selected && (

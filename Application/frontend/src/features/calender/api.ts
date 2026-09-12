@@ -1,6 +1,6 @@
 import { del, get, post, patch, put } from "../../services/apiClient";
 import { endpoints } from "../../services/endpoints";
-import {
+import { CrunchStrip, FreeBlock, WeekLoad,
   CalendarEvent,
   ClassScheduleCreate,
   EventCreate,
@@ -68,4 +68,21 @@ export async function setClassSchedule(
   payload: ClassScheduleCreate
 ) {
   return put<CalendarEvent[]>(endpoints.calendar.classSchedule(userId, courseId), payload);
+}
+
+function window(start: string, end: string) {
+  return `?start=${start}&end=${end}`;
+}
+
+/** The gaps between commitments, longest first, inside your study hours. */
+export async function fetchFreeBlocks(userId: string, start: string, end: string) {
+  return get<FreeBlock[]>(endpoints.calendar.freeBlocks(userId) + window(start, end));
+}
+
+export async function fetchWeekLoad(userId: string, start: string, end: string) {
+  return get<WeekLoad>(endpoints.calendar.weekLoad(userId) + window(start, end));
+}
+
+export async function fetchCrunch(userId: string, start: string, end: string) {
+  return get<CrunchStrip>(endpoints.calendar.crunch(userId) + window(start, end));
 }
