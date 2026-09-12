@@ -30,7 +30,7 @@ from app.Grades.services.grade_service import add_grade
 from app.Grades.utils.enums import GradeCategory
 from app.Omnibox.schemas.omnibox import OmniboxKind, OmniboxPreview, OmniboxResult
 from app.Tasks.schemas.task import MAX_ESTIMATED_MINUTES, TaskCreate
-from app.Tasks.services.quick_capture_service import resolve_course
+from app.Grades.services.course_lookup import resolve_course
 from app.Tasks.services.task_service import create_task, user_exists
 from app.shared.tokenizer import Parsed, parse
 
@@ -204,6 +204,10 @@ def _expense_preview(db: Session, user_id: uuid.UUID, parsed: Parsed, title: str
     label = f"${parsed.amount:.2f} from {account.name}"
     if named_category:
         label += f" · {named_category.name}"
+    # The course was resolved from the same line, so say so -- otherwise the
+    # expense silently acquires a course the preview never mentioned.
+    if common.get("course_code"):
+        label += f" · {common['course_code']}"
 
     return OmniboxPreview(
         **{**common, "on_date": when},
@@ -277,6 +281,10 @@ def file_it(db: Session, user_id: uuid.UUID, text: str):
             description=preview.title,
             occurred_on=preview.on_date or date.today(),
             category_id=preview.category_id,
+            # The course was already resolved for the preview and then thrown
+            # away here, so "textbook cpsc 210 $80" filed the money but lost
+            # what it was for.
+            course_id=preview.course_id,
         ))
         if transaction is None:
             raise ValueError("That account no longer exists")
