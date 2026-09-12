@@ -44,10 +44,23 @@ Shipped so far (do not re-propose)
           class, plus per-event dates blocked while setting a repeat up.
 
 
+Bugs:   Editing a repeating task appears to do nothing. Confirmed: the rule row
+          updates, but every occurrence already written keeps the old title,
+          time and estimate -- and the window runs 60 days ahead, so a daily
+          rule has 62 stale rows and nothing on screen changes.
+        A task's due time never reaches the calendar. Confirmed: both views
+          render tasks in the all-day band and never read due_time, so a task
+          due at 14:00 sits above the grid rather than at 14:00 in it.
+
 Tasks:  Shows midterms and exams coming up in the next 30 days.
         Reminders, as opposed to tasks: something that notifies rather than waits.
         At-risk first: tasks belonging to courses below target sort to the top of the list.
         Snooze with a reason, and keep the reason. Patterns show up after a term.
+        Record how much earlier or later assignments and tasks in general are marked completed. Exclude those with no due dates from this metric.
+        The above average should be in the tasks page and shold show the average for the past week and current month. We will do more with this later on.
+        A due time on an ordinary task, defaulting to 23:59. The column and the
+          type already carry due_time and the repeating form already sets it --
+          the plain task form is the only place with no input for it.
 
 
 Grades: Think of other functionalities that can merge over to the other.
@@ -211,6 +224,21 @@ Worth knowing before picking anything up
 - A repeat materialises differently per module, and the differences are the
   point: class times never become rows, payments become rows only once they have
   happened, tasks become rows a little way ahead so each can be ticked off.
+- That third case is where the editing bug lives. update_rule writes the rule and
+  then calls materialise, which skips any date already written, so edits never
+  reach the 60 days of occurrences the rule wrote earlier. The comment defending
+  this is right about the past -- renaming a chore must not rename last week's
+  completed one, which is a record of work actually done -- but it applies that
+  rule to future untouched occurrences too, where it is simply wrong. The fix is
+  to propagate to occurrences that are still ahead and not yet done, and leave
+  past and completed ones alone. There is no flag distinguishing an occurrence
+  the student hand-edited, so a manual tweak to one future occurrence would be
+  overwritten; that is the right trade against editing appearing to do nothing.
+- Tasks reach the calendar as chips the client places, not through
+  list_occurrences, and due_time appears nowhere in the calendar feature. Both
+  WeekView and CalenderView render every task in the all-day band, which is
+  correct only for an undated-in-time task. Placing a timed task in the grid is
+  the same arithmetic the week view already does for events.
 - Interval belongs on the meeting, not on the timetable: a weekly lecture and a
   biweekly lab on one course is the ordinary case, not an edge case. That suits
   what is already there, because set_class_schedule turns each ClassMeeting into
