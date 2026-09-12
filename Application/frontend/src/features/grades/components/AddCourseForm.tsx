@@ -1,4 +1,5 @@
-import {CourseCreate, GradeCategory, Semester } from "../types"
+import {CourseCreate, Semester } from "../types"
+import CategoryWeights from "./CategoryWeights"
 import CourseFlags from "./CourseFlags";
 
 interface AddCourseFormProps {
@@ -186,36 +187,15 @@ export default function AddCourseForm({
 
       <CourseFlags form={form} updateField={updateField} idPrefix="add-course" />
 
-      <div className="category_grid">
-        {/* A real label per box, as EditCourseForm already does. The placeholder
-            used to be the only thing naming these eight inputs, and it vanishes on
-            the first keystroke -- leaving eight identical boxes with nothing to say
-            which category each one weights, and eight bare spin buttons to a
-            screen reader. */}
-        {Object.values(GradeCategory).map((category) => (
-          <div key={category} className="categoryWeightItem">
-            <label htmlFor={`add-category-weight-${category}`} className="categoryWeightLabel">
-              {category}
-            </label>
-            <input
-              id={`add-category-weight-${category}`}
-              type="number"
-              className="categoryWeightInput"
-              placeholder="0"
-              min={0}
-              max={100}
-              value={form.category_weights?.[category] ?? ""}
-              onChange={(e) => {
-                const raw = e.target.value;
-                updateField("category_weights", {
-                  ...form.category_weights,
-                  [category]: raw === "" ? undefined : Number(raw),
-                });
-              }}
-            />
-          </div>
-        ))}
-      </div>
+      <CategoryWeights
+        weights={form.category_weights ?? {}}
+        onChange={(next) => updateField("category_weights", next)}
+        idPrefix="add"
+        gridClass="category_grid"
+        itemClass="categoryWeightItem"
+        labelClass="categoryWeightLabel"
+        inputClass="categoryWeightInput"
+      />
 
       {error && (
         <div className="space-y-1">

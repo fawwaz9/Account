@@ -788,3 +788,37 @@
   gap: 4px;
   margin-left: 26px;
 }
+
+/* ===== Category weights =====
+   The grid's boxes are meant to total 100, so bonus cannot sit inside it: its
+   whole point is to be outside that total. Separated, with only the scoring
+   categories counted, so a course carrying bonus still reads as being marked
+   out of 100 rather than 105. */
+
+.weightTotal {
+  margin: 8px 0 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.weightTotal strong {
+  color: var(--text);
+}
+
+.weightTotalExact strong {
+  color: var(--gold-soft);
+}
+
+.bonusWeights {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+}
+
+.bonusWeightsNote {
+  margin: 0 0 8px;
+  font-size: 0.75rem;
+  color: var(--gold-soft);
+  text-align: center;
+}

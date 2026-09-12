@@ -1,5 +1,6 @@
 import { GradeCategory, GradeSchedule } from "../types";
 import ScheduleChoice from "./ScheduleChoice";
+import BonusNote, { scoreInputClass } from "./BonusNote";
 
 interface EditGradeFormState {
   name: string;
@@ -71,7 +72,7 @@ export default function EditGradeForm({
           onChange={(event) =>
             updateField("score", event.target.value === "" ? null : Number(event.target.value))
           }
-          className="--input mt-1 w-[45%] rounded-lg border border-slate-700 bg-transparent px-3 py-2 text-white text-center"
+          className={scoreInputClass("--input mt-1 w-[45%] rounded-lg border border-slate-700 bg-transparent px-3 py-2 text-white text-center", form.score ?? null, form.max_score)}
           placeholder="Score (blank = not graded yet)"
           aria-label="Score, blank if not graded yet"
         />
@@ -87,6 +88,8 @@ export default function EditGradeForm({
           required
         />
       </div>
+
+      <BonusNote score={form.score ?? null} maxScore={form.max_score} />
 
       <ScheduleChoice
         dueDate={form.due_date}

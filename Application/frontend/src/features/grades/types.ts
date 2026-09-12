@@ -146,7 +146,9 @@ export enum GradeCategory {
   PARTICIPATION = "Participation",
   PROJECT = "Project",
   OTHER = "Other",
-  FINAL = "Final"
+  FINAL = "Final",
+  /** Adds to the course average rather than forming part of it. See bonus.ts. */
+  BONUS = "Bonus"
 }
 
 /** Answer from the "what do I need on the final" calculation. */

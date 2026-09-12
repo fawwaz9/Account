@@ -1,4 +1,5 @@
-import { CourseCreate, GradeCategory, Semester } from "../types";
+import { CourseCreate, Semester } from "../types"
+import CategoryWeights from "./CategoryWeights";
 import CourseFlags from "./CourseFlags";
 
 interface EditCourseFormProps {
@@ -181,31 +182,15 @@ export default function EditCourseForm({
 
       <CourseFlags form={form} updateField={updateField} idPrefix="edit-course" />
 
-      <div className="edit_category_grid">
-        {Object.values(GradeCategory).map((category) => (
-            <div key={category} className="editCategoryWeightItem">
-            <label htmlFor={`category-weight-${category}`} className="editCategoryWeightLabel">
-                {category}
-            </label>
-            <input
-                id={`category-weight-${category}`}
-                type="number"
-                className="editCategoryWeightInput"
-                placeholder="0"
-                min={0}
-                max={100}
-                value={form.category_weights?.[category] ?? ""}
-                onChange={(e) => {
-                const raw = e.target.value;
-                updateField("category_weights", {
-                    ...form.category_weights,
-                    [category]: raw === "" ? undefined : Number(raw),
-                });
-                }}
-            />
-            </div>
-        ))}
-        </div>
+      <CategoryWeights
+        weights={form.category_weights ?? {}}
+        onChange={(next) => updateField("category_weights", next)}
+        idPrefix="edit"
+        gridClass="edit_category_grid"
+        itemClass="editCategoryWeightItem"
+        labelClass="editCategoryWeightLabel"
+        inputClass="editCategoryWeightInput"
+      />
 
       {error && (
         <div className="space-y-1">
