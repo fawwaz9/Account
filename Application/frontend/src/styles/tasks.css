@@ -546,3 +546,81 @@
 .taskBeyond {
   margin: 10px 2px 0;
 }
+
+/* ===== The two columns =====
+
+   Split by what you do with each side rather than by size. The left is the work
+   in front of you; the right is everything that takes more than a line to set
+   up, and the fortnight those things write into.
+
+   Each column is its own flex column rather than letting one grid place every
+   row, because a grid row is as tall as its tallest cell: a short "Overdue"
+   beside a long fortnight would leave a hole underneath it. */
+
+.taskGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  align-items: start;
+  margin-top: 18px;
+}
+
+.taskCol {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  /* Without this a long task title can push a column past its track, and the
+     page scrolls sideways instead of the title ellipsing. */
+  min-width: 0;
+}
+
+/* The slots space themselves with the column's gap, so each section's own
+   vertical margin would double it. Flex does not collapse margins the way the
+   old single-column block layout did. */
+.taskSlot > * {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+/* Both the stats and the exam band render nothing until there is something to
+   say, and an empty wrapper still takes a share of the column's gap -- so a new
+   account would open on a blank band above its first task. */
+.taskSlot:empty {
+  display: none;
+}
+
+/* Side by side even here: the point of the pair is comparing the week against
+   the month, and stacked they read as two unrelated figures. minmax(0, 1fr)
+   lets them shrink rather than forcing the column wider. */
+.taskCol .timingWindows {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* One column, and the order stops following the columns.
+
+   `display: contents` dissolves the two wrappers so every slot becomes a direct
+   child of the grid, which is what lets `order` interleave them -- otherwise the
+   whole of one column would have to come before the whole of the other, and the
+   fortnight's work would sit below the add form and the repeats.
+
+   Urgent first, setup last: what you act on now leads, and the tools for making
+   more work sink to the bottom where they belong on a phone. */
+@media (max-width: 900px) {
+  .taskGrid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 22px;
+  }
+
+  .taskCol {
+    display: contents;
+  }
+
+  .taskSlot--stats { order: 1; }
+  .taskSlot--capture { order: 2; }
+  .taskSlot--overdue { order: 3; }
+  .taskSlot--soon { order: 4; }
+  .taskSlot--undated { order: 5; }
+  .taskSlot--form { order: 6; }
+  .taskSlot--repeats { order: 7; }
+  .taskSlot--done { order: 8; }
+}
