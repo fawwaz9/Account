@@ -201,16 +201,88 @@ def update_rule(db: Session, user_id: uuid.UUID, rule_id: uuid.UUID, data: Recur
     if rule.recur_until is not None and rule.recur_until < rule.starts_on:
         raise ValueError("A repeat cannot end before it starts")
 
-    # Occurrences already written keep whatever they say. Rewriting them would
-    # reach into work the student may have already edited or ticked off, and a
-    # renamed chore does not rename last week's completed one -- that is a record
-    # of what was actually done.
     db.commit()
     db.refresh(rule)
-    materialise(db, user_id, rule)
+    resync_occurrences(db, rule)
+    materialise(db, user_id, rule, since=today())
     db.commit()
     db.refresh(rule)
     return attach_rule(db, rule)
+
+
+def resync_occurrences(db: Session, rule: RecurringTaskModel) -> None:
+    """Bring the occurrences this rule already wrote back in line with it.
+
+    Without this, editing a rule looks like it does nothing at all. The window
+    runs sixty days ahead, so by the time you rename a daily chore there are
+    already sixty-odd rows carrying the old title, and `materialise` will not
+    touch them -- it only ever adds dates that are missing. The rule changed and
+    every occurrence on screen did not.
+
+    What must *not* follow the rule is an occurrence already ticked off: renaming
+    a chore does not rename last week's completed one, which is a record of what
+    was actually done. So the dividing line is `done`, not the date:
+
+    * A **completed** occurrence is history and is never touched.
+    * An **outstanding** occurrence is still work to do, so it takes the rule's
+      current title, notes, time, estimate, course and tags -- including one
+      already overdue, which is the same chore still waiting.
+
+    Dates the rule no longer generates are dropped as well, or changing a chore
+    from Monday to Thursday would leave the Mondays behind beside the new
+    Thursdays. Only dates from today forward are dropped: an overdue occurrence
+    was genuinely assigned at the time, and deleting it would erase work the
+    student may still mean to do.
+
+    One deliberate loss: nothing marks an occurrence the student hand-edited, so
+    a tweak to a future one is overwritten here. That is the better trade
+    against every edit appearing to do nothing.
+    """
+    horizon = today()
+    window_end = horizon + timedelta(days=MATERIALISE_AHEAD_DAYS)
+    wanted = set(
+        occurrences(
+            rule_of(rule),
+            rule.starts_on,
+            max(rule.starts_on, horizon - timedelta(days=MATERIALISE_BEHIND_DAYS)),
+            window_end,
+            skipped_of(rule),
+        )
+    )
+
+    # Dropped first, so the update below does not bother with rows on their way
+    # out. Bounded by the same window the rule writes into, so an occurrence
+    # beyond it is left alone rather than deleted for being unrecognised.
+    stale = (
+        db.query(TaskModel)
+        .filter(
+            TaskModel.recurring_id == rule.id,
+            TaskModel.done.is_(False),
+            TaskModel.due_date >= horizon,
+            TaskModel.due_date <= window_end,
+        )
+        .all()
+    )
+    for task in stale:
+        if task.due_date not in wanted:
+            db.delete(task)
+
+    outstanding = (
+        db.query(TaskModel)
+        .filter(TaskModel.recurring_id == rule.id, TaskModel.done.is_(False))
+        .all()
+    )
+    for task in outstanding:
+        task.title = rule.title
+        task.notes = rule.notes
+        task.due_time = rule.due_time
+        task.estimated_minutes = rule.estimated_minutes
+        task.course_id = rule.course_id
+        # Rewritten whole rather than mutated: SQLAlchemy does not track a change
+        # made inside a JSON column.
+        task.tags = list(rule.tags or [])
+
+    db.flush()
 
 
 def delete_rule(db: Session, user_id: uuid.UUID, rule_id: uuid.UUID, drop_pending: bool = True):
@@ -267,13 +339,29 @@ def skip_occurrence(db: Session, user_id: uuid.UUID, rule_id: uuid.UUID, on_date
 
 # ------------------------------------------------------------ materialising --
 
-def materialise(db: Session, user_id: uuid.UUID, rule: RecurringTaskModel) -> list[TaskModel]:
-    """Write this rule's occurrences for the rolling window, skipping any already there."""
+def materialise(
+    db: Session,
+    user_id: uuid.UUID,
+    rule: RecurringTaskModel,
+    *,
+    since: date | None = None,
+) -> list[TaskModel]:
+    """Write this rule's occurrences for the rolling window, skipping any already there.
+
+    `since` raises the start of the window. Catching up is right when a rule is
+    first run or has been idle -- a chore set up on Friday for a Monday that has
+    already gone should still appear. It is wrong when an existing rule is
+    *edited*: moving a weekly chore from Monday to Thursday would otherwise
+    back-fill last Thursday, handing the student an overdue task that was never
+    assigned. So an edit passes today and only writes forward.
+    """
     if not rule.active:
         return []
 
     horizon = today()
     window_start = max(rule.starts_on, horizon - timedelta(days=MATERIALISE_BEHIND_DAYS))
+    if since is not None:
+        window_start = max(window_start, since)
     window_end = horizon + timedelta(days=MATERIALISE_AHEAD_DAYS)
 
     wanted = occurrences(
