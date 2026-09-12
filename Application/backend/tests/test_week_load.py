@@ -31,8 +31,13 @@ def klass(db, user, title, on, start, end, kind=EventKind.LECTURE):
     ))
 
 
-def blocks_on(db, user, day):
-    found = free_blocks(db, user.id, day, day)
+#: A fixed "now" well before the fixtures, so tests that are not about the clock
+#: do not start failing once the wall date passes MON.
+BEFORE = datetime.datetime(2026, 9, 1, 6, 0)
+
+
+def blocks_on(db, user, day, now=BEFORE):
+    found = free_blocks(db, user.id, day, day, now=now)
     return [(b.starts_at, b.ends_at, b.minutes) for b in found]
 
 
@@ -113,7 +118,7 @@ def test_blocks_come_back_longest_first(db, user):
     klass(db, user, "A", MON, at(9), at(10))
     klass(db, user, "B", MON, at(12), at(13))
 
-    found = free_blocks(db, user.id, MON, MON)
+    found = free_blocks(db, user.id, MON, MON, now=BEFORE)
     assert [b.minutes for b in found] == sorted([b.minutes for b in found], reverse=True)
 
 
@@ -282,3 +287,66 @@ def test_saving_one_preference_keeps_the_others(db, user):
     # Defaults from the model win over the stored value here, which is the
     # existing merge behaviour -- the point is that the key survives at all.
     assert "credit_target" in updated.preferences
+
+
+# ---------------------------------------------------------- time already gone --
+
+def test_days_before_today_offer_nothing(db, user):
+    """Free time on Tuesday is not useful information on Friday."""
+    week_start = MON
+    week_end = MON + datetime.timedelta(days=6)
+    friday = datetime.datetime(2026, 9, 18, 9, 0)   # MON is Mon 14 Sep 2026
+
+    found = free_blocks(db, user.id, week_start, week_end, now=friday)
+    days = {b.on_date for b in found}
+
+    assert all(day >= friday.date() for day in days)
+    assert datetime.date(2026, 9, 14) not in days
+    assert datetime.date(2026, 9, 18) in days
+
+
+def test_today_starts_from_now_not_from_the_morning(db, user):
+    """Offering 08:00-22:00 at two in the afternoon offers six hours that are gone."""
+    afternoon = datetime.datetime(2026, 9, 14, 14, 0)
+
+    found = free_blocks(db, user.id, MON, MON, now=afternoon)
+
+    assert [(b.starts_at, b.ends_at) for b in found] == [(at(14), at(22))]
+
+
+def test_an_earlier_class_today_does_not_reopen_the_morning(db, user):
+    klass(db, user, "Morning lecture", MON, at(9), at(10))
+    afternoon = datetime.datetime(2026, 9, 14, 14, 0)
+
+    found = free_blocks(db, user.id, MON, MON, now=afternoon)
+
+    assert [(b.starts_at, b.ends_at) for b in found] == [(at(14), at(22))]
+
+
+def test_a_class_later_today_still_splits_what_is_left(db, user):
+    klass(db, user, "Evening lecture", MON, at(17), at(18))
+    afternoon = datetime.datetime(2026, 9, 14, 14, 0)
+
+    found = free_blocks(db, user.id, MON, MON, now=afternoon)
+
+    assert sorted((b.starts_at, b.ends_at) for b in found) == [
+        (at(14), at(17)), (at(18), at(22)),
+    ]
+
+
+def test_a_day_already_over_offers_nothing(db, user):
+    """Past the study window's close, today has nothing left to give."""
+    late = datetime.datetime(2026, 9, 14, 23, 30)
+
+    assert free_blocks(db, user.id, MON, MON, now=late) == []
+
+
+def test_future_days_are_untouched_by_the_clock(db, user):
+    """Only today is clipped; tomorrow still starts at the study hour."""
+    afternoon = datetime.datetime(2026, 9, 14, 14, 0)
+    tomorrow = MON + datetime.timedelta(days=1)
+
+    found = free_blocks(db, user.id, MON, tomorrow, now=afternoon)
+    on_tomorrow = [b for b in found if b.on_date == tomorrow]
+
+    assert [(b.starts_at, b.ends_at) for b in on_tomorrow] == [(at(8), at(22))]
