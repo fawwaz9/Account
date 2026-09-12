@@ -58,20 +58,24 @@ export default function AccountDetailPage() {
             />
           </div>
 
-          {/* Every figure below the header is for the chosen month, so each
+          {/* The month's figures beside the month's shape: four tiles in a 2x2
+              block, with the daily flow they summarise next to them rather than
+              a screen below. Every figure here is for the chosen month, so each
               tile says so rather than leaving the reader to assume. */}
-          <ul className="tileRow">
-            <Tile label={`In · ${label}`} value={formatMoney(activity.total_in)} tone="in" />
-            <Tile label={`Out · ${label}`} value={formatMoney(activity.total_out)} tone="out" />
-            <Tile
-              label={`Net · ${label}`}
-              value={formatMoney(activity.net, { signed: true })}
-              tone={activity.net < 0 ? "out" : "in"}
-            />
-            <Tile label={`Movements · ${label}`} value={String(activity.transaction_count)} />
-          </ul>
+          <div className="accountSplit">
+            <ul className="tileRow">
+              <Tile label={`In · ${label}`} value={formatMoney(activity.total_in)} tone="in" />
+              <Tile label={`Out · ${label}`} value={formatMoney(activity.total_out)} tone="out" />
+              <Tile
+                label={`Net · ${label}`}
+                value={formatMoney(activity.net, { signed: true })}
+                tone={activity.net < 0 ? "out" : "in"}
+              />
+              <Tile label={`Movements · ${label}`} value={String(activity.transaction_count)} />
+            </ul>
 
-          <AccountFlowChart days={activity.daily} monthLabel={label} />
+            <AccountFlowChart days={activity.daily} monthLabel={label} />
+          </div>
 
           <section className="accountTarget">
             <div className="sectionHeading">
@@ -94,10 +98,18 @@ export default function AccountDetailPage() {
             </span>
           </section>
 
-          <AccountBalanceChart points={activity.balance_history} />
-
-          {activity.by_category.length > 0 && (
-            <WhereItWent entries={activity.by_category} />
+          {/* Below the target bar, the same split again: what the month went on
+              under the tiles, and the longer balance history under the chart it
+              continues. With no categories recorded there is nothing to put in
+              the left column, so the history takes the full width rather than
+              sitting beside a gap. */}
+          {activity.by_category.length > 0 ? (
+            <div className="accountSplit">
+              <WhereItWent entries={activity.by_category} />
+              <AccountBalanceChart points={activity.balance_history} />
+            </div>
+          ) : (
+            <AccountBalanceChart points={activity.balance_history} />
           )}
 
           <section className="ledgerSection">
