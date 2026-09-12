@@ -79,3 +79,32 @@ class BudgetSummary(BaseModel):
     total_actual: float = 0.0
     accounts: list[AccountBudget] = Field(default_factory=list)
     by_category: list[CategorySpend] = Field(default_factory=list)
+
+
+class TermBudget(BaseModel):
+    """What a term cost, measured over the term rather than a calendar month.
+
+    A month is the wrong unit for a student. Tuition lands once, textbooks land
+    in the first fortnight, and the question worth asking is what the *term* has
+    taken -- which Grades already knows the shape of, because its courses carry
+    their own start and end dates.
+    """
+
+    term_name: str = "your current term"
+    #: None when no course in the term carries dates, in which case there is no
+    #: span to measure and `reason` says so rather than inventing one.
+    starts_on: date | None = None
+    ends_on: date | None = None
+    #: Courses that supplied the span, so it is obvious where it came from.
+    dated_courses: int = 0
+    undated_courses: int = 0
+    spent: float = 0.0
+    received: float = 0.0
+    net: float = 0.0
+    #: Spend on anything tagged to a course in this term, tuition included.
+    on_courses: float = 0.0
+    by_category: list[CategorySpend] = Field(default_factory=list)
+    days_elapsed: int = 0
+    days_total: int = 0
+    can_measure: bool = False
+    reason: str | None = None

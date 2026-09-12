@@ -56,6 +56,7 @@ export const endpoints = {
     category: (userId: string, categoryId: string) => `finances/${userId}/categories/${categoryId}`,
     budgetTargets: (userId: string) => `finances/${userId}/budget-targets`,
     budgetSummary: (userId: string) => `finances/${userId}/budget-summary`,
+    termBudget: (userId: string) => `finances/${userId}/term-budget`,
     deposits: (userId: string) => `finances/${userId}/deposits`,
     depositPreview: (userId: string) => `finances/${userId}/deposit-preview`,
     tuition: (userId: string) => `finances/${userId}/tuition`,

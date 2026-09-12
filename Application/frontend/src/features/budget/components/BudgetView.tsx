@@ -11,6 +11,7 @@ import RecurringModal from "./RecurringModal";
 import { useBudget } from "../hooks/useBudget";
 import { useCourses } from "../../grades/hooks/useCourses";
 import TuitionModal from "./TuitionModal";
+import TermBudget from "./TermBudget";
 import { useTransactionDelete } from "../hooks/useTransactionDelete";
 import DeleteConfirmModal from "../../grades/components/DeleteConfirmModal";
 import { deleteRecurring, setBudgetTarget } from "../api";
@@ -29,6 +30,9 @@ export default function BudgetView() {
   const [modalOpen, setModalOpen] = useState(false);
   const [tuitionOpen, setTuitionOpen] = useState(false);
   const [editingTuition, setEditingTuition] = useState<string | null>(null);
+  // Bumped alongside reload so the term panel refetches when money moves.
+  const [termNonce, setTermNonce] = useState(0);
+  const reloadAll = () => { reload(); setTermNonce((n) => n + 1); };
 
   // A tuition row's amount is derived from its per-credit rate, so it goes to
   // the tuition editor rather than the plain one -- which would change the
@@ -100,6 +104,10 @@ export default function BudgetView() {
         <>
           <Sectors accounts={accounts} onEdit={setEditingAccount} />
 
+          {/* Above the monthly view on purpose: the month is the wrong unit for
+              tuition and textbooks, so the term is the frame you want first. */}
+          <TermBudget nonce={termNonce} />
+
           <div className={spendByCategory.length > 0 ? "budgetGrid" : ""}>
             <div className="budgetColumn">
               <PlannedSpend
@@ -163,7 +171,7 @@ export default function BudgetView() {
         account={editingAccount}
         accounts={accounts}
         onClose={() => setEditingAccount(null)}
-        onSaved={reload}
+        onSaved={reloadAll}
       />
 
       <EditTransactionModal
@@ -171,7 +179,7 @@ export default function BudgetView() {
         categories={categories}
         courses={courses}
         onClose={() => setEditing(null)}
-        onSaved={reload}
+        onSaved={reloadAll}
       />
 
       <RecurringModal
@@ -180,7 +188,7 @@ export default function BudgetView() {
         accounts={accounts}
         categories={categories}
         onClose={() => { setAddingRule(false); setEditingRule(null); }}
-        onSaved={reload}
+        onSaved={reloadAll}
       />
 
       <AddMoneyModal
@@ -189,14 +197,14 @@ export default function BudgetView() {
         categories={categories}
         courses={courses}
         onClose={() => setModalOpen(false)}
-        onSaved={reload}
+        onSaved={reloadAll}
       />
 
       <TuitionModal
         open={tuitionOpen}
         accounts={accounts}
         onClose={() => setTuitionOpen(false)}
-        onSaved={reload}
+        onSaved={reloadAll}
       />
 
       <TuitionModal
@@ -204,7 +212,7 @@ export default function BudgetView() {
         accounts={accounts}
         paymentId={editingTuition}
         onClose={() => setEditingTuition(null)}
-        onSaved={reload}
+        onSaved={reloadAll}
       />
     </div>
   );

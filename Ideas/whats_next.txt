@@ -32,6 +32,11 @@ Shipped so far (do not re-propose)
           line for what left; the gross is what the course pages report.
         What a course cost, on the course page: its gross tuition share plus
           anything bought for it.
+        Correcting and removing a tuition payment, its ledger row moving with it.
+        Dropped marks: a grade kept on a course but left out of every average,
+          for when a professor drops the two lowest.
+        Term budget: what a term has cost, measured over the term's own dates
+          rather than a calendar month.
 
 
 Tasks:  Shows midterms and exams coming up in the next 30 days.
@@ -66,7 +71,6 @@ Budget:
 
 Grades x Budget (nothing else does this):
         A dollar figure next to a dropped course, since the deadline to drop with a refund is a date on the calendar.
-        Term budget that already knows the term dates because Grades does.
 
 Quality of Life:
         Weekly digest on the dashboard: what is due, what moved, what you spent.
@@ -89,14 +93,16 @@ and the Grades UI debts are cleared. What is left splits into one piece of
 plumbing that unblocks a whole section, a set of derivations that need no new
 tables at all, and the things that genuinely need new storage.
 
-What is left of Grades x Budget -- next
-- The plumbing is in. A dropped course's dollar figure and a term budget that
-  knows its own dates are now each a query rather than a feature.
-- The dropped-course figure wants one decision first: refunds are income, and a
-  course_id is expense-only, so a refund is currently attributed to nothing. That
-  was deliberate -- it keeps one rule for what a labelled transaction means -- but
-  it means cost per course reads gross rather than net, and a drop with a refund
-  is exactly where that shows.
+Cheap wins, read-only -- next
+- Free blocks first: the week view already lays a day out against the clock, so
+  the gaps between classes are arithmetic on data it already holds.
+
+Still open from Grades x Budget
+- A dropped course's dollar figure. Two questions before it is worth building:
+  whether a refund should be attributable at all (refunds are income, course_id
+  is expense-only, so today one is attributed to nothing and cost per course
+  reads gross), and what "dropped" even means here -- no course carries such a
+  flag, only archived.
 
 Cheap wins, read-only
 - Free blocks, crunch radar, week load, term timeline, category blind spots,
@@ -144,7 +150,7 @@ Worth knowing before picking anything up
 - gh is not installed and no token is exported. git push works because the
   credential sits in the macOS keychain, but opening a PR means the browser, or
   installing gh first.
-- 261 backend tests. The frontend has none: the week view's overlap maths was
+- 297 backend tests. The frontend has none: the week view's overlap maths was
   checked with a one-off esbuild harness, not by anything that runs on its own.
   Vitest would slot in beside Vite cheaply if that starts to bite.
 - Repeat rules live in five columns shared by events, standing payments and
@@ -167,6 +173,15 @@ Worth knowing before picking anything up
   callers: quick capture, the omnibox, and tagging an expense.
 - FastAPI matches routes in declaration order, so any literal path under
   /courses/ must be declared above /courses/{course_id} or it is parsed as an id.
+- Only Grades knows when a term runs, and it knows it per course: the term span
+  is min(start_date), max(end_date) across the term's courses. Most courses carry
+  no dates, so anything built on the span has to say when it is measuring from
+  only some of them.
+- The figure beside a category on the course page is computed in Decimal from the
+  recorded marks. 11.825 has no binary representation -- the nearest double sits
+  below it -- so scaling through a float loses the hundredth before any rounding
+  happens. The averaging engine deliberately does not do this: it would move the
+  stored course average, and it was measured to change nothing.
 - A repeat materialises differently per module, and the differences are the
   point: class times never become rows, payments become rows only once they have
   happened, tasks become rows a little way ahead so each can be ticked off.
