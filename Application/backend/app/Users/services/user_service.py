@@ -180,9 +180,19 @@ def update_user(db: Session, user_id: UUID, data: UserUpdate):
 
     # Preferences are a JSON column, so a partial patch must merge rather than
     # replace -- otherwise setting one preference silently clears the rest.
-    preferences = update_data.pop("preferences", None)
-    if preferences is not None:
-        user.preferences = {**(user.preferences or {}), **preferences}
+    #
+    # Dumped in JSON mode, not Python mode. model_dump() keeps real Python
+    # objects, so study_day_start arrived as a datetime.time and the column
+    # refused it: "Object of type time is not JSON serializable", which made
+    # saving anything at all in Settings a 500. Anything stored as JSON has to
+    # be serialised on the way in, whatever type is added to the model later.
+    update_data.pop("preferences", None)
+    if data.preferences is not None:
+        merged = {
+            **(user.preferences or {}),
+            **data.preferences.model_dump(mode="json"),
+        }
+        user.preferences = merged
 
     for key, value in update_data.items():
         setattr(user, key, value)
