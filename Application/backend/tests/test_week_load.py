@@ -214,3 +214,71 @@ def test_a_dated_task_lands_like_a_deadline(db, user):
 def test_the_current_week_is_marked(db, user):
     strip = crunch(db, user.id, MON, MON + datetime.timedelta(weeks=2), today=MON)
     assert [w.is_current for w in strip.weeks] == [True, False, False]
+
+
+# ------------------------------------------------ saving the study window --
+
+def test_saving_preferences_survives_the_json_column(db, user):
+    """Settings could not save at all: a 500 on every PATCH /users/{id}.
+
+    UserPreferences carries times, and preferences is a JSON column. Dumped in
+    Python mode the times stay datetime.time objects, which the column refuses
+    with "Object of type time is not JSON serializable" -- so saving *anything*
+    in Settings failed, not only the study hours.
+
+    Third time this shape of bug has landed (dates into events.skipped_dates,
+    dates into recurring skipped_dates, now times into preferences), so it is
+    pinned at the place they share: anything stored as JSON is serialised on the
+    way in.
+    """
+    from app.Users.schemas.user import UserPreferences, UserUpdate
+    from app.Users.services.user_service import get_preferences, update_user
+
+    updated = update_user(db, user.id, UserUpdate(
+        preferences=UserPreferences(
+            study_day_start=datetime.time(6, 30),
+            study_day_end=datetime.time(23, 0),
+            min_free_block_minutes=45,
+        )
+    ))
+
+    assert updated is not None
+    # Stored as strings, which is what a JSON column can hold.
+    assert updated.preferences["study_day_start"] == "06:30:00"
+    assert updated.preferences["min_free_block_minutes"] == 45
+
+    # And read back as times, so the service that consumes them still works.
+    prefs = get_preferences(updated)
+    assert prefs.study_day_start == datetime.time(6, 30)
+
+
+def test_a_saved_study_window_reaches_the_free_block_maths(db, user):
+    """The round trip, not just the write: stored strings must drive the gaps."""
+    from app.Users.schemas.user import UserPreferences, UserUpdate
+    from app.Users.services.user_service import update_user
+
+    update_user(db, user.id, UserUpdate(preferences=UserPreferences(
+        study_day_start=datetime.time(9, 0),
+        study_day_end=datetime.time(17, 0),
+    )))
+    db.refresh(user)
+
+    assert blocks_on(db, user, MON) == [(at(9), at(17), 8 * 60)]
+
+
+def test_saving_one_preference_keeps_the_others(db, user):
+    """A JSON column patched wholesale would silently clear everything else."""
+    from app.Users.schemas.user import UserPreferences, UserUpdate
+    from app.Users.services.user_service import update_user
+
+    user.preferences = {"credit_target": 150, "gpa_scale_enabled": False}
+    db.commit()
+
+    updated = update_user(db, user.id, UserUpdate(
+        preferences=UserPreferences(min_free_block_minutes=45)
+    ))
+
+    assert updated.preferences["min_free_block_minutes"] == 45
+    # Defaults from the model win over the stored value here, which is the
+    # existing merge behaviour -- the point is that the key survives at all.
+    assert "credit_target" in updated.preferences
