@@ -17,6 +17,7 @@ from app.Tasks.schemas.recurring_task import (
     RecurringTaskUpdate,
 )
 from app.Tasks.schemas.task import Task, TaskCreate, TaskUpdate
+from app.Tasks.schemas.timing import CompletionTiming
 from app.Tasks.services.recurring_task_service import (
     create_rule,
     delete_rule,
@@ -34,6 +35,7 @@ from app.Tasks.services.task_service import (
     list_tasks,
     update_task,
 )
+from app.Tasks.services.timing_service import completion_timing
 from app.shared import audit
 from app.shared.errors import error_user, responses
 
@@ -211,6 +213,25 @@ def skip_repeating(
         raise HTTPException(status_code=404, detail="Repeating task not found")
 
     return updated
+
+
+@router.get(
+    "/{user_id}/tasks/timing",
+    response_model=CompletionTiming,
+    responses=responses["user_404"],
+)
+def get_task_timing(user_id: VerifiedUserId, db: DBSession):
+    """How early or late work was finished, over a rolling week and this month.
+
+    Declared above `/tasks/{task_id}`: FastAPI matches in declaration order, so
+    below it "timing" is parsed as a task id and the request fails as a bad
+    UUID rather than reaching this at all.
+    """
+    timing = completion_timing(db, user_id)
+    if timing is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+
+    return timing
 
 
 @router.get("/{user_id}/tasks/{task_id}", response_model=Task, responses=TASK_404)

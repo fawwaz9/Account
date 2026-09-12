@@ -26,6 +26,40 @@ export interface Task {
    * score lands, so the client does not offer to delete it separately.
    */
   grade_id: string | null;
+  /**
+   * How far behind the course this task belongs to is, or null when there is
+   * nothing to flag. Computed by the API: the client would otherwise need every
+   * course, every target and the current-term rule just to colour one row.
+   */
+  risk: RiskBand | null;
+}
+
+/** How far below its target a course has fallen, in percentage points. */
+export type RiskBand = "mild" | "moderate" | "severe";
+
+/** Mirrors app/Tasks/schemas/timing.py. */
+export interface TimingWindow {
+  label: string;
+  starts_on: string;
+  ends_on: string;
+  /** Completed tasks that carried a due date; undated work is excluded. */
+  counted: number;
+  /** Signed days from the due date: positive late, negative early. */
+  mean_days: number | null;
+  on_time_percent: number | null;
+  early_count: number;
+  /** Days early, positive, across the early ones only. */
+  early_mean_days: number | null;
+  late_count: number;
+  /** Days late, positive, across the late ones only. */
+  late_mean_days: number | null;
+}
+
+export interface CompletionTiming {
+  past_week: TimingWindow;
+  this_month: TimingWindow;
+  /** Completed but undated, so counted by no figure above. */
+  undated_completed: number;
 }
 
 export interface TaskCreate {

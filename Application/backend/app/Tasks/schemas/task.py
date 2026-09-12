@@ -76,6 +76,11 @@ class Task(TaskBase):
     #: Denormalised, so a list of tasks can be labelled by course without the
     #: client holding every course to look them up.
     course_code: str | None = None
+    #: How far behind the course this task belongs to is: "mild", "moderate" or
+    #: "severe", and null when there is nothing to flag. Computed here rather
+    #: than in the client, which would otherwise need every course, every target
+    #: and the current-term rule just to colour a row.
+    risk: str | None = None
 
     class Config:
         from_attributes = True

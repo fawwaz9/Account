@@ -48,14 +48,17 @@ Shipped so far (do not re-propose)
         Due times on the calendar: placed on the clock in the week view, shown
           on the chip in the month view, and enterable on an ordinary task --
           a due date now pre-fills the end of that day.
+        Exams coming up, above the work: a read-only thirty-day band on the
+          tasks page, since revision is what fills the fortnight below it.
+        At-risk first: tasks from courses below target lead their own date
+          group, badged by how far behind the course is.
+        How early or late work actually gets finished, over a rolling week and
+          the month to date, with the signed average and the on-time share
+          side by side because each hides what the other shows.
 
 
-Tasks:  Shows midterms and exams coming up in the next 30 days.
-        Reminders, as opposed to tasks: something that notifies rather than waits.
-        At-risk first: tasks belonging to courses below target sort to the top of the list.
+Tasks:  Reminders, as opposed to tasks: something that notifies rather than waits.
         Snooze with a reason, and keep the reason. Patterns show up after a term.
-        Record how much earlier or later assignments and tasks in general are marked completed. Exclude those with no due dates from this metric.
-        The above average should be in the tasks page and shold show the average for the past week and current month. We will do more with this later on.
 
 
 Grades: Think of other functionalities that can merge over to the other.
@@ -230,6 +233,23 @@ Worth knowing before picking anything up
   right on a first run, and wrong on an edit: moving a weekly chore from Monday
   to Thursday would otherwise back-fill last Thursday as an overdue task that was
   never assigned.
+- completed_at is naive UTC and due_date is a plain local date, so the
+  completion-timing figure converts through the student's own timezone before
+  subtracting. Comparing them raw is not a rounding error: in UTC-6 anything
+  finished after 18:00 local lands on the next UTC day, and evening is when most
+  work gets done, so the whole figure would drift toward "late".
+- effective_target moved from dash_services to Grades/utils/terms.py. Tasks needs
+  it for the at-risk badge, and importing it from a service closed a loop through
+  grade_service and grade_schedule back into task_service. The utils modules are
+  pure -- no session, no models -- so anything may read them, and that is where a
+  rule two modules share belongs.
+- Risk bands are 0-5 mild, 5-10 moderate, over 10 severe, in percentage points
+  below target, and only for current courses -- the rule collect_attention
+  already applies, because a past course below target is history. A course with
+  nothing recorded has no standing to be behind, which is why a term that has
+  only just started badges nothing at all.
+- The exam band needed no endpoint. fetchAgenda already expands repeats over any
+  window, so it is that call with a filter on EXAM_KINDS.
 - Tasks reach the calendar as chips the client places, not through
   list_occurrences. placeTasks is deliberately separate from place: an event owns
   a span and is drawn with a height, a task is due at a moment and owns none of

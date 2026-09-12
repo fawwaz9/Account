@@ -1,6 +1,7 @@
 import { del, get, patch, post } from "../../services/apiClient";
 import { endpoints } from "../../services/endpoints";
 import {
+  CompletionTiming,
   QuickCapturePreview,
   QuickCaptureResult,
   RecurringTask,
@@ -50,6 +51,11 @@ export async function setTaskDone(userId: string, taskId: string, done: boolean)
 
 export async function deleteTask(userId: string, taskId: string) {
   return del<Task>(endpoints.tasks.detail(userId, taskId));
+}
+
+/** How early or late work has been finished lately. */
+export async function fetchTaskTiming(userId: string) {
+  return get<CompletionTiming>(endpoints.tasks.timing(userId));
 }
 
 /* ===== Repeating tasks ===== */
