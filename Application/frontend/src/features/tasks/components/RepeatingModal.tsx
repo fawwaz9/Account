@@ -2,7 +2,20 @@ import { useEffect, useState } from "react";
 import Modal from "../../../shared/components/Modal";
 import RecurrenceEditor from "../../calender/components/RecurrenceEditor";
 import { createRepeating, updateRepeating } from "../api";
-import { RecurringTask, RecurringTaskCreate } from "../types";
+import {
+  DEFAULT_PRIORITY,
+  MAX_PRIORITY,
+  MIN_PRIORITY,
+  PRIORITY_LABELS,
+  RecurringTask,
+  RecurringTaskCreate,
+} from "../types";
+
+/** 1..5, for the select. */
+const PRIORITY_STEPS = Array.from(
+  { length: MAX_PRIORITY - MIN_PRIORITY + 1 },
+  (_, index) => MIN_PRIORITY + index
+);
 import { Course } from "../../grades/types";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { today, weekdayCode } from "../../../shared/utils/dateUtils";
@@ -26,6 +39,7 @@ function blankRule(): RecurringTaskCreate {
     estimated_minutes: null,
     course_id: null,
     tags: [],
+    priority: DEFAULT_PRIORITY,
     starts_on: start,
     // Weekly on today's weekday: the commonest repeating chore by far, and
     // showing the day already chosen makes the rule legible at a glance.
@@ -45,6 +59,7 @@ function formFor(rule: RecurringTask | null): RecurringTaskCreate {
     estimated_minutes: rule.estimated_minutes,
     course_id: rule.course_id,
     tags: rule.tags,
+    priority: rule.priority,
     starts_on: rule.starts_on,
     recurrence: rule.recurrence,
     active: rule.active,
@@ -164,6 +179,21 @@ export default function RepeatingModal({
               value={form.due_time ?? ""}
               onChange={(event) => update("due_time", event.target.value || null)}
             />
+          </label>
+
+          <label className="calField">
+            <span className="calFieldLabel">Priority</span>
+            {/* On the rule, not on each occurrence: a chore that repeats sixty
+                times would otherwise need correcting sixty times. */}
+            <select
+              className="calInput"
+              value={form.priority}
+              onChange={(event) => update("priority", Number(event.target.value))}
+            >
+              {PRIORITY_STEPS.map((step) => (
+                <option key={step} value={step}>{step} · {PRIORITY_LABELS[step]}</option>
+              ))}
+            </select>
           </label>
         </div>
 

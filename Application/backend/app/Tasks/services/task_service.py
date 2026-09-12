@@ -197,6 +197,7 @@ def create_task(db: Session, user_id: uuid.UUID, data: TaskCreate):
         due_time=data.due_time,
         estimated_minutes=data.estimated_minutes,
         tags=list(data.tags),
+        priority=data.priority,
         done=False,
         archived=False,
         created_at=utc_now(),

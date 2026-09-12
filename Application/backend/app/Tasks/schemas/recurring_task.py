@@ -4,6 +4,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator
 
 from app.Calendar.schemas.event import Recurrence
+from app.Grades.utils.enums import DEFAULT_PRIORITY, MAX_PRIORITY, MIN_PRIORITY
 from app.Tasks.schemas.task import MAX_ESTIMATED_MINUTES, Task
 
 
@@ -19,6 +20,7 @@ class RecurringTaskBase(BaseModel):
     )
     course_id: UUID | None = None
     tags: list[str] = Field(default_factory=list, max_length=10)
+    priority: int = Field(default=DEFAULT_PRIORITY, ge=MIN_PRIORITY, le=MAX_PRIORITY)
     starts_on: date
     recurrence: Recurrence
     active: bool = True
@@ -56,6 +58,7 @@ class RecurringTaskUpdate(BaseModel):
     estimated_minutes: int | None = Field(default=None, ge=1, le=MAX_ESTIMATED_MINUTES)
     course_id: UUID | None = None
     tags: list[str] | None = Field(default=None, max_length=10)
+    priority: int | None = Field(default=None, ge=MIN_PRIORITY, le=MAX_PRIORITY)
     starts_on: date | None = None
     recurrence: Recurrence | None = None
     active: bool | None = None

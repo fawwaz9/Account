@@ -13,6 +13,7 @@ import {
   deleteTask,
   fetchTaskTiming,
   setTaskDone,
+  updateTask,
 } from "../features/tasks/api";
 import {
   CompletionTiming,
@@ -31,6 +32,9 @@ import "../styles/tasks.css";
  * Work due inside this many days gets its own section.
  *
  * Two weeks because that is the window an assignment is actually actionable in.
+ * There is deliberately no section past it: a task three weeks out is not work
+ * you can start, and a standing list of it was noise above the part that is.
+ * The count of what lies beyond is still shown, so nothing is silently hidden.
  * Exams are still not tasks -- there is nothing to tick off, so they are not
  * rows in these groups. They are a read-only band above the list instead
  * (ExamStrip), on a thirty-day horizon: revision is what fills the fortnight,
@@ -109,6 +113,14 @@ export default function TasksPage() {
     await withBusy(() => deleteTask(user.id, task.id), "Could not delete the task");
   }
 
+  async function handlePriority(task: Task, priority: number) {
+    if (!user) return;
+    await withBusy(
+      () => updateTask(user.id, task.id, { priority }),
+      "Could not change the priority"
+    );
+  }
+
   async function handleStopRepeat(rule: RecurringTask) {
     if (!user) return;
     // Occurrences already ticked off stay: they record work actually done.
@@ -154,6 +166,7 @@ export default function TasksPage() {
         tasks={groups.overdue}
         onToggle={handleToggle}
         onDelete={handleDelete}
+        onPriority={handlePriority}
         busy={busy}
         emptyMessage="Nothing overdue."
       />
@@ -162,22 +175,21 @@ export default function TasksPage() {
         tasks={groups.soon}
         onToggle={handleToggle}
         onDelete={handleDelete}
+        onPriority={handlePriority}
         busy={busy}
         emptyMessage="Clear for a fortnight."
       />
-      <TaskList
-        title="Later"
-        tasks={groups.later}
-        onToggle={handleToggle}
-        onDelete={handleDelete}
-        busy={busy}
-        emptyMessage="Nothing on the horizon."
-      />
+      {groups.later.length > 0 && (
+        <p className="small-text muted taskBeyond">
+          {groups.later.length} further out than {ASSIGNMENT_HORIZON} days, on the calendar.
+        </p>
+      )}
       <TaskList
         title="No date"
         tasks={groups.undated}
         onToggle={handleToggle}
         onDelete={handleDelete}
+        onPriority={handlePriority}
         busy={busy}
         emptyMessage="Nothing without a date."
       />
@@ -203,6 +215,7 @@ export default function TasksPage() {
           tasks={groups.done}
           onToggle={handleToggle}
           onDelete={handleDelete}
+          onPriority={handlePriority}
           busy={busy}
           emptyMessage="Nothing finished yet."
         />

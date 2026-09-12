@@ -83,3 +83,32 @@ SCHEDULE_EVENT_KINDS: dict[str, str] = {
     GradeCategory.FINAL.value: "final",
 }
 DEFAULT_SCHEDULE_EVENT_KIND = "deadline"
+
+#: The lowest and highest a task's priority may be.
+MIN_PRIORITY = 1
+MAX_PRIORITY = 5
+
+#: What a task gets when nothing says otherwise: the middle of the scale, so
+#: there is room to raise and lower from it. Coursework whose category is not
+#: listed below lands here too -- an assignment, a lab, a quiz -- which is the
+#: ordinary case rather than a fallback.
+DEFAULT_PRIORITY = 3
+
+#: Coursework that outranks the ordinary case. A final is the one date on a term
+#: that cannot be made up; a midterm and a project are heavy enough to want
+#: planning around, without being unrecoverable.
+#:
+#: Only the exceptions are listed. Spelling out every category would mean a new
+#: one silently getting no priority at all, where falling through to the middle
+#: of the scale is the right answer for anything unclassified.
+CATEGORY_PRIORITY: dict[str, int] = {
+    GradeCategory.FINAL.value: 5,
+    GradeCategory.MIDTERM.value: 4,
+    GradeCategory.PROJECT.value: 4,
+}
+
+
+def priority_for_category(category) -> int:
+    """What a task raised from a grade in this category starts at."""
+    value = getattr(category, "value", category)
+    return CATEGORY_PRIORITY.get(value, DEFAULT_PRIORITY)

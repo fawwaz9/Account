@@ -31,6 +31,7 @@ from app.Grades.utils.enums import (
     DEFAULT_SCHEDULE_EVENT_KIND,
     SCHEDULE_EVENT_KINDS,
     GradeSchedule,
+    priority_for_category,
 )
 from app.Tasks.services.task_service import set_done
 
@@ -82,14 +83,20 @@ def sync_task(db: Session, course: CourseModel, grade: GradeModel) -> TaskModel:
             grade_id=grade.id,
             created_at=utc_now(),
             tags=[],
+            # Seeded from the category, and only here. A final starts at 5 and a
+            # lab at 3 because that is usually right, but re-saving the grade
+            # must not undo a student who decided otherwise -- this function runs
+            # on every grade write, so overwriting would silently revert the edit
+            # every time a score was entered.
+            priority=priority_for_category(grade.category),
         )
         db.add(task)
 
     task.title = grade.name
     task.due_date = grade.due_date
     task.course_id = course.id
-    # Everything else the student set on the task -- an estimate, notes, tags --
-    # is theirs and is left alone.
+    # Everything else the student set on the task -- an estimate, notes, tags,
+    # the priority -- is theirs and is left alone.
 
     # A marked grade is finished work. Only move the flag when it disagrees, so
     # re-saving an already-marked grade does not keep resetting `completed_at`
