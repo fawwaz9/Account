@@ -35,14 +35,19 @@ export function CourseCard({ course }: CourseCardProps) {
   const grade = displayGrade(course);
 
   return (
-    <div className="courses">
+    <div className={course.archived ? "courses courseArchived" : "courses"}>
       <button
         type="button"
         className="courseBox"
         onClick={() => navigate(`/grades/courses/${course.id}`)}
       >
         <span className="courseBoxMain">
-          <span className="courseCode">{course.code}</span>
+          <span className="courseCode">
+            {course.code}
+            {/* Archived courses are only on screen when asked for, so the mark
+                says why this one looks muted rather than dead. */}
+            {course.archived && <span className="archivedTag">archived</span>}
+          </span>
           {course.professor && (
             <span className="small-text courseProfessor">{course.professor}</span>
           )}

@@ -822,3 +822,46 @@
   color: var(--gold-soft);
   text-align: center;
 }
+
+/* ===== Archived courses =====
+   The flag existed and was settable, but nothing read it: an archived course sat
+   in the list looking exactly like a live one. It still counts toward the
+   average and stays searchable -- it just should not crowd the lists read every
+   day, so it is hidden until asked for and muted when shown. */
+
+.archivedToggle {
+  margin: 10px 0 0;
+  padding: 5px 12px;
+  font-size: 0.78rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.archivedToggle:hover {
+  color: var(--gold);
+  border-color: var(--gold);
+}
+
+.courseArchived {
+  opacity: 0.62;
+}
+
+.courseArchived:hover {
+  opacity: 1;
+}
+
+.archivedTag {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  vertical-align: middle;
+}
