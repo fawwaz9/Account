@@ -60,8 +60,9 @@ Grades: Think of other functionalities that can merge over to the other.
 
 Calendar:
         Term timeline: every course's span on one horizontal chart, so overlaps and gaps are obvious.
-        Class times that are not weekly: weekly stays the default, with biweekly
-          and monthly offered for the courses that actually run that way.
+        Class times that are not weekly, set per meeting rather than per course:
+          a lecture can stay weekly while the lab or discussion on the same
+          course runs biweekly.
 
 Budget:
         Safe to spend: balance minus every commitment you already know about, shown as one number.
@@ -101,10 +102,12 @@ Cheap wins, read-only -- next
   and the term retrospective wants a term to have closed first.
 - Safe-to-spend and sinking funds next on the money side: /recurring/upcoming
   already returns the commitments, so safe-to-spend is a subtraction.
-- Biweekly class times, which are cheaper than they look: the engine already
-  repeats every N weeks and only the timetable form hardcodes weekly. Monthly
-  class times are not in the same bracket and are a separate decision -- see the
-  two notes on it below.
+- Biweekly class times, per meeting: a weekly lecture beside a biweekly lab on
+  the same course. The engine already repeats every N weeks and each meeting is
+  already its own event row, so the interval itself is nearly free -- but all the
+  meetings share one start date, so it needs a per-meeting first date too, or
+  every biweekly lab is pinned to the odd weeks of term. Monthly is a separate
+  decision again. All three notes are below.
 
 Parked, now that the question is answered
 - A dropped course's dollar figure. The open question was whether a refund
@@ -208,12 +211,22 @@ Worth knowing before picking anything up
 - A repeat materialises differently per module, and the differences are the
   point: class times never become rows, payments become rows only once they have
   happened, tasks become rows a little way ahead so each can be ticked off.
-- Every N weeks already works. Rule.interval is honoured, and the weekly branch
-  steps whole weeks from the Monday of the starting week, so a biweekly Mon/Wed/Fri
-  class keeps all three days inside the same on-week instead of drifting apart.
-  What hardcodes weekly is the timetable form: set_class_schedule writes
-  recur_freq=weekly with recur_interval=1, and ClassMeeting carries no interval
-  field at all. Biweekly classes are one field passed through, not an engine change.
+- Interval belongs on the meeting, not on the timetable: a weekly lecture and a
+  biweekly lab on one course is the ordinary case, not an edge case. That suits
+  what is already there, because set_class_schedule turns each ClassMeeting into
+  its own event row carrying its own rule columns -- so a per-meeting interval is
+  one field on ClassMeeting and one line where recur_interval=1 is currently
+  hardcoded. The engine needs nothing: Rule.interval is honoured, and the weekly
+  branch steps whole weeks from the Monday of the starting week, so a biweekly
+  Mon/Wed lab keeps both days inside the same on-week rather than drifting apart.
+- The interval is the easy half. The phase is the real gap: every meeting in a
+  timetable shares one starts_on, taken from the form or else the course, and the
+  engine anchors a weekly repeat to the Monday of that week. So a biweekly lab
+  would be pinned to the odd weeks of term with no way to say otherwise -- and
+  labs commonly begin in week two, not week one. Doing this properly means a
+  per-meeting first date as well as an interval; an "on week / off week" toggle
+  is the same thing expressed worse, since it only works while the term start is
+  the reference everyone agrees on.
 - Monthly classes are not the same size of job. byday is weekly-only -- the
   Recurrence validator rejects it outright for any other frequency -- and monthly
   steps by day of the month through add_months, which yields nothing for a month
