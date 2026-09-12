@@ -809,3 +809,28 @@
 }
 
 .blockedDateAdd .calInput { flex: 1; min-width: 0; }
+
+/* A count rather than silent truncation, and clickable rather than dead text:
+   the reported bug was looking for a block that existed and not finding it.
+   Styled as quiet text instead of a control, because it is a footnote to the
+   list rather than an action competing with it. */
+.freeBlockMore {
+  /* Right-aligned under the list, where the durations already sit. `block` plus
+     auto left margin rather than text-align, since a button shrink-wraps its
+     own text and would otherwise stay stuck to the left edge. */
+  display: block;
+  margin: 6px 0 0 auto;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 0.72rem;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 0.2s ease;
+}
+
+.freeBlockMore:hover {
+  color: var(--gold);
+}

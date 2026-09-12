@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { fetchCrunch, fetchFreeBlocks, fetchWeekLoad } from "../api";
 import { CrunchStrip, FreeBlock, WeekLoad } from "../types";
 import { clockTime, duration, fromIso } from "../../../shared/utils/dateUtils";
@@ -26,6 +26,7 @@ export default function TimeInsights({
   const [blocks, setBlocks] = useState<FreeBlock[]>([]);
   const [load, setLoad] = useState<WeekLoad | null>(null);
   const [strip, setStrip] = useState<CrunchStrip | null>(null);
+  const [showAllBlocks, setShowAllBlocks] = useState(false);
   // The week can be changed faster than these return, and an older answer
   // landing last would describe a week that is no longer on screen.
   const latestRequest = useRef(0);
@@ -33,6 +34,7 @@ export default function TimeInsights({
   useEffect(() => {
     const ticket = ++latestRequest.current;
     let cancelled = false;
+    setShowAllBlocks(false);
 
     Promise.all([
       fetchFreeBlocks(userId, weekStart, weekEnd),
@@ -54,6 +56,30 @@ export default function TimeInsights({
 
     return () => { cancelled = true; };
   }, [userId, weekStart, weekEnd, horizonEnd, nonce]);
+
+  /**
+   * At most two gaps per day in the collapsed list.
+   *
+   * The server ranks every block in the week by length, which let one day fill
+   * the whole list — five empty days at fourteen hours each pushed Friday's
+   * real ten-hour gap off the end, and it was truncated silently so it looked
+   * like the gap had not been found at all.
+   *
+   * The cap applies only while collapsed. Expanding shows every block, uncapped,
+   * so nothing is ever unreachable.
+   */
+  const rankedBlocks = useMemo(() => {
+    const perDay = new Map<string, number>();
+    return blocks.filter((block) => {
+      const seen = perDay.get(block.on_date) ?? 0;
+      if (seen >= 2) return false;
+      perDay.set(block.on_date, seen + 1);
+      return true;
+    });
+  }, [blocks]);
+
+  const shownBlocks = showAllBlocks ? blocks : rankedBlocks.slice(0, 5);
+  const hiddenBlocks = blocks.length - shownBlocks.length;
 
   const hasLoad = load && (load.booked_minutes > 0 || load.task_count > 0);
   const hasCrunch = strip && strip.peak > 0;
@@ -89,7 +115,7 @@ export default function TimeInsights({
         <div className="freeBlocks">
           <h3 className="insightHeading">Free blocks</h3>
           <ul className="freeBlockList">
-            {blocks.slice(0, 5).map((block) => (
+            {shownBlocks.map((block) => (
               <li key={`${block.on_date}-${block.starts_at}`}>
                 <span className="freeBlockDay">
                   {fromIso(block.on_date).toLocaleDateString(undefined, {
@@ -103,6 +129,28 @@ export default function TimeInsights({
               </li>
             ))}
           </ul>
+
+          {/* A count rather than silent truncation, and clickable because the
+              whole problem was looking for a block that was there and not
+              finding it. */}
+          {hiddenBlocks > 0 && (
+            <button
+              type="button"
+              className="freeBlockMore"
+              onClick={() => setShowAllBlocks(true)}
+            >
+              +{hiddenBlocks} more
+            </button>
+          )}
+          {showAllBlocks && blocks.length > 5 && (
+            <button
+              type="button"
+              className="freeBlockMore"
+              onClick={() => setShowAllBlocks(false)}
+            >
+              Show fewer
+            </button>
+          )}
         </div>
       )}
 
