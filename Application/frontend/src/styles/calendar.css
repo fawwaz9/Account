@@ -196,6 +196,19 @@
   color: var(--gold);
 }
 
+/* The month grid has no time axis, so a due time has to be readable on the chip
+   itself. Muted and ahead of the title: it qualifies the deadline rather than
+   being the thing you scan for. */
+.calChipWhen {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.calChipDone .calChipWhen {
+  text-decoration: line-through;
+}
+
 /* ===== Detail and forms ===== */
 
 .calDetail {
@@ -627,6 +640,67 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* A deadline on the clock.
+   Not a .weekBlock: an event owns a span and is drawn with a height, while a
+   task is due at a moment and owns none of the day. So this is a marker that
+   sits on its minute -- fixed height, a rule above it for the line it falls on,
+   and a z-index that keeps it above the blocks rather than behind whichever
+   lecture happens to be running then.
+   padding and box-sizing are set explicitly: a fixed-height button otherwise
+   inherits padding: 7px 14px from the base .container button rule and its
+   contents sit low and to the right. That has caught three controls already. */
+.weekDue {
+  position: absolute;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  box-sizing: border-box;
+  height: 17px;
+  padding: 0 5px;
+  overflow: hidden;
+  border: none;
+  border-top: 2px solid var(--gold);
+  border-radius: 0 4px 4px 0;
+  background: rgba(212, 175, 55, 0.22);
+  color: var(--text);
+  font-size: 0.7rem;
+  line-height: 1;
+  text-align: left;
+  cursor: pointer;
+}
+
+.weekDue:hover {
+  background: rgba(212, 175, 55, 0.34);
+}
+
+.weekDueMark {
+  flex-shrink: 0;
+  color: var(--gold);
+}
+
+.weekDueTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Done, but still shown: a deadline you met is part of what the week looked
+   like, and blanking it would make a busy Friday read as an empty one. */
+.weekDueDone {
+  border-top-color: var(--muted);
+  background: rgba(148, 163, 184, 0.16);
+}
+
+.weekDueDone .weekDueTitle {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.weekDueDone .weekDueMark {
+  color: var(--muted);
 }
 
 @media (max-width: 720px) {

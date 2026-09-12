@@ -133,5 +133,12 @@ function groupByDay(
     if (task.due_date) buckets.get(task.due_date)?.tasks.push(task);
   }
 
+  // Earliest deadline first, and anything without a time ahead of the rest --
+  // an untimed task is due some time that day, so it cannot be ordered against
+  // one due at nine and should not be guessed into the middle of them.
+  for (const bucket of buckets.values()) {
+    bucket.tasks.sort((a, b) => (a.due_time ?? "").localeCompare(b.due_time ?? ""));
+  }
+
   return days.map((date) => buckets.get(date)!);
 }
