@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { CalendarDay } from "../hooks/useCalender";
 import { EventOccurrence, EXAM_KINDS } from "../types";
 import { Task } from "../../tasks/types";
+import { hasSpecificTime } from "../../tasks/dueTime";
 import { TaskChip } from "./EventCard";
 import { DAY_START, HOUR_HEIGHT, HOURS, OPENING_HOUR, place, placeTasks } from "../weekLayout";
 import { clockTime, fromIso, hourLabel, today } from "../../../shared/utils/dateUtils";
@@ -30,9 +31,9 @@ interface WeekViewProps {
  *
  * All-day items sit in that header rather than in the grid. They have no
  * position on a time axis, and pinning them to midnight would say something
- * false about when they happen. A task carrying a due time is not one of them:
- * it belongs on the clock at the minute it is due, which is what the header
- * cannot show.
+ * false about when they happen. A task due at a particular minute is not one of
+ * them: it belongs on the clock, which is what the header cannot show. A task
+ * due by the end of the day is, since that is what a bare due date means.
  */
 export default function WeekView({
   days,
@@ -92,10 +93,11 @@ export default function WeekView({
                   <span className="calChipTitle">{occurrence.title}</span>
                 </button>
               ))}
-            {/* Only the ones with no time of their own. A task due at 14:00
-                has a place in the grid below and does not belong up here. */}
+            {/* Exactly what the grid below leaves out. A task due at 14:00 has
+                a place on the clock; one due by the end of the day does not, and
+                pinning it to 23:59 would bury it under the fold. */}
             {day.tasks
-              .filter((task) => !task.due_time)
+              .filter((task) => !hasSpecificTime(task))
               .map((task) => (
                 <TaskChip key={task.id} task={task} onToggle={onToggleTask} />
               ))}

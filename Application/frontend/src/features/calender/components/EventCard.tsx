@@ -1,5 +1,6 @@
 import { EventOccurrence, EXAM_KINDS } from "../types";
 import { Task } from "../../tasks/types";
+import { hasSpecificTime } from "../../tasks/dueTime";
 import { clockTime, duration } from "../../../shared/utils/dateUtils";
 
 interface EventCardProps {
@@ -49,7 +50,9 @@ interface TaskChipProps {
  * entirely. The week view puts the same task on the clock instead.
  */
 export function TaskChip({ task, onToggle }: TaskChipProps) {
-  const due = clockTime(task.due_time);
+  // Not the end-of-day sentinel: "11:59pm" on nearly every chip is noise, and
+  // says nothing the day it sits in has not already said.
+  const due = hasSpecificTime(task) ? clockTime(task.due_time) : "";
 
   return (
     <button

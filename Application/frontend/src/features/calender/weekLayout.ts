@@ -1,5 +1,6 @@
 import { EventOccurrence } from "./types";
 import { Task } from "../tasks/types";
+import { hasSpecificTime } from "../tasks/dueTime";
 import { minutesOfDay } from "../../shared/utils/dateUtils";
 
 /** Pixels per hour. Tall enough that a 50-minute class can show its title. */
@@ -122,9 +123,14 @@ export interface PlacedTask {
  * Deadlines within `NEARBY_MINUTES` of each other share a cluster and split the
  * width, so two things due at the same hour stay legible instead of stacking
  * exactly on top of one another.
+ *
+ * Takes only the tasks `hasSpecificTime` is true of, which is exactly what the
+ * all-day band leaves out. The two must stay complementary or a task shows
+ * twice or not at all.
  */
 export function placeTasks(tasks: Task[]): PlacedTask[] {
   const timed = tasks
+    .filter(hasSpecificTime)
     .map((task) => {
       const minutes = minutesOfDay(task.due_time);
       return minutes === null ? null : { task, minutes };
