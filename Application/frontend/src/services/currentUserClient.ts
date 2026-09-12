@@ -19,6 +19,11 @@ export interface CurrentUser {
     credit_target: number;
     gpa_scale_enabled: boolean;
     default_target_grade: number;
+    /** "HH:MM:SS" — the hours free blocks are offered in. */
+    study_day_start: string;
+    study_day_end: string;
+    /** Below this a gap is walking time, not study time. */
+    min_free_block_minutes: number;
     [key: string]: unknown;
   };
 }

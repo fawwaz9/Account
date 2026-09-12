@@ -20,6 +20,9 @@ export const endpoints = {
   calendar: {
     /** Materialised occurrences for a window; takes ?start= and ?end=. */
     agenda: (userId: string) => `calendar/${userId}/agenda`,
+    freeBlocks: (userId: string) => `calendar/${userId}/free-blocks`,
+    weekLoad: (userId: string) => `calendar/${userId}/week-load`,
+    crunch: (userId: string) => `calendar/${userId}/crunch`,
     events: (userId: string) => `calendar/${userId}/events`,
     event: (userId: string, eventId: string) => `calendar/${userId}/events/${eventId}`,
     restoreOccurrence: (userId: string, eventId: string) =>

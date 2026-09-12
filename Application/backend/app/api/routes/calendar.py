@@ -26,6 +26,8 @@ from app.Calendar.services.event_service import (
     skip_occurrence,
     update_event,
 )
+from app.Calendar.schemas.load import CrunchStrip, FreeBlock, WeekLoad
+from app.Calendar.services.load_service import crunch, free_blocks, week_load
 from app.shared import audit
 from app.shared.errors import error_course, error_user, responses
 
@@ -191,3 +193,54 @@ def set_course_class_schedule(
         raise HTTPException(status_code=404, detail=error_course["not_found"])
 
     return events
+
+
+@router.get("/{user_id}/free-blocks", response_model=list[FreeBlock], responses=responses["user_both"])
+def get_free_blocks(
+    user_id: VerifiedUserId,
+    db: DBSession,
+    start: date = Query(..., description="First date of the window, inclusive"),
+    end: date = Query(..., description="Last date of the window, inclusive"),
+):
+    """The gaps between commitments, longest first, inside your study hours."""
+    try:
+        blocks = free_blocks(db, user_id, start, end)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if blocks is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+    return blocks
+
+
+@router.get("/{user_id}/week-load", response_model=WeekLoad, responses=responses["user_both"])
+def get_week_load(
+    user_id: VerifiedUserId,
+    db: DBSession,
+    start: date = Query(..., description="First date of the window, inclusive"),
+    end: date = Query(..., description="Last date of the window, inclusive"),
+):
+    """What the window costs in hours, booked and estimated kept apart."""
+    try:
+        load = week_load(db, user_id, start, end)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if load is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+    return load
+
+
+@router.get("/{user_id}/crunch", response_model=CrunchStrip, responses=responses["user_both"])
+def get_crunch(
+    user_id: VerifiedUserId,
+    db: DBSession,
+    start: date = Query(..., description="First date of the window, inclusive"),
+    end: date = Query(..., description="Last date of the window, inclusive"),
+):
+    """How the term's weight is spread across its weeks."""
+    try:
+        strip = crunch(db, user_id, start, end)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if strip is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+    return strip

@@ -3,6 +3,8 @@ import "../styles/dashboard.css";
 import { useAuth } from "../app/auth/AuthContext";
 import { useDashboard } from "../features/grades/hooks/useDashboard";
 import { useBudgetGlance } from "../features/budget/hooks/useBudgetGlance";
+import { useTimeGlance } from "../features/calender/hooks/useTimeGlance";
+import { duration } from "../shared/utils/dateUtils";
 import { formatMoney } from "../features/budget/money";
 
 export default function Dashboard() {
@@ -11,6 +13,11 @@ export default function Dashboard() {
 
   const { summary, error: summaryError } = useDashboard();
   const { summary: budget, totalBalance } = useBudgetGlance();
+  const { blocks: freeBlocks, load: weekLoad } = useTimeGlance();
+  // Nothing to say without a timetable, so the section stays away
+  // rather than showing a row of zeroes.
+  const hasWeek = Boolean(weekLoad && (weekLoad.booked_minutes > 0
+    || weekLoad.task_count > 0 || freeBlocks.length > 0));
 
   const hasCourses = (summary?.total_courses ?? 0) > 0;
 
@@ -81,6 +88,50 @@ export default function Dashboard() {
               <p>
                 Biggest this month <strong>{budget.by_category[0].category_name}</strong>{" "}
                 <span className="muted">{formatMoney(budget.by_category[0].actual)}</span>
+              </p>
+            </div>
+          )}
+        </section>
+      )}
+
+      {hasWeek && weekLoad && (
+        <section className="gradeSummary">
+          <div className="summaryStats">
+            <div className="statBlock">
+              <span className="statValue">{duration(weekLoad.booked_minutes) || "0h"}</span>
+              <span className="statLabel">Booked this week</span>
+            </div>
+            <div className="statBlock">
+              <span className="statValue">{weekLoad.task_count}</span>
+              <span className="statLabel">
+                {weekLoad.task_count === 1 ? "Task due" : "Tasks due"}
+              </span>
+            </div>
+            {weekLoad.estimated_minutes > 0 && (
+              <div className="statBlock">
+                <span className="statValue">{duration(weekLoad.estimated_minutes)}</span>
+                <span className="statLabel">Estimated work</span>
+              </div>
+            )}
+          </div>
+
+          {/* The two longest, because the point is "where could this go" and a
+              list of every gap is a thing nobody reads on a dashboard. */}
+          {freeBlocks.length > 0 && (
+            <div className="summaryCourses">
+              <p>
+                Longest free{" "}
+                {freeBlocks.slice(0, 2).map((block, index) => (
+                  <span key={`${block.on_date}-${block.starts_at}`}>
+                    {index > 0 && ", "}
+                    <strong>{duration(block.minutes)}</strong>{" "}
+                    <span className="muted">
+                      {new Date(`${block.on_date}T00:00:00`).toLocaleDateString(
+                        undefined, { weekday: "short" }
+                      )}
+                    </span>
+                  </span>
+                ))}
               </p>
             </div>
           )}

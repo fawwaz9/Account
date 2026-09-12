@@ -112,3 +112,44 @@ export interface ClassScheduleCreate {
   starts_on: string | null;
   ends_on: string | null;
 }
+
+/** A gap between commitments long enough to be worth putting something in. */
+export interface FreeBlock {
+  on_date: string;
+  starts_at: string;
+  ends_at: string;
+  minutes: number;
+}
+
+/**
+ * What a window costs, in hours rather than item counts.
+ *
+ * Booked and estimated stay apart: booked time is not optional, estimated time
+ * is a guess you wrote down, and one combined number would hide which half is
+ * which — and hide that most tasks carry no estimate at all.
+ */
+export interface WeekLoad {
+  starts_on: string;
+  ends_on: string;
+  booked_minutes: number;
+  estimated_minutes: number;
+  task_count: number;
+  unestimated_tasks: number;
+  event_count: number;
+}
+
+export interface CrunchWeek {
+  starts_on: string;
+  /** Weighted by kind: a final outweighs a midterm outweighs a deadline. */
+  weight: number;
+  exams: number;
+  deadlines: number;
+  tasks: number;
+  is_current: boolean;
+}
+
+export interface CrunchStrip {
+  weeks: CrunchWeek[];
+  /** The heaviest week, so a bar is a share of the worst week rather than a guess. */
+  peak: number;
+}

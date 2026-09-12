@@ -1,5 +1,5 @@
 import re
-from datetime import datetime
+from datetime import datetime, time
 from enum import Enum
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -70,6 +70,14 @@ class UserPreferences(BaseModel):
     gpa_scale_enabled: bool = Field(default=True)
     #: Used for any course without its own target.
     default_target_grade: float = Field(default=85.0, ge=0, le=100)
+    #: The hours a free block is worth offering. 03:00 is technically free and
+    #: is not study time, so the gaps between classes are only counted inside
+    #: this window.
+    study_day_start: time = Field(default=time(8, 0))
+    study_day_end: time = Field(default=time(22, 0))
+    #: Below this a gap is not a block: twenty minutes between two lectures is
+    #: walking time, not an hour of work.
+    min_free_block_minutes: int = Field(default=30, ge=5, le=240)
 
     @field_validator("currency")
     @classmethod

@@ -624,3 +624,122 @@
   .calHeader { gap: 8px; }
   .weekWrap { padding: 8px; }
 }
+
+/* ===== Time insights =====
+   What the week costs and where the room in it is. Three readings of one
+   window, shown only in week view: the gaps between classes only mean something
+   against a time axis, and a month of free blocks is a list nobody reads. */
+
+.timeInsights {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.loadLine {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.loadLabel {
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.loadFigures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 0.88rem;
+}
+
+.loadFigures span { white-space: nowrap; }
+.loadMuted { color: var(--muted); }
+
+.freeBlocks,
+.crunchRadar {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.insightHeading {
+  margin: 0 0 10px;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.freeBlockList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.freeBlockList li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 12px;
+  padding: 5px 0;
+  border-bottom: 1px dashed var(--border);
+  font-size: 0.85rem;
+}
+
+.freeBlockList li:last-child { border-bottom: none; }
+.freeBlockSpan { color: var(--muted); }
+.freeBlockLength { color: var(--gold); font-weight: 600; }
+
+/* A bar is a share of the heaviest week rather than of an arbitrary ceiling, so
+   the shape still means something in a light term. */
+.crunchStrip {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 64px;
+}
+
+.crunchWeek {
+  flex: 1;
+  min-width: 4px;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+
+.crunchBar {
+  width: 100%;
+  border-radius: 2px 2px 0 0;
+  background: var(--gold-soft);
+  opacity: 0.65;
+  transition: 0.2s ease;
+}
+
+.crunchWeek:hover .crunchBar { opacity: 1; }
+
+.crunchWeekNow .crunchBar {
+  background: var(--gold);
+  opacity: 1;
+  box-shadow: 0 0 0 1px var(--gold);
+}
+
+.crunchLegend {
+  margin: 8px 0 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
