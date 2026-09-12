@@ -5,7 +5,7 @@ Kept separate from the schema validators: those decide what the API will
 legitimate. These decide what is worth pointing out to the student.
 """
 
-from app.Grades.utils.enums import GradeCategory
+from app.Grades.utils.enums import GradeCategory, is_additive, scoring_weight
 
 #: Below this a category is probably missing.
 MIN_EXPECTED_TOTAL = 100.0
@@ -25,7 +25,12 @@ def weight_problems(course) -> list[str]:
         return []
 
     problems: list[str] = []
-    total = round(sum(weights.values()), 2)
+    # Bonus sits outside the 100 the course is marked out of, so it must not
+    # count here. Summing everything made this check wrong in both directions:
+    # 95% of real categories plus a 5% bonus reached 100 and stopped reporting
+    # the category that really was missing, while a generous 15% bonus on a
+    # correctly built course tripped the "looks like a typo" warning.
+    total = round(scoring_weight(weights), 2)
 
     # A course with nothing entered at all is already reported as such; adding
     # "weights total 0%" on top is noise, not a second problem.
@@ -43,7 +48,7 @@ def weight_problems(course) -> list[str]:
     final_weight = weights.get(GradeCategory.FINAL.value, 0.0)
     other_weights = [
         weight for category, weight in weights.items()
-        if category != GradeCategory.FINAL.value
+        if category != GradeCategory.FINAL.value and not is_additive(category)
     ]
     biggest_other = max(other_weights, default=0.0)
 

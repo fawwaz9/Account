@@ -2,7 +2,7 @@ import itertools
 import uuid
 from sqlalchemy.orm import Session
 from app._database.models import CourseModel
-from app.Grades.utils.enums import GradeCategory
+from app.Grades.utils.enums import GradeCategory, is_additive
 from app.Grades.schemas.dashboard import (
     AttentionItem,
     CourseDashboardEntry,
@@ -70,7 +70,13 @@ def get_dashboard(db: Session, user_id: uuid.UUID, target_grade: float = DEFAULT
         average = course.average
         unfinished_categories = [
             category for category, weight in weights.items()
-            if category != GradeCategory.FINAL.value and weight > 0 and not any(
+            # Bonus is optional work, so an empty bonus category is not something
+            # left undone. Counted here it would sit in Attention for the whole
+            # term as a warning nothing could clear.
+            if category != GradeCategory.FINAL.value
+            and not is_additive(category)
+            and weight > 0
+            and not any(
                 grade.category == category and grade.score is not None
                 for grade in course.grades
             )

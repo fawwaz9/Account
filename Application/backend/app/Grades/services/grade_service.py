@@ -2,7 +2,7 @@ import uuid
 from sqlalchemy.orm import Session, joinedload
 from app._database.models import CourseModel, CourseCategoryWeightModel, GradeModel
 from app.Grades.schemas.grade import GradeCreate, GradeUpdate, Grade as GradeSchema
-from app.Grades.utils.enums import GradeCategory, GradeSchedule
+from app.Grades.utils.enums import GradeCategory, GradeSchedule, is_additive
 from app.Grades.utils.terms import course_result_grade
 from app.Grades.services.grade_schedule import sync_schedule_for_grade
 
@@ -252,29 +252,60 @@ def record_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id
     return grade
 
 
+def bonus_contribution(course: CourseModel) -> float:
+    """Percentage points an additive category adds on top of the average.
+
+    Measured against the whole course, never against the graded slice: a bonus
+    worth 5% of the course is worth 5 points whenever you earn it, in week two or
+    in week twelve. Dividing by the graded weight instead would have made the
+    same bonus worth 25 points in a term that was only a fifth marked, which is
+    the kind of number that looks like a bug because it is one.
+    """
+    weights = course.category_weights
+    contribution = 0.0
+
+    for category, weight in weights.items():
+        if not is_additive(category) or weight <= 0:
+            continue
+        contribution += calculate_grade_category_average(course, category) * weight / 100.0
+
+    return contribution
+
+
 def calculate_current_average(course: CourseModel) -> float:
     graded = [g for g in course.grades if g.score is not None and g.max_score > 0]
     if not graded:
         return 0.0
 
     weights = course.category_weights
-    categories_present = {g.category for g in graded}
+    # Bonus is held out of both sums and added back at the end. Left in, its
+    # weight would join the denominator -- so partway through a term, a 5% bonus
+    # sitting next to a 20% batch of marked assignments would have been treated
+    # as a fifth of the grade rather than as five points on top of it.
+    categories_present = {
+        g.category for g in graded if not is_additive(g.category)
+    }
 
     total_weight = sum(weights.get(category, 0.0) for category in categories_present)
-    if total_weight == 0:
-        return 0.0
+    earned = 0.0
 
-    weighted_sum = sum(
-        calculate_grade_category_average(course, category) * weights.get(category, 0.0)
-        for category in categories_present
-    )
+    if total_weight > 0:
+        weighted_sum = sum(
+            calculate_grade_category_average(course, category) * weights.get(category, 0.0)
+            for category in categories_present
+        )
+        # Weight past 100 across the scoring categories is bonus by another
+        # route: it adds marks without enlarging the denominator, which is how a
+        # course marked out of 101% works. Both routes still cap the course at 100.
+        denominator = min(total_weight, MAX_COURSE_PERCENT)
+        earned = weighted_sum / denominator
 
-    # Weight past 100 is bonus: it adds marks without enlarging the denominator,
-    # which is how a course marked out of 101% works. Earning beyond a
-    # category's weight (bonus marks on an assignment) is allowed to offset
-    # losses elsewhere, but the course itself still caps at 100.
-    denominator = min(total_weight, MAX_COURSE_PERCENT)
-    return min(round(weighted_sum / denominator, 2), MAX_COURSE_PERCENT)
+    total = earned + bonus_contribution(course)
+
+    # Bonus earned before anything else is marked is real, so a course showing
+    # only bonus is not zero -- but it is also not a percentage of nothing, which
+    # is why `earned` stays at 0.0 rather than the function returning early.
+    return min(round(total, 2), MAX_COURSE_PERCENT)
 
 
 # (minimum percentage, letter, grade points) on UBC's published 4.33 scale.
@@ -340,6 +371,7 @@ def calculate_required_final(db: Session, user_id: uuid.UUID, course_id: uuid.UU
         grade.category
         for grade in course.grades
         if grade.category != GradeCategory.FINAL.value
+        and not is_additive(grade.category)
         and grade.score is not None
         and grade.max_score > 0
     }
@@ -353,16 +385,27 @@ def calculate_required_final(db: Session, user_id: uuid.UUID, course_id: uuid.UU
     )
     graded_weight = sum(weights.get(category, 0.0) for category in graded_categories)
 
+    # Bonus already banked lowers the bar rather than raising the denominator.
+    # Counting it on both sides -- as marks earned and as weight to make up --
+    # would have cancelled most of its own effect out.
+    banked_bonus = bonus_contribution(course)
+
     unfinished_categories = [
         category for category, weight in weights.items()
         if (
             category != GradeCategory.FINAL.value
+            # Bonus is optional by definition, so an empty bonus category is not
+            # unfinished work. Left in, it would sit here all term as a warning
+            # that no amount of effort could clear.
+            and not is_additive(category)
             and weight > 0
             and category not in graded_categories
         )
     ]
     counted_weight = graded_weight + final_weight
-    needed = ((target_grade * counted_weight) - earned_weighted_sum) / final_weight
+    needed = (
+        ((target_grade - banked_bonus) * counted_weight) - earned_weighted_sum
+    ) / final_weight
     return {
         "needed": round(needed, 2),
         "possible": 0 <= needed <= 100,

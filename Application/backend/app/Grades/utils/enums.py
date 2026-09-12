@@ -25,6 +25,40 @@ class GradeCategory(str, Enum):
     PARTICIPATION = "Participation"
     PROJECT = "Project"
     OTHER = "Other"
+    #: Marks that add on top of the course rather than forming part of it. See
+    #: ADDITIVE_CATEGORIES below for what that means arithmetically.
+    BONUS = "Bonus"
+
+
+#: Categories whose weight sits *outside* the 100% a course is marked out of.
+#: Their marks are added to the average; their weight never enters the
+#: denominator. A course weighted 100% plus 5% bonus is still marked out of 100,
+#: and the bonus is the 5 points that protect a slip somewhere else.
+#:
+#: A set rather than a single member because the distinction is the thing worth
+#: naming, and because every site that needs it needs the same answer. Scattering
+#: `!= BONUS` beside the six existing `!= FINAL` checks is how those two
+#: exclusions would quietly drift apart.
+ADDITIVE_CATEGORIES: frozenset[str] = frozenset({GradeCategory.BONUS.value})
+
+
+def is_additive(category) -> bool:
+    """True when a category adds to the average instead of composing it."""
+    value = category.value if isinstance(category, GradeCategory) else category
+    return value in ADDITIVE_CATEGORIES
+
+
+def scoring_weight(weights: dict) -> float:
+    """Total weight of the categories the course is actually marked out of.
+
+    The denominator, in other words -- bonus excluded. Every caller that used to
+    write `sum(weights.values())` wants this instead, because that sum stopped
+    meaning "out of how much" the moment an additive category existed.
+    """
+    return sum(
+        weight for category, weight in weights.items()
+        if not is_additive(category)
+    )
 
 class GradeSchedule(str, Enum):
     """How a dated grade shows up outside the gradebook.
