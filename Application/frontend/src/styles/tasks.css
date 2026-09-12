@@ -314,3 +314,173 @@
 .captureDetails[open] .captureSummary {
   margin-bottom: 8px;
 }
+
+/* ===== Exams coming up =====
+   A band, not a list of rows. There is nothing to tick off on an exam, so it
+   must not look like the checkable work below it. */
+
+.examStrip {
+  margin: 18px 0;
+}
+
+.examStripHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.examStripTitle {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.examStripLink {
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-decoration: none;
+}
+
+.examStripLink:hover {
+  color: var(--gold);
+  text-decoration: underline;
+}
+
+.examStripList {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  margin: 0;
+  padding: 0 0 4px;
+  list-style: none;
+}
+
+.examCard {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 0 0 auto;
+  min-width: 150px;
+  padding: 9px 12px;
+  border-left: 4px solid #e0685f;
+  border-radius: 0 8px 8px 0;
+  background: rgba(224, 104, 95, 0.14);
+}
+
+/* A final is not a heavier midterm: it usually falls after teaching has ended,
+   and it is the one date on the term that cannot be made up. Same distinction
+   the calendar draws, so the two agree. */
+.examCard-final {
+  border-left-color: #c9453c;
+  background: rgba(201, 69, 60, 0.2);
+}
+
+.examWhen {
+  color: var(--gold);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.examTitle {
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.examWhere {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+/* ===== How early or late work gets finished ===== */
+
+.timingBlock {
+  margin: 18px 0;
+}
+
+.timingWindows {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
+  gap: 12px;
+}
+
+.timingWindow {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 1px solid #1f2a44;
+  border-radius: 10px;
+  background: var(--panel-2);
+}
+
+.timingLabel {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.timingHeadline {
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+/* Only late is coloured. Early and on-time are the expected case, and marking
+   them too would leave nothing standing out. */
+.timingHeadlineLate {
+  color: #e0685f;
+}
+
+.timingHeadlineEmpty {
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.timingSplit,
+.timingOnTime {
+  font-variant-numeric: tabular-nums;
+}
+
+.timingNote {
+  margin: 8px 0 0;
+}
+
+/* ===== At-risk badge =====
+   A fixed-size element, so padding and box-sizing are set explicitly: without
+   them it inherits padding: 7px 14px from the base .container button rule and
+   its glyph sits low and to the right. That has caught four controls now. */
+
+.taskRisk {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: default;
+}
+
+/* Three weights of the same red rather than three colours: the bands are
+   degrees of one problem, and a different hue would read as a different kind
+   of problem. */
+.taskRisk-mild {
+  background: rgba(224, 104, 95, 0.18);
+  color: #e0685f;
+}
+
+.taskRisk-moderate {
+  background: rgba(224, 104, 95, 0.38);
+  color: #f3b3ae;
+}
+
+.taskRisk-severe {
+  background: #c9453c;
+  color: #fff;
+}

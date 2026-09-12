@@ -11,7 +11,23 @@ from datetime import date, datetime
 from sqlalchemy.orm import Session
 
 from app._database.models import CourseModel, TaskModel, UserModel, utc_now
+from app.Grades.utils.terms import (
+    CURRENT,
+    course_result_grade,
+    effective_target,
+    term_bucket,
+)
 from app.Tasks.schemas.task import Task as TaskSchema, TaskCreate, TaskUpdate
+from app.Users.services.user_service import get_preferences
+
+#: How far below target a course has to be for each band, in percentage points.
+#: Two thresholds rather than one, because "below target" covers both a course
+#: you will pull back next week and one you are losing -- and a single badge on
+#: both says nothing about which is which.
+RISK_BANDS = ((10.0, "severe"), (5.0, "moderate"), (0.0, "mild"))
+
+#: Sort order for the bands, worst first. Anything unbadged sorts last.
+RISK_RANK = {"severe": 0, "moderate": 1, "mild": 2, None: 3}
 
 
 def user_exists(db: Session, user_id: uuid.UUID) -> bool:
@@ -35,23 +51,78 @@ def course_codes(db: Session, user_id: uuid.UUID) -> dict[uuid.UUID, str]:
     return {row.id: row.code for row in rows}
 
 
-def attach_course_code(task: TaskModel, codes: dict[uuid.UUID, str]) -> TaskModel:
-    """Label a task with its course code.
+def risk_band(gap: float) -> str:
+    """Which band a course sitting `gap` points below its target falls in."""
+    for threshold, band in RISK_BANDS:
+        if gap > threshold:
+            return band
+    return "mild"
+
+
+def course_risk(db: Session, user: UserModel) -> dict[uuid.UUID, str]:
+    """Courses the student is behind on, and by how much.
+
+    Only the current term, which is the rule the dashboard already applies to
+    the same question: a past course below target is history rather than
+    something tonight's work can move. A course with no marks yet has no
+    standing to be behind on.
+
+    One query, and it is the same one `course_codes` makes -- both are read per
+    task list, so widening it beats issuing a second.
+    """
+    default_target = get_preferences(user).default_target_grade
+    courses = db.query(CourseModel).filter(CourseModel.user_id == user.id).all()
+
+    risks: dict[uuid.UUID, str] = {}
+    for course in courses:
+        if term_bucket(course, user.current_school_year, user.current_semester) != CURRENT:
+            continue
+
+        result = course_result_grade(course)
+        if result is None:
+            continue
+
+        gap = effective_target(course, default_target) - result
+        if gap > 0:
+            risks[course.id] = risk_band(gap)
+
+    return risks
+
+
+def attach_course_code(
+    task: TaskModel,
+    codes: dict[uuid.UUID, str],
+    risks: dict[uuid.UUID, str] | None = None,
+) -> TaskModel:
+    """Label a task with its course code, and how far behind that course is.
 
     School work is categorised by course code rather than by a tag the student
-    has to remember to type, so the code has to travel with the task.
+    has to remember to type, so the code has to travel with the task. The risk
+    band travels the same way and for the same reason: the client would
+    otherwise need every course and the target rules to colour one row.
     """
     task.course_code = codes.get(task.course_id)
+    task.risk = (risks or {}).get(task.course_id)
     return task
 
 
 def sort_key(task: TaskModel):
-    """Soonest first; undated tasks last, in the order they were created.
+    """Most at risk first, then soonest; undated tasks last.
+
+    Risk leads and the date ordering is untouched beneath it, so a task from a
+    course you are failing rises to the top of whichever group it is already in
+    rather than the page being reorganised around risk. Two tasks from equally
+    troubled courses still sort by when they are due.
 
     `date.max` rather than None so undated tasks sort after every dated one
     instead of raising on the comparison.
     """
-    return (task.due_date or date.max, task.due_time or datetime.min.time(), task.created_at or datetime.min)
+    return (
+        RISK_RANK.get(getattr(task, "risk", None), 3),
+        task.due_date or date.max,
+        task.due_time or datetime.min.time(),
+        task.created_at or datetime.min,
+    )
 
 
 def list_tasks(
@@ -69,7 +140,8 @@ def list_tasks(
     A window excludes undated tasks, since the calendar asking for a week means
     the week's deadlines rather than everything ever.
     """
-    if not user_exists(db, user_id):
+    user = db.query(UserModel).filter(UserModel.id == user_id).first()
+    if user is None:
         return None
 
     query = db.query(TaskModel).filter(TaskModel.user_id == user_id)
@@ -86,10 +158,14 @@ def list_tasks(
         query = query.filter(TaskModel.due_date.isnot(None), TaskModel.due_date <= end)
 
     tasks = query.all()
-    tasks.sort(key=sort_key)
-
     codes = course_codes(db, user_id)
-    return [attach_course_code(task, codes) for task in tasks]
+    risks = course_risk(db, user)
+
+    # Attached before sorting, because the sort key reads the risk band off the
+    # task rather than looking it up again per comparison.
+    labelled = [attach_course_code(task, codes, risks) for task in tasks]
+    labelled.sort(key=sort_key)
+    return labelled
 
 
 def get_task(db: Session, user_id: uuid.UUID, task_id: uuid.UUID):

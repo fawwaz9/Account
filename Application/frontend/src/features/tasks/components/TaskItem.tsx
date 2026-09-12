@@ -1,5 +1,18 @@
-import { Task } from "../types";
+import { RiskBand, Task } from "../types";
 import { dueLabel, duration, daysBetween, today } from "../../../shared/utils/dateUtils";
+
+/**
+ * What each band says when you hover it.
+ *
+ * The badge itself is a single character: a task row already carries a course
+ * code, a date, an estimate and sometimes a tag, and a fourth word competing
+ * with those buries the thing it is meant to surface.
+ */
+const RISK_TITLES: Record<RiskBand, string> = {
+  mild: "This course is slightly below its target",
+  moderate: "This course is well below its target",
+  severe: "This course is far below its target",
+};
 
 interface TaskItemProps {
   readonly task: Task;
@@ -36,6 +49,18 @@ export default function TaskItem({ task, onToggle, onDelete, busy }: TaskItemPro
         <p className="taskTitle">{task.title}</p>
 
         <div className="taskMeta">
+          {/* Beside the course code, because the course is what is at risk --
+              the task itself is fine, it is the thing it belongs to that is
+              slipping. */}
+          {task.risk && (
+            <span
+              className={`taskRisk taskRisk-${task.risk}`}
+              title={RISK_TITLES[task.risk]}
+              aria-label={RISK_TITLES[task.risk]}
+            >
+              <span aria-hidden="true">!</span>
+            </span>
+          )}
           {task.course_code && <span className="taskTag taskTagCourse">{task.course_code}</span>}
           {task.tags.map((tag) => (
             <span key={tag} className="taskTag">{tag}</span>

@@ -43,6 +43,8 @@ export const endpoints = {
       `tasks/${userId}/repeating/${ruleId}/skip`,
     /** GET previews what a line means; POST creates the task it describes. */
     quickCapture: (userId: string) => `tasks/${userId}/quick-capture`,
+    /** Declared above /tasks/{task_id} on the server, or "timing" parses as an id. */
+    timing: (userId: string) => `tasks/${userId}/tasks/timing`,
   },
   omnibox: {
     /** GET previews which module a line goes to; POST files it there. */

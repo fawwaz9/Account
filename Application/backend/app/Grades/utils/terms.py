@@ -37,6 +37,17 @@ def term_bucket(course, current_school_year: int | None, current_semester: str |
     return CURRENT
 
 
+def effective_target(course, default_target: float) -> float:
+    """The course's own target, or the account default when it has none.
+
+    Here rather than in a service because two callers now need it and one of
+    them is Tasks: importing it from dash_services closed a loop through
+    grade_service and grade_schedule back into task_service. This module is
+    pure -- courses in, answers out, no session -- so anything may read it.
+    """
+    return course.target_grade if course.target_grade is not None else default_target
+
+
 def course_result_grade(course) -> float | None:
     """The single grade a finished course should be represented by.
 

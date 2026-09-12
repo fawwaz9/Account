@@ -15,7 +15,14 @@ from app.Grades.services.grade_service import (
     calculate_required_final,
     counts_toward_average,
 )
-from app.Grades.utils.terms import CURRENT, FUTURE, PAST, course_result_grade, year_average
+from app.Grades.utils.terms import (
+    CURRENT,
+    FUTURE,
+    PAST,
+    course_result_grade,
+    effective_target,
+    year_average,
+)
 from app.Grades.utils.weights import weight_problems
 from app.Grades.services.course_service import get_all_courses
 from app.Users.services.user_service import get_preferences, get_user
@@ -259,11 +266,6 @@ def summarize_years(courses, bucket: str) -> list[YearSummary]:
         for year, year_courses in by_year.items()
     ]
     return sorted(summaries, key=lambda entry: entry.school_year)
-
-
-def effective_target(course, default_target: float) -> float:
-    """The course's own target, or the account default when it has none."""
-    return course.target_grade if course.target_grade is not None else default_target
 
 
 def collect_attention(courses, default_target: float) -> list[AttentionItem]:

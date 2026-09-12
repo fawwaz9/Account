@@ -4,14 +4,22 @@ import TaskForm from "../features/tasks/components/TaskForm";
 import QuickCapture from "../features/tasks/components/QuickCapture";
 import Repeating from "../features/tasks/components/Repeating";
 import RepeatingModal from "../features/tasks/components/RepeatingModal";
+import ExamStrip from "../features/tasks/components/ExamStrip";
+import CompletionTimingBlock from "../features/tasks/components/CompletionTiming";
 import { useTasks } from "../features/tasks/hooks/useTasks";
 import {
   createTask,
   deleteRepeating,
   deleteTask,
+  fetchTaskTiming,
   setTaskDone,
 } from "../features/tasks/api";
-import { RecurringTask, Task, TaskCreate } from "../features/tasks/types";
+import {
+  CompletionTiming,
+  RecurringTask,
+  Task,
+  TaskCreate,
+} from "../features/tasks/types";
 import { fetchCourses } from "../features/grades/api";
 import { Course } from "../features/grades/types";
 import { useAuth } from "../app/auth/AuthContext";
@@ -23,8 +31,10 @@ import "../styles/tasks.css";
  * Work due inside this many days gets its own section.
  *
  * Two weeks because that is the window an assignment is actually actionable in.
- * Exams are not tasks -- they are events with a date and a room, so the
- * thirty-day exam view belongs on the calendar rather than here.
+ * Exams are still not tasks -- there is nothing to tick off, so they are not
+ * rows in these groups. They are a read-only band above the list instead
+ * (ExamStrip), on a thirty-day horizon: revision is what fills the fortnight,
+ * so knowing what it is for has to reach further out than the work itself.
  */
 const ASSIGNMENT_HORIZON = 14;
 
@@ -37,6 +47,7 @@ export default function TasksPage() {
   });
 
   const [courses, setCourses] = useState<Course[]>([]);
+  const [timing, setTiming] = useState<CompletionTiming | null>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [editingRule, setEditingRule] = useState<RecurringTask | null>(null);
@@ -52,6 +63,19 @@ export default function TasksPage() {
 
     return () => { mounted = false; };
   }, [user]);
+
+  // Refetched whenever the list reloads, because ticking a task off is exactly
+  // what moves these figures.
+  useEffect(() => {
+    if (!user) return;
+
+    let mounted = true;
+    fetchTaskTiming(user.id)
+      .then((next) => { if (mounted) setTiming(next); })
+      .catch(() => { if (mounted) setTiming(null); });
+
+    return () => { mounted = false; };
+  }, [user, tasks]);
 
   // Grouped by how soon, not by course: the question this page answers is
   // "what now", and a course grouping answers "what eventually".
@@ -107,6 +131,10 @@ export default function TasksPage() {
           Show completed
         </label>
       </div>
+
+      <ExamStrip />
+
+      <CompletionTimingBlock timing={timing} />
 
       {/* The fast path first, the full form under it: most tasks are a line
           of text, and the ones that are not still have every field. */}
