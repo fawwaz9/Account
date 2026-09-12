@@ -28,6 +28,18 @@ export default function BudgetView() {
   const { courses } = useCourses();
   const [modalOpen, setModalOpen] = useState(false);
   const [tuitionOpen, setTuitionOpen] = useState(false);
+  const [editingTuition, setEditingTuition] = useState<string | null>(null);
+
+  // A tuition row's amount is derived from its per-credit rate, so it goes to
+  // the tuition editor rather than the plain one -- which would change the
+  // ledger and leave the course pages saying something else.
+  function editTransaction(transaction: Transaction) {
+    if (transaction.tuition_payment_id) {
+      setEditingTuition(transaction.tuition_payment_id);
+      return;
+    }
+    setEditing(transaction);
+  }
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [editingRule, setEditingRule] = useState<RecurringTransaction | null>(null);
@@ -108,7 +120,7 @@ export default function BudgetView() {
                   transactions={transactions}
                   accounts={accounts}
                   onDelete={remove.requestDelete}
-                  onEdit={setEditing}
+                  onEdit={editTransaction}
                   deletingId={remove.deletingId}
                   emptyMessage="Nothing recorded today or yesterday."
                 />
@@ -184,6 +196,14 @@ export default function BudgetView() {
         open={tuitionOpen}
         accounts={accounts}
         onClose={() => setTuitionOpen(false)}
+        onSaved={reload}
+      />
+
+      <TuitionModal
+        open={editingTuition !== null}
+        accounts={accounts}
+        paymentId={editingTuition}
+        onClose={() => setEditingTuition(null)}
         onSaved={reload}
       />
     </div>

@@ -17,7 +17,9 @@ import {
   TransactionCreate,
   TransferCreate,
   TuitionCreate,
+  TuitionPayment,
   TuitionPreview,
+  TuitionUpdate,
   UpcomingCharge,
 } from "./types";
 
@@ -240,4 +242,25 @@ export async function recordTuition(userId: string, data: TuitionCreate) {
 /** What a course cost: its gross tuition share plus anything bought for it. */
 export async function fetchCourseCost(userId: string, courseId: string) {
   return get<CourseCost>(endpoints.finances.courseCost(userId, courseId));
+}
+
+export async function fetchTuitionPayment(userId: string, paymentId: string) {
+  return get<TuitionPayment>(endpoints.finances.tuitionPayment(userId, paymentId));
+}
+
+/** Correct a payment. Its ledger row moves with it. */
+export async function updateTuition(
+  userId: string,
+  paymentId: string,
+  data: TuitionUpdate
+) {
+  return patch<TuitionPayment>(
+    endpoints.finances.tuitionPayment(userId, paymentId),
+    data
+  );
+}
+
+/** Remove a payment and the ledger row it owns. */
+export async function deleteTuition(userId: string, paymentId: string) {
+  return del(endpoints.finances.tuitionPayment(userId, paymentId));
 }

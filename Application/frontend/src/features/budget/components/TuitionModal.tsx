@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { fetchTuitionPreview, recordTuition } from "../api";
+import {
+  deleteTuition,
+  fetchTuitionPayment,
+  fetchTuitionPreview,
+  recordTuition,
+  updateTuition,
+} from "../api";
 import { Account, TuitionDeduction, TuitionPreview } from "../types";
 import { getErrorMessage } from "../../grades/components/AddCourseModal";
 import { useAuth } from "../../../app/auth/AuthContext";
@@ -11,6 +17,8 @@ import Modal from "../../../shared/components/Modal";
 interface TuitionModalProps {
   readonly open: boolean;
   readonly accounts: readonly Account[];
+  /** Editing an existing payment rather than recording a new one. */
+  readonly paymentId?: string | null;
   readonly onClose: () => void;
   readonly onSaved: () => void;
 }
@@ -28,7 +36,13 @@ const BLANK: TuitionDeduction = { description: "", amount: 0 };
  * The form shows both totals on purpose. They are different numbers answering
  * different questions, and showing only one would imply they are the same.
  */
-export default function TuitionModal({ open, accounts, onClose, onSaved }: TuitionModalProps) {
+export default function TuitionModal({
+  open,
+  accounts,
+  paymentId = null,
+  onClose,
+  onSaved,
+}: TuitionModalProps) {
   const { user } = useAuth();
   const [accountId, setAccountId] = useState("");
   const [occurredOn, setOccurredOn] = useState(localToday());
@@ -39,6 +53,12 @@ export default function TuitionModal({ open, accounts, onClose, onSaved }: Tuiti
   const [preview, setPreview] = useState<TuitionPreview | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Credits are history: a payment recorded before a course was added should
+  // not start billing for it just because a typo in the fees was fixed. The
+  // recount is there when the bill really did change, and is opt-in.
+  const [recountCredits, setRecountCredits] = useState(false);
+  const [loadedCredits, setLoadedCredits] = useState<number | null>(null);
+  const editing = Boolean(paymentId);
 
   const deductionsTotal = deductions.reduce(
     (total, entry) => total + (Number(entry.amount) || 0), 0
@@ -53,14 +73,36 @@ export default function TuitionModal({ open, accounts, onClose, onSaved }: Tuiti
 
   useEffect(() => {
     if (!open) return;
-    setAccountId(accounts[0]?.id ?? "");
-    setOccurredOn(localToday());
-    setCostPerCredit("");
-    setFees("");
-    setDescription("");
-    setDeductions([]);
     setError(null);
-  }, [open, accounts]);
+    setRecountCredits(false);
+
+    if (!paymentId || !user) {
+      setAccountId(accounts[0]?.id ?? "");
+      setOccurredOn(localToday());
+      setCostPerCredit("");
+      setFees("");
+      setDescription("");
+      setDeductions([]);
+      setLoadedCredits(null);
+      return;
+    }
+
+    let cancelled = false;
+    fetchTuitionPayment(user.id, paymentId)
+      .then((payment) => {
+        if (cancelled) return;
+        setOccurredOn(payment.occurred_on);
+        setCostPerCredit(String(payment.cost_per_credit));
+        setFees(String(payment.fees));
+        setDeductions(payment.deductions.map((entry) => ({ ...entry })));
+        setLoadedCredits(payment.credits_counted);
+      })
+      .catch(() => {
+        if (!cancelled) setError("That payment could not be loaded.");
+      });
+
+    return () => { cancelled = true; };
+  }, [open, accounts, paymentId, user]);
 
   useEffect(() => {
     if (!open || !user) return;
@@ -96,7 +138,7 @@ export default function TuitionModal({ open, accounts, onClose, onSaved }: Tuiti
     setSubmitting(true);
     setError(null);
     try {
-      await recordTuition(user.id, {
+      const payload = {
         account_id: accountId,
         occurred_on: occurredOn,
         cost_per_credit: Number(costPerCredit) || 0,
@@ -109,7 +151,16 @@ export default function TuitionModal({ open, accounts, onClose, onSaved }: Tuiti
             description: entry.description.trim(),
             amount: Number(entry.amount),
           })),
-      });
+      };
+
+      if (paymentId) {
+        await updateTuition(user.id, paymentId, {
+          ...payload,
+          recount_credits: recountCredits,
+        });
+      } else {
+        await recordTuition(user.id, payload);
+      }
       onSaved();
       onClose();
     } catch (caught) {
@@ -123,11 +174,30 @@ export default function TuitionModal({ open, accounts, onClose, onSaved }: Tuiti
 
   // Built on the server: school_year is a year of standing, not a calendar
   // year, so joining the parts here produced "3 Fall".
+  async function handleDelete() {
+    if (!user || !paymentId) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await deleteTuition(user.id, paymentId);
+      onSaved();
+      onClose();
+    } catch (caught) {
+      setError(getErrorMessage(caught));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   const term = preview?.term_name ?? "your current term";
   const blocked = Boolean(preview && !preview.can_record);
 
   return (
-    <Modal title="Pay Tuition" onClose={onClose} panelClassName="widePopup">
+    <Modal
+      title={editing ? "Edit tuition payment" : "Pay Tuition"}
+      onClose={onClose}
+      panelClassName="widePopup"
+    >
       <form className="loginForm" onSubmit={handleSubmit}>
         <div className="calRow">
           <div className="loginField calField">
@@ -185,8 +255,27 @@ export default function TuitionModal({ open, accounts, onClose, onSaved }: Tuiti
         <div className="tuitionCourses">
           <div className="tuitionCoursesHead">
             <span>{term} — transfer credits excluded</span>
-            <strong>{preview?.credits_counted ?? 0} credits</strong>
+            <strong>
+              {(editing && !recountCredits ? loadedCredits : preview?.credits_counted) ?? 0} credits
+            </strong>
           </div>
+
+          {/* Offered only when the term has actually moved since the bill, so
+              it is a choice rather than a permanent checkbox to read past. */}
+          {editing && loadedCredits !== null && preview
+            && preview.credits_counted !== loadedCredits && (
+            <label className="tuitionRecount">
+              <input
+                type="checkbox"
+                checked={recountCredits}
+                onChange={(event) => setRecountCredits(event.target.checked)}
+              />
+              <span>
+                This term now has {preview.credits_counted} credits, not the{" "}
+                {loadedCredits} this was billed for. Re-count and re-price it?
+              </span>
+            </label>
+          )}
           {preview?.courses.length ? (
             <ul className="tuitionCourseList">
               {preview.courses.map((course) => (
@@ -313,13 +402,25 @@ export default function TuitionModal({ open, accounts, onClose, onSaved }: Tuiti
         {error && <p className="error">{error}</p>}
 
         <div className="calActions">
+          {editing && (
+            <button
+              type="button"
+              className="deleteCourseButton"
+              onClick={handleDelete}
+              disabled={submitting}
+            >
+              Delete payment
+            </button>
+          )}
           <button type="button" className="buttons" onClick={onClose}>Cancel</button>
           <button
             type="submit"
             className="buttons !bg-gold"
             disabled={submitting || blocked || !accountId}
           >
-            {submitting ? "Recording…" : "Record payment"}
+            {submitting
+              ? "Saving…"
+              : editing ? "Save changes" : "Record payment"}
           </button>
         </div>
       </form>

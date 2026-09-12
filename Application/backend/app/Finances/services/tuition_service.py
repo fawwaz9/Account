@@ -32,8 +32,13 @@ from app.Finances.schemas.tuition import (
     TuitionCourse,
     TuitionCreate,
     TuitionPreview,
+    TuitionUpdate,
 )
-from app.Finances.services.transaction_service import create_transaction, owned_account
+from app.Finances.services.transaction_service import (
+    create_transaction,
+    delete_transaction,
+    owned_account,
+)
 from app.Grades.utils.terms import CURRENT, term_bucket
 
 
@@ -266,3 +271,115 @@ def course_cost(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> Course
         materials_total=materials_total,
         total=round(tuition_share + materials_total, 2),
     )
+
+
+def get_tuition(db: Session, user_id: uuid.UUID, payment_id: uuid.UUID):
+    return (
+        db.query(TuitionPaymentModel)
+        .filter(
+            TuitionPaymentModel.id == payment_id,
+            TuitionPaymentModel.user_id == user_id,
+        )
+        .first()
+    )
+
+
+def update_tuition(db: Session, user_id: uuid.UUID, payment_id: uuid.UUID, data: TuitionUpdate):
+    """Correct a payment, and move its ledger row to match.
+
+    The two are one thing: the rate is what the course pages read and the net is
+    what the ledger shows, so a correction that changed one without the other
+    would leave them disagreeing with no way to tell which was right.
+    """
+    payment = get_tuition(db, user_id, payment_id)
+    if payment is None:
+        return None
+
+    if owned_account(db, user_id, data.account_id) is None:
+        raise ValueError("That account does not exist")
+
+    deductions_total = round(sum(entry.amount for entry in data.deductions), 2)
+
+    # credits_counted is history unless the caller asks to re-count. A payment
+    # recorded before a course was added should not silently start billing for
+    # it just because a typo in the fees was fixed.
+    credits_counted = payment.credits_counted
+    if data.recount_credits:
+        credits_counted = round(
+            sum(course.credits for course in billable_courses(db, user_id)), 2
+        )
+
+    gross = round(credits_counted * data.cost_per_credit, 2)
+    payable = round(gross + data.fees - deductions_total, 2)
+
+    if payable < 0:
+        raise ValueError(
+            f"Deductions come to {deductions_total:.2f}, more than the "
+            f"{gross + data.fees:.2f} being billed."
+        )
+    if payable == 0:
+        raise ValueError("That payment comes to nothing once deductions are applied")
+
+    transaction = (
+        db.query(TransactionModel)
+        .filter(
+            TransactionModel.id == payment.transaction_id,
+            TransactionModel.user_id == user_id,
+        )
+        .first()
+    )
+    if transaction is None:
+        raise ValueError("The ledger row for this payment is missing")
+
+    # Expenses are stored negative, so the sign is reapplied rather than assumed.
+    transaction.amount = -abs(payable)
+    transaction.account_id = data.account_id
+    transaction.occurred_on = data.occurred_on
+    transaction.description = data.description or f"Tuition {term_name(db, user_id)}"
+
+    # The account lives on the transaction, which is the thing that moved money.
+    payment.cost_per_credit = data.cost_per_credit
+    payment.fees = data.fees
+    payment.credits_counted = credits_counted
+    payment.occurred_on = data.occurred_on
+
+    # Replaced wholesale rather than diffed: the list is short, and matching old
+    # rows to new ones by description would guess wrong the moment one is renamed.
+    db.query(TuitionDeductionModel).filter(
+        TuitionDeductionModel.tuition_payment_id == payment.id
+    ).delete(synchronize_session=False)
+    for entry in data.deductions:
+        db.add(TuitionDeductionModel(
+            id=uuid.uuid4(),
+            tuition_payment_id=payment.id,
+            description=entry.description,
+            amount=entry.amount,
+        ))
+
+    db.commit()
+    db.refresh(payment)
+    return payment
+
+
+def delete_tuition(db: Session, user_id: uuid.UUID, payment_id: uuid.UUID):
+    """Remove a payment and the ledger row it owns.
+
+    Deleting through the transaction works too -- that path clears the payment
+    record -- but a tuition payment is the thing the student thinks they are
+    deleting, so it can be addressed directly.
+    """
+    payment = get_tuition(db, user_id, payment_id)
+    if payment is None:
+        return None
+
+    transaction_id = payment.transaction_id
+    db.query(TuitionDeductionModel).filter(
+        TuitionDeductionModel.tuition_payment_id == payment.id
+    ).delete(synchronize_session=False)
+    db.delete(payment)
+    db.commit()
+
+    # After the payment is gone, so the cascade in delete_transaction finds
+    # nothing left to remove and cannot recurse.
+    delete_transaction(db, user_id, transaction_id, scope="row")
+    return True

@@ -48,6 +48,8 @@ export interface Transaction {
   group_size: number;
   /** What it was bought for, on expenses. Tuition never sets this. */
   course_id: string | null;
+  /** Set when a tuition payment owns this row, so it opens the right editor. */
+  tuition_payment_id: string | null;
 }
 
 export interface TransactionCreate {
@@ -269,6 +271,23 @@ export interface TuitionCreate {
   fees: number;
   description: string | null;
   deductions: TuitionDeduction[];
+}
+
+export interface TuitionPayment {
+  id: string;
+  transaction_id: string;
+  school_year: number | null;
+  semester: string | null;
+  cost_per_credit: number;
+  fees: number;
+  credits_counted: number;
+  occurred_on: string;
+  deductions: TuitionDeduction[];
+}
+
+export interface TuitionUpdate extends TuitionCreate {
+  /** Re-count the term's credits as they stand now, rather than as billed. */
+  recount_credits: boolean;
 }
 
 export interface CourseCostLine {

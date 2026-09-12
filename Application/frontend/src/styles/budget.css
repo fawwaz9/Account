@@ -614,3 +614,23 @@
   font-size: 0.72rem;
   color: var(--gold-soft);
 }
+
+/* Offered only when the term has moved since the bill, so it reads as a
+   question rather than a permanent checkbox. */
+.tuitionRecount {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--gold-soft);
+  cursor: pointer;
+}
+
+.tuitionRecount input {
+  margin-top: 2px;
+  flex-shrink: 0;
+}

@@ -63,6 +63,10 @@ class Transaction(TransactionBase):
     group_size: int = 1
     category_id: UUID | None = None
     course_id: UUID | None = None
+    #: Set when a tuition payment owns this row. The client sends such a
+    #: row to the tuition editor instead of the plain one, because editing
+    #: the amount directly would leave the rate and the ledger disagreeing.
+    tuition_payment_id: UUID | None = None
 
     class Config:
         from_attributes = True

@@ -52,6 +52,26 @@ class TuitionCreate(BaseModel):
         return self
 
 
+class TuitionUpdate(BaseModel):
+    """Correcting a payment already recorded.
+
+    Every field is required rather than optional: the arithmetic is a whole, and
+    a partial update that changed the rate without knowing the deductions would
+    have to re-read them anyway. The form always holds all of it.
+    """
+
+    account_id: UUID
+    occurred_on: date
+    cost_per_credit: float = Field(..., ge=0)
+    fees: float = Field(default=0.0, ge=0)
+    description: str | None = Field(default=None, max_length=200)
+    deductions: list[TuitionDeduction] = Field(default_factory=list)
+    #: Re-count the term's credits as they stand now, rather than keeping what
+    #: the bill was for. Off by default: credits_counted is history, and a
+    #: correction to the rate should not quietly re-bill a course added since.
+    recount_credits: bool = False
+
+
 class TuitionPreview(BaseModel):
     """The arithmetic, before anything is written.
 

@@ -59,6 +59,8 @@ export const endpoints = {
     deposits: (userId: string) => `finances/${userId}/deposits`,
     depositPreview: (userId: string) => `finances/${userId}/deposit-preview`,
     tuition: (userId: string) => `finances/${userId}/tuition`,
+    tuitionPayment: (userId: string, paymentId: string) =>
+      `finances/${userId}/tuition/${paymentId}`,
     tuitionPreview: (userId: string) => `finances/${userId}/tuition/preview`,
     courseCost: (userId: string, courseId: string) =>
       `finances/${userId}/courses/${courseId}/cost`,

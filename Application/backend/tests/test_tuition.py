@@ -306,3 +306,204 @@ def test_course_cost_ignores_income_tagged_rows(db, user):
     db.commit()
 
     assert course_cost(db, user.id, course.id).materials_total == 89.0
+
+
+# ------------------------------------------------------- correcting one --
+
+def edit(db, user, payment, **overrides):
+    from app.Finances.schemas.tuition import TuitionUpdate
+    from app.Finances.services.tuition_service import update_tuition
+    fields = {
+        "account_id": overrides.pop("account_id", None),
+        "occurred_on": __import__("datetime").date(2026, 9, 15),
+        "cost_per_credit": payment.cost_per_credit,
+        "fees": payment.fees,
+        "description": None,
+        "deductions": [],
+    }
+    fields.update(overrides)
+    return update_tuition(db, user.id, payment.id, TuitionUpdate(**fields))
+
+
+def test_fixing_the_fees_moves_the_ledger_row(db, user):
+    """The rate and the net are one thing; correcting one must move the other."""
+    set_term(db, user)
+    account = make_account(db, user.id, "Chequing")
+    in_term(db, user, "CPSC 210", credits=4.0)
+
+    payment = pay(db, user, account, rate=250.0, fees=500.0)
+    row = db.query(TransactionModel).filter(TransactionModel.user_id == user.id).first()
+    assert abs(row.amount) == 1500.0
+
+    edit(db, user, payment, account_id=account.id, fees=310.0)
+
+    db.refresh(row)
+    assert abs(row.amount) == 1310.0
+
+
+def test_fixing_a_deduction_moves_the_ledger_row(db, user):
+    set_term(db, user)
+    account = make_account(db, user.id, "Chequing")
+    in_term(db, user, "CPSC 210", credits=4.0)
+
+    payment = pay(db, user, account, rate=250.0,
+                  deductions=[("Scholarship", 100.0)])
+    row = db.query(TransactionModel).filter(TransactionModel.user_id == user.id).first()
+    assert abs(row.amount) == 900.0
+
+    edit(db, user, payment, account_id=account.id,
+         deductions=[TuitionDeduction(description="Scholarship", amount=600.0)])
+
+    db.refresh(row)
+    assert abs(row.amount) == 400.0
+
+
+def test_an_edit_leaves_the_row_an_expense(db, user):
+    """Expenses are stored negative; reapplying the sign, not assuming it."""
+    set_term(db, user)
+    account = make_account(db, user.id, "Chequing")
+    in_term(db, user, "CPSC 210", credits=4.0)
+
+    payment = pay(db, user, account, rate=250.0)
+    edit(db, user, payment, account_id=account.id, fees=50.0)
+
+    row = db.query(TransactionModel).filter(TransactionModel.user_id == user.id).first()
+    assert row.amount < 0
+
+
+def test_an_edit_keeps_credits_as_billed_by_default(db, user):
+    """A payment should not start billing for a course added since."""
+    set_term(db, user)
+    account = make_account(db, user.id, "Chequing")
+    in_term(db, user, "CPSC 210", credits=4.0)
+
+    payment = pay(db, user, account, rate=250.0)
+    in_term(db, user, "LATE 200", credits=3.0)
+
+    edit(db, user, payment, account_id=account.id, fees=10.0)
+    db.refresh(payment)
+    assert payment.credits_counted == 4.0
+
+
+def test_recounting_credits_is_opt_in(db, user):
+    set_term(db, user)
+    account = make_account(db, user.id, "Chequing")
+    in_term(db, user, "CPSC 210", credits=4.0)
+
+    payment = pay(db, user, account, rate=250.0)
+    in_term(db, user, "LATE 200", credits=3.0)
+
+    edit(db, user, payment, account_id=account.id, recount_credits=True)
+    db.refresh(payment)
+    assert payment.credits_counted == 7.0
+
+
+def test_deductions_are_replaced_not_merged(db, user):
+    from app._database.models import TuitionDeductionModel
+    set_term(db, user)
+    account = make_account(db, user.id, "Chequing")
+    in_term(db, user, "CPSC 210", credits=4.0)
+
+    payment = pay(db, user, account, rate=250.0,
+                  deductions=[("Scholarship", 100.0), ("Deposit", 50.0)])
+    edit(db, user, payment, account_id=account.id,
+         deductions=[TuitionDeduction(description="Bursary", amount=75.0)])
+
+    left = db.query(TuitionDeductionModel).filter(
+        TuitionDeductionModel.tuition_payment_id == payment.id).all()
+    assert [(d.description, d.amount) for d in left] == [("Bursary", 75.0)]
+
+
+def test_an_edit_that_over_deducts_is_refused(db, user):
+    set_term(db, user)
+    account = make_account(db, user.id, "Chequing")
+    in_term(db, user, "CPSC 210", credits=4.0)
+    payment = pay(db, user, account, rate=250.0)
+
+    with pytest.raises(ValueError, match="more than"):
+        edit(db, user, payment, account_id=account.id,
+             deductions=[TuitionDeduction(description="Too big", amount=99999.0)])
+
+
+# --------------------------------------------------------- removing one --
+
+def test_deleting_the_ledger_row_clears_the_payment(db, user):
+    """The bug this suite exists to stop coming back.
+
+    The payment record used to survive its own ledger row, so a course went on
+    being charged for a payment that no longer existed -- and nothing in the UI
+    could reach the orphan to clear it.
+    """
+    from app.Finances.services.transaction_service import delete_transaction
+
+    set_term(db, user)
+    account = make_account(db, user.id, "Chequing")
+    course = in_term(db, user, "CPSC 210", credits=4.0)
+    payment = pay(db, user, account, rate=250.0)
+
+    assert course_cost(db, user.id, course.id).tuition_share == 1000.0
+
+    delete_transaction(db, user.id, payment.transaction_id)
+
+    assert db.query(TuitionPaymentModel).filter(
+        TuitionPaymentModel.user_id == user.id).count() == 0
+    assert course_cost(db, user.id, course.id).tuition_share == 0.0
+
+
+def test_deleting_the_payment_clears_the_ledger_row(db, user):
+    from app.Finances.services.tuition_service import delete_tuition
+
+    set_term(db, user)
+    account = make_account(db, user.id, "Chequing")
+    course = in_term(db, user, "CPSC 210", credits=4.0)
+    payment = pay(db, user, account, rate=250.0)
+
+    delete_tuition(db, user.id, payment.id)
+
+    assert db.query(TransactionModel).filter(
+        TransactionModel.user_id == user.id).count() == 0
+    assert course_cost(db, user.id, course.id).tuition_share == 0.0
+
+
+def test_deleting_a_payment_leaves_no_deductions_behind(db, user):
+    from app._database.models import TuitionDeductionModel
+    from app.Finances.services.tuition_service import delete_tuition
+
+    set_term(db, user)
+    account = make_account(db, user.id, "Chequing")
+    in_term(db, user, "CPSC 210", credits=4.0)
+    payment = pay(db, user, account, rate=250.0,
+                  deductions=[("Scholarship", 100.0)])
+
+    delete_tuition(db, user.id, payment.id)
+
+    assert db.query(TuitionDeductionModel).filter(
+        TuitionDeductionModel.tuition_payment_id == payment.id).count() == 0
+
+
+def test_the_plain_editor_refuses_a_tuition_amount(db, user):
+    """Editing it there would leave the rate and the ledger disagreeing."""
+    from app.Finances.schemas.transaction import TransactionUpdate
+    from app.Finances.services.transaction_service import update_transaction
+
+    set_term(db, user)
+    account = make_account(db, user.id, "Chequing")
+    in_term(db, user, "CPSC 210", credits=4.0)
+    payment = pay(db, user, account, rate=250.0)
+
+    with pytest.raises(ValueError, match="Pay Tuition"):
+        update_transaction(db, user.id, payment.transaction_id,
+                           TransactionUpdate(amount=5.0))
+
+
+def test_a_tuition_row_says_which_payment_owns_it(db, user):
+    """The client needs this to send the row to the right editor."""
+    from app.Finances.services.transaction_service import list_transactions
+
+    set_term(db, user)
+    account = make_account(db, user.id, "Chequing")
+    in_term(db, user, "CPSC 210", credits=4.0)
+    payment = pay(db, user, account, rate=250.0)
+
+    rows = list_transactions(db, user.id)
+    assert rows[0].tuition_payment_id == payment.id
