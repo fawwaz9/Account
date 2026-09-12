@@ -33,7 +33,10 @@ export type CalendarView = "month" | "week";
  */
 export function useCalender() {
   const { user } = useAuth();
-  const [view, setView] = useState<CalendarView>("month");
+  // Week by default: it is the view with a time axis, so it is the one that
+  // answers "what does today actually look like" and the one the free
+  // blocks and week load hang off.
+  const [view, setView] = useState<CalendarView>("week");
   // One anchor for both views, so switching between them stays where you were
   // rather than jumping back to today.
   const [cursor, setCursor] = useState(today());

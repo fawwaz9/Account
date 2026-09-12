@@ -85,24 +85,41 @@ def busy_spans(occurrences, on_date: date) -> list[tuple[time, time]]:
 
 
 def free_blocks(
-    db: Session, user_id: uuid.UUID, window_start: date, window_end: date
+    db: Session, user_id: uuid.UUID, window_start: date, window_end: date,
+    now: datetime | None = None,
 ) -> list[FreeBlock] | None:
     """The gaps between a day's commitments, longest first.
 
     Clipped to the study window at both ends, so a 07:00 lab does not open a
     block at midnight and an evening with nothing in it stops at the hour you
     said you stop.
+
+    Time already gone is not free time. Days before today are skipped entirely,
+    and today's blocks start no earlier than the current hour -- offering
+    "08:00-16:00" at two in the afternoon is offering six hours that no longer
+    exist.
     """
     occurrences = list_occurrences(db, user_id, window_start, window_end)
     if occurrences is None:
         return None
 
+    now = now or datetime.now()
+    today = now.date()
     day_start, day_end, floor = study_window(db, user_id)
     blocks: list[FreeBlock] = []
 
     day = window_start
     while day <= window_end:
+        if day < today:
+            day += timedelta(days=1)
+            continue
+
         cursor = day_start
+        if day == today:
+            # Clipped to the actual time, not rounded up to the next hour: an
+            # odd-looking "14:37" is honest, and rounding would both discard up
+            # to an hour of real time and need a special case near midnight.
+            cursor = max(cursor, now.time().replace(second=0, microsecond=0))
         for start, end in busy_spans(occurrences, day):
             # Entirely before the window, or entirely after it.
             if end <= cursor:
