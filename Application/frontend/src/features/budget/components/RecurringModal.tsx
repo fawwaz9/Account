@@ -144,7 +144,11 @@ export default function RecurringModal({
   const spendable = accounts.filter((account) => !account.archived);
 
   return (
-    <Modal title={rule ? "Edit standing instruction" : "New standing instruction"} onClose={onClose}>
+    <Modal
+      title={rule ? "Edit standing instruction" : "New standing instruction"}
+      onClose={onClose}
+      panelClassName="widePopup"
+    >
       <form className="calForm" onSubmit={handleSubmit}>
         {!rule && (
           <div className="moneyTabs" role="group" aria-label="What kind of movement">
