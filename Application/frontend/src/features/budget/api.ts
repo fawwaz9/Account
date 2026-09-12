@@ -11,10 +11,13 @@ import {
   RecurringRun,
   RecurringTransaction,
   RecurringUpdate,
+  CourseCost,
   SpendCategory,
   Transaction,
   TransactionCreate,
   TransferCreate,
+  TuitionCreate,
+  TuitionPreview,
   UpcomingCharge,
 } from "./types";
 
@@ -206,4 +209,35 @@ export async function skipRecurring(userId: string, ruleId: string, onDate: stri
     `${endpoints.finances.recurringSkip(userId, ruleId)}?on_date=${onDate}`,
     {}
   );
+}
+
+/** Which course a line of text names, decided server-side. See CoursePicker. */
+export async function resolveCourse(userId: string, text: string) {
+  return get<{ course_id: string | null; code: string | null; name: string | null }>(
+    `${endpoints.grades.resolveCourse(userId)}?text=${encodeURIComponent(text)}`
+  );
+}
+
+/** The arithmetic of a tuition payment, before anything is written. */
+export async function fetchTuitionPreview(
+  userId: string,
+  costPerCredit: number,
+  fees: number,
+  deductionsTotal: number
+) {
+  const query = new URLSearchParams({
+    cost_per_credit: String(costPerCredit),
+    fees: String(fees),
+    deductions_total: String(deductionsTotal),
+  });
+  return get<TuitionPreview>(`${endpoints.finances.tuitionPreview(userId)}?${query}`);
+}
+
+export async function recordTuition(userId: string, data: TuitionCreate) {
+  return post(endpoints.finances.tuition(userId), data);
+}
+
+/** What a course cost: its gross tuition share plus anything bought for it. */
+export async function fetchCourseCost(userId: string, courseId: string) {
+  return get<CourseCost>(endpoints.finances.courseCost(userId, courseId));
 }

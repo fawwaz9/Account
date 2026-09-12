@@ -9,6 +9,7 @@ import EditAccountModal from "./EditAccountModal";
 import Recurring from "./Recurring";
 import RecurringModal from "./RecurringModal";
 import { useBudget } from "../hooks/useBudget";
+import { useCourses } from "../../grades/hooks/useCourses";
 import { useTransactionDelete } from "../hooks/useTransactionDelete";
 import DeleteConfirmModal from "../../grades/components/DeleteConfirmModal";
 import { deleteRecurring, setBudgetTarget } from "../api";
@@ -21,6 +22,9 @@ export default function BudgetView() {
     accounts, transactions, categories, summary, recurring, upcoming,
     month, setMonth, loading, error, reload,
   } = useBudget();
+  // Reused rather than refetched: the course picker needs the same list the
+  // Grades page already loads.
+  const { courses } = useCourses();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
@@ -141,6 +145,7 @@ export default function BudgetView() {
       <EditTransactionModal
         transaction={editing}
         categories={categories}
+        courses={courses}
         onClose={() => setEditing(null)}
         onSaved={reload}
       />
@@ -158,6 +163,7 @@ export default function BudgetView() {
         open={modalOpen}
         accounts={accounts}
         categories={categories}
+        courses={courses}
         onClose={() => setModalOpen(false)}
         onSaved={reload}
       />

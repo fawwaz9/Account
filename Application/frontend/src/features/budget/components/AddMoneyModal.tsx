@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { createTransaction, createTransfer, previewDeposit, recordDeposit } from "../api";
 import { useDebounce } from "../../../shared/hooks/useDebounce";
 import { Account, DepositAllocation, SpendCategory } from "../types";
+import { Course } from "../../grades/types";
+import CoursePicker from "./CoursePicker";
 import { getErrorMessage } from "../../grades/components/AddCourseModal";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { localToday } from "../dates";
@@ -11,6 +13,7 @@ interface AddMoneyModalProps {
   readonly open: boolean;
   readonly accounts: readonly Account[];
   readonly categories: readonly SpendCategory[];
+  readonly courses: readonly Course[];
   readonly onClose: () => void;
   readonly onSaved: () => void;
 }
@@ -21,6 +24,7 @@ export default function AddMoneyModal({
   open,
   accounts,
   categories,
+  courses,
   onClose,
   onSaved,
 }: AddMoneyModalProps) {
@@ -32,6 +36,7 @@ export default function AddMoneyModal({
   const [description, setDescription] = useState("");
   const [occurredOn, setOccurredOn] = useState(localToday());
   const [categoryId, setCategoryId] = useState("");
+  const [courseId, setCourseId] = useState("");
   const [allocations, setAllocations] = useState<DepositAllocation[]>([]);
   const [needsShares, setNeedsShares] = useState(false);
   const debouncedAmount = useDebounce(amount, 300);
@@ -48,6 +53,7 @@ export default function AddMoneyModal({
     setDescription("");
     setOccurredOn(localToday());
     setCategoryId("");
+    setCourseId("");
     setAllocations([]);
     setError(null);
   }, [open, accounts]);
@@ -113,6 +119,7 @@ export default function AddMoneyModal({
           occurred_on: occurredOn,
           // Only expenses carry a category; the server ignores it on income.
           category_id: mode === "expense" && categoryId ? categoryId : null,
+          course_id: mode === "expense" && courseId ? courseId : null,
         });
       }
       onSaved();
@@ -251,6 +258,17 @@ export default function AddMoneyModal({
               ))}
             </select>
           </div>
+        )}
+
+        {mode === "expense" && user && (
+          <CoursePicker
+            userId={user.id}
+            courses={courses}
+            value={courseId}
+            onChange={setCourseId}
+            description={description}
+            idPrefix="money"
+          />
         )}
 
         <div className="loginField">

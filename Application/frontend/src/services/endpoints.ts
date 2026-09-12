@@ -11,6 +11,7 @@ export const endpoints = {
     courseDetail: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}`,
     CategoryWeights: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/category-weights`,
     requiredFinal: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/required-final`,
+    resolveCourse: (userId: string) => `grades/${userId}/courses/resolve`,
     gradeBand: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/grade-band`,
     courseGrades: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/grades`,
     bulkGrades: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/grades/bulk`,
@@ -57,6 +58,10 @@ export const endpoints = {
     budgetSummary: (userId: string) => `finances/${userId}/budget-summary`,
     deposits: (userId: string) => `finances/${userId}/deposits`,
     depositPreview: (userId: string) => `finances/${userId}/deposit-preview`,
+    tuition: (userId: string) => `finances/${userId}/tuition`,
+    tuitionPreview: (userId: string) => `finances/${userId}/tuition/preview`,
+    courseCost: (userId: string, courseId: string) =>
+      `finances/${userId}/courses/${courseId}/cost`,
     recurring: (userId: string) => `finances/${userId}/recurring`,
     recurringRule: (userId: string, ruleId: string) => `finances/${userId}/recurring/${ruleId}`,
     /** Writes any payment that is owed. Idempotent, so it is safe on every load. */
