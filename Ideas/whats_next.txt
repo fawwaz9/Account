@@ -126,6 +126,15 @@ Syllabus parser
   is the default and the parser sits under the grid.
 
 Worth knowing before picking anything up
+- Everything in the shipped block above sits on the `repeating-tasks` branch,
+  pushed to origin. main is a strict ancestor of it, so it merges without
+  conflicts -- unlike the grades-branch merge, where every reported conflict
+  turned out to be phantom (identical trees under different SHAs).
+- It carries a migration: one nullable tasks.recurring_id and the recurring_tasks
+  table. Additive and idempotent like the rest, but back up data/app.db first.
+- gh is not installed and no token is exported. git push works because the
+  credential sits in the macOS keychain, but opening a PR means the browser, or
+  installing gh first.
 - 224 backend tests. The frontend has none: the week view's overlap maths was
   checked with a one-off esbuild harness, not by anything that runs on its own.
   Vitest would slot in beside Vite cheaply if that starts to bite.
