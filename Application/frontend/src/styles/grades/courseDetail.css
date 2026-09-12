@@ -474,7 +474,7 @@
    high up and a narrow band low down should not look alike. */
 
 .gradeBand {
-  margin: 0 0 24px;
+  margin: 0;
   padding: 12px 14px;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -542,7 +542,7 @@
    discovered as an apparent bug. */
 
 .courseCost {
-  margin: 0 0 24px;
+  margin: 0;
   padding: 12px 14px;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -648,4 +648,23 @@
   font-size: 0.72rem;
   color: var(--muted);
   line-height: 1.5;
+}
+
+/* ===== The two insight panels, side by side =====
+   Cost on the left, the band on the right. Each hides itself when it has
+   nothing to say -- no spend recorded, or a band that has closed -- so the row
+   has to survive having one child, or none. auto-fit lets a lone panel take the
+   full width instead of sitting in a half-empty column, and :empty collapses
+   the row entirely rather than leaving its gap and margin behind. */
+
+.courseInsights {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+  gap: 16px;
+  align-items: start;
+  margin: 0 0 24px;
+}
+
+.courseInsights:empty {
+  display: none;
 }
