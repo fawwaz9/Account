@@ -3,6 +3,8 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.Grades.utils.enums import DEFAULT_PRIORITY, MAX_PRIORITY, MIN_PRIORITY
+
 #: A day is 1440 minutes; nothing you can sit down and do is longer than a
 #: working week, and a figure past that is a slipped digit rather than a plan.
 MAX_ESTIMATED_MINUTES = 2400
@@ -23,6 +25,10 @@ class TaskBase(BaseModel):
         default=None, description="School work; its course code is then its category"
     )
     tags: list[str] = Field(default_factory=list, max_length=10)
+    priority: int = Field(
+        default=DEFAULT_PRIORITY, ge=MIN_PRIORITY, le=MAX_PRIORITY,
+        description="1 to 5, 5 being the most important",
+    )
 
     @model_validator(mode="after")
     def validate_task(self):
@@ -58,6 +64,7 @@ class TaskUpdate(BaseModel):
     estimated_minutes: int | None = Field(default=None, ge=1, le=MAX_ESTIMATED_MINUTES)
     course_id: UUID | None = None
     tags: list[str] | None = Field(default=None, max_length=10)
+    priority: int | None = Field(default=None, ge=MIN_PRIORITY, le=MAX_PRIORITY)
     #: Checking a task sets `completed_at`; unchecking clears it.
     done: bool | None = None
     archived: bool | None = None

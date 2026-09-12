@@ -1,6 +1,12 @@
 import { useState } from "react";
-import { TaskCreate } from "../types";
+import { DEFAULT_PRIORITY, MAX_PRIORITY, MIN_PRIORITY, PRIORITY_LABELS, TaskCreate } from "../types";
 import { END_OF_DAY } from "../dueTime";
+
+/** 1..5, for the select. */
+const PRIORITY_STEPS = Array.from(
+  { length: MAX_PRIORITY - MIN_PRIORITY + 1 },
+  (_, index) => MIN_PRIORITY + index
+);
 import { Course } from "../../grades/types";
 
 interface TaskFormProps {
@@ -18,6 +24,9 @@ function blankTask(): TaskCreate {
     estimated_minutes: null,
     course_id: null,
     tags: [],
+    // Coursework gets its priority from the grade's category; a task typed in
+    // here has no category to read, so it starts in the middle of the scale.
+    priority: DEFAULT_PRIORITY,
   };
 }
 
@@ -100,6 +109,17 @@ export default function TaskForm({ courses, onSubmit, busy }: TaskFormProps) {
           aria-label="Due time"
         />
       )}
+
+      <select
+        className="taskInput taskInputNarrow"
+        value={form.priority}
+        onChange={(event) => update("priority", Number(event.target.value))}
+        aria-label="Priority"
+      >
+        {PRIORITY_STEPS.map((step) => (
+          <option key={step} value={step}>{step} · {PRIORITY_LABELS[step]}</option>
+        ))}
+      </select>
 
       <input
         type="number"

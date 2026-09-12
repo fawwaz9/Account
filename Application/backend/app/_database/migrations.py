@@ -40,6 +40,10 @@ ADDED_COLUMNS: dict[str, dict[str, str]] = {
     },
     "tasks": {
         "recurring_id": "CHAR(32)",
+        "priority": "INTEGER NOT NULL DEFAULT 3",
+    },
+    "recurring_tasks": {
+        "priority": "INTEGER NOT NULL DEFAULT 3",
     },
     "transactions": {
         "category_id": "CHAR(32)",

@@ -161,6 +161,7 @@ def create_rule(db: Session, user_id: uuid.UUID, data: RecurringTaskCreate):
         due_time=data.due_time,
         estimated_minutes=data.estimated_minutes,
         tags=list(data.tags),
+        priority=data.priority,
         starts_on=data.starts_on,
         skipped_dates=[],
         active=data.active,
@@ -278,6 +279,7 @@ def resync_occurrences(db: Session, rule: RecurringTaskModel) -> None:
         task.due_time = rule.due_time
         task.estimated_minutes = rule.estimated_minutes
         task.course_id = rule.course_id
+        task.priority = rule.priority
         # Rewritten whole rather than mutated: SQLAlchemy does not track a change
         # made inside a JSON column.
         task.tags = list(rule.tags or [])
@@ -385,6 +387,7 @@ def materialise(
             due_time=rule.due_time,
             estimated_minutes=rule.estimated_minutes,
             tags=list(rule.tags or []),
+            priority=rule.priority,
             done=False,
             archived=False,
             created_at=utc_now(),

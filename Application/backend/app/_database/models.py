@@ -340,6 +340,9 @@ class TaskModel(Base):
     #: Free-text labels, as a JSON list. Coursework is categorised by its
     #: course code instead.
     tags = Column(JSON, nullable=False, default=list)
+    #: 1 to 5, 5 being the most important. Coursework is seeded from its grade
+    #: category and then belongs to the student, who may change it freely.
+    priority = Column(Integer, nullable=False, default=3)
     done = Column(Boolean, nullable=False, default=False)
     completed_at = Column(DateTime, nullable=True)
     #: Checked-off tasks archive rather than vanish, so the term's record of what
@@ -447,6 +450,9 @@ class RecurringTaskModel(Base):
     due_time = Column(Time, nullable=True)
     estimated_minutes = Column(Integer, nullable=True)
     tags = Column(JSON, nullable=False, default=list)
+    #: Stamped onto every occurrence, so a repeating chore is not stuck at the
+    #: default with sixty rows to correct one at a time.
+    priority = Column(Integer, nullable=False, default=3)
 
     #: The rule, in the same five columns events and standing payments use.
     starts_on = Column(Date, nullable=False)

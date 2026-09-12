@@ -484,3 +484,65 @@
   background: #c9453c;
   color: #fff;
 }
+
+/* ===== Priority =====
+   A select, so it reads as changeable rather than as a label. Sized and padded
+   explicitly: the base rule gives form controls their own padding, and a fixed
+   narrow control inherits it into the wrong shape. */
+
+.taskPriority {
+  box-sizing: border-box;
+  flex-shrink: 0;
+  align-self: flex-start;
+  width: 34px;
+  height: 22px;
+  margin-top: 1px;
+  padding: 0 0 0 6px;
+  border: 1px solid #1f2a44;
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+  text-align: left;
+  cursor: pointer;
+  /* The options carry "3 · Normal", which will not fit in 34px. The arrow goes
+     and the text is clipped to the number, so the row stays a row while the
+     open menu still explains what each step means. */
+  appearance: none;
+  overflow: hidden;
+}
+
+.taskPriority:hover {
+  border-color: var(--gold);
+}
+
+.taskPriority:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+
+/* Only the two above normal are coloured. Marking all five would leave nothing
+   standing out, and "normal" is what most tasks are. */
+.taskPriority-4 {
+  border-color: rgba(212, 175, 55, 0.5);
+  color: var(--gold);
+}
+
+.taskPriority-5 {
+  border-color: var(--gold);
+  background: rgba(212, 175, 55, 0.16);
+  color: var(--gold);
+}
+
+/* Below normal recedes rather than shouts. */
+.taskPriority-1,
+.taskPriority-2 {
+  opacity: 0.65;
+}
+
+/* What is past the fortnight, said in one line rather than a standing list. */
+.taskBeyond {
+  margin: 10px 2px 0;
+}

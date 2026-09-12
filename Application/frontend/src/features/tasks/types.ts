@@ -17,6 +17,8 @@ export interface Task {
   /** Denormalised by the API. Coursework is categorised by this, not by a tag. */
   course_code: string | null;
   tags: string[];
+  /** 1 to 5, 5 most important. Coursework is seeded from its grade category. */
+  priority: number;
   done: boolean;
   completed_at: string | null;
   archived: boolean;
@@ -70,7 +72,22 @@ export interface TaskCreate {
   estimated_minutes: number | null;
   course_id: string | null;
   tags: string[];
+  priority: number;
 }
+
+/** The lowest, default and highest a priority may be. Mirrors Grades/utils/enums.py. */
+export const MIN_PRIORITY = 1;
+export const DEFAULT_PRIORITY = 3;
+export const MAX_PRIORITY = 5;
+
+/** What each step means, so the number is not the only thing on offer. */
+export const PRIORITY_LABELS: Record<number, string> = {
+  1: "Lowest",
+  2: "Low",
+  3: "Normal",
+  4: "High",
+  5: "Highest",
+};
 
 export type TaskUpdate = Partial<TaskCreate> & {
   done?: boolean;
@@ -97,6 +114,8 @@ export interface RecurringTask {
   course_id: string | null;
   course_code: string | null;
   tags: string[];
+  /** Stamped onto every occurrence this rule writes. */
+  priority: number;
   starts_on: string;
   recurrence: Recurrence;
   active: boolean;
@@ -113,6 +132,7 @@ export interface RecurringTaskCreate {
   estimated_minutes: number | null;
   course_id: string | null;
   tags: string[];
+  priority: number;
   starts_on: string;
   recurrence: Recurrence;
   active: boolean;

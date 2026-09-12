@@ -1,4 +1,4 @@
-import { RiskBand, Task } from "../types";
+import { MAX_PRIORITY, MIN_PRIORITY, PRIORITY_LABELS, RiskBand, Task } from "../types";
 import { dueLabel, duration, daysBetween, today } from "../../../shared/utils/dateUtils";
 
 /**
@@ -14,10 +14,17 @@ const RISK_TITLES: Record<RiskBand, string> = {
   severe: "This course is far below its target",
 };
 
+/** 1..5, for the select. */
+const PRIORITY_STEPS = Array.from(
+  { length: MAX_PRIORITY - MIN_PRIORITY + 1 },
+  (_, index) => MIN_PRIORITY + index
+);
+
 interface TaskItemProps {
   readonly task: Task;
   readonly onToggle: (task: Task) => void;
   readonly onDelete: (task: Task) => void;
+  readonly onPriority: (task: Task, priority: number) => void;
   readonly busy: boolean;
 }
 
@@ -28,7 +35,13 @@ interface TaskItemProps {
  * that does both, so a single click can never mean two things (SonarQube S6848,
  * and the same rule the ledger rows follow).
  */
-export default function TaskItem({ task, onToggle, onDelete, busy }: TaskItemProps) {
+export default function TaskItem({
+  task,
+  onToggle,
+  onDelete,
+  onPriority,
+  busy,
+}: TaskItemProps) {
   const overdue = !task.done && task.due_date !== null && daysBetween(today(), task.due_date) < 0;
   const estimate = duration(task.estimated_minutes);
 
@@ -44,6 +57,25 @@ export default function TaskItem({ task, onToggle, onDelete, busy }: TaskItemPro
       >
         <span aria-hidden="true">{task.done ? "✓" : ""}</span>
       </button>
+
+      {/* A select rather than a badge you click through: coursework arrives with
+          a priority already on it, so the common interaction is correcting one
+          rather than setting one, and a cycle-on-click control makes going from
+          5 to 4 a four-click job. */}
+      <select
+        className={`taskPriority taskPriority-${task.priority}`}
+        value={task.priority}
+        onChange={(event) => onPriority(task, Number(event.target.value))}
+        disabled={busy}
+        title={`Priority: ${PRIORITY_LABELS[task.priority]}`}
+        aria-label={`Priority of ${task.title}`}
+      >
+        {PRIORITY_STEPS.map((step) => (
+          <option key={step} value={step}>
+            {step} · {PRIORITY_LABELS[step]}
+          </option>
+        ))}
+      </select>
 
       <div className="taskBody">
         <p className="taskTitle">{task.title}</p>
