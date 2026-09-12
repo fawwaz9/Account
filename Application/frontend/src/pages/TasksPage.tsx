@@ -144,62 +144,117 @@ export default function TasksPage() {
         </label>
       </div>
 
+      {/* Full width, above the split: it is a scrolling row of cards that wants
+          the room, and what is coming is context for both columns rather than
+          belonging to either. */}
       <ExamStrip />
-
-      <CompletionTimingBlock timing={timing} />
-
-      {/* The fast path first, the full form under it: most tasks are a line
-          of text, and the ones that are not still have every field. */}
-      <QuickCapture onCaptured={reload} />
-
-      <details className="captureDetails">
-        <summary className="captureSummary">Add with all the fields</summary>
-        <TaskForm courses={courses} onSubmit={handleAdd} busy={busy} />
-      </details>
 
       {error && <p className="calError">{error}</p>}
       {actionError && <p className="calError">{actionError}</p>}
       {loading && <p className="calMuted" role="status">Loading…</p>}
 
-      <TaskList
-        title="Overdue"
-        tasks={groups.overdue}
-        onToggle={handleToggle}
-        onDelete={handleDelete}
-        onPriority={handlePriority}
-        busy={busy}
-        emptyMessage="Nothing overdue."
-      />
-      <TaskList
-        title={`Due in the next ${ASSIGNMENT_HORIZON} days`}
-        tasks={groups.soon}
-        onToggle={handleToggle}
-        onDelete={handleDelete}
-        onPriority={handlePriority}
-        busy={busy}
-        emptyMessage="Clear for a fortnight."
-      />
-      {groups.later.length > 0 && (
-        <p className="small-text muted taskBeyond">
-          {groups.later.length} further out than {ASSIGNMENT_HORIZON} days, on the calendar.
-        </p>
-      )}
-      <TaskList
-        title="No date"
-        tasks={groups.undated}
-        onToggle={handleToggle}
-        onDelete={handleDelete}
-        onPriority={handlePriority}
-        busy={busy}
-        emptyMessage="Nothing without a date."
-      />
-      <Repeating
-        rules={repeating}
-        onAdd={() => { setEditingRule(null); setAddingRule(true); }}
-        onEdit={(rule) => { setEditingRule(rule); setAddingRule(true); }}
-        onStop={handleStopRepeat}
-        busy={busy}
-      />
+      {/*
+        Two columns, split by what you do with them rather than by size.
+
+        The left is the work in front of you -- how you have been doing, the one
+        line it takes to add something, what is late, what has no date at all,
+        and the record of what is finished. The right is everything that takes
+        more than a line: the full form, the repeats that write themselves, and
+        the fortnight they write into.
+
+        Each column is its own flex column rather than the grid placing rows,
+        because a grid row is as tall as its tallest cell -- a short "Overdue"
+        beside a long fortnight would leave a hole under it.
+      */}
+      <div className="taskGrid">
+        <div className="taskCol">
+          <div className="taskSlot taskSlot--stats">
+            <CompletionTimingBlock timing={timing} />
+          </div>
+
+          <div className="taskSlot taskSlot--capture">
+            <QuickCapture onCaptured={reload} />
+          </div>
+
+          <div className="taskSlot taskSlot--overdue">
+            <TaskList
+              title="Overdue"
+              tasks={groups.overdue}
+              onToggle={handleToggle}
+              onDelete={handleDelete}
+              onPriority={handlePriority}
+              busy={busy}
+              emptyMessage="Nothing overdue."
+            />
+          </div>
+
+          <div className="taskSlot taskSlot--undated">
+            <TaskList
+              title="No date"
+              tasks={groups.undated}
+              onToggle={handleToggle}
+              onDelete={handleDelete}
+              onPriority={handlePriority}
+              busy={busy}
+              emptyMessage="Nothing without a date."
+            />
+          </div>
+
+          {showDone && (
+            <div className="taskSlot taskSlot--done">
+              <TaskList
+                title="Done"
+                tasks={groups.done}
+                onToggle={handleToggle}
+                onDelete={handleDelete}
+                onPriority={handlePriority}
+                busy={busy}
+                emptyMessage="Nothing finished yet."
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="taskCol">
+          {/* The fast path is the add bar on the left; this is the same act with
+              every field, for the tasks that need them. */}
+          <div className="taskSlot taskSlot--form">
+            <details className="captureDetails">
+              <summary className="captureSummary">Add with all the fields</summary>
+              <TaskForm courses={courses} onSubmit={handleAdd} busy={busy} />
+            </details>
+          </div>
+
+          <div className="taskSlot taskSlot--repeats">
+            <Repeating
+              rules={repeating}
+              onAdd={() => { setEditingRule(null); setAddingRule(true); }}
+              onEdit={(rule) => { setEditingRule(rule); setAddingRule(true); }}
+              onStop={handleStopRepeat}
+              busy={busy}
+            />
+          </div>
+
+          <div className="taskSlot taskSlot--soon">
+            <TaskList
+              title={`Due in the next ${ASSIGNMENT_HORIZON} days`}
+              tasks={groups.soon}
+              onToggle={handleToggle}
+              onDelete={handleDelete}
+              onPriority={handlePriority}
+              busy={busy}
+              emptyMessage="Clear for a fortnight."
+            />
+            {/* Under the list it qualifies, so the fortnight is not read as
+                everything there is. */}
+            {groups.later.length > 0 && (
+              <p className="small-text muted taskBeyond">
+                {groups.later.length} further out than {ASSIGNMENT_HORIZON} days, on the calendar.
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
 
       <RepeatingModal
         open={addingRule}
@@ -208,18 +263,6 @@ export default function TasksPage() {
         onClose={() => { setAddingRule(false); setEditingRule(null); }}
         onSaved={reload}
       />
-
-      {showDone && (
-        <TaskList
-          title="Done"
-          tasks={groups.done}
-          onToggle={handleToggle}
-          onDelete={handleDelete}
-          onPriority={handlePriority}
-          busy={busy}
-          emptyMessage="Nothing finished yet."
-        />
-      )}
     </div>
   );
 }

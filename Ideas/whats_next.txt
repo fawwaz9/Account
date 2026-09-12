@@ -61,6 +61,10 @@ Shipped so far (do not re-propose)
           rule, so sixty occurrences are not corrected one at a time.
         The list ends at the fortnight. What lies past it is a count rather than
           a standing section: a task three weeks out is not work you can start.
+        The tasks page in two columns, split by what you do with each side: the
+          work in front of you on the left, the things that take more than a
+          line to set up on the right. One column on a phone, ordered by
+          urgency rather than by which column it came from.
 
 
 Tasks:  Reminders, as opposed to tasks: something that notifies rather than waits.
