@@ -533,3 +533,62 @@
   font-size: 0.75rem;
   color: var(--muted);
 }
+
+/* ===== What a course cost =====
+   Gross: its credits times the term's per-credit rate. This deliberately does
+   not tie out against the ledger, which records the net of one payment covering
+   a whole term -- a scholarship lowers what you paid, not what a course is
+   worth. The note under the panel says so, rather than leaving it to be
+   discovered as an apparent bug. */
+
+.courseCost {
+  margin: 0 0 24px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.courseCostHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.courseCostLabel {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.courseCostTotal {
+  font-size: 1.05rem;
+  color: var(--gold);
+}
+
+.courseCostList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.courseCostList li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+  border-bottom: 1px dashed var(--border);
+  font-size: 0.88rem;
+}
+
+.courseCostList li:last-child { border-bottom: none; }
+
+.courseCostNote {
+  margin: 8px 0 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+  line-height: 1.5;
+}

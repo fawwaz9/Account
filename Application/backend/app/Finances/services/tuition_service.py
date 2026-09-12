@@ -44,6 +44,22 @@ def current_term(db: Session, user_id: uuid.UUID) -> tuple[int | None, str | Non
     return user.current_school_year, user.current_semester
 
 
+def term_name(db: Session, user_id: uuid.UUID) -> str:
+    """A term as a person would write it.
+
+    school_year is a year of standing, not a calendar year, so pasting it in
+    front of the semester produced "3 Fall". The user's own term_label ("2025-
+    2026") is the right thing when they have set one; failing that the semester
+    alone reads better than a bare ordinal.
+    """
+    user = db.query(UserModel).filter(UserModel.id == user_id).first()
+    if user is None or not user.current_semester:
+        return "your current term"
+    if user.term_label:
+        return f"{user.current_semester} {user.term_label}"
+    return user.current_semester
+
+
 def billable_courses(db: Session, user_id: uuid.UUID) -> list[CourseModel]:
     """The current term's courses that tuition is actually charged for.
 
@@ -118,6 +134,7 @@ def preview_tuition(
         deductions_total=round(deductions_total, 2),
         payable=payable,
         already_recorded_per_credit=recorded_rate(db, user_id, school_year, semester),
+        term_name=term_name(db, user_id),
     )
 
     if not courses and cost_per_credit > 0:
@@ -152,7 +169,7 @@ def record_tuition(db: Session, user_id: uuid.UUID, data: TuitionCreate):
         raise ValueError("That payment comes to nothing once deductions are applied")
 
     school_year, semester = preview.school_year, preview.semester
-    label = data.description or f"Tuition{f' {school_year} {semester}' if semester else ''}"
+    label = data.description or f"Tuition {term_name(db, user_id)}"
 
     # One line, fees folded in, deductions already off. The deductions are not
     # income -- that money never entered the account -- so they never become

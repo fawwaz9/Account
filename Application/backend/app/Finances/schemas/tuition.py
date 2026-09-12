@@ -62,6 +62,9 @@ class TuitionPreview(BaseModel):
 
     school_year: int | None = None
     semester: str | None = None
+    #: The term as a person would write it. school_year is a year of
+    #: standing, so the client cannot build this from the parts.
+    term_name: str = "your current term"
     courses: list[TuitionCourse] = Field(default_factory=list)
     credits_counted: float = 0.0
     cost_per_credit: float = 0.0
