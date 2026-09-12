@@ -43,6 +43,7 @@ ADDED_COLUMNS: dict[str, dict[str, str]] = {
     "transactions": {
         "category_id": "CHAR(32)",
         "recurring_id": "CHAR(32)",
+        "course_id": "CHAR(32)",
     },
 }
 

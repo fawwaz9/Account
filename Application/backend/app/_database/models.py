@@ -204,10 +204,17 @@ class TransactionModel(Base):
     #: it is a separate column from `group_id` on purpose: that one already
     #: carries two meanings and must not take a third.
     recurring_id = Column(Uuid, ForeignKey("recurring_transactions.id"), nullable=True)
+    #: Which course this was bought for -- a textbook, a lab manual, an iClicker.
+    #: Only meaningful for expenses, like category_id, and deliberately NOT used
+    #: by tuition: a tuition payment is one ledger line covering a whole term,
+    #: and what it cost each course is a Grades question answered from the
+    #: per-credit rate rather than from rows in the ledger.
+    course_id = Column(Uuid, ForeignKey("courses.id"), nullable=True)
 
     account = relationship("AccountModel", back_populates="transactions")
     category = relationship("SpendCategoryModel", back_populates="transactions")
     recurring = relationship("RecurringTransactionModel", back_populates="transactions")
+    course = relationship("CourseModel")
 
 
 class SpendCategoryModel(Base):
@@ -453,3 +460,67 @@ class RecurringTaskModel(Base):
 
     course = relationship("CourseModel")
     tasks = relationship("TaskModel", back_populates="recurring")
+
+
+class TuitionPaymentModel(Base):
+    """What a tuition payment was for, beside the one ledger row that recorded it.
+
+    The ledger answers "what left my account": one expense, fees folded in,
+    deductions already taken off. This answers "what was that payment made of",
+    which is a different question and the one Grades needs -- a course's share is
+    its credits times the per-credit rate, gross, because a scholarship reduces
+    what you pay and not what the course is worth.
+
+    The two views do not reconcile, deliberately. A term at $250/credit over 13
+    credits with $310 of fees and $1,500 of deductions is one $2,060 ledger line
+    and $3,250 spread across the course pages. Both are right.
+    """
+
+    __tablename__ = "tuition_payments"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False)
+    #: The single expense this payment wrote. Deleting that row should take this
+    #: with it, which the service does explicitly.
+    transaction_id = Column(Uuid, ForeignKey("transactions.id"), nullable=False)
+    #: Which term was paid for, matching a course's own year and semester.
+    school_year = Column(Integer, nullable=True)
+    semester = Column(String, nullable=True)
+    #: The rate, not the total. Summed across a term's payments, so paying in two
+    #: instalments means entering half the rate twice.
+    cost_per_credit = Column(Float, nullable=False, default=0.0)
+    #: Mandatory but not a cost of any particular course -- a U-Pass is not a
+    #: cost of CPSC 210. Part of the ledger line, absent from every course page.
+    fees = Column(Float, nullable=False, default=0.0)
+    #: Stored rather than recomputed: it is what the bill was for. Recomputing it
+    #: later would silently rewrite history when a course is added or dropped.
+    credits_counted = Column(Float, nullable=False, default=0.0)
+    occurred_on = Column(Date, nullable=False)
+
+    deductions = relationship(
+        "TuitionDeductionModel",
+        back_populates="payment",
+        cascade="all, delete-orphan",
+    )
+
+
+class TuitionDeductionModel(Base):
+    """Something that reduced a tuition bill without being income.
+
+    A scholarship, a bursary, a deposit paid earlier. The money never entered the
+    account, so recording it as income would invent a deposit that never
+    happened -- but it did reduce the cheque, so it cannot simply be dropped
+    either. It lives here, named, and only the net reaches the ledger.
+    """
+
+    __tablename__ = "tuition_deductions"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    tuition_payment_id = Column(
+        Uuid, ForeignKey("tuition_payments.id"), nullable=False
+    )
+    description = Column(String, nullable=False)
+    #: Positive. The sign is in the name.
+    amount = Column(Float, nullable=False)
+
+    payment = relationship("TuitionPaymentModel", back_populates="deductions")
