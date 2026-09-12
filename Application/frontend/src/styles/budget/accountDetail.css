@@ -24,6 +24,17 @@
 .accountBalanceNote { margin-left: 8px; }
 
 /* ----- Tiles ----- */
+/* The month's numbers on the left, the chart they summarise on the right.
+   The left column is held narrow so the chart -- which is the part that needs
+   horizontal room -- gets everything else. */
+.accountSplit {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+  margin-bottom: 28px;
+}
+
 .tileRow {
   list-style: none;
   margin: 0 0 28px;
@@ -31,6 +42,46 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 12px;
+}
+
+/* 2x2 rather than one flexible row: beside a chart there is only room for two
+   across, and a 2x2 block reads as one unit of "this month" rather than as a
+   strip of four unrelated figures. */
+.accountSplit .tileRow {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* The grid's own gap already separates the columns. */
+  margin-bottom: 0;
+}
+
+/* .flowPanel already carries a bottom margin for when it is stacked; inside the
+   split the grid gap does that job, and the margin only leaves the two columns
+   ending at different heights. */
+.accountSplit > .flowPanel {
+  margin-bottom: 0;
+}
+
+/* "Where it went" is a bare list elsewhere, which is right on the budget page
+   where it sits in a plain column. Here it sits beside a bordered chart, so it
+   takes the same panel treatment -- scoped to this layout, so the budget page
+   is left as it was. */
+.accountSplit > .categorySpend {
+  background: linear-gradient(145deg, var(--panel), var(--panel-2));
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px 20px;
+  margin-bottom: 0;
+}
+
+@media (max-width: 900px) {
+  /* One column: at this width the tiles and the chart each want the full
+     measure, and side by side neither gets it. */
+  .accountSplit {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .accountSplit .tileRow {
+    margin-bottom: 0;
+  }
 }
 
 .tile {
