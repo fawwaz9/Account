@@ -169,6 +169,7 @@ function BulkRow({ row, index, onChange, onRemove, removable }: BulkRowProps) {
       <input
         className="--input bulkInput"
         type="number"
+        step="any"
         min={0}
         aria-label={`Score for row ${index + 1}`}
         value={row.score}
@@ -177,6 +178,7 @@ function BulkRow({ row, index, onChange, onRemove, removable }: BulkRowProps) {
       <input
         className="--input bulkInput"
         type="number"
+        step="any"
         min={0}
         aria-label={`Out of, for row ${index + 1}`}
         value={row.max_score}

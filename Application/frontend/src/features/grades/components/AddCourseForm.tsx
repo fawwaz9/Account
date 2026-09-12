@@ -125,6 +125,7 @@ export default function AddCourseForm({
           <input
             id="course-final-grade"
             type="number"
+            step="any"
             min={0}
             max={100}
             value={form.final_grade}
@@ -138,6 +139,7 @@ export default function AddCourseForm({
           <input
             id="course-target"
             type="number"
+            step="any"
             min={0}
             max={100}
             value={form.target_grade ?? ""}
