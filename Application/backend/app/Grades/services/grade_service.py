@@ -1,4 +1,5 @@
 import uuid
+from decimal import Decimal, ROUND_HALF_UP
 from sqlalchemy.orm import Session, joinedload
 from app._database.models import CourseModel, CourseCategoryWeightModel, GradeModel
 from app.Grades.schemas.grade import GradeCreate, GradeUpdate, Grade as GradeSchema
@@ -538,6 +539,51 @@ def calculate_required_final(db: Session, user_id: uuid.UUID, course_id: uuid.UU
         "possible": 0 <= needed <= 100,
         "unfinished_categories": unfinished_categories,
     }
+
+
+def category_points(course: CourseModel, category) -> float:
+    """What a category contributes to the course, in marks out of its weight.
+
+    The figure beside each category on the course page: "11.83/12". Computed here
+    rather than in the client, which had the weight and the *rounded* average and
+    multiplied them -- rounding twice, so a category worth exactly 11.825 read
+    11.82.
+
+    Done in Decimal, which is not fussiness. COSC 111's assignments are 236.5 of
+    240 at a weight of 12, exactly 11.825, which should read 11.83. In binary
+    floating point 11.825 does not exist: the nearest double is
+    11.82499999999999928..., genuinely below the midpoint, so every rounding
+    scheme that touches a float -- round(), Decimal(float).quantize, JavaScript's
+    Math.round(x * 100) / 100 -- correctly rounds it down and the hundredth is
+    already gone before anyone can round it. Converting through str() is what
+    keeps it exact: Decimal(str(236.5)) is 236.5, while Decimal(236.5) is the
+    binary approximation spelled out in full.
+
+    Deliberately standalone. The averaging engine still scales from the rounded
+    category average, because changing that would move the number stored on the
+    course and therefore the dashboard, the GPA and the letter grade -- for a
+    hundredth that is invisible there. This is the one figure a student reads
+    against their own arithmetic on a page of marks, so this is the one that
+    earns the ceremony.
+    """
+    category_value = category.value if isinstance(category, GradeCategory) else category
+    weight = course.category_weights.get(category_value, 0.0)
+
+    items = [
+        g for g in course.grades
+        if g.category == category_value and g.score is not None and g.max_score > 0
+        and counts_toward_average(g)
+    ]
+    if not items or weight == 0:
+        return 0.0
+
+    earned = sum(Decimal(str(g.score)) for g in items)
+    possible = sum(Decimal(str(g.max_score)) for g in items)
+    if possible == 0:
+        return 0.0
+
+    points = earned / possible * Decimal(str(weight))
+    return float(points.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
 def calculate_grade_category_average(course: CourseModel, category: GradeCategory) -> float:

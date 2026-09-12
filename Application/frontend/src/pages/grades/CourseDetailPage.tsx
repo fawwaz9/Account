@@ -206,12 +206,16 @@ export default function CourseDetailPage() {
           {Object.entries(course.category_weights)
             .filter(([, weight]) => weight > 0)
             .map(([category, weight]) => {
-              // Straight from the API. Recomputing it here counted ungraded work
-              // as a zero, so this strip disagreed with the average beside it.
-              const average = course.category_averages?.[category as GradeCategory] ?? 0;
+              // Straight from the API, and it has to be. This strip has been
+              // wrong twice from doing its own arithmetic: once by recomputing
+              // the average here, which counted ungraded work as a zero and
+              // disagreed with the figure beside it, and again by multiplying
+              // the *rounded* category average by the weight -- a second
+              // rounding, which showed 11.82 for an exact 11.825.
+              const points = course.category_points?.[category as GradeCategory] ?? 0;
               // Trimmed rather than padded: most of these are whole numbers,
               // and "18.00/20" spent two characters saying nothing.
-              const weightage = trimNumber((weight * average) / 100);
+              const weightage = trimNumber(points);
               // An additive category is not marks out of a total, so showing it
               // as "2.50/5" read as three marks lost. It is points gained.
               const additive = isAdditive(category);
