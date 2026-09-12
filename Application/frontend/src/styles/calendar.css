@@ -743,3 +743,69 @@
   font-size: 0.72rem;
   color: var(--muted);
 }
+
+/* ===== Blocked periods =====
+   Two mechanisms that look alike and are not. A term blackout is entered once
+   and applies to every class -- a reading break covers all six courses. An
+   event's own skipped dates cancel one series on one date. Both are here
+   because both are real, and the copy in each says which is which. */
+
+.blackoutIntro {
+  margin: 0 0 14px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.blackoutList {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.blackoutList li {
+  display: grid;
+  grid-template-columns: 1fr auto auto 28px;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.88rem;
+}
+
+.blackoutList li:last-child { border-bottom: none; }
+.blackoutSpan { color: var(--muted); white-space: nowrap; }
+.blackoutDays { color: var(--gold); font-size: 0.78rem; white-space: nowrap; }
+
+/* Per-event, inside the event dialog. */
+.blockedDateList {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.blockedDateList li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
+  font-size: 0.78rem;
+}
+
+.blockedDateAdd {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.blockedDateAdd .calInput { flex: 1; min-width: 0; }

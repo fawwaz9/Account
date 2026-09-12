@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Modal from "../../../shared/components/Modal";
 import RecurrenceEditor from "./RecurrenceEditor";
+import BlockedDates from "./BlockedDates";
 import { createEvent, updateEvent } from "../api";
 import {
   CalendarEvent,
@@ -33,6 +34,7 @@ function blankEvent(date: string): EventCreate {
     start_time: null,
     end_time: null,
     recurrence: null,
+  skipped_dates: [],
   };
 }
 
@@ -51,6 +53,7 @@ function formFor(event: CalendarEvent | null, date: string): EventCreate {
     start_time: event.start_time ? event.start_time.slice(0, 5) : null,
     end_time: event.end_time ? event.end_time.slice(0, 5) : null,
     recurrence: event.recurrence,
+    skipped_dates: event.skipped_dates ?? [],
   };
 }
 
@@ -184,6 +187,12 @@ export default function EventModal({
           value={form.recurrence}
           onChange={(recurrence) => update("recurrence", recurrence)}
           startsOn={form.starts_on}
+        />
+
+        <BlockedDates
+          value={form.skipped_dates ?? []}
+          onChange={(dates) => update("skipped_dates", dates)}
+          repeats={Boolean(form.recurrence)}
         />
 
         <label className="calField">

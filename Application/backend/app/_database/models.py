@@ -529,3 +529,29 @@ class TuitionDeductionModel(Base):
     amount = Column(Float, nullable=False)
 
     payment = relationship("TuitionPaymentModel", back_populates="deductions")
+
+
+class TermBlackoutModel(Base):
+    """A stretch of term when classes do not run.
+
+    A reading break, a stat holiday, a strike. Set once and subtracted from every
+    recurring event that belongs to a course, because one reading break applies
+    to all six of your classes and entering it six times is how one of them ends
+    up wrong.
+
+    Scoped to course-linked events on purpose. The recurrence engine also drives
+    recurring transactions and repeating tasks, and neither cares: rent is still
+    due during reading break, and the bins still need taking out.
+
+    Stored as a range rather than a list of dates because a reading break is a
+    week and a stat holiday is a range of one, so one shape covers both.
+    """
+
+    __tablename__ = "term_blackouts"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False)
+    label = Column(String, nullable=False)
+    starts_on = Column(Date, nullable=False)
+    #: Inclusive, and equal to starts_on for a single day.
+    ends_on = Column(Date, nullable=False)

@@ -26,6 +26,17 @@ from app.Calendar.services.event_service import (
     skip_occurrence,
     update_event,
 )
+from app.Calendar.schemas.blackout import (
+    TermBlackout,
+    TermBlackoutCreate,
+    TermBlackoutUpdate,
+)
+from app.Calendar.services.blackout_service import (
+    create_blackout,
+    delete_blackout,
+    list_blackouts,
+    update_blackout,
+)
 from app.Calendar.schemas.load import CrunchStrip, FreeBlock, WeekLoad
 from app.Calendar.services.load_service import crunch, free_blocks, week_load
 from app.shared import audit
@@ -244,3 +255,43 @@ def get_crunch(
     if strip is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
     return strip
+
+
+@router.get("/{user_id}/blackouts", response_model=list[TermBlackout], responses=responses["user_404"])
+def get_blackouts(user_id: VerifiedUserId, db: DBSession):
+    """Stretches of term when classes do not run."""
+    rows = list_blackouts(db, user_id)
+    if rows is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+    return rows
+
+
+@router.post("/{user_id}/blackouts", response_model=TermBlackout, status_code=201, responses=responses["user_both"])
+def add_blackout(user_id: VerifiedUserId, data: TermBlackoutCreate, db: DBSession):
+    try:
+        row = create_blackout(db, user_id, data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if row is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+    return row
+
+
+@router.patch("/{user_id}/blackouts/{blackout_id}", response_model=TermBlackout, responses=responses["user_both"])
+def edit_blackout(
+    user_id: VerifiedUserId, blackout_id: UUID, data: TermBlackoutUpdate, db: DBSession
+):
+    try:
+        row = update_blackout(db, user_id, blackout_id, data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if row is None:
+        raise HTTPException(status_code=404, detail="Blocked period not found")
+    return row
+
+
+@router.delete("/{user_id}/blackouts/{blackout_id}", status_code=204, responses=responses["user_404"])
+def remove_blackout(user_id: VerifiedUserId, blackout_id: UUID, db: DBSession):
+    if delete_blackout(db, user_id, blackout_id) is None:
+        raise HTTPException(status_code=404, detail="Blocked period not found")
+    return None

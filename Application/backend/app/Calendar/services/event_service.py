@@ -19,6 +19,7 @@ from app.Calendar.schemas.event import (
     Recurrence,
 )
 from app.Calendar.utils.recurrence import occurrences
+from app.Calendar.services.blackout_service import blackout_dates
 from app.Calendar.utils.rule_columns import apply_recurrence, recurrence_of, rule_of
 
 #: Longest window one read may ask for. A year of a daily event is already
@@ -102,7 +103,10 @@ def create_event(db: Session, user_id: uuid.UUID, data: EventCreate):
         starts_on=data.starts_on,
         start_time=data.start_time,
         end_time=data.end_time,
-        skipped_dates=[],
+        # Blocked at setup, rather than only by cancelling occurrences one at a
+        # time afterwards: a class you already know does not run on the 14th
+        # should never have appeared on the 14th.
+        skipped_dates=sorted({day.isoformat() for day in (data.skipped_dates or [])}),
     )
     apply_recurrence(event, data.recurrence)
 
@@ -130,6 +134,15 @@ def update_event(db: Session, user_id: uuid.UUID, event_id: uuid.UUID, data: Eve
 
     if "title" in update_data and update_data["title"] is not None:
         update_data["title"] = update_data["title"].strip()
+
+    # skipped_dates is a JSON column, so date objects cannot go into it -- that
+    # exact assignment once made editing any event with a cancelled date fail
+    # with "Object of type date is not JSON serializable". Serialised here, and
+    # rewritten whole rather than appended to, since SQLAlchemy does not track
+    # mutation inside a JSON value.
+    if "skipped_dates" in update_data:
+        blocked = update_data.pop("skipped_dates") or []
+        event.skipped_dates = sorted({day.isoformat() for day in blocked})
 
     for key, value in update_data.items():
         setattr(event, key, value)
@@ -240,10 +253,19 @@ def list_occurrences(
     )
 
     codes = course_codes(db, user_id)
+    # Term blackouts -- a reading break, a stat holiday -- subtracted from
+    # anything belonging to a course. Deliberately not from everything that
+    # repeats: this same engine drives recurring payments and repeating tasks,
+    # and rent is still due during reading break.
+    blackouts = blackout_dates(db, user_id)
     materialised: list[EventOccurrence] = []
 
     for event in events:
         skipped = [parse_date(value) for value in (event.skipped_dates or [])]
+        if event.course_id is not None and blackouts:
+            # The engine already takes a set of dates to skip, so a blackout
+            # needs no concept of its own down there.
+            skipped = list(set(skipped) | blackouts)
         rule = rule_of(event)
         for on_date in occurrences(rule, event.starts_on, window_start, window_end, skipped):
             materialised.append(

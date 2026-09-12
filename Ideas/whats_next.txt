@@ -39,6 +39,8 @@ Shipped so far (do not re-propose)
           rather than a calendar month.
         Free blocks, week load and the crunch radar: three readings of one
           window, with a study-hours window you set in Settings.
+        Blocked periods: a reading break entered once and skipped by every
+          class, plus per-event dates blocked while setting a repeat up.
 
 
 Tasks:  Shows midterms and exams coming up in the next 30 days.
@@ -56,7 +58,6 @@ Grades: Think of other functionalities that can merge over to the other.
         When editing courses the manual is the default but syllabus parser will be available under the manual grid.
 
 Calendar:
-        Reading break and term boundaries pulled from course start/end dates, blocked out automatically.
         Term timeline: every course's span on one horizontal chart, so overlaps and gaps are obvious.
 
 Budget:
@@ -148,7 +149,7 @@ Worth knowing before picking anything up
 - gh is not installed and no token is exported. git push works because the
   credential sits in the macOS keychain, but opening a PR means the browser, or
   installing gh first.
-- 317 backend tests. The frontend has none: the week view's overlap maths was
+- 331 backend tests. The frontend has none: the week view's overlap maths was
   checked with a one-off esbuild harness, not by anything that runs on its own.
   Vitest would slot in beside Vite cheaply if that starts to bite.
 - Repeat rules live in five columns shared by events, standing payments and
@@ -175,6 +176,13 @@ Worth knowing before picking anything up
   is min(start_date), max(end_date) across the term's courses. Most courses carry
   no dates, so anything built on the span has to say when it is measuring from
   only some of them.
+- A term blackout skips only recurring events that belong to a course. The same
+  recurrence engine drives recurring payments and repeating tasks, and neither
+  cares about reading break -- rent is still due, the bins still need taking out.
+  That scoping is one `event.course_id is not None` check, and a test.
+- skipped_dates is a JSON column, so dates must be serialised before assignment
+  and the list rewritten whole. Assigning date objects into it once broke editing
+  any event that had a cancelled date.
 - Free blocks, week load and the crunch radar live in one service
   (Calendar/services/load_service.py) because they are one question asked three
   ways, off a single list_occurrences call. Overlapping classes are merged before

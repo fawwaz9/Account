@@ -93,6 +93,13 @@ export interface EventCreate {
   start_time: string | null;
   end_time: string | null;
   recurrence: Recurrence | null;
+  /**
+   * Dates this series does not run — a cancelled lecture, a week away.
+   *
+   * Set while editing, rather than only by skipping occurrences after the fact.
+   * A reading break that applies to every class is a TermBlackout instead.
+   */
+  skipped_dates: string[];
 }
 
 export type EventUpdate = Partial<EventCreate>;
@@ -152,4 +159,27 @@ export interface CrunchStrip {
   weeks: CrunchWeek[];
   /** The heaviest week, so a bar is a share of the worst week rather than a guess. */
   peak: number;
+}
+
+/**
+ * A stretch of term when classes do not run.
+ *
+ * Set once and subtracted from every recurring event that belongs to a course,
+ * because one reading break applies to all six of your classes. Scoped to
+ * course-linked events on purpose: the same recurrence engine drives recurring
+ * payments and repeating tasks, and rent is still due during reading break.
+ */
+export interface TermBlackout {
+  id: string;
+  label: string;
+  starts_on: string;
+  /** Inclusive, and equal to starts_on for a single day. */
+  ends_on: string;
+  days: number;
+}
+
+export interface TermBlackoutCreate {
+  label: string;
+  starts_on: string;
+  ends_on: string;
 }

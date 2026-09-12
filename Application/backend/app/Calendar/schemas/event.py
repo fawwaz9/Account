@@ -106,6 +106,9 @@ class EventBase(BaseModel):
 
         return self
 
+    #: Dates the series does not run: a known cancellation, a week away. Set at
+    #: setup rather than only by skipping occurrences after the fact.
+    skipped_dates: list[date] = Field(default_factory=list)
 
 class EventCreate(EventBase):
     pass
@@ -122,6 +125,9 @@ class EventUpdate(BaseModel):
     end_time: time | None = None
     #: Sending null clears the repeat, leaving a one-off on `starts_on`.
     recurrence: Recurrence | None = None
+    #: Dates this series does not run, set while editing rather than only by
+    #: cancelling occurrences one at a time afterwards.
+    skipped_dates: list[date] | None = None
 
 
 class Event(EventBase):
