@@ -13,6 +13,18 @@ Shipped so far (do not re-propose)
         Quick capture on the Tasks page, and the omnibox on top of the same parser.
         A week view on the calendar: 24 hours, overlapping classes side by side.
         The account page in two columns, with the target bar dividing them.
+        Bonus as a real category: its weight sits outside the 100 the course is
+          marked out of, and its marks are added on top, banked against the whole
+          course rather than the graded slice.
+        Bonus on screen: the course badge, "+2.50" in the strip rather than a
+          fraction, a gold row for a grade above its own max, and forms that stay
+          silent until a score actually goes over.
+        Best/worst band: where a course can still finish, projected per unmarked
+          item rather than per category, hidden once nothing is outstanding.
+        Archived courses marked and hideable, the flag finally read.
+        A final's card distinct from a midterm's.
+        Fractional scores and weights, which the columns always allowed -- the
+          inputs defaulted to step="1" and refused anything else.
 
 
 Tasks:  Shows midterms and exams coming up in the next 30 days.
@@ -22,14 +34,6 @@ Tasks:  Shows midterms and exams coming up in the next 30 days.
 
 
 Grades: Think of other functionalities that can merge over to the other.
-        For finals a different design from the midterm card, since a final usually
-          happens after the class has ended.
-        Archived courses in the list: the flag and its rules exist, but the course
-          list does not mark them or offer to hide them yet.
-        Bonus marks in the UI. The backend already allows a category total to 200%
-          and a score to 2x its max; nothing on screen says so, and a course sitting
-          above 100% is not shown as carrying bonus.
-        Best/worst case band on every course: what you get if you ace everything left, and if you bomb it.
         Cheapest path to a target: which remaining item moves the average most per hour spent.
         Category blind spots across all courses: you may be losing marks in labs everywhere, not in one class.
         Term retrospective when a term closes: what moved, what slipped, what you predicted vs got.
@@ -75,10 +79,10 @@ Wild:
 
 Implementation Plan
 
-The engine now has all three consumers it was written for, and the tokenizer has
-two. What is left splits into one piece of plumbing that unblocks a whole
-section, a set of derivations that need no new tables at all, a short list of UI
-debts, and the things that genuinely need new storage.
+The engine now has all three consumers it was written for, the tokenizer has two,
+and the Grades UI debts are cleared. What is left splits into one piece of
+plumbing that unblocks a whole section, a set of derivations that need no new
+tables at all, and the things that genuinely need new storage.
 
 course_id on transactions -- next
 - One nullable column, and every Grades x Budget idea becomes a query rather than
@@ -88,9 +92,12 @@ course_id on transactions -- next
   bit of plumbing anything is waiting on.
 
 Cheap wins, read-only
-- Free blocks, crunch radar, week load, term timeline, best/worst band, category
-  blind spots, term retrospective. All derived from data already stored: no new
-  tables, no writes, and each one is a service function plus a chart.
+- Free blocks, crunch radar, week load, term timeline, category blind spots,
+  term retrospective. All derived from data already stored: no new tables, no
+  writes, and each one is a service function plus a chart.
+- The band that shipped is the pattern for the rest of them: project_average in
+  grade_service.py shows the shape, including the rule that a projection must
+  agree with the live number at the ends or it is a second opinion.
 - Free blocks is the closest to free of them: the week view already lays the day
   out against the clock, so the gaps are arithmetic on data it holds.
 - Safe-to-spend and sinking funds. /recurring/upcoming already returns the
@@ -100,12 +107,6 @@ Cheap wins, read-only
   instructions exist to compare against.
 - PDF export: a print stylesheet and window.print(). No dependency.
 - Read-only offline: cache the shell, stale-while-revalidate the GETs.
-
-Small UI debts, worth clearing in one pass
-- Archived courses marked and hideable in the course list.
-- Bonus marks surfaced: say that a category may exceed 100% and show when a
-  course is carrying bonus, rather than only permitting it silently.
-- A final's card distinct from a midterm's. Both currently share one exam style.
 
 Needs new storage, so later
 - Reminders that notify, as opposed to tasks that wait.
@@ -126,20 +127,28 @@ Syllabus parser
   is the default and the parser sits under the grid.
 
 Worth knowing before picking anything up
-- Everything in the shipped block above sits on the `repeating-tasks` branch,
-  pushed to origin. main is a strict ancestor of it, so it merges without
-  conflicts -- unlike the grades-branch merge, where every reported conflict
-  turned out to be phantom (identical trees under different SHAs).
+- The shipped block sits on two branches: `repeating-tasks` (pushed) and
+  `bonus-and-grades-clarity` on top of it. main is a strict ancestor of both, so
+  they merge without conflicts -- unlike the grades-branch merge, where every
+  reported conflict turned out to be phantom (identical trees under different
+  SHAs).
 - It carries a migration: one nullable tasks.recurring_id and the recurring_tasks
   table. Additive and idempotent like the rest, but back up data/app.db first.
 - gh is not installed and no token is exported. git push works because the
   credential sits in the macOS keychain, but opening a PR means the browser, or
   installing gh first.
-- 224 backend tests. The frontend has none: the week view's overlap maths was
+- 242 backend tests. The frontend has none: the week view's overlap maths was
   checked with a one-off esbuild harness, not by anything that runs on its own.
   Vitest would slot in beside Vite cheaply if that starts to bite.
 - Repeat rules live in five columns shared by events, standing payments and
   repeating tasks, read and written through Calendar/utils/rule_columns.py.
+- Bonus is the one category whose weight is not part of the denominator. Anything
+  that sums category_weights wants scoring_weight() from Grades/utils/enums.py
+  instead; six sites already special-case Final and route the bonus exclusion
+  through is_additive() rather than repeating the check.
+- Scores, weights and target grades are floats everywhere. A number input for any
+  of them needs step="any" -- without it the browser defaults to step="1" and
+  rejects half marks, which is how that went unnoticed for so long.
 - A repeat materialises differently per module, and the differences are the
   point: class times never become rows, payments become rows only once they have
   happened, tasks become rows a little way ahead so each can be ticked off.
