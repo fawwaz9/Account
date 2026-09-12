@@ -53,6 +53,7 @@ export default function AddGradeForm({
         <input
           id="grade-score"
           type="number"
+          step="any"
           min={0}
           // Number("") is 0, so clearing the box used to silently record a zero.
           value={form.score ?? ""}
@@ -66,6 +67,7 @@ export default function AddGradeForm({
         <input
           id="grade-max-score"
           type="number"
+          step="any"
           min={0}
           value={form.max_score}
           onChange={(event) => updateField("max_score", Number(event.target.value))}

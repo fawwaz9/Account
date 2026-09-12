@@ -49,6 +49,7 @@ export default function CategoryWeights({
         <input
           id={`${idPrefix}-category-weight-${category}`}
           type="number"
+          step="any"
           className={inputClass}
           placeholder="0"
           min={0}

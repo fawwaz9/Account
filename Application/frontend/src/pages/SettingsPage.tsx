@@ -178,6 +178,7 @@ export default function SettingsPage() {
                 id="default-target"
                 className="loginInput"
                 type="number"
+                step="any"
                 min={0}
                 max={100}
                 value={defaultTarget}

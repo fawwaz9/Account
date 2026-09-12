@@ -120,6 +120,7 @@ export default function EditCourseForm({
           <input
             id="edit-course-final-grade"
             type="number"
+            step="any"
             min={0}
             max={100}
             value={form.final_grade}
@@ -133,6 +134,7 @@ export default function EditCourseForm({
           <input
             id="edit-course-target"
             type="number"
+            step="any"
             min={0}
             max={100}
             value={form.target_grade ?? ""}
