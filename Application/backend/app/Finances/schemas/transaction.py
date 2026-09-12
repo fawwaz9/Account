@@ -24,6 +24,11 @@ class TransactionCreate(TransactionBase):
     account_id: UUID
     #: Only meaningful for expenses; ignored on income.
     category_id: UUID | None = None
+    #: What the money was bought for -- a textbook, a lab manual. Expense-only
+    #: for the same reason a category is. Tuition never sets this: one payment
+    #: covers a whole term, and what it cost each course is answered from the
+    #: per-credit rate rather than from the ledger.
+    course_id: UUID | None = None
 
 
 class TransferCreate(TransactionBase):
@@ -42,6 +47,7 @@ class TransactionUpdate(BaseModel):
     description: str | None = Field(default=None, max_length=200)
     occurred_on: date | None = None
     category_id: UUID | None = None
+    course_id: UUID | None = None
 
 
 class Transaction(TransactionBase):
@@ -56,6 +62,7 @@ class Transaction(TransactionBase):
     #: a single allocation without fetching the siblings. 1 when ungrouped.
     group_size: int = 1
     category_id: UUID | None = None
+    course_id: UUID | None = None
 
     class Config:
         from_attributes = True

@@ -4,7 +4,7 @@ from datetime import date
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app._database.models import AccountModel, SpendCategoryModel, TransactionModel
+from app._database.models import AccountModel, CourseModel, SpendCategoryModel, TransactionModel
 from app.Finances.schemas.transaction import (
     Transaction,
     TransactionCreate,
@@ -31,6 +31,19 @@ def owned_category(db: Session, user_id: uuid.UUID, category_id: uuid.UUID):
     return (
         db.query(SpendCategoryModel)
         .filter(SpendCategoryModel.id == category_id, SpendCategoryModel.user_id == user_id)
+        .first()
+    )
+
+
+def owned_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
+    """A course the caller owns, or None.
+
+    Same reason as owned_category: the id arrives from the client, and one
+    belonging to someone else would otherwise be stored happily.
+    """
+    return (
+        db.query(CourseModel)
+        .filter(CourseModel.id == course_id, CourseModel.user_id == user_id)
         .first()
     )
 
@@ -75,6 +88,7 @@ def as_schema(transaction: TransactionModel, group_size: int = 1) -> Transaction
         group_id=transaction.group_id,
         group_size=group_size,
         category_id=transaction.category_id,
+        course_id=transaction.course_id,
     )
 
 
@@ -120,6 +134,9 @@ def create_transaction(db: Session, user_id: uuid.UUID, data: TransactionCreate)
     if data.category_id is not None and owned_category(db, user_id, data.category_id) is None:
         raise ValueError("That category does not exist")
 
+    if data.course_id is not None and owned_course(db, user_id, data.course_id) is None:
+        raise ValueError("That course does not exist")
+
     transaction = TransactionModel(
         id=uuid.uuid4(),
         user_id=user_id,
@@ -131,6 +148,9 @@ def create_transaction(db: Session, user_id: uuid.UUID, data: TransactionCreate)
         # A category labels what money went on, which only makes sense for
         # money going out.
         category_id=data.category_id if data.kind == TransactionKind.EXPENSE else None,
+        # Same rule as the category: a course says what money went on, which
+        # only makes sense for money going out.
+        course_id=data.course_id if data.kind == TransactionKind.EXPENSE else None,
     )
     db.add(transaction)
     db.commit()
@@ -213,6 +233,10 @@ def update_transaction(
         return None
 
     update_data = data.model_dump(exclude_unset=True)
+
+    course_id = update_data.get("course_id")
+    if course_id is not None and owned_course(db, user_id, course_id) is None:
+        raise ValueError("That course does not exist")
 
     category_id = update_data.get("category_id")
     if category_id is not None and owned_category(db, user_id, category_id) is None:

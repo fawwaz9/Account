@@ -20,6 +20,12 @@ from app.Finances.schemas.budget import (
     SpendCategoryUpdate,
 )
 from app.Finances.schemas.deposit import DepositCreate, DepositPreview
+from app.Finances.schemas.tuition import (
+    CourseCost,
+    TuitionCreate,
+    TuitionPayment,
+    TuitionPreview,
+)
 from app.Finances.schemas.transaction import (
     Transaction,
     TransactionCreate,
@@ -32,6 +38,12 @@ from app.Finances.services.account_service import (
     get_account,
     get_accounts,
     update_account,
+)
+from app.Finances.services.tuition_service import (
+    billable_courses,
+    course_cost,
+    preview_tuition,
+    record_tuition,
 )
 from app.Finances.services.transaction_service import (
     create_transaction,
@@ -331,3 +343,33 @@ def add_deposit(user_id: VerifiedUserId, deposit: DepositCreate, db: DBSession):
         raise HTTPException(status_code=404, detail="Account not found")
 
     return created
+
+
+@router.get("/{user_id}/tuition/preview", response_model=TuitionPreview, responses=responses["user_404"])
+def preview_tuition_payment(
+    user_id: VerifiedUserId,
+    db: DBSession,
+    cost_per_credit: float = Query(0.0, ge=0),
+    fees: float = Query(0.0, ge=0),
+    deductions_total: float = Query(0.0, ge=0),
+):
+    """The arithmetic before anything is written, so the form can show the total."""
+    return preview_tuition(db, user_id, cost_per_credit, fees, deductions_total)
+
+
+@router.post("/{user_id}/tuition", response_model=TuitionPayment, status_code=201, responses=responses["user_400"])
+def create_tuition_payment(user_id: VerifiedUserId, data: TuitionCreate, db: DBSession):
+    """One ledger row for what left the account, plus what it was made of."""
+    try:
+        return record_tuition(db, user_id, data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/{user_id}/courses/{course_id}/cost", response_model=CourseCost, responses=responses["course_both"])
+def get_course_cost(user_id: VerifiedUserId, course_id: UUID, db: DBSession):
+    """What a course cost: its gross share of tuition, plus what was bought for it."""
+    cost = course_cost(db, user_id, course_id)
+    if cost is None:
+        raise HTTPException(status_code=404, detail="Course not found")
+    return cost
