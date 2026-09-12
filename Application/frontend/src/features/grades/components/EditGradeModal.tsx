@@ -23,6 +23,7 @@ function buildFormFromGrade(grade: Grade | null) {
     max_score: grade?.max_score ?? 0,
     due_date: grade?.due_date ?? null,
     schedule_as: grade?.schedule_as ?? GradeSchedule.TASK,
+    excluded: grade?.excluded ?? false,
   };
 }
 
@@ -66,6 +67,7 @@ export default function EditGradeModal({
         due_date: form.due_date,
         // Switching removes the other kind, so a grade never produces both.
         schedule_as: form.schedule_as,
+        excluded: form.excluded,
       };
       await updateGrade(user.id, courseId, grade.id, payload);
       onGradeUpdated();

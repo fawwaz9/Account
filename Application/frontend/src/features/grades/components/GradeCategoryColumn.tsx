@@ -30,19 +30,30 @@ export default function GradeCategoryColumn({ title, category, items, onEditItem
           // Scoring above the maximum is allowed and always has been, but it
           // rendered as a plain "11/10" -- indistinguishable from a typo.
           const over = isOverMax(item);
+          // A dropped mark stays visible -- you want to see what was dropped --
+          // but must not look like it is counting.
+          const dropped = item.excluded;
+          const classes = ["gradeRow"];
+          if (over && !dropped) classes.push("gradeRowBonus");
+          if (dropped) classes.push("gradeRowDropped");
           return (
           <li key={item.id} className="gradeRowItem">
             <button
               type="button"
-              className={over ? "gradeRow gradeRowBonus" : "gradeRow"}
+              className={classes.join(" ")}
               onClick={() => onEditItem(item.id)}
-              title={over ? `${marksOver(item)} over the maximum` : undefined}
+              title={
+                dropped
+                  ? "Not counted toward the course"
+                  : over ? `${marksOver(item)} over the maximum` : undefined
+              }
             >
               <span>{item.name}</span>
               <span>
-                {over && <span className="bonusMark" aria-hidden="true">★ </span>}
+                {over && !dropped && <span className="bonusMark" aria-hidden="true">★ </span>}
                 {item.score ?? "-"}/{item.max_score}
-                {over && <span className="srOnly"> (bonus)</span>}
+                {over && !dropped && <span className="srOnly"> (bonus)</span>}
+                {dropped && <span className="droppedTag">dropped</span>}
               </span>
             </button>
             <button

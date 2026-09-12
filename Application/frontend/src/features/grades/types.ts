@@ -122,6 +122,8 @@ export interface Grade {
   due_date: string | null;
   /** What that date means. Ignored when there is no date. */
   schedule_as: GradeSchedule;
+  /** Kept on the course but left out of every average, e.g. a dropped quiz. */
+  excluded: boolean;
 }
 
 /**
@@ -202,6 +204,8 @@ export interface GradeUpdate{
   category: GradeCategory | null;
   due_date: string | null;
   schedule_as: GradeSchedule | null;
+  /** Kept on the course but left out of every average. */
+  excluded: boolean | null;
 }
 
 

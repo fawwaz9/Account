@@ -25,6 +25,13 @@ class GradeBase(BaseModel):
         default=GradeSchedule.TASK,
         description="task: raises a task that closes when marked. event: a calendar block only.",
     )
+    #: Shown on the course but left out of every average, for a mark a professor
+    #: has dropped. Kept rather than deleted: it happened, and which marks are
+    #: dropped can change as more work comes back.
+    excluded: bool = Field(
+        default=False,
+        description="Kept on the course but left out of the average",
+    )
 
     @model_validator(mode="after")
     def validate_grade_logic(self):
@@ -47,6 +54,7 @@ class GradeUpdate(BaseModel):
     category: GradeCategory | None = Field(default=None)
     due_date: date | None = Field(default=None)
     schedule_as: GradeSchedule | None = Field(default=None)
+    excluded: bool | None = Field(default=None)
 
 class Grade(GradeBase):
     id: UUID = Field(default_factory=uuid4)

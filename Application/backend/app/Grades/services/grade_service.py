@@ -14,6 +14,17 @@ MAX_COURSE_PERCENT = 100.0
 MAX_SCORE_MULTIPLE = 2.0
 
 
+def counts_toward_average(grade) -> bool:
+    """Whether a grade is part of the arithmetic at all.
+
+    A dropped mark -- the two lowest quizzes, say -- stays on the course so it
+    can be seen and un-dropped later, but must not reach any average. One
+    predicate rather than `not g.excluded` scattered across six call sites,
+    because a single place that forgets it is a wrong grade shown confidently.
+    """
+    return not getattr(grade, "excluded", False)
+
+
 def score_exceeds_limit(score: float | None, max_score: float) -> bool:
     return score is not None and score > max_score * MAX_SCORE_MULTIPLE
 
@@ -273,7 +284,10 @@ def bonus_contribution(course: CourseModel) -> float:
 
 
 def calculate_current_average(course: CourseModel) -> float:
-    graded = [g for g in course.grades if g.score is not None and g.max_score > 0]
+    graded = [
+        g for g in course.grades
+        if g.score is not None and g.max_score > 0 and counts_toward_average(g)
+    ]
     if not graded:
         return 0.0
 
@@ -367,7 +381,10 @@ def category_average_assuming(course: CourseModel, category, unmarked: float) ->
     wide it says nothing.
     """
     category_value = category.value if isinstance(category, GradeCategory) else category
-    items = [g for g in course.grades if g.category == category_value and g.max_score > 0]
+    items = [
+        g for g in course.grades
+        if g.category == category_value and g.max_score > 0 and counts_toward_average(g)
+    ]
     if not items:
         return None
 
@@ -440,7 +457,8 @@ def calculate_grade_band(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
     current = calculate_current_average(course)
 
     outstanding = sum(
-        1 for g in course.grades if g.score is None and g.max_score > 0
+        1 for g in course.grades
+        if g.score is None and g.max_score > 0 and counts_toward_average(g)
     )
     empty_categories = [
         category for category, weight in course.category_weights.items()
@@ -482,6 +500,7 @@ def calculate_required_final(db: Session, user_id: uuid.UUID, course_id: uuid.UU
         and not is_additive(grade.category)
         and grade.score is not None
         and grade.max_score > 0
+        and counts_toward_average(grade)
     }
 
     if final_weight == 0:
@@ -526,6 +545,7 @@ def calculate_grade_category_average(course: CourseModel, category: GradeCategor
     category_grades = [
         g for g in course.grades
         if g.category == category_value and g.score is not None and g.max_score > 0
+        and counts_toward_average(g)
     ]
     if not category_grades:
         return 0.0
