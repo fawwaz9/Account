@@ -38,7 +38,8 @@ Shipped so far (do not re-propose)
         Term budget: what a term has cost, measured over the term's own dates
           rather than a calendar month.
         Free blocks, week load and the crunch radar: three readings of one
-          window, with a study-hours window you set in Settings.
+          window, with a study-hours window you set in Settings. The calendar
+          opens on the week, and time already gone is not offered as free.
         Blocked periods: a reading break entered once and skipped by every
           class, plus per-event dates blocked while setting a repeat up.
 
@@ -59,6 +60,8 @@ Grades: Think of other functionalities that can merge over to the other.
 
 Calendar:
         Term timeline: every course's span on one horizontal chart, so overlaps and gaps are obvious.
+        Class times that are not weekly: weekly stays the default, with biweekly
+          and monthly offered for the courses that actually run that way.
 
 Budget:
         Safe to spend: balance minus every commitment you already know about, shown as one number.
@@ -70,6 +73,7 @@ Budget:
 
 Grades x Budget (nothing else does this):
         A dollar figure next to a dropped course, since the deadline to drop with a refund is a date on the calendar.
+          Parked -- the question behind it has been answered. See below.
 
 Quality of Life:
         Weekly digest on the dashboard: what is due, what moved, what you spent.
@@ -97,13 +101,19 @@ Cheap wins, read-only -- next
   and the term retrospective wants a term to have closed first.
 - Safe-to-spend and sinking funds next on the money side: /recurring/upcoming
   already returns the commitments, so safe-to-spend is a subtraction.
+- Biweekly class times, which are cheaper than they look: the engine already
+  repeats every N weeks and only the timetable form hardcodes weekly. Monthly
+  class times are not in the same bracket and are a separate decision -- see the
+  two notes on it below.
 
-Still open from Grades x Budget
-- A dropped course's dollar figure. Two questions before it is worth building:
-  whether a refund should be attributable at all (refunds are income, course_id
-  is expense-only, so today one is attributed to nothing and cost per course
-  reads gross), and what "dropped" even means here -- no course carries such a
-  flag, only archived.
+Parked, now that the question is answered
+- A dropped course's dollar figure. The open question was whether a refund
+  should be attributable to a course at all, given that refunds are income and
+  course_id is expense-only. It mostly does not arise: a course dropped late is
+  not refunded, and on the rare occasion it is, recording the refund as plain
+  income is enough. So this needs no course_id on income, no "dropped" flag
+  alongside archived, and no work. Set aside rather than closed -- worth
+  reopening only if the refund case turns out to be common in practice.
 
 Cheap wins, read-only
 - Term timeline, category blind spots, term retrospective. All derived from data
@@ -139,17 +149,16 @@ Syllabus parser
   is the default and the parser sits under the grid.
 
 Worth knowing before picking anything up
-- The shipped block sits on two branches: `repeating-tasks` (pushed) and
-  `bonus-and-grades-clarity` on top of it. main is a strict ancestor of both, so
-  they merge without conflicts -- unlike the grades-branch merge, where every
-  reported conflict turned out to be phantom (identical trees under different
-  SHAs).
-- It carries a migration: one nullable tasks.recurring_id and the recurring_tasks
-  table. Additive and idempotent like the rest, but back up data/app.db first.
-- gh is not installed and no token is exported. git push works because the
-  credential sits in the macOS keychain, but opening a PR means the browser, or
-  installing gh first.
-- 331 backend tests. The frontend has none: the week view's overlap maths was
+- Everything above main sits on `time-and-load`, open as PR #13. The branches it
+  followed -- `repeating-tasks` and `bonus-and-grades-clarity` -- are merged and
+  deleted. Branch off main rather than off unmerged work: stacking caused
+  phantom conflicts twice, identical trees under different SHAs reading as
+  conflicts.
+- The migration it carries is the term_blackouts table. Additive and idempotent
+  like the rest, but back up data/app.db first.
+- gh is installed and authenticated, so a PR opens from the terminal. The push
+  credential still lives in the macOS keychain.
+- 340 backend tests. The frontend has none: the week view's overlap maths was
   checked with a one-off esbuild harness, not by anything that runs on its own.
   Vitest would slot in beside Vite cheaply if that starts to bite.
 - Repeat rules live in five columns shared by events, standing payments and
@@ -199,6 +208,24 @@ Worth knowing before picking anything up
 - A repeat materialises differently per module, and the differences are the
   point: class times never become rows, payments become rows only once they have
   happened, tasks become rows a little way ahead so each can be ticked off.
+- Every N weeks already works. Rule.interval is honoured, and the weekly branch
+  steps whole weeks from the Monday of the starting week, so a biweekly Mon/Wed/Fri
+  class keeps all three days inside the same on-week instead of drifting apart.
+  What hardcodes weekly is the timetable form: set_class_schedule writes
+  recur_freq=weekly with recur_interval=1, and ClassMeeting carries no interval
+  field at all. Biweekly classes are one field passed through, not an engine change.
+- Monthly classes are not the same size of job. byday is weekly-only -- the
+  Recurrence validator rejects it outright for any other frequency -- and monthly
+  steps by day of the month through add_months, which yields nothing for a month
+  too short for the date. So a class meeting "the second Tuesday" cannot be
+  expressed, and a monthly class would land on whatever date it started on. That
+  is precisely the BYSETPOS case the recurrence docstring names as the point to
+  reach for a library rather than extend the rule. Decide which is meant before
+  building: "every 4 weeks" is free today, "the second Tuesday" is not.
+- A fixed-size button inherits padding: 7px 14px from the base .container button
+  rule, so its glyph sits low and to the right unless the button sets
+  display:inline-flex, padding:0 and box-sizing:border-box for itself. That has
+  now caught the add-grade button, the weekday picker and the task checkbox.
 
 Collaboration, by invite
 - No shared ownership. The invitee gets their own row; every existing query keeps
