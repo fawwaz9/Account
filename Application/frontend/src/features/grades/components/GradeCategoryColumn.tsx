@@ -1,4 +1,5 @@
 import {GradeCategory, Grade} from "../types"
+import { isOverMax, marksOver } from "../bonus"
 
 
 interface GradeCategoryColumnProps {
@@ -25,16 +26,23 @@ export default function GradeCategoryColumn({ title, category, items, onEditItem
         </button>
       </div>     
       <ul className="categoryList">
-        {items.map((item) => (
+        {items.map((item) => {
+          // Scoring above the maximum is allowed and always has been, but it
+          // rendered as a plain "11/10" -- indistinguishable from a typo.
+          const over = isOverMax(item);
+          return (
           <li key={item.id} className="gradeRowItem">
             <button
               type="button"
-              className="gradeRow"
+              className={over ? "gradeRow gradeRowBonus" : "gradeRow"}
               onClick={() => onEditItem(item.id)}
+              title={over ? `${marksOver(item)} over the maximum` : undefined}
             >
               <span>{item.name}</span>
               <span>
+                {over && <span className="bonusMark" aria-hidden="true">★ </span>}
                 {item.score ?? "-"}/{item.max_score}
+                {over && <span className="srOnly"> (bonus)</span>}
               </span>
             </button>
             <button
@@ -49,7 +57,8 @@ export default function GradeCategoryColumn({ title, category, items, onEditItem
               ×
             </button>
           </li>
-        ))}
+          );
+        })}
       </ul>
     </div>
   );

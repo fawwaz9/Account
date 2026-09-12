@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/auth/AuthContext";
 import { fetchCourseDetail, deleteCourse, deleteGrade } from "../../features/grades/api";
 import { GradeCategory, Grade, CourseDetail } from "../../features/grades/types";
+import { bonusLast, carriesBonus, isAdditive } from "../../features/grades/bonus";
 import AddGradeModal from "../../features/grades/components/AddGradeModal";
 import EditGradeModal from "../../features/grades/components/EditGradeModal";
 import EditCourseModal from "../../features/grades/components/EditCourseModal";
@@ -89,8 +90,12 @@ export default function CourseDetailPage() {
       .filter(([, weight]) => weight > 0)
       .map(([category]) => category as GradeCategory);
     const withGrades = course.grades.map((grade) => grade.category);
-    return [...new Set([...weighted, ...withGrades])].filter(
-      (category) => category !== GradeCategory.FINAL
+    // Bonus reads as a footnote to the course rather than one of its parts, so
+    // it sits after everything the course is actually marked out of.
+    return bonusLast(
+      [...new Set([...weighted, ...withGrades])].filter(
+        (category) => category !== GradeCategory.FINAL
+      )
     );
   }, [course]);
 
@@ -202,11 +207,17 @@ export default function CourseDetailPage() {
               // as a zero, so this strip disagreed with the average beside it.
               const average = course.category_averages?.[category as GradeCategory] ?? 0;
               const weightage = ((weight * average) / 100).toFixed(2);
+              // An additive category is not marks out of a total, so showing it
+              // as "2.50/5" read as three marks lost. It is points gained.
+              const additive = isAdditive(category);
               return (
-                <div className="summaryItem" key={category}>
+                <div
+                  className={additive ? "summaryItem summaryItemBonus" : "summaryItem"}
+                  key={category}
+                >
                   <span style={{ textTransform: "capitalize" }}>{category}</span>
                   <span>
-                    {weightage}/{weight}
+                    {additive ? `+${weightage}` : `${weightage}/${weight}`}
                   </span>
                 </div>
               );
@@ -219,6 +230,14 @@ export default function CourseDetailPage() {
           {course.letter_grade && (
             <div className="courseGradePoints">
               {course.letter_grade} &middot; {course.grade_points.toFixed(2)}
+            </div>
+          )}
+          {/* The average itself stays the capped number. This only says that
+              bonus is in play, by either route -- a weighted bonus category or
+              an ordinary grade marked above its own maximum. */}
+          {carriesBonus(course) && (
+            <div className="bonusBadge" title="Bonus marks count toward this course">
+              ★ carries bonus
             </div>
           )}
         </div>

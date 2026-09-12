@@ -402,3 +402,68 @@
 .bulkRemove:disabled { opacity: 0.3; cursor: not-allowed; }
 
 .bulkAddRow { padding: 5px 12px; font-size: 0.82rem; }
+
+/* ===== Bonus marks =====
+   Bonus was permitted by the backend long before anything on screen said so: a
+   score could reach twice its maximum and a category could sit outside the 100%
+   the course is marked out of, and both rendered exactly like ordinary marks.
+   Gold is already this app's "good news" colour, so it carries the distinction
+   without needing a legend. */
+
+.bonusBadge {
+  margin-top: 8px;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  color: var(--gold-soft);
+  white-space: nowrap;
+}
+
+/* An additive category shows "+2.50" rather than "2.50/5", because as a
+   fraction it read as three marks lost rather than two and a half gained. */
+.summaryItemBonus {
+  border-bottom-style: solid;
+  border-bottom-color: var(--gold);
+  color: var(--gold-soft);
+}
+
+.gradeRowBonus {
+  background: linear-gradient(145deg, var(--panel), var(--panel-2));
+  color: var(--gold-soft);
+  box-shadow: inset 2px 0 0 var(--gold);
+}
+
+.gradeRowBonus:hover {
+  background: var(--panel-2);
+}
+
+.bonusMark {
+  color: var(--gold);
+}
+
+/* Says nothing until a score actually goes over its maximum. A permanent hint
+   would sit under every grade ever entered to explain a case that rarely
+   applies. */
+.bonusNote {
+  margin: 6px 0 0;
+  font-size: 0.78rem;
+  color: var(--gold-soft);
+  text-align: center;
+}
+
+.bonusInput {
+  border-color: var(--gold) !important;
+  color: var(--gold-soft) !important;
+}
+
+/* Present for screen readers, which cannot see that a row is gold. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

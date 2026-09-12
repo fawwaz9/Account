@@ -1,5 +1,6 @@
 import { GradeCreate } from "../types";
 import ScheduleChoice from "./ScheduleChoice";
+import BonusNote, { scoreInputClass } from "./BonusNote";
 
 interface AddGradeFormProps {
   readonly form: GradeCreate;
@@ -58,7 +59,7 @@ export default function AddGradeForm({
           onChange={(event) =>
             updateField("score", event.target.value === "" ? null : Number(event.target.value))
           }
-          className="--input mt-1 w-[45%] rounded-lg border border-slate-700 bg-transparent px-3 py-2 text-white text-center"
+          className={scoreInputClass("--input mt-1 w-[45%] rounded-lg border border-slate-700 bg-transparent px-3 py-2 text-white text-center", form.score ?? null, form.max_score)}
           placeholder="Score (blank = not graded yet)"
           aria-label="Score, blank if not graded yet"
         />
@@ -74,6 +75,8 @@ export default function AddGradeForm({
           required
         />
       </div>
+
+      <BonusNote score={form.score ?? null} maxScore={form.max_score} />
 
       {/* The date lives inside the choice: what it means is the decision, and
           the date is only one of the three answers. */}
