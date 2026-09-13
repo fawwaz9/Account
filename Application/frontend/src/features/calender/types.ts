@@ -7,7 +7,8 @@ export type EventKind =
   | "midterm"
   | "final"
   | "deadline"
-  | "personal";
+  | "personal"
+  | "shift";
 
 export type Frequency = "daily" | "weekly" | "monthly";
 
@@ -27,6 +28,7 @@ export const EVENT_KIND_LABELS: Record<EventKind, string> = {
   final: "Final",
   deadline: "Deadline",
   personal: "Personal",
+  shift: "Shift",
 };
 
 export interface Recurrence {
@@ -74,6 +76,8 @@ export interface EventOccurrence {
   notes: string | null;
   course_id: string | null;
   course_code: string | null;
+  /** Set on a shift, the way course_id is set on a lecture. */
+  job_id: string | null;
   repeats: boolean;
   /**
    * Set when a dated grade produced this block. The gradebook owns it, so there

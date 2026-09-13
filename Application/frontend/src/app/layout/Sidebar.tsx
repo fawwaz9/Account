@@ -12,6 +12,7 @@ const NAV: NavItem[] = [
   { to: "/grades", label: "Grades" },
   { to: "/calendar", label: "Calendar" },
   { to: "/tasks", label: "Tasks" },
+  { to: "/jobs", label: "Jobs" },
   { to: "/budget", label: "Budget" },
   { to: "/settings", label: "Settings" },
 ];

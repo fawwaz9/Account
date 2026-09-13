@@ -917,3 +917,18 @@
 .freeBlockMore:hover {
   color: var(--gold);
 }
+
+/* A shift.
+   Green rather than another blue: work is not coursework, and the one thing a
+   student wants to see at a glance is where paid hours sit against the
+   timetable. Same hue in both views, so a shift reads as a shift whichever
+   grid it is drawn in. */
+.calChip-shift {
+  border-left-color: #4fa86f;
+  background: rgba(79, 168, 111, 0.14);
+}
+
+.weekBlock.calChip-shift {
+  border-left-color: #4fa86f;
+  background: rgba(79, 168, 111, 0.22);
+}

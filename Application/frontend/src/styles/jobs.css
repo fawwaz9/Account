@@ -1,0 +1,207 @@
+/* ===== Jobs =====
+   Cards for the jobs themselves, a list for the shifts they are worked in. The
+   money lives in the ledger and the hours live on the calendar; what is here is
+   the job, and what is known about each date of it. */
+
+.jobTopActions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.jobGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
+  gap: 14px;
+  margin: 18px 0 26px;
+  padding: 0;
+  list-style: none;
+}
+
+.jobCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid #1f2a44;
+  border-radius: 12px;
+  background: var(--panel-2);
+}
+
+/* A job you have left is history: still readable, no longer competing for
+   attention with one you turn up to. */
+.jobCardEnded {
+  opacity: 0.68;
+}
+
+.jobCardHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.jobName {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.jobKind {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.18);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+/* The three arrangements are genuinely different, so each reads differently
+   rather than all three being a rate in disguise. */
+.jobKind-hourly { background: rgba(79, 168, 111, 0.2); color: #7fd0a0; }
+.jobKind-salaried { background: rgba(69, 147, 214, 0.2); color: #8fc4ee; }
+.jobKind-contract { background: rgba(212, 175, 55, 0.18); color: var(--gold); }
+
+.jobPay {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.jobMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.jobEnded {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.jobActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.jobButton {
+  padding: 5px 12px;
+  border: 1px solid #1f2a44;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: 0.15s ease;
+}
+
+.jobButton:hover {
+  border-color: var(--gold);
+}
+
+/* ===== Shifts ===== */
+
+.shiftSection {
+  margin-top: 24px;
+}
+
+.shiftList {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shiftRow {
+  display: grid;
+  grid-template-columns: minmax(88px, auto) minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 4px;
+  border-bottom: 1px solid rgba(31, 42, 68, 0.7);
+}
+
+/* A past shift nobody confirmed. Marked rather than hidden: forgetting the
+   admin is not the same as not having worked, so the hours still count and the
+   row says they are being assumed. */
+.shiftRowAssumed {
+  border-left: 3px solid var(--gold);
+  padding-left: 9px;
+}
+
+.shiftWhen {
+  color: var(--gold);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.shiftBody {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.shiftJob {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
+}
+
+.shiftHours {
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.shiftState {
+  font-size: 0.75rem;
+}
+
+.shiftStateDone {
+  color: var(--muted);
+}
+
+/* Padding and box-sizing set explicitly: without them a small button inherits
+   padding: 7px 14px from the base .container button rule and sits wrong. That
+   has now caught five controls. */
+.shiftConfirm {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 4px 10px;
+  border: 1px solid var(--gold);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--gold);
+  font-size: 0.78rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: 0.15s ease;
+}
+
+.shiftConfirm:hover {
+  background: rgba(212, 175, 55, 0.16);
+}
+
+.shiftMeeting {
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(31, 42, 68, 0.7);
+}
+
+@media (max-width: 640px) {
+  .shiftRow {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "when   hours"
+      "body   action";
+    row-gap: 4px;
+  }
+  .shiftWhen { grid-area: when; }
+  .shiftBody { grid-area: body; }
+  .shiftHours { grid-area: hours; text-align: right; }
+  .shiftState, .shiftConfirm { grid-area: action; justify-self: end; }
+}

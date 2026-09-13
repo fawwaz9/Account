@@ -277,6 +277,9 @@ class EventModel(Base):
     #: Set when a dated grade scheduled as an event produced this block. The
     #: gradebook entry stays the record; this follows it.
     grade_id = Column(Uuid, ForeignKey("grades.id"), nullable=True)
+    #: Set when this is a shift. Sits beside course_id and behaves the same way:
+    #: it says which thing outside the calendar the block belongs to.
+    job_id = Column(Uuid, ForeignKey("jobs.id"), nullable=True)
     title = Column(String, nullable=False)
     #: lecture | lab | discussion | midterm | final | deadline | personal.
     #: Drives how the card is themed, not what it does.
@@ -561,3 +564,162 @@ class TermBlackoutModel(Base):
     starts_on = Column(Date, nullable=False)
     #: Inclusive, and equal to starts_on for a single day.
     ends_on = Column(Date, nullable=False)
+
+
+class JobModel(Base):
+    """A job the student works, and how it pays.
+
+    Three kinds, because they are genuinely different arrangements rather than
+    styling on one:
+
+    * **hourly** -- pay is hours times a rate, so the hours are the pay.
+    * **salaried** -- a fixed amount each pay period however many hours it took.
+      Hours are still worth recording, but as a measure of what the job costs
+      you rather than of what it pays.
+    * **contract** -- you invoice, and the amount is whatever you billed. There
+      is nothing to predict from hours at all.
+
+    The pay schedule reuses the same five rule columns as class times, standing
+    payments and repeating tasks, so "every second Friday" needs no mechanism of
+    its own. Nothing is ever materialised from it: the rule answers "when is the
+    next cheque", and an actual cheque is only ever a row the student entered.
+    """
+
+    __tablename__ = "jobs"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False)
+    name = Column(String, nullable=False)
+    employer = Column(String, nullable=True)
+    #: hourly | salaried | contract
+    kind = Column(String, nullable=False, default="hourly")
+    #: Hourly jobs only. A shift may override it for one date.
+    hourly_rate = Column(Float, nullable=True)
+    #: Salaried jobs only: what one pay period pays, regardless of hours.
+    period_amount = Column(Float, nullable=True)
+    started_on = Column(Date, nullable=True)
+    #: Null while the job is current. Set when it ends, so past jobs keep their
+    #: earnings history without being offered for new shifts.
+    ended_on = Column(Date, nullable=True)
+    #: The pay rule, in the same shape events use, so one engine reads both.
+    pay_starts_on = Column(Date, nullable=True)
+    recur_freq = Column(String, nullable=True)
+    recur_interval = Column(Integer, nullable=False, default=1)
+    recur_byday = Column(String, nullable=True)
+    recur_until = Column(Date, nullable=True)
+    recur_count = Column(Integer, nullable=True)
+    archived = Column(Boolean, nullable=False, default=False)
+    position = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+
+    shift_records = relationship(
+        "ShiftRecordModel", back_populates="job", cascade=cascade
+    )
+    paycheques = relationship("PaychequeModel", back_populates="job", cascade=cascade)
+
+
+class ShiftRecordModel(Base):
+    """What actually happened on one date of a shift.
+
+    A repeating shift is one event row expanded on read, exactly like a lecture,
+    so there is no row anywhere representing "this Friday" -- `(event_id,
+    on_date)` is the only thing that identifies one, which is what this is keyed
+    by.
+
+    A record exists only once there is something to say about that date. An
+    ordinary shift worked exactly as scheduled has no row at all until it is
+    confirmed, and an unconfirmed past shift is counted at its scheduled hours
+    and reported as assumed rather than dropped -- a forgotten confirmation
+    should not make a busy fortnight read as an idle one.
+    """
+
+    __tablename__ = "shift_records"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False)
+    #: The shift event this is one date of.
+    event_id = Column(Uuid, ForeignKey("events.id"), nullable=False)
+    #: Denormalised from the event, so earnings can be summed per job without
+    #: joining back through the calendar on every read.
+    job_id = Column(Uuid, ForeignKey("jobs.id"), nullable=False)
+    on_date = Column(Date, nullable=False)
+    #: What was actually worked. Null means "as scheduled".
+    worked_start = Column(Time, nullable=True)
+    worked_end = Column(Time, nullable=True)
+    confirmed = Column(Boolean, nullable=False, default=False)
+    #: Always positive.
+    tip_amount = Column(Float, nullable=False, default=0.0)
+    #: Cash tips are money already in hand and may write their own income row.
+    #: Tips paid through payroll arrive inside the paycheque's gross, so writing
+    #: one for those as well would count them twice.
+    tip_is_cash = Column(Boolean, nullable=False, default=True)
+    tip_transaction_id = Column(Uuid, ForeignKey("transactions.id"), nullable=True)
+    #: Overrides the job's rate for this date alone -- a stat holiday, a night
+    #: differential. Null uses the job's own rate.
+    rate_override = Column(Float, nullable=True)
+    notes = Column(String, nullable=True)
+
+    job = relationship("JobModel", back_populates="shift_records")
+    event = relationship("EventModel")
+
+
+class PaychequeModel(Base):
+    """A cheque that actually arrived, and the hours it was meant to cover.
+
+    The same shape as a tuition payment, in reverse. Gross pay and named
+    deductions live here; only the net reaches the ledger, because a deduction
+    is money that never entered the account and recording it as income would
+    invent a deposit that never happened.
+
+    `group_id` rather than a single transaction, because the net splits across
+    accounts by income share and a deposit is already several rows tied together
+    by that column.
+
+    `expected_gross` is stored rather than recomputed for the same reason a
+    tuition payment stores `credits_counted`: it is what the cheque was checked
+    against at the time, and deriving it later would silently rewrite the
+    verdict when a shift is edited months afterwards.
+    """
+
+    __tablename__ = "paycheques"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False)
+    job_id = Column(Uuid, ForeignKey("jobs.id"), nullable=False)
+    #: Ties the deposit rows this wrote together. Not a foreign key, because a
+    #: deposit is several rows and the column it matches carries that meaning
+    #: already.
+    group_id = Column(Uuid, nullable=True)
+    occurred_on = Column(Date, nullable=False)
+    gross_amount = Column(Float, nullable=False, default=0.0)
+    #: The stretch of work this cheque was for, so it can be reconciled against
+    #: the shifts inside it.
+    period_start = Column(Date, nullable=True)
+    period_end = Column(Date, nullable=True)
+    expected_gross = Column(Float, nullable=True)
+    notes = Column(String, nullable=True)
+
+    job = relationship("JobModel", back_populates="paycheques")
+    deductions = relationship(
+        "PaychequeDeductionModel",
+        back_populates="paycheque",
+        cascade="all, delete-orphan",
+    )
+
+
+class PaychequeDeductionModel(Base):
+    """Something taken off a cheque before it arrived.
+
+    Income tax, EI, CPP, union dues. Real money that was earned and never
+    reached the account, which is why it is recorded here and not in the ledger.
+    """
+
+    __tablename__ = "paycheque_deductions"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    paycheque_id = Column(Uuid, ForeignKey("paycheques.id"), nullable=False)
+    description = Column(String, nullable=False)
+    #: Positive. The sign is in the name.
+    amount = Column(Float, nullable=False)
+
+    paycheque = relationship("PaychequeModel", back_populates="deductions")

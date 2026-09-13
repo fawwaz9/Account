@@ -280,6 +280,7 @@ def list_occurrences(
                     notes=event.notes,
                     course_id=event.course_id,
                     course_code=codes.get(event.course_id),
+                    job_id=event.job_id,
                     repeats=rule.repeats,
                     grade_id=event.grade_id,
                 )
