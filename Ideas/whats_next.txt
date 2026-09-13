@@ -65,6 +65,8 @@ Shipped so far (do not re-propose)
           work in front of you on the left, the things that take more than a
           line to set up on the right. One column on a phone, ordered by
           urgency rather than by which column it came from.
+        Jobs, first stage: a job with the kind of pay it actually has, shifts
+          as events on the calendar, and confirming what was really worked.
 
 
 Tasks:  Reminders, as opposed to tasks: something that notifies rather than waits.
@@ -232,6 +234,24 @@ Worth knowing before picking anything up
 - A repeat materialises differently per module, and the differences are the
   point: class times never become rows, payments become rows only once they have
   happened, tasks become rows a little way ahead so each can be ticked off.
+- A shift is the engine's fourth consumer and cost nothing: it is an event with
+  a job_id and a rule, exactly as a lecture is an event with a course_id and a
+  rule. Free blocks already subtract any timed occurrence, crunch scores an
+  unrecognised kind zero, and blackouts only touch course-linked events -- so
+  work competes with study, carries no academic weight, and a reading break
+  cannot cancel it, with no code that knows what a shift is.
+- What an event cannot hold is what happened on one of its dates, because a
+  repeating shift is one row expanded on read. shift_records is keyed by
+  (event_id, on_date), the same identity EventOccurrence documents, and a row
+  exists only once there is something to say about that date.
+- An unconfirmed past shift counts at its scheduled hours and is flagged
+  `assumed`. Dropping it would make a fortnight nobody did the admin for read as
+  a fortnight nobody worked.
+- CLASS_KINDS does not protect shifts from a course timetable rewrite --
+  set_class_schedule matches on course_id as well, and a shift has none. What
+  CLASS_KINDS controls is what a ClassMeeting will accept. The first test of
+  this was vacuous: adding SHIFT to CLASS_KINDS broke nothing until the test was
+  rewritten to assert the rule that actually depends on it.
 - That third case is where the editing bug was. materialise only ever adds dates
   that are missing, so edits never reached the 60 days of occurrences already
   written. resync_occurrences now divides on `done` rather than on the date: an

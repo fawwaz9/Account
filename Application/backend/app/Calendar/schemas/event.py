@@ -23,13 +23,27 @@ class EventKind(str, Enum):
     FINAL = "final"
     DEADLINE = "deadline"
     PERSONAL = "personal"
+    #: Paid work. A block like any other on the clock, and deliberately not one
+    #: of the kinds below: it belongs to a job rather than a course, carries no
+    #: academic weight, and a reading break does not cancel it.
+    SHIFT = "shift"
 
 
-#: The kinds a course's timetable is built from.
+#: The kinds a course's timetable is built from, and the only kinds a
+#: `ClassMeeting` will accept.
+#:
+#: A shift is not among them and must not be: adding it would let the class
+#: timetable form build a course out of shifts. What stops a timetable rewrite
+#: from deleting shifts is a different guard -- `set_class_schedule` matches on
+#: `course_id` as well, and a shift has none -- so the two are worth keeping
+#: apart rather than trusting one to cover both.
 CLASS_KINDS = (EventKind.LECTURE, EventKind.LAB, EventKind.DISCUSSION)
 
 #: The kinds that replace the class card with an exam-themed one.
 EXAM_KINDS = (EventKind.MIDTERM, EventKind.FINAL)
+
+#: Kinds that belong to a job rather than to a course.
+WORK_KINDS = (EventKind.SHIFT,)
 
 
 class Frequency(str, Enum):
@@ -158,6 +172,9 @@ class EventOccurrence(BaseModel):
     #: Denormalised so the calendar can label a block "CPSC 221" without the
     #: client holding the whole course list to look it up.
     course_code: str | None = None
+    #: Set on a shift, the way course_id is set on a lecture. Carried here so
+    #: reading a window of shifts needs no second query per occurrence.
+    job_id: UUID | None = None
     #: True when this came from a rule, so the UI can say "every Monday" and ask
     #: whether an edit means this date or all of them.
     repeats: bool = False

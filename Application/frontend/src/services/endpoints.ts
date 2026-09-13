@@ -46,6 +46,15 @@ export const endpoints = {
     /** Declared above /tasks/{task_id} on the server, or "timing" parses as an id. */
     timing: (userId: string) => `tasks/${userId}/tasks/timing`,
   },
+  jobs: {
+    list: (userId: string) => `jobs/${userId}/jobs`,
+    detail: (userId: string, jobId: string) => `jobs/${userId}/jobs/${jobId}`,
+    schedule: (userId: string, jobId: string) => `jobs/${userId}/jobs/${jobId}/schedule`,
+    /** Declared above /jobs/{job_id} on the server, or "shifts" parses as an id. */
+    shifts: (userId: string) => `jobs/${userId}/jobs/shifts`,
+    shiftRecord: (userId: string, eventId: string, onDate: string) =>
+      `jobs/${userId}/jobs/shifts/${eventId}/${onDate}`,
+  },
   omnibox: {
     /** GET previews which module a line goes to; POST files it there. */
     base: (userId: string) => `omnibox/${userId}`,
