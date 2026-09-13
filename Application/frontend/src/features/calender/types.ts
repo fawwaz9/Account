@@ -115,7 +115,32 @@ export interface ClassMeeting {
   start_time: string;
   end_time: string;
   location: string | null;
+  /**
+   * Every N weeks. 1 is weekly, 2 is fortnightly.
+   *
+   * On the meeting rather than the schedule, because a course routinely mixes
+   * them: a weekly lecture beside a fortnightly lab is the ordinary case.
+   */
+  interval: number;
+  /**
+   * Which week the cycle starts on, for anything that is not weekly.
+   *
+   * Without it every fortnightly meeting is pinned to the odd weeks of term,
+   * because the whole timetable shares one start date — and labs commonly begin
+   * in week two. Ignored when the interval is 1.
+   */
+  first_on: string | null;
 }
+
+/** Weekly through every eight weeks. Past that it is a mistake, not a schedule. */
+export const MAX_MEETING_INTERVAL = 8;
+
+export const INTERVAL_LABELS: Record<number, string> = {
+  1: "Every week",
+  2: "Every 2 weeks",
+  3: "Every 3 weeks",
+  4: "Every 4 weeks",
+};
 
 export interface ClassScheduleCreate {
   meetings: ClassMeeting[];

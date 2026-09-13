@@ -7,6 +7,8 @@ import {
   ClassMeeting,
   EVENT_KIND_LABELS,
   EventKind,
+  INTERVAL_LABELS,
+  MAX_MEETING_INTERVAL,
   Weekday,
 } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
@@ -30,7 +32,10 @@ interface ClassScheduleModalProps {
 }
 
 function blankMeeting(): ClassMeeting {
-  return { kind: "lecture", days: [], start_time: "09:00", end_time: "10:00", location: null };
+  return {
+    kind: "lecture", days: [], start_time: "09:00", end_time: "10:00",
+    location: null, interval: 1, first_on: null,
+  };
 }
 
 /** The stored events back into the rows the form edits. */
@@ -42,6 +47,11 @@ function meetingsFrom(events: CalendarEvent[]): ClassMeeting[] {
     start_time: (event.start_time ?? "09:00").slice(0, 5),
     end_time: (event.end_time ?? "10:00").slice(0, 5),
     location: event.location,
+    interval: event.recurrence?.interval ?? 1,
+    // The event's own start date *is* the phase for anything not weekly, which
+    // is why reopening the form shows the week the cycle really starts on
+    // rather than resetting it to the term start.
+    first_on: (event.recurrence?.interval ?? 1) > 1 ? event.starts_on : null,
   }));
 }
 
@@ -215,6 +225,54 @@ export default function ClassScheduleModal({
                 );
               })}
             </div>
+
+            <div className="calRow">
+              <label className="calField">
+                <span className="calFieldLabel">How often</span>
+                <select
+                  className="calInput"
+                  value={meeting.interval}
+                  onChange={(event) =>
+                    updateMeeting(index, {
+                      interval: Number(event.target.value),
+                      // Weekly has no phase to choose, so the anchor goes with it
+                      // rather than lingering as a value the API would ignore.
+                      first_on: Number(event.target.value) > 1 ? meeting.first_on : null,
+                    })
+                  }
+                >
+                  {Array.from({ length: MAX_MEETING_INTERVAL }, (_, at) => at + 1).map((n) => (
+                    <option key={n} value={n}>
+                      {INTERVAL_LABELS[n] ?? `Every ${n} weeks`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {/* Only once there is a phase to choose. A weekly meeting starts
+                  when the term does, and asking would imply otherwise. */}
+              {meeting.interval > 1 && (
+                <label className="calField">
+                  <span className="calFieldLabel">First one on</span>
+                  <input
+                    type="date"
+                    className="calInput"
+                    value={meeting.first_on ?? ""}
+                    onChange={(event) =>
+                      updateMeeting(index, { first_on: event.target.value || null })
+                    }
+                  />
+                </label>
+              )}
+            </div>
+
+            {meeting.interval > 1 && (
+              <p className="small-text muted">
+                {meeting.first_on
+                  ? "Runs from this date, then every " + meeting.interval + " weeks."
+                  : "Without a date it starts in the term's first week, which puts it on the odd weeks."}
+              </p>
+            )}
 
             <div className="calRow">
               <label className="calField">
