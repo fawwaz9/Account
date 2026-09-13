@@ -331,3 +331,46 @@ export interface TermBudget {
   can_measure: boolean;
   reason: string | null;
 }
+
+/* ===== Safe to spend ===== */
+
+/** Mirrors app/Finances/schemas/safe.py. */
+
+export interface SpendableAccount {
+  account_id: string;
+  name: string;
+  balance: number;
+}
+
+export interface Commitment {
+  on_date: string;
+  description: string | null;
+  /** Positive. Every commitment reduces what is safe; the sign is in the name. */
+  amount: number;
+}
+
+export interface SafeToSpend {
+  starts_on: string;
+  /** The day before the next pay date, or month end when no job has a pay rule. */
+  ends_on: string;
+  days: number;
+  /** True when the window ends at a real pay date rather than a fallback. */
+  until_payday: boolean;
+
+  spendable: number;
+  committed: number;
+  /** This period's sinking-fund contributions not yet transferred. */
+  earmarked: number;
+  /** The answer: money in a spending account, less what is committed. */
+  safe_now: number;
+
+  /** Confirmed work no cheque has covered yet. Context, never the headline. */
+  owed_to_you: number;
+  safe_soon: number;
+
+  /** Null when safe_now is negative — a daily allowance of minus money is not guidance. */
+  per_day: number | null;
+
+  accounts: SpendableAccount[];
+  commitments: Commitment[];
+}

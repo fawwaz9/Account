@@ -1,6 +1,7 @@
 import { del, get, patch, post, put } from "../../services/apiClient";
 import { endpoints } from "../../services/endpoints";
 import {
+  SafeToSpend,
   Account,
   AccountActivity,
   AccountCreate,
@@ -269,4 +270,15 @@ export async function deleteTuition(userId: string, paymentId: string) {
 /** What the current term has cost, over the term's own dates. */
 export async function fetchTermBudget(userId: string) {
   return get<TermBudget>(endpoints.finances.termBudget(userId));
+}
+
+/**
+ * What can be spent between now and the next time money arrives.
+ *
+ * Two figures come back. `safe_now` is the answer -- cash in a spending account
+ * less what is committed. `safe_soon` adds confirmed work not yet paid for, and
+ * is context rather than a second answer.
+ */
+export async function fetchSafeToSpend(userId: string) {
+  return get<SafeToSpend>(endpoints.finances.safeToSpend(userId));
 }

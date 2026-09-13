@@ -735,3 +735,97 @@
   gap: 12px;
   font-size: 0.85rem;
 }
+
+/* ===== Safe to spend =====
+   The only thing on the budget page that answers a question rather than
+   recording one, so it leads and it is one figure. Everything below it is the
+   working. */
+
+.safeBlock {
+  margin: 0 0 22px;
+  padding: 16px 18px;
+  border: 1px solid var(--gold);
+  border-radius: 14px;
+  background: rgba(212, 175, 55, 0.1);
+}
+
+/* Over-committed is not a failure state to hide, it is the single most useful
+   thing this figure can tell you, so it changes colour rather than tone. */
+.safeBlockOver {
+  border-color: #e0685f;
+  background: rgba(224, 104, 95, 0.12);
+}
+
+.safeHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.safeLabel {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.safeHeadline {
+  display: block;
+  font-size: 1.9rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.safeBlockOver .safeHeadline {
+  color: #e0685f;
+}
+
+.safeParts {
+  margin: 10px 0 0;
+  padding: 10px 0 0;
+  border-top: 1px solid rgba(31, 42, 68, 0.8);
+  list-style: none;
+  font-size: 0.82rem;
+}
+
+.safeParts li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 0;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.safeMinus {
+  color: #e0685f;
+}
+
+/* Muted and below the working, because it is money a late or short cheque
+   might not bring. Acting on it is how an overdraft happens. */
+.safeSoon {
+  margin: 10px 0 0;
+}
+
+.safeCommitments {
+  margin-top: 8px;
+}
+
+.safeCommitments summary {
+  cursor: pointer;
+}
+
+.safeCommitments ul {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.safeCommitments li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 0;
+}

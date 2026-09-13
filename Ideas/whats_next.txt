@@ -86,6 +86,9 @@ Shipped so far (do not re-propose)
         Class times that are not weekly, per meeting: a weekly lecture beside a
           fortnightly lab, each with its own first week -- without which every
           fortnightly meeting would be stuck on the odd weeks of term.
+        Safe to spend: what is in a spending account, less what is committed,
+          over the window that ends at your next cheque. Work done but not yet
+          paid for is shown beside it, never inside it.
 
 
 What is left, by module. Tasks and Calendar no longer appear: everything that
@@ -101,8 +104,6 @@ Grades: Think of other functionalities that can merge over to the other.
         When editing courses the manual is the default but syllabus parser will be available under the manual grid.
 
 Budget:
-        Safe to spend: balance minus every commitment you already know about, shown as one number.
-          The commitments are already there to read -- /recurring/upcoming returns them.
         Sinking funds: tuition split across the months before it is due, so January is not a shock.
         Subscription audit: recurring charges detected from the ledger, with the ones you forgot flagged.
         Money Lent gets who and when, plus a nudge when it has been out too long.
@@ -150,12 +151,14 @@ to have closed, the parser that everything else had to settle before, and the
 things that need new storage or a second person.
 
 Next, and cheapest
-- Safe-to-spend on the money side. /recurring/upcoming already returns the
-  commitments, so it is a subtraction over data already exposed.
+- Sinking funds, next. Safe-to-spend already has an `earmarked` field waiting
+  for them, so the arithmetic on screen does not change shape when they land.
+- Subscription audit after that: it reads the ledger for repeats with no
+  standing instruction behind them, which is only possible because standing
+  instructions exist to compare against.
 - Category blind spots across courses. Derived from what is stored, no new
   tables, and the one Grades answer nothing else gives: you may be losing marks
   in labs everywhere rather than in one class.
-- Sinking funds after safe-to-spend, since both read the same commitments.
 
 Parked, now that the question is answered
 - A dropped course's dollar figure. The open question was whether a refund
@@ -230,6 +233,13 @@ Worth knowing before picking anything up
 - Scores, weights and target grades are floats everywhere. A number input for any
   of them needs step="any" -- without it the browser defaults to step="1" and
   rejects half marks, which is how that went unnoticed for so long.
+- accounts.kind drives behaviour in exactly one place: safe-to-spend counts only
+  "spending" accounts. It is documented as styling everywhere else, so that one
+  exception is written on the column itself. If per-account control is wanted,
+  add counts_as_spendable rather than loading more meaning onto kind.
+- Safe-to-spend never counts money that has not arrived. Incoming standing
+  instructions inside the window are excluded, and work done but not yet paid
+  for is a second figure beside the first rather than part of it.
 - A tuition payment writes exactly one ledger row, never one per course. What a
   course cost is a Grades answer -- credits times the term's per-credit rate,
   gross -- and is not meant to tie out against the ledger, which records the net

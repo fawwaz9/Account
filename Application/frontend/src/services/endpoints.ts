@@ -75,6 +75,7 @@ export const endpoints = {
     base: (userId: string) => `omnibox/${userId}`,
   },
   finances: {
+    safeToSpend: (userId: string) => `finances/${userId}/safe-to-spend`,
     accounts: (userId: string) => `finances/${userId}/accounts`,
     account: (userId: string, accountId: string) => `finances/${userId}/accounts/${accountId}`,
     accountActivity: (userId: string, accountId: string) =>
