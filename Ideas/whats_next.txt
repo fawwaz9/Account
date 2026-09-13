@@ -113,6 +113,11 @@ Shipped so far (do not re-propose)
           matched every course, a GET that queued a write, and an empty list
           standing in for both an impossible date range and an unknown account.
 
+        The grades dashboard from 81 queries to 5, with the payload verified
+          byte-identical before and after. Deposit allocations compared in
+          whole cents, so a split can no longer be a cent more than the money
+          that actually arrived.
+
 
 What is left, by module. Tasks and Calendar no longer appear: everything that
 was under them has shipped.
@@ -230,7 +235,7 @@ Worth knowing before picking anything up
   false pass.
 - gh is installed and authenticated, so a PR opens from the terminal. The push
   credential lives in the macOS keychain.
-- 599 backend tests, and the suite is worth running with
+- 609 backend tests, and the suite is worth running with
   -W error::sqlalchemy.exc.SAWarning: that is how a duplicate cascade delete
   surfaced. The frontend still has no test runner. Three pieces of layout maths
   -- the week view's overlap, placeTasks, and the term timeline -- were each

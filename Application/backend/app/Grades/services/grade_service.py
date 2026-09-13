@@ -483,8 +483,21 @@ def calculate_grade_band(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
     }
 
 
-def calculate_required_final(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, target_grade: float):
-    course = get_user_course(db, user_id, course_id)
+def calculate_required_final(
+    db: Session,
+    user_id: uuid.UUID,
+    course_id: uuid.UUID,
+    target_grade: float,
+    course: CourseModel | None = None,
+):
+    """What the final must score to finish at `target_grade`.
+
+    `course` lets a caller that already holds the row pass it in. The dashboard
+    does, and without it this re-fetched a course that was already in the
+    identity map once per course -- a third of the N+1 on that page.
+    """
+    if course is None:
+        course = get_user_course(db, user_id, course_id)
     if course is None:
         raise ValueError("Course not found.")
 
