@@ -232,9 +232,45 @@ Verified beyond the suite:
   assumed; transaction count unchanged at 89, since no money moves until
   stage 2.
 
-## Stage 2 — not started
+## Stage 2 — done
 
-Paycheques, deductions, and the net reaching the ledger.
+Paycheques, deductions, the net reaching the ledger, and cash tips. Branch
+`job-paycheques`. 447 backend tests pass (422 + 25 new).
+
+Built as planned. Five things the plan did not anticipate:
+
+- **`db.refresh()` silently discarded a correction.** `update_paycheque` set the
+  new gross, then called `db.refresh(cheque)` to reload the deductions — which
+  reloads the row from the database and threw the edit away, so correcting a
+  gross kept the old one and rewrote the ledger at the old net. Replaced with
+  `db.flush()` plus a query for the deductions. Caught by a test, not by review.
+- **A cash tip is several ledger rows, not one.** It splits across accounts like
+  any other income, but `shift_records` holds a single `tip_transaction_id`.
+  Deleting only that row orphaned the rest. The record now points at one row and
+  the *group* finds them all, and a changed tip rewrites the group rather than
+  patching it.
+- **A cash tip with nowhere to go no longer fails.** The first version raised
+  when no account had an income share — which blocks logging your hours over an
+  unrelated budget setting. It now records the tip and reports
+  `tip_in_ledger: false`, so the gap is visible rather than silent or fatal.
+- **The manual deduction delete duplicated the ORM cascade**, leaving SQLAlchemy
+  expecting to remove rows already gone and warning on every commit. The
+  relationship's `delete-orphan` handles it. The suite is now also run with
+  `-W error::sqlalchemy.exc.SAWarning` to catch the next one.
+- **`record_deposit` commits on its own**, so it could not be reused: the rows
+  and the cheque have to land in one transaction. `deposit_rows` builds them
+  unsaved from the same `split_income`, and the caller commits once.
+
+Verified beyond the suite:
+
+- Reverse cascade mutation-tested: removing it fails
+  `test_deleting_the_ledger_rows_takes_the_cheque`.
+- End-to-end on a **copy** of the real database, against the real income shares
+  (Spending 50, Savings 20, Investments 20, Money Lent 0): a $170 cheque against
+  an expected $185 was flagged $15 short; deductions of $23.21 stayed off the
+  ledger; the net of $146.79 split into three rows of $81.55 / $32.62 / $32.62
+  summing exactly to the net; deleting the cheque returned the transaction count
+  to where it started, with no paycheque left behind.
 
 ## Stage 3 — not started
 

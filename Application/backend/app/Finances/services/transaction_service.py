@@ -10,6 +10,7 @@ from app._database.models import (
     SpendCategoryModel,
     TransactionModel,
     TuitionDeductionModel,
+    PaychequeModel,
     TuitionPaymentModel,
 )
 from app.Finances.schemas.transaction import (
@@ -374,6 +375,24 @@ def delete_transaction(
             TuitionDeductionModel.tuition_payment_id == payment.id
         ).delete(synchronize_session=False)
         db.delete(payment)
+
+    # A paycheque owns the rows its net was split into, so removing them must
+    # remove the cheque as well. Left behind it would still answer "what did
+    # this job pay" for money no longer recorded anywhere -- the orphaned
+    # tuition payment, again. Matched on group_id because a cheque is several
+    # rows, not one.
+    if transaction.group_id is not None:
+        doomed_cheques = (
+            db.query(PaychequeModel)
+            .filter(
+                PaychequeModel.user_id == user_id,
+                PaychequeModel.group_id == transaction.group_id,
+            )
+            .all()
+        )
+        # Deductions follow through the relationship's delete-orphan cascade.
+        for cheque in doomed_cheques:
+            db.delete(cheque)
 
     if transaction.group_id is not None and (is_transfer or scope == "group"):
         db.query(TransactionModel).filter(

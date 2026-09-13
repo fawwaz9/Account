@@ -67,6 +67,10 @@ Shipped so far (do not re-propose)
           urgency rather than by which column it came from.
         Jobs, first stage: a job with the kind of pay it actually has, shifts
           as events on the calendar, and confirming what was really worked.
+        Jobs, second stage: paycheques. Gross and named deductions stay on the
+          cheque, only the net reaches the ledger and splits by income share,
+          and what the hours said it should be is checked against what arrived.
+          Cash tips reach the budget; tips paid on the cheque are already in it.
 
 
 Tasks:  Reminders, as opposed to tasks: something that notifies rather than waits.
@@ -247,6 +251,26 @@ Worth knowing before picking anything up
 - An unconfirmed past shift counts at its scheduled hours and is flagged
   `assumed`. Dropping it would make a fortnight nobody did the admin for read as
   a fortnight nobody worked.
+- A paycheque is the tuition payment in reverse: gross and named deductions on
+  the cheque, only the net in the ledger. It stores a group_id rather than a
+  transaction id, because the net splits across accounts and a deposit is
+  already several rows tied by that column.
+- expected_gross is frozen when the cheque is recorded and never recomputed.
+  Re-deriving it would let a shift edited months later overturn a verdict
+  already reached -- the same reason a tuition payment stores credits_counted.
+- Reconciliation is per job kind. Hourly compares hours times rate, salaried
+  compares the period amount and treats hours as context, contract compares
+  nothing because you invoiced it. Converting a salary to an implied hourly rate
+  would make a long week read as underpayment.
+- Cash tips reach the ledger; tips paid through payroll do not, because they
+  arrive inside the cheque's gross and a row of their own would count them
+  twice. A cash tip with no account taking an income share still records, and
+  reports tip_in_ledger false rather than failing -- logging your hours must not
+  depend on budget setup.
+- db.refresh() reloads a row from the database and discards pending edits. It
+  silently undid a corrected gross in update_paycheque; db.flush() is what was
+  wanted. The test suite is run with -W error::sqlalchemy.exc.SAWarning, which
+  is how the duplicate cascade delete surfaced.
 - CLASS_KINDS does not protect shifts from a course timetable rewrite --
   set_class_schedule matches on course_id as well, and a shift has none. What
   CLASS_KINDS controls is what a ClassMeeting will accept. The first test of

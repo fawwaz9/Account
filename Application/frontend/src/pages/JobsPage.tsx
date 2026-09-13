@@ -4,8 +4,10 @@ import JobModal from "../features/jobs/components/JobModal";
 import ShiftList from "../features/jobs/components/ShiftList";
 import ShiftScheduleModal from "../features/jobs/components/ShiftScheduleModal";
 import ConfirmShiftModal from "../features/jobs/components/ConfirmShiftModal";
+import PaychequeList from "../features/jobs/components/PaychequeList";
+import PaychequeModal from "../features/jobs/components/PaychequeModal";
 import { useJobs } from "../features/jobs/hooks/useJobs";
-import { Job, ShiftOccurrence } from "../features/jobs/types";
+import { Job, Paycheque, ShiftOccurrence } from "../features/jobs/types";
 import "../styles/calendar.css";
 import "../styles/jobs.css";
 
@@ -21,12 +23,14 @@ import "../styles/jobs.css";
  */
 export default function JobsPage() {
   const [showArchived, setShowArchived] = useState(false);
-  const { jobs, shifts, loading, error, reload } = useJobs(showArchived);
+  const { jobs, shifts, paycheques, loading, error, reload } = useJobs(showArchived);
 
   const [editing, setEditing] = useState<Job | null>(null);
   const [adding, setAdding] = useState(false);
   const [scheduling, setScheduling] = useState<Job | null>(null);
   const [confirming, setConfirming] = useState<ShiftOccurrence | null>(null);
+  const [payingCheque, setPayingCheque] = useState<Paycheque | null>(null);
+  const [recordingPay, setRecordingPay] = useState(false);
 
   // Minutes per job across the window, so a card can say what it is worth in
   // time without every card filtering the same list again.
@@ -88,6 +92,15 @@ export default function JobsPage() {
         <ShiftList shifts={shifts} onConfirm={setConfirming} busy={loading} />
       )}
 
+      {jobs.length > 0 && (
+        <PaychequeList
+          paycheques={paycheques}
+          onAdd={() => { setPayingCheque(null); setRecordingPay(true); }}
+          onEdit={(cheque) => { setPayingCheque(cheque); setRecordingPay(true); }}
+          busy={loading}
+        />
+      )}
+
       <JobModal
         open={adding}
         job={editing}
@@ -104,6 +117,14 @@ export default function JobsPage() {
       <ConfirmShiftModal
         shift={confirming}
         onClose={() => setConfirming(null)}
+        onSaved={reload}
+      />
+
+      <PaychequeModal
+        open={recordingPay}
+        jobs={jobs}
+        paycheque={payingCheque}
+        onClose={() => { setRecordingPay(false); setPayingCheque(null); }}
         onSaved={reload}
       />
     </div>

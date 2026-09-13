@@ -54,6 +54,11 @@ export const endpoints = {
     shifts: (userId: string) => `jobs/${userId}/jobs/shifts`,
     shiftRecord: (userId: string, eventId: string, onDate: string) =>
       `jobs/${userId}/jobs/shifts/${eventId}/${onDate}`,
+    paycheques: (userId: string) => `jobs/${userId}/paycheques`,
+    /** Declared above /paycheques/{id} on the server, or "preview" parses as an id. */
+    paychequePreview: (userId: string) => `jobs/${userId}/paycheques/preview`,
+    paycheque: (userId: string, paychequeId: string) =>
+      `jobs/${userId}/paycheques/${paychequeId}`,
   },
   omnibox: {
     /** GET previews which module a line goes to; POST files it there. */
