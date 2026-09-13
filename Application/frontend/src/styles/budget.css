@@ -461,14 +461,37 @@
   flex-shrink: 0;
 }
 
+/* ===== Standing instructions beside what is coming up =====
+   What is set up and what it costs you next are two ends of the same story,
+   and stacking them put the whole rules list between a change you might make
+   and the near-term reason to make it. Equal columns, like jobSplit and
+   earnWindows: neither side is a sidebar to the other. */
+
+.recurringSplit {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+  gap: 20px;
+  align-items: start;
+}
+
 /* ===== Coming up ===== */
 
 .upcomingBlock {
-  margin-top: 18px;
-  padding-top: 14px;
   /* Dashed, so the break between "what has happened" and "what has not" is
-     visible without another heading. */
-  border-top: 1px dashed #2a3550;
+     visible without another heading -- a left border beside the rules list,
+     the same divider rotated for a side-by-side layout. */
+  padding-left: 18px;
+  border-left: 1px dashed #2a3550;
+}
+
+@media (max-width: 640px) {
+  .upcomingBlock {
+    margin-top: 18px;
+    padding-left: 0;
+    padding-top: 14px;
+    border-left: none;
+    border-top: 1px dashed #2a3550;
+  }
 }
 
 .upcomingTotal {

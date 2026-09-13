@@ -138,6 +138,9 @@ Shipped so far (do not re-propose)
           closed badge is not left to whatever a fixed-width overflow:hidden
           happened to clip "3 · Normal" down to -- the open dropdown still
           spells out what each step means.
+        Standing instructions beside what is coming up, rather than stacked --
+          equal columns, so the near-term reason to change a rule sits next to
+          the rule instead of below the whole list of them.
 
 
 What is left, by module. Tasks and Calendar no longer appear: everything that
