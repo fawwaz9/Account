@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from app._database.models import CourseModel, CourseCategoryWeightModel, UserModel
 from app.Grades.schemas.course import CourseCreate, CourseUpdate
 from app.Grades.services.grade_service import (
@@ -119,7 +119,21 @@ def get_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
 
 
 def get_all_courses(db: Session, user_id: uuid.UUID):
-    courses = db.query(CourseModel).filter(CourseModel.user_id == user_id).all()
+    # Grades and weights are loaded with the courses, in two extra queries for
+    # the whole list rather than two per course. Every caller here reads both --
+    # attach_course_summary and the dashboard rollup do -- so lazy loading was
+    # a guaranteed N+1, not a possible one. selectinload rather than joinedload
+    # because these are collections: a join would multiply each course row by
+    # its grades and make the sort and the summary work on duplicates.
+    courses = (
+        db.query(CourseModel)
+        .options(
+            selectinload(CourseModel.grades),
+            selectinload(CourseModel.category_weight_rows),
+        )
+        .filter(CourseModel.user_id == user_id)
+        .all()
+    )
     # One lookup for the whole list, not one per course.
     year, semester = current_term_of(db, user_id)
 

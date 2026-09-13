@@ -27,8 +27,13 @@ class DepositCreate(BaseModel):
         if not self.allocations:
             return self
 
+        # Compared as whole cents, and required to match exactly. A tolerance of
+        # `> 0.01` let allocations of 100.01 through against a deposit of
+        # 100.00 -- the split has to account for the money that arrived and not
+        # a cent more, and integers are also what keeps float fuzz out of the
+        # comparison without needing a tolerance to absorb it.
         total = round(sum(entry.amount for entry in self.allocations), 2)
-        if abs(total - round(self.amount, 2)) > 0.01:
+        if round(total * 100) != round(self.amount * 100):
             raise ValueError(
                 f"Allocations total {total:.2f} but the deposit is {self.amount:.2f}"
             )

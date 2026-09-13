@@ -131,6 +131,28 @@ The theme is the same in every one: the server answered confidently and wrongly.
 - **#45** was not one route. Fourteen `raise HTTPException` sites across four routers
   were missing `from exc`.
 
+## Status as of the performance pass
+
+**Closed: #22, #23, #50.**
+
+The dashboard went from **81 queries to 5** on the real gradebook's 27 courses. Two
+causes, both named correctly here: lazy `grades` and `category_weights` per course
+(now one `selectinload` each for the whole list), and `calculate_required_final`
+re-fetching a course already in the identity map (now takes the row the caller
+holds). Verified byte-identical: the whole dashboard payload and every account
+balance, dumped before and after against a copy of the real database, `diff` clean.
+
+`get_account` no longer groups the entire ledger to answer about one account.
+
+**#50 is real but its example is not.** The rule was `abs(difference) > 0.01`, and
+for 100.00 against 100.01 the float difference lands at 0.010000000000005 -- just
+*above* the tolerance, so that exact case was rejected by accident. The first test
+written for it passed against the unfixed code for precisely that reason. Sweeping
+every amount from 0.01 to 600.00 finds **tens of thousands** of pairs where the
+difference lands at or below 0.01 and a one-cent error really was accepted, so the
+finding stands; it just needed a value that demonstrates it. Comparison is now in
+whole cents, which needs no tolerance at all.
+
 One correction to #17 found while fixing it: this document calls the unconfirmed
 account delete "permanent", but the server refuses to delete an account that still
 holds transactions and says to archive instead. The exposure was empty accounts only.
