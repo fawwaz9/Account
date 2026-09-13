@@ -8,16 +8,29 @@ there is one record of a deadline rather than two that can disagree.
 import uuid
 from datetime import date, datetime
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app._database.models import CourseModel, TaskModel, UserModel, utc_now
+from app._database.models import (
+    CourseModel,
+    TaskModel,
+    TaskSnoozeModel,
+    UserModel,
+    utc_now,
+)
 from app.Grades.utils.terms import (
     CURRENT,
     course_result_grade,
     effective_target,
     term_bucket,
 )
-from app.Tasks.schemas.task import Task as TaskSchema, TaskCreate, TaskUpdate
+from app.Tasks.schemas.task import (
+    SnoozeRequest,
+    Task as TaskSchema,
+    TaskCreate,
+    TaskSnooze,
+    TaskUpdate,
+)
 from app.Users.services.user_service import get_preferences
 
 #: How far below target a course has to be for each band, in percentage points.
@@ -28,6 +41,10 @@ RISK_BANDS = ((10.0, "severe"), (5.0, "moderate"), (0.0, "mild"))
 
 #: Sort order for the bands, worst first. Anything unbadged sorts last.
 RISK_RANK = {"severe": 0, "moderate": 1, "mild": 2, None: 3}
+
+
+def today() -> date:
+    return date.today()
 
 
 def user_exists(db: Session, user_id: uuid.UUID) -> bool:
@@ -103,6 +120,14 @@ def attach_course_code(
     """
     task.course_code = codes.get(task.course_id)
     task.risk = (risks or {}).get(task.course_id)
+
+    # The count and the latest reason, not the rows: a list of tasks does not
+    # need a term of snooze history travelling with it.
+    history = sorted(
+        task.snoozes or [], key=lambda row: row.snoozed_at or datetime.min
+    )
+    task.snooze_count = len(history)
+    task.last_snooze_reason = history[-1].reason if history else None
     return task
 
 
@@ -131,6 +156,7 @@ def list_tasks(
     *,
     include_done: bool = False,
     include_archived: bool = False,
+    include_snoozed: bool = False,
     start: date | None = None,
     end: date | None = None,
     course_id: uuid.UUID | None = None,
@@ -150,6 +176,15 @@ def list_tasks(
         query = query.filter(TaskModel.archived.is_(False))
     if not include_done:
         query = query.filter(TaskModel.done.is_(False))
+    if not include_snoozed:
+        # A snooze that has run out is simply gone: the task comes back on its
+        # own, in the position its untouched due date puts it in.
+        query = query.filter(
+            or_(
+                TaskModel.snoozed_until.is_(None),
+                TaskModel.snoozed_until <= today(),
+            )
+        )
     if course_id is not None:
         query = query.filter(TaskModel.course_id == course_id)
     if start is not None:
@@ -251,6 +286,70 @@ def set_done(task: TaskModel, done: bool) -> None:
     else:
         task.completed_at = None
         task.archived = False
+
+
+def snooze_task(
+    db: Session, user_id: uuid.UUID, task_id: uuid.UUID, data: SnoozeRequest
+):
+    """Hide a task until a date, and record why.
+
+    `due_date` is deliberately untouched. Moving it would hide the deferral
+    rather than record it, and would make every later question about lateness
+    measure against a date the student picked instead of the one they were
+    given -- which is exactly what the completion-timing figure depends on.
+    """
+    task = get_task(db, user_id, task_id)
+    if task is None:
+        return None
+
+    if data.until <= today():
+        raise ValueError("Snooze until a date in the future")
+    if task.done:
+        raise ValueError("That task is already done")
+
+    task.snoozed_until = data.until
+    db.add(TaskSnoozeModel(
+        id=uuid.uuid4(),
+        task_id=task.id,
+        snoozed_at=utc_now(),
+        until=data.until,
+        reason=data.reason,
+    ))
+
+    db.commit()
+    db.refresh(task)
+    return attach_course_code(task, course_codes(db, user_id))
+
+
+def wake_task(db: Session, user_id: uuid.UUID, task_id: uuid.UUID):
+    """Bring a snoozed task back now.
+
+    The history stays. Undoing a snooze does not undo having made it, and the
+    pattern is what the history is for.
+    """
+    task = get_task(db, user_id, task_id)
+    if task is None:
+        return None
+
+    task.snoozed_until = None
+    db.commit()
+    db.refresh(task)
+    return attach_course_code(task, course_codes(db, user_id))
+
+
+def snooze_history(db: Session, user_id: uuid.UUID, task_id: uuid.UUID):
+    """Every time this task was pushed back, oldest first."""
+    task = get_task(db, user_id, task_id)
+    if task is None:
+        return None
+
+    rows = (
+        db.query(TaskSnoozeModel)
+        .filter(TaskSnoozeModel.task_id == task_id)
+        .order_by(TaskSnoozeModel.snoozed_at)
+        .all()
+    )
+    return [TaskSnooze.model_validate(row) for row in rows]
 
 
 def delete_task(db: Session, user_id: uuid.UUID, task_id: uuid.UUID):

@@ -45,6 +45,8 @@ export const endpoints = {
     quickCapture: (userId: string) => `tasks/${userId}/quick-capture`,
     /** Declared above /tasks/{task_id} on the server, or "timing" parses as an id. */
     timing: (userId: string) => `tasks/${userId}/tasks/timing`,
+    snooze: (userId: string, taskId: string) => `tasks/${userId}/tasks/${taskId}/snooze`,
+    snoozes: (userId: string, taskId: string) => `tasks/${userId}/tasks/${taskId}/snoozes`,
   },
   jobs: {
     list: (userId: string) => `jobs/${userId}/jobs`,

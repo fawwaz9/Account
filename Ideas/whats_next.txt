@@ -74,10 +74,12 @@ Shipped so far (do not re-propose)
         Jobs, third stage: earnings. Week, month and term in hours and money,
           the effective rate once tax comes off, work hours beside class hours,
           and what has been worked but not yet paid for.
+        Snooze with a reason. A task leaves the list until a date and comes back
+          in its own place, because the due date never moves -- and every snooze
+          is kept, so three citing the same thing reads as a blocked task.
 
 
 Tasks:  Reminders, as opposed to tasks: something that notifies rather than waits.
-        Snooze with a reason, and keep the reason. Patterns show up after a term.
 
 
 Grades: Think of other functionalities that can merge over to the other.
@@ -283,6 +285,12 @@ Worth knowing before picking anything up
   cheque still to come reads as a pay cut.
 - WeekLoad now splits booked time into work_minutes and class_minutes.
   booked_minutes still means every timed event, so the split is additive.
+- Snoozing never moves due_date. Moving it would hide the deferral rather than
+  record it, and would leave the completion-timing figure measuring against a
+  date the student chose instead of the one they were given. The snooze history
+  is a table rather than two columns, because the pattern is the point: three
+  snoozes citing "waiting on lab partner" is the finding, and a latest-reason
+  column cannot say it.
 - Any service taking an `on_day` has to thread it into everything it calls.
   window_earnings did not, so whether a shift counted as past was judged against
   the wall clock rather than the day being reported on -- figures that drifted

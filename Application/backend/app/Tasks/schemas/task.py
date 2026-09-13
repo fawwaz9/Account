@@ -56,6 +56,36 @@ class TaskCreate(TaskBase):
     pass
 
 
+class SnoozeRequest(BaseModel):
+    """Push a task out of the way, and say why.
+
+    The reason is the point of the feature rather than a nicety: a task snoozed
+    three times for the same reason is a blocked task, and nothing else in the
+    app would ever say so.
+    """
+
+    until: date
+    reason: str | None = Field(default=None, max_length=200)
+
+    @model_validator(mode="after")
+    def validate_snooze(self):
+        if self.reason is not None and self.reason.strip() == "":
+            self.reason = None
+        return self
+
+
+class TaskSnooze(BaseModel):
+    """One time a task was pushed back."""
+
+    id: UUID = Field(default_factory=uuid4)
+    snoozed_at: datetime
+    until: date
+    reason: str | None = None
+
+    class Config:
+        from_attributes = True
+
+
 class TaskUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     notes: str | None = Field(default=None, max_length=2000)
@@ -88,6 +118,13 @@ class Task(TaskBase):
     #: than in the client, which would otherwise need every course, every target
     #: and the current-term rule just to colour a row.
     risk: str | None = None
+    #: Hidden from the list until this date. The due date is unaffected.
+    snoozed_until: date | None = None
+    #: How many times this has been pushed back. The count rather than the rows,
+    #: because a list of tasks does not need a term of history in it.
+    snooze_count: int = 0
+    #: Why it was last pushed back, so a blocked task says so on its own row.
+    last_snooze_reason: str | None = None
 
     class Config:
         from_attributes = True

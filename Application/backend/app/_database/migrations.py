@@ -42,6 +42,7 @@ ADDED_COLUMNS: dict[str, dict[str, str]] = {
     "tasks": {
         "recurring_id": "CHAR(32)",
         "priority": "INTEGER NOT NULL DEFAULT 3",
+        "snoozed_until": "DATE",
     },
     "recurring_tasks": {
         "priority": "INTEGER NOT NULL DEFAULT 3",

@@ -624,3 +624,88 @@
   .taskSlot--repeats { order: 7; }
   .taskSlot--done { order: 8; }
 }
+
+/* ===== Snooze =====
+   Pushing a task back is recorded rather than hidden: the row keeps a count,
+   and the count is what turns "I keep putting this off" into something you can
+   see without remembering it. */
+
+/* padding and box-sizing explicit: the base .container button rule would
+   otherwise give this 7px 14px and shove it out of the row. Six controls now. */
+.taskSnooze {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin-top: 1px;
+  padding: 4px 9px;
+  border: 1px solid #1f2a44;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: 0.15s ease;
+}
+
+.taskSnooze:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+/* Muted, not alarming. A snoozed task is a decision, not a failure -- it only
+   becomes interesting once the count climbs. */
+.taskTagSnoozed {
+  background: rgba(148, 163, 184, 0.18);
+  color: var(--muted);
+  cursor: help;
+}
+
+.snoozePresets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.snoozePreset {
+  box-sizing: border-box;
+  padding: 6px 12px;
+  border: 1px solid #1f2a44;
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: 0.15s ease;
+}
+
+.snoozePreset:hover {
+  border-color: var(--gold);
+}
+
+.snoozePresetOn {
+  border-color: var(--gold);
+  color: var(--text);
+}
+
+.snoozeHistory {
+  padding: 10px 12px;
+  border-left: 3px solid var(--gold);
+  border-radius: 0 8px 8px 0;
+  background: rgba(212, 175, 55, 0.1);
+}
+
+.snoozeHistory ul {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.snoozeHistory li {
+  display: flex;
+  gap: 10px;
+  padding: 2px 0;
+}

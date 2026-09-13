@@ -8,8 +8,10 @@ import {
   RecurringTaskCreate,
   RecurringTaskRun,
   RecurringTaskUpdate,
+  SnoozeRequest,
   Task,
   TaskCreate,
+  TaskSnooze,
   TaskUpdate,
 } from "./types";
 
@@ -51,6 +53,25 @@ export async function setTaskDone(userId: string, taskId: string, done: boolean)
 
 export async function deleteTask(userId: string, taskId: string) {
   return del<Task>(endpoints.tasks.detail(userId, taskId));
+}
+
+/**
+ * Push a task out of the way until a date, and say why.
+ *
+ * The due date does not move, which is what keeps the timing figures measuring
+ * against the date you were given rather than one you picked.
+ */
+export async function snoozeTask(userId: string, taskId: string, payload: SnoozeRequest) {
+  return post<Task>(endpoints.tasks.snooze(userId, taskId), payload);
+}
+
+/** Bring a snoozed task back now. The record of having snoozed it stays. */
+export async function wakeTask(userId: string, taskId: string) {
+  return del<Task>(endpoints.tasks.snooze(userId, taskId));
+}
+
+export async function fetchSnoozes(userId: string, taskId: string) {
+  return get<TaskSnooze[]>(endpoints.tasks.snoozes(userId, taskId));
 }
 
 /** How early or late work has been finished lately. */
