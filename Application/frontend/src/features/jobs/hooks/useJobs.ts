@@ -16,6 +16,11 @@ const AHEAD_DAYS = 21;
  */
 export function useJobs(includeArchived = false) {
   const { user } = useAuth();
+  // The id, not the object. `refreshUser()` builds a fresh `user` every time,
+  // so depending on the object meant one Settings save re-ran every mounted
+  // hook's entire fetch -- the id is what this actually needs, and it does not
+  // change.
+  const userId = user?.id;
   const [jobs, setJobs] = useState<Job[]>([]);
   const [shifts, setShifts] = useState<ShiftOccurrence[]>([]);
   const [paycheques, setPaycheques] = useState<Paycheque[]>([]);
@@ -28,7 +33,7 @@ export function useJobs(includeArchived = false) {
   const latestRequest = useRef(0);
 
   const load = useCallback(async () => {
-    if (!user) return;
+    if (!userId) return;
 
     const ticket = ++latestRequest.current;
     setLoading(true);
@@ -37,10 +42,10 @@ export function useJobs(includeArchived = false) {
       const from = addDays(today(), -BEHIND_DAYS);
       const to = addDays(today(), AHEAD_DAYS);
       const [nextJobs, nextShifts, nextCheques, nextEarnings] = await Promise.all([
-        fetchJobs(user.id, includeArchived),
-        fetchShifts(user.id, from, to),
-        fetchPaycheques(user.id),
-        fetchEarnings(user.id),
+        fetchJobs(userId, includeArchived),
+        fetchShifts(userId, from, to),
+        fetchPaycheques(userId),
+        fetchEarnings(userId),
       ]);
       if (ticket !== latestRequest.current) return;
       setJobs(nextJobs);
@@ -53,7 +58,7 @@ export function useJobs(includeArchived = false) {
     } finally {
       if (ticket === latestRequest.current) setLoading(false);
     }
-  }, [user, includeArchived]);
+  }, [userId, includeArchived]);
 
   useEffect(() => { void load(); }, [load]);
 

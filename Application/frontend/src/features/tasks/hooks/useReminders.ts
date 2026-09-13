@@ -21,14 +21,19 @@ const POLL_MS = 60_000;
  */
 export function useReminders() {
   const { user } = useAuth();
+  // The id, not the object. `refreshUser()` builds a fresh `user` every time,
+  // so depending on the object meant one Settings save re-ran every mounted
+  // hook's entire fetch -- the id is what this actually needs, and it does not
+  // change.
+  const userId = user?.id;
   const [due, setDue] = useState<Reminder[]>([]);
   const notified = useRef<Set<string>>(new Set());
 
   const poll = useCallback(async () => {
-    if (!user) return;
+    if (!userId) return;
 
     try {
-      const rows = await fetchDueReminders(user.id);
+      const rows = await fetchDueReminders(userId);
       setDue(rows);
       announce(rows, notified.current);
     } catch {
@@ -36,29 +41,29 @@ export function useReminders() {
       // and an error banner for a background fetch trains people to ignore
       // banners.
     }
-  }, [user]);
+  }, [userId]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!userId) return;
 
     void poll();
     const timer = window.setInterval(() => void poll(), POLL_MS);
     return () => window.clearInterval(timer);
-  }, [user, poll]);
+  }, [userId, poll]);
 
   const dismiss = useCallback(
     async (reminder: Reminder) => {
-      if (!user) return;
+      if (!userId) return;
       // Removed here first so the banner goes at once rather than at the next
       // poll, which could be a minute away.
       setDue((current) => current.filter((row) => row.id !== reminder.id));
       try {
-        await dismissReminder(user.id, reminder.id);
+        await dismissReminder(userId, reminder.id);
       } catch {
         void poll();
       }
     },
-    [user, poll]
+    [userId, poll]
   );
 
   return { due, dismiss, refresh: poll };

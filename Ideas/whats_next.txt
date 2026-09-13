@@ -123,6 +123,12 @@ Shipped so far (do not re-propose)
           as your weakest one. A course that genuinely averages zero still
           says zero -- that distinction is the whole point.
 
+        Eight frontend audit findings: a blank white page on every cold load,
+          a greeting addressed to nobody, a swallowed budget error, half-typed
+          input wiped by a background refresh, a bulk-grade row losing a
+          keystroke when another row was removed, and the client second-
+          guessing a percentage the server had already rounded.
+
 
 What is left, by module. Tasks and Calendar no longer appear: everything that
 was under them has shipped.

@@ -33,6 +33,11 @@ export type CalendarView = "month" | "week";
  */
 export function useCalender() {
   const { user } = useAuth();
+  // The id, not the object. `refreshUser()` builds a fresh `user` every time,
+  // so depending on the object meant one Settings save re-ran every mounted
+  // hook's entire fetch -- the id is what this actually needs, and it does not
+  // change.
+  const userId = user?.id;
   // Week by default: it is the view with a time axis, so it is the one that
   // answers "what does today actually look like" and the one the free
   // blocks and week load hang off.
@@ -72,7 +77,7 @@ export function useCalender() {
   );
 
   const load = useCallback(async () => {
-    if (!user) {
+    if (!userId) {
       setLoading(false);
       return;
     }
@@ -83,8 +88,8 @@ export function useCalender() {
 
     try {
       const [nextOccurrences, nextTasks] = await Promise.all([
-        fetchAgenda(user.id, windowStart, windowEnd),
-        fetchTasks(user.id, { start: windowStart, end: windowEnd }),
+        fetchAgenda(userId, windowStart, windowEnd),
+        fetchTasks(userId, { start: windowStart, end: windowEnd }),
       ]);
       if (ticket !== latestRequest.current) return;
       setOccurrences(nextOccurrences);
@@ -95,7 +100,7 @@ export function useCalender() {
     } finally {
       if (ticket === latestRequest.current) setLoading(false);
     }
-  }, [user, windowStart, windowEnd]);
+  }, [userId, windowStart, windowEnd]);
 
   useEffect(() => {
     load();

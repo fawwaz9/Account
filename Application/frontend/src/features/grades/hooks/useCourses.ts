@@ -5,6 +5,11 @@ import { useAuth } from "../../../app/auth/AuthContext";
 
 export function useCourses() {
   const { user } = useAuth();
+  // The id, not the object. `refreshUser()` builds a fresh `user` every time,
+  // so depending on the object meant one Settings save re-ran every mounted
+  // hook's entire fetch -- the id is what this actually needs, and it does not
+  // change.
+  const userId = user?.id;
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -12,7 +17,7 @@ export function useCourses() {
   const loadCourses = useCallback(async () => {
     // Clear loading on the way out, or a null user leaves the page stuck on
     // "Loading courses..." forever.
-    if (!user) {
+    if (!userId) {
       setLoading(false);
       return;
     }
@@ -21,14 +26,14 @@ export function useCourses() {
     setError(null);
 
     try {
-      const data = await fetchCourses(user.id);
+      const data = await fetchCourses(userId);
       setCourses(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load courses");
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [userId]);
 
   useEffect(() => {
     loadCourses();

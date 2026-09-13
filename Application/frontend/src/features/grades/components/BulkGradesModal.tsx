@@ -13,13 +13,23 @@ interface BulkGradesModalProps {
 }
 
 interface Row {
+  /**
+   * Identity that survives its position. Keying these by array index meant that
+   * removing row 1 while editing row 3 handed row 3's focused input to row 4's
+   * data -- React reuses the DOM node for the key, and the keystroke in flight
+   * landed on the wrong row.
+   */
+  id: string;
   name: string;
   category: GradeCategory;
   score: string;
   max_score: string;
 }
 
+let nextRowId = 0;
+
 const emptyRow = (): Row => ({
+  id: `row-${nextRowId++}`,
   name: "",
   category: GradeCategory.ASSIGNMENT,
   score: "",
@@ -99,7 +109,7 @@ export default function BulkGradesModal({
 
           {rows.map((row, index) => (
             <BulkRow
-              key={index}
+              key={row.id}
               row={row}
               index={index}
               onChange={(patch) => updateRow(index, patch)}

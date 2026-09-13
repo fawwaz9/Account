@@ -13,6 +13,11 @@ interface UseTasksOptions {
 /** The task list, with whatever filter the page is showing. */
 export function useTasks({ includeDone, includeArchived, courseId }: UseTasksOptions = {}) {
   const { user } = useAuth();
+  // The id, not the object. `refreshUser()` builds a fresh `user` every time,
+  // so depending on the object meant one Settings save re-ran every mounted
+  // hook's entire fetch -- the id is what this actually needs, and it does not
+  // change.
+  const userId = user?.id;
   const [tasks, setTasks] = useState<Task[]>([]);
   const [repeating, setRepeating] = useState<RecurringTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,7 +28,7 @@ export function useTasks({ includeDone, includeArchived, courseId }: UseTasksOpt
   const latestRequest = useRef(0);
 
   const load = useCallback(async () => {
-    if (!user) {
+    if (!userId) {
       setLoading(false);
       return;
     }
@@ -38,12 +43,12 @@ export function useTasks({ includeDone, includeArchived, courseId }: UseTasksOpt
       // on (rule, due date), so this writes nothing twice. Failures are
       // swallowed deliberately: not being able to materialise must not stop the
       // list the student already has from rendering.
-      await runRepeating(user.id).catch(() => undefined);
+      await runRepeating(userId).catch(() => undefined);
       if (ticket !== latestRequest.current) return;
 
       const [next, nextRepeating] = await Promise.all([
-        fetchTasks(user.id, { includeDone, includeArchived, courseId }),
-        fetchRepeating(user.id),
+        fetchTasks(userId, { includeDone, includeArchived, courseId }),
+        fetchRepeating(userId),
       ]);
       if (ticket !== latestRequest.current) return;
       setTasks(next);
@@ -54,7 +59,7 @@ export function useTasks({ includeDone, includeArchived, courseId }: UseTasksOpt
     } finally {
       if (ticket === latestRequest.current) setLoading(false);
     }
-  }, [user, includeDone, includeArchived, courseId]);
+  }, [userId, includeDone, includeArchived, courseId]);
 
   useEffect(() => {
     load();

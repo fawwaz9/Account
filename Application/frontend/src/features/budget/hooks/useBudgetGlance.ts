@@ -10,15 +10,20 @@ import { useAuth } from "../../../app/auth/AuthContext";
  */
 export function useBudgetGlance() {
   const { user } = useAuth();
+  // The id, not the object. `refreshUser()` builds a fresh `user` every time,
+  // so depending on the object meant one Settings save re-ran every mounted
+  // hook's entire fetch -- the id is what this actually needs, and it does not
+  // change.
+  const userId = user?.id;
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [summary, setSummary] = useState<BudgetSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!user) return;
+    if (!userId) return;
 
     let cancelled = false;
-    Promise.all([fetchAccounts(user.id), fetchBudgetSummary(user.id, currentMonth())])
+    Promise.all([fetchAccounts(userId), fetchBudgetSummary(userId, currentMonth())])
       .then(([nextAccounts, nextSummary]) => {
         if (cancelled) return;
         setAccounts(nextAccounts);
@@ -33,7 +38,7 @@ export function useBudgetGlance() {
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, [userId]);
 
   const totalBalance = accounts.reduce((sum, account) => sum + account.balance, 0);
 

@@ -21,6 +21,8 @@ import { deleteRecurring, setBudgetTarget } from "../api";
 import { Account, RecurringTransaction, Transaction } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
 
+const NO_ACCOUNTS_YET = "Add an account first -- money has to go somewhere.";
+
 export default function BudgetView() {
   const { user } = useAuth();
   const {
@@ -81,11 +83,14 @@ export default function BudgetView() {
     <div className="container budgetPage">
       <div className="budgetHeader">
         <h1 className="gradesTitle">Budget</h1>
+        {/* A disabled control with no reason on it is a dead end. Both of
+            these need somewhere for the money to go, so they say so. */}
         <button
           type="button"
           className="buttons addCourseButton"
           onClick={() => setModalOpen(true)}
           disabled={accounts.length === 0}
+          title={accounts.length === 0 ? NO_ACCOUNTS_YET : undefined}
         >
           Record Money
         </button>
@@ -96,13 +101,17 @@ export default function BudgetView() {
           className="buttons addCourseButton"
           onClick={() => setTuitionOpen(true)}
           disabled={accounts.length === 0}
+          title={accounts.length === 0 ? NO_ACCOUNTS_YET : undefined}
         >
           Pay Tuition
         </button>
       </div>
 
       {loading && <p className="muted">Loading your accounts...</p>}
-      {error && <p className="muted">{error}</p>}
+      {error && <p className="muted" role="alert">{error}</p>}
+      {!loading && !error && accounts.length === 0 && (
+        <p className="muted">{NO_ACCOUNTS_YET}</p>
+      )}
 
       {!loading && !error && (
         <>

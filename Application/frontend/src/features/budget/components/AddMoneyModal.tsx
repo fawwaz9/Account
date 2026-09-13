@@ -43,12 +43,16 @@ export default function AddMoneyModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Default the pickers once accounts arrive, and reset on each open so a
-  // previous entry never carries over into a new one.
+  // Cleared on open, so a previous entry never carries over into a new one.
+  //
+  // Deliberately depends on `open` alone. It used to depend on `accounts` as
+  // well, and that is an array the parent rebuilds on every reload -- so a
+  // background refresh while the dialog was open wiped whatever was half-typed,
+  // with nothing on screen to explain where it went.
   useEffect(() => {
-    if (!open || accounts.length === 0) return;
-    setAccountId(accounts[0].id);
-    setToAccountId(accounts[1]?.id ?? accounts[0].id);
+    if (!open) return;
+    setAccountId("");
+    setToAccountId("");
     setAmount("");
     setDescription("");
     setOccurredOn(localToday());
@@ -56,6 +60,14 @@ export default function AddMoneyModal({
     setCourseId("");
     setAllocations([]);
     setError(null);
+  }, [open]);
+
+  // Seeds the pickers once accounts exist, and only while nothing is chosen, so
+  // a reload arriving mid-entry cannot move a selection already made.
+  useEffect(() => {
+    if (!open || accounts.length === 0) return;
+    setAccountId((current) => current || accounts[0].id);
+    setToAccountId((current) => current || accounts[1]?.id || accounts[0].id);
   }, [open, accounts]);
 
   // Ask the server how the deposit would divide, so the preview and what gets

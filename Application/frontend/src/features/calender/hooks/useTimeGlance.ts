@@ -12,11 +12,16 @@ import { useAuth } from "../../../app/auth/AuthContext";
  */
 export function useTimeGlance() {
   const { user } = useAuth();
+  // The id, not the object. `refreshUser()` builds a fresh `user` every time,
+  // so depending on the object meant one Settings save re-ran every mounted
+  // hook's entire fetch -- the id is what this actually needs, and it does not
+  // change.
+  const userId = user?.id;
   const [blocks, setBlocks] = useState<FreeBlock[]>([]);
   const [load, setLoad] = useState<WeekLoad | null>(null);
 
   useEffect(() => {
-    if (!user) return;
+    if (!userId) return;
 
     // Monday to Sunday of the week containing today, so the dashboard and the
     // calendar's week view agree about which week "this week" is.
@@ -26,8 +31,8 @@ export function useTimeGlance() {
 
     let cancelled = false;
     Promise.all([
-      fetchFreeBlocks(user.id, monday, sunday),
-      fetchWeekLoad(user.id, monday, sunday),
+      fetchFreeBlocks(userId, monday, sunday),
+      fetchWeekLoad(userId, monday, sunday),
     ])
       .then(([nextBlocks, nextLoad]) => {
         if (cancelled) return;
@@ -41,7 +46,7 @@ export function useTimeGlance() {
       });
 
     return () => { cancelled = true; };
-  }, [user]);
+  }, [userId]);
 
   return { blocks, load };
 }

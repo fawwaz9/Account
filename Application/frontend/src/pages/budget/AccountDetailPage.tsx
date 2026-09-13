@@ -117,6 +117,7 @@ export default function AccountDetailPage() {
             <ProgressBar
               value={activity.total_out}
               max={activity.planned}
+              percent={activity.used_percent}
               label={`${activity.account_name} spend against target`}
             />
 

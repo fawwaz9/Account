@@ -179,6 +179,28 @@ The flag is computed in one grouped query for a list and an EXISTS for a single
 course, so it does not depend on grades being eager-loaded and does not reintroduce
 the N+1 closed at #22.
 
+## Status as of the frontend pass
+
+**Closed: #32, #33, #34, #36, #37, #53, #54**, plus `aria-valuenow` exceeding
+`aria-valuemax` from the low-tier tail. **#55 was already fixed** -- `TaskList` takes
+an `emptyMessage` and every caller passes one; what remained was the unexplained
+disabled button, which now says why on the page as well as on hover.
+
+- **#34 was twenty sites, not a handful.** Ten of them are the always-mounted data
+  hooks, which is where the cost lands: `refreshUser()` builds a fresh object, so one
+  Settings save re-ran every one of them. All ten use `user` for nothing but its id,
+  so they now depend on `user?.id` -- a primitive that does not change. The remaining
+  ten are transient components (modals, the omnibox) and are left for now.
+- **#32's disagreement is real and narrow.** The server rounds `used_percent` to 1dp
+  and the client did not, so at the `close` boundary 89.96 became 90.0 on one side
+  and stayed 0.8996 on the other. The server's figure is now passed in, with the
+  derivation kept only as a fallback for callers that have none.
+- **#33 was a comment, not a bug.** The type said "expenses only -- transfers move
+  money rather than spending it"; `budget_service` deliberately includes the outgoing
+  leg of a transfer and carries a comment saying the two must not diverge. The numbers
+  were right, so the comment moved to match them.
+- **#36** needed row identity, not a different key expression: rows carry an `id` now.
+
 One correction to #17 found while fixing it: this document calls the unconfirmed
 account delete "permanent", but the server refuses to delete an account that still
 holds transactions and says to archive instead. The exposure was empty accounts only.
