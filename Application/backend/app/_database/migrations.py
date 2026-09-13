@@ -11,7 +11,12 @@ step must be idempotent, since this runs on every startup.
 
 from sqlalchemy import inspect, text
 
-from app._database.db import engine
+from app._database.db import Base, engine
+
+# Importing the models is what populates Base.metadata, which ensure_indexes
+# walks. Without it this module would see an empty metadata and silently create
+# nothing.
+from app._database import models  # noqa: F401
 
 # table -> column -> DDL type, for columns added after the table's first release
 ADDED_COLUMNS: dict[str, dict[str, str]] = {
@@ -55,11 +60,18 @@ ADDED_COLUMNS: dict[str, dict[str, str]] = {
 }
 
 # Run once, immediately after the named column is first added, to give existing
-# rows a sensible value. Keyed by column so it cannot fire twice.
-BACKFILLS: dict[str, str] = {
+# rows a sensible value.
+#
+# Keyed by ``(table, column)``, not by column alone. `archived`, `position`,
+# `name`, `user_id` and `kind` each exist on several tables, so a bare column
+# name would fire one table's backfill against another's new column the moment
+# a second entry was added. One entry today is exactly when to fix that.
+BACKFILLS: dict[tuple[str, str], str] = {
     # Every pre-existing Google account had its address vouched for by Google
     # at signup, before this column existed.
-    "email_verified": "UPDATE users SET email_verified = 1 WHERE google_id IS NOT NULL",
+    ("users", "email_verified"): (
+        "UPDATE users SET email_verified = 1 WHERE google_id IS NOT NULL"
+    ),
 }
 
 
@@ -80,6 +92,26 @@ def ensure_schema() -> None:
             for name, ddl in missing.items():
                 # Identifiers come from the literal dict above, never user input.
                 connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
-                backfill = BACKFILLS.get(name)
+                backfill = BACKFILLS.get((table, name))
                 if backfill is not None:
                     connection.execute(text(backfill))
+
+
+def ensure_indexes(bind=None) -> None:
+    """Create any index declared on a model that the database does not have.
+
+    ``create_all`` builds indexes only for tables it creates, so an existing
+    database never gains one added later. This walks the same metadata the
+    models declare, which is why there is no second list of index DDL to keep
+    in step with models.py.
+
+    A unique index can fail here, and that is the point: it means rows already
+    violate it, and inventing a resolution automatically would be worse than
+    saying so. The name of the failing index says which rule was broken.
+
+    `bind` defaults to the application engine; the tests pass their own.
+    """
+    target = bind if bind is not None else engine
+    for table in Base.metadata.sorted_tables:
+        for index in table.indexes:
+            index.create(bind=target, checkfirst=True)

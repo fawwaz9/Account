@@ -1,5 +1,7 @@
 import logging
 import os
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -8,7 +10,7 @@ from app.api.routes import (
 )
 from app._database.db import Base, engine
 from app._database import models
-from app._database.migrations import ensure_schema
+from app._database.migrations import ensure_indexes, ensure_schema
 
 # The audit log needs somewhere to go. uvicorn configures its own loggers but not
 # the application's, so without this every audit.* call is swallowed by the root
@@ -18,9 +20,23 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)-8s %(name)s %(message)s",
 )
 
-app = FastAPI()
-Base.metadata.create_all(bind=engine)
-ensure_schema()
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Bring the schema up to date, once, when the server actually starts.
+
+    Deliberately not at module import. These three issue DDL, and `import
+    app.main` happens in places that are emphatically not a server start: a
+    test collector, a reload worker, an IDE indexer, `--help`. Any of those
+    would write to whatever `DATABASE_URL` happened to point at.
+    """
+    Base.metadata.create_all(bind=engine)
+    ensure_schema()
+    ensure_indexes()
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
 

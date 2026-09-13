@@ -5,6 +5,8 @@ venv
 .env
 .git
 *.db
+*.db-wal
+*.db-shm
 *.db.backup*
 *.sqlite
 *.sqlite3

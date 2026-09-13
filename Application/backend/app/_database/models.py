@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 from sqlalchemy import (
-    Column, String, Float, Boolean, Integer, ForeignKey, Date, DateTime, Time, JSON
+    Column, String, Float, Boolean, Integer, ForeignKey, Date, DateTime, Time, Index, JSON
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import Uuid
@@ -57,8 +57,32 @@ class UserModel(Base):
     current_semester = Column(String, nullable=True)
     term_label = Column(String, nullable=True)
 
+    # Every table a user directly owns, so "delete my account" removes all of
+    # it. Only `courses` and `accounts` were listed here once, which left
+    # categories, targets, jobs, reminders and the rest behind as rows belonging
+    # to a user who no longer existed -- invisible, because nothing queries by a
+    # deleted id. Declaring them lets SQLAlchemy work out the delete order
+    # itself rather than this having to hand-sort twenty statements.
+    #
+    # The rows underneath these cascade from their own parents: grades and
+    # category weights from a course, deductions from a payment or cheque,
+    # contributions from a fund, snoozes from a task.
     courses = relationship("CourseModel", back_populates="user", cascade=cascade)
     accounts = relationship("AccountModel", back_populates="user", cascade=cascade)
+    transactions = relationship("TransactionModel", cascade=cascade, overlaps="account,transactions")
+    spend_categories = relationship("SpendCategoryModel", cascade=cascade)
+    budget_targets = relationship("BudgetTargetModel", cascade=cascade)
+    recurring_transactions = relationship("RecurringTransactionModel", cascade=cascade)
+    sinking_funds = relationship("SinkingFundModel", cascade=cascade)
+    tuition_payments = relationship("TuitionPaymentModel", cascade=cascade)
+    events = relationship("EventModel", back_populates="user", cascade=cascade)
+    tasks = relationship("TaskModel", cascade=cascade, overlaps="course,tasks,grade")
+    recurring_tasks = relationship("RecurringTaskModel", cascade=cascade)
+    reminders = relationship("ReminderModel", cascade=cascade)
+    term_blackouts = relationship("TermBlackoutModel", cascade=cascade)
+    jobs = relationship("JobModel", cascade=cascade)
+    shift_records = relationship("ShiftRecordModel", cascade=cascade, overlaps="job,shift_records")
+    paycheques = relationship("PaychequeModel", cascade=cascade, overlaps="job,paycheques")
 
     @property
     def has_password(self) -> bool:
@@ -314,7 +338,7 @@ class EventModel(Base):
     #: series could only mean ending the series.
     skipped_dates = Column(JSON, nullable=False, default=list)
 
-    user = relationship("UserModel")
+    user = relationship("UserModel", back_populates="events")
     course = relationship("CourseModel", back_populates="events")
     grade = relationship("GradeModel", back_populates="events")
 
@@ -859,3 +883,108 @@ class PaychequeDeductionModel(Base):
     amount = Column(Float, nullable=False)
 
     paycheque = relationship("PaychequeModel", back_populates="deductions")
+
+
+# ===== Indexes =====
+#
+# Declared here in one block rather than as `index=True` scattered over
+# twenty-three classes, so the policy is readable in one place: **every foreign
+# key, plus the columns a hot query filters or orders on.** Every table in this
+# app is multi-tenant, so `user_id` is in nearly every WHERE clause; without
+# these, each of those is a full table scan.
+#
+# `ensure_indexes` in migrations.py walks this same metadata, so an existing
+# database picks up anything added here without a second list to keep in step.
+
+# Tenancy and the date window, in one composite. A leading `user_id` also
+# serves the plain "everything this user owns" queries, so this is two indexes'
+# worth for one index's write cost.
+Index("ix_transactions_user_occurred", TransactionModel.user_id, TransactionModel.occurred_on)
+Index("ix_transactions_account_id", TransactionModel.account_id)
+# The two halves of a transfer, and the several rows of one deposit.
+Index("ix_transactions_group_id", TransactionModel.group_id)
+Index("ix_transactions_category_id", TransactionModel.category_id)
+# Both the "has this rule already written this date" check and the subscription
+# audit's `recurring_id IS NULL` filter read this.
+Index("ix_transactions_recurring_id", TransactionModel.recurring_id)
+Index("ix_transactions_course_id", TransactionModel.course_id)
+
+Index("ix_courses_user_id", CourseModel.user_id)
+Index("ix_course_category_weights_course_id", CourseCategoryWeightModel.course_id)
+Index("ix_grades_course_id", GradeModel.course_id)
+
+Index("ix_accounts_user_id", AccountModel.user_id)
+Index("ix_spend_categories_user_id", SpendCategoryModel.user_id)
+
+# budget_targets.account_id is not served by the unique index below it: that one
+# leads with user_id, and an index is only usable from its first column.
+Index("ix_budget_targets_account_id", BudgetTargetModel.account_id)
+
+Index("ix_events_user_id", EventModel.user_id)
+Index("ix_events_course_id", EventModel.course_id)
+Index("ix_events_grade_id", EventModel.grade_id)
+Index("ix_events_job_id", EventModel.job_id)
+
+Index("ix_tasks_user_id", TaskModel.user_id)
+Index("ix_tasks_course_id", TaskModel.course_id)
+Index("ix_tasks_grade_id", TaskModel.grade_id)
+Index("ix_tasks_recurring_id", TaskModel.recurring_id)
+Index("ix_task_snoozes_task_id", TaskSnoozeModel.task_id)
+
+Index("ix_reminders_user_id", ReminderModel.user_id)
+Index("ix_reminders_course_id", ReminderModel.course_id)
+
+Index("ix_recurring_transactions_user_id", RecurringTransactionModel.user_id)
+# Both account columns, because deleting an account has to look for a rule
+# pointing at it from either end.
+Index("ix_recurring_transactions_account_id", RecurringTransactionModel.account_id)
+Index("ix_recurring_transactions_to_account_id", RecurringTransactionModel.to_account_id)
+Index("ix_recurring_transactions_category_id", RecurringTransactionModel.category_id)
+Index("ix_recurring_tasks_user_id", RecurringTaskModel.user_id)
+Index("ix_recurring_tasks_course_id", RecurringTaskModel.course_id)
+
+Index("ix_sinking_funds_user_id", SinkingFundModel.user_id)
+Index("ix_sinking_funds_from_account_id", SinkingFundModel.from_account_id)
+Index("ix_sinking_funds_to_account_id", SinkingFundModel.to_account_id)
+Index("ix_sinking_contributions_fund_id", SinkingContributionModel.fund_id)
+
+Index("ix_tuition_payments_user_id", TuitionPaymentModel.user_id)
+Index("ix_tuition_payments_transaction_id", TuitionPaymentModel.transaction_id)
+Index("ix_tuition_deductions_payment_id", TuitionDeductionModel.tuition_payment_id)
+
+Index("ix_term_blackouts_user_id", TermBlackoutModel.user_id)
+
+Index("ix_jobs_user_id", JobModel.user_id)
+# shift_records is keyed by (event_id, on_date) conceptually -- that pair is how
+# one date of a repeating shift is identified -- so the composite is the lookup.
+Index("ix_shift_records_event_on_date", ShiftRecordModel.event_id, ShiftRecordModel.on_date)
+Index("ix_shift_records_user_id", ShiftRecordModel.user_id)
+Index("ix_shift_records_job_id", ShiftRecordModel.job_id)
+# Walked when a shift is removed, to find the ledger rows a cash tip wrote.
+Index("ix_shift_records_tip_transaction_id", ShiftRecordModel.tip_transaction_id)
+Index("ix_paycheques_user_id", PaychequeModel.user_id)
+Index("ix_paycheques_job_id", PaychequeModel.job_id)
+Index("ix_paycheque_deductions_paycheque_id", PaychequeDeductionModel.paycheque_id)
+
+
+# ===== Uniqueness =====
+#
+# Each of these was previously enforced only by a check-then-insert in Python,
+# which races: two concurrent requests both read "no row exists" and both
+# insert. That is also what let a fresh user's seeded accounts and categories
+# double up when two GETs arrived together -- the constraint is what actually
+# closes that, not the seeding code.
+#
+# Unique *indexes* rather than table constraints because SQLite cannot add a
+# constraint to an existing table, and an index is the same enforcement.
+
+Index("uq_courses_user_code", CourseModel.user_id, CourseModel.code, unique=True)
+Index("uq_accounts_user_name", AccountModel.user_id, AccountModel.name, unique=True)
+Index("uq_spend_categories_user_name", SpendCategoryModel.user_id, SpendCategoryModel.name, unique=True)
+Index(
+    "uq_budget_targets_user_account_month",
+    BudgetTargetModel.user_id,
+    BudgetTargetModel.account_id,
+    BudgetTargetModel.month,
+    unique=True,
+)

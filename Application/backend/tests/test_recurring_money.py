@@ -242,15 +242,35 @@ def test_deleting_an_instruction_keeps_the_money_it_moved(db, user):
 
 
 def test_a_broken_rule_does_not_stop_the_others(db, user):
-    """One instruction pointing at a gone account must not block the rest."""
+    """One instruction pointing at a gone account must not block the rest.
+
+    The database now refuses to delete an account a rule still points at, so
+    this state is no longer reachable through the app. It is still reachable in
+    a database written *before* foreign keys were enforced, which is every
+    database this project created until now -- so the defensive branch in
+    `run_due` stays, and the only honest way to set the scenario up is to drop
+    enforcement for the two statements that fabricate it.
+    """
     good = make_account(db, user.id, "Spending")
     doomed = make_account(db, user.id, "Old")
     create_rule(db, user.id, monthly(amount=10.0, description="Good", account_id=good.id))
     create_rule(db, user.id, monthly(amount=20.0, description="Broken", account_id=doomed.id))
 
     db.query(TransactionModel).filter(TransactionModel.account_id == doomed.id).delete()
-    db.delete(db.get(type(doomed), doomed.id))
     db.commit()
+
+    # Straight through the driver with enforcement off, which is the only way to
+    # produce a row a pre-enforcement database could hold. The pragma goes back
+    # on immediately: the fixture shares one connection, so leaving it off would
+    # quietly disable foreign keys for the rest of the test.
+    raw = db.get_bind().raw_connection()
+    cursor = raw.cursor()
+    cursor.execute("PRAGMA foreign_keys=OFF")
+    cursor.execute("DELETE FROM accounts WHERE id = ?", (doomed.id.hex,))
+    raw.commit()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
+    db.expire_all()
 
     result = run_due(db, user.id, through=date(2026, 1, 15))
 
