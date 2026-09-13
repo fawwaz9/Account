@@ -374,3 +374,60 @@ export interface SafeToSpend {
   accounts: SpendableAccount[];
   commitments: Commitment[];
 }
+
+/* ===== Sinking funds ===== */
+
+/** Mirrors app/Finances/schemas/sinking.py. */
+
+export interface SinkingContribution {
+  id: string;
+  for_month: string;
+  amount: number;
+  group_id: string | null;
+  confirmed_at: string | null;
+}
+
+export interface SinkingFund {
+  id: string;
+  name: string;
+  target_amount: number;
+  due_on: string;
+  from_account_id: string;
+  to_account_id: string;
+  archived: boolean;
+  created_at: string | null;
+
+  saved: number;
+  remaining: number;
+  /** Contributions left, counting this month. Zero once the due date has passed. */
+  months_left: number;
+  /** Derived on every read, never stored: a missed month corrects itself. */
+  per_month: number;
+  funded_this_month: boolean;
+  /**
+   * What safe-to-spend subtracts — this month's contribution while it is still
+   * a promise. Zero once transferred, because the money is then in a savings
+   * account that safe-to-spend already excludes.
+   */
+  unfunded_this_month: number;
+  overdue: boolean;
+
+  contributions: SinkingContribution[];
+}
+
+export interface SinkingFundCreate {
+  name: string;
+  target_amount: number;
+  due_on: string;
+  from_account_id: string;
+  to_account_id: string;
+  archived: boolean;
+}
+
+export type SinkingFundUpdate = Partial<SinkingFundCreate>;
+
+export interface ContributionRequest {
+  /** Null uses the derived monthly figure. A smaller month is allowed. */
+  amount: number | null;
+  occurred_on: string | null;
+}

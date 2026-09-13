@@ -134,8 +134,33 @@ most useful thing this figure can say, so it changes colour rather than tone —
 and `per_day` goes null, because a daily allowance of minus money is not
 guidance.
 
-## Still open
+## Sinking funds
 
-Sinking funds; a subscription audit reading the ledger for
+What something costs and when it is due. The monthly figure is
+`(target − saved) ÷ months left`, **derived on every read and never stored**: a
+stored schedule goes stale the moment a month is missed or the target changes,
+and the recovery from either is that same division — so storing it would only be
+a second answer able to disagree with the first.
+
+A contribution row exists only once the transfer has happened, for the same
+reason a projected payment is not a transaction. Planned contributions have no
+row at all.
+
+**Why it cannot double-count.** Safe-to-spend subtracts a fund's contribution
+only while it is still a promise. Once transferred, the money is in a savings
+account, which safe-to-spend already excludes. Verified end to end on real data:
+the safe figure is *identical* either side of a contribution — the earmark drops
+to zero exactly as the spending balance falls by the same amount.
+
+A fund past its due date with money still owed asks for the whole remainder
+rather than spreading it over one more month, which would quietly move the
+deadline. Zero months left is also a division by nothing, so the fallback is
+load-bearing rather than cosmetic.
+
+Deleting a fund takes its transfers with it; deleting a transfer clears the
+contribution. Both directions are mutation-tested — a fund left claiming money
+no longer set aside is the orphaned-tuition-payment fault again.
+
+## Still open a subscription audit reading the ledger for
 repeats with no standing instruction behind them; reimbursement state; who and
 when on Money Lent.

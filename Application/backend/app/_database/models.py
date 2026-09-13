@@ -370,6 +370,65 @@ class TaskModel(Base):
     )
 
 
+class SinkingFundModel(Base):
+    """Money put aside a bit at a time for something that lands all at once.
+
+    Tuition in January is not a surprise, but it behaves like one if nothing
+    reserves for it. This says what the thing costs and when it is due, and the
+    monthly figure falls out of the two.
+
+    Nothing about the schedule is stored. The contribution is
+    (target - saved) / months remaining, recomputed on every read, because a
+    stored schedule goes stale the moment a month is missed or the target
+    changes -- and the recovery from either is the same division. What *is*
+    stored is what actually moved.
+    """
+
+    __tablename__ = "sinking_funds"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False)
+    name = Column(String, nullable=False)
+    target_amount = Column(Float, nullable=False, default=0.0)
+    due_on = Column(Date, nullable=False)
+    #: Where contributions come from, and where they go. Both required: a
+    #: contribution is an ordinary transfer, and a transfer has two ends.
+    from_account_id = Column(Uuid, ForeignKey("accounts.id"), nullable=False)
+    to_account_id = Column(Uuid, ForeignKey("accounts.id"), nullable=False)
+    archived = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+
+    contributions = relationship(
+        "SinkingContributionModel",
+        back_populates="fund",
+        cascade="all, delete-orphan",
+    )
+
+
+class SinkingContributionModel(Base):
+    """One month's money actually set aside.
+
+    A row exists only once the transfer has happened. A *planned* contribution
+    is derived and has no row, for the same reason a planned payment is not a
+    transaction: nothing has moved, and a balance that counted it would report
+    money as gone while it is still in the account.
+    """
+
+    __tablename__ = "sinking_contributions"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    fund_id = Column(Uuid, ForeignKey("sinking_funds.id"), nullable=False)
+    #: The first of the month this covers, so one month cannot be funded twice.
+    for_month = Column(Date, nullable=False)
+    amount = Column(Float, nullable=False)
+    #: The transfer this wrote. A transfer is two rows tied by this column, so
+    #: it is the group rather than a single transaction id.
+    group_id = Column(Uuid, nullable=True)
+    confirmed_at = Column(DateTime, nullable=False, default=utc_now)
+
+    fund = relationship("SinkingFundModel", back_populates="contributions")
+
+
 class ReminderModel(Base):
     """Something that notifies, as opposed to a task that waits.
 

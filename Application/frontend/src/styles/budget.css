@@ -829,3 +829,120 @@
   gap: 12px;
   padding: 2px 0;
 }
+
+/* ===== Sinking funds =====
+   Money reserved for something that lands all at once. Sits under the accounts
+   and above the month, because it is a claim on the balances just shown and it
+   changes the safe figure at the top. */
+
+.sinkSection {
+  margin: 24px 0;
+}
+
+.sinkList {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
+  gap: 12px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sinkCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 13px 15px;
+  border: 1px solid #1f2a44;
+  border-radius: 12px;
+  background: var(--panel-2);
+}
+
+/* Past its date with money still owed. Not a failure to hide -- it is the one
+   state where the monthly figure stops being a plan and becomes a bill. */
+.sinkCardOverdue {
+  border-color: #e0685f;
+}
+
+.sinkHead {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sinkName {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.sinkBar {
+  overflow: hidden;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.16);
+}
+
+.sinkBarFill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: #4fa86f;
+}
+
+.sinkActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+/* padding and box-sizing explicit: the base .container button rule would
+   otherwise give these 7px 14px. Eight controls now. */
+.sinkPut {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  padding: 5px 12px;
+  border: 1px solid var(--gold);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--gold);
+  font-size: 0.8rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: 0.15s ease;
+}
+
+.sinkPut:hover {
+  background: rgba(212, 175, 55, 0.16);
+}
+
+.sinkUndo,
+.sinkRemove {
+  box-sizing: border-box;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.sinkUndo:hover,
+.sinkRemove:hover {
+  color: var(--gold);
+}
+
+.sinkRemove {
+  align-self: flex-start;
+  margin-top: 2px;
+}
+
+.sinkDone {
+  color: #7fd0a0;
+}
+
+.sinkOverdueNote {
+  color: #e0685f;
+}

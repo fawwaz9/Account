@@ -29,6 +29,7 @@ from app.Finances.schemas.safe import Commitment, SafeToSpend, SpendableAccount
 from app.Finances.services.account_service import balances_by_account
 from app.Finances.services.budget_service import month_bounds
 from app.Finances.services.recurring_service import upcoming
+from app.Finances.services.sinking_service import unfunded_total
 from app.Jobs.services.earnings_service import upcoming_pay
 from app.Jobs.services.job_service import next_pay_on
 from app.Tasks.services.task_service import user_exists
@@ -136,7 +137,11 @@ def safe_to_spend(db: Session, user_id: uuid.UUID, on_day: date | None = None):
     leaving = [charge for charge in charges if charge.signed_amount < 0]
     committed = money(sum(-charge.signed_amount for charge in leaving))
 
-    earmarked = 0.0  # Sinking funds land in the next stage.
+    # This month's sinking-fund contributions that are still promises. A
+    # contribution already transferred needs nothing here: the money sits in a
+    # savings account, which `spendable_accounts` already leaves out, and
+    # subtracting it in both places would take it off twice.
+    earmarked = unfunded_total(db, user_id, anchor)
     safe_now = money(spendable - committed - earmarked)
     owed = owed_for_work(db, user_id, anchor)
 
