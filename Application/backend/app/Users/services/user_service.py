@@ -1,5 +1,6 @@
 from uuid import UUID, uuid4
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app._database.models import UserModel
@@ -66,7 +67,17 @@ def create_local_user(db: Session, data: RegisterRequest):
         password_hash=hash_password(data.password),
     )
     db.add(user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        # The check above races: two registrations of the same address can both
+        # read "no such user" and both insert. The unique index on users.email
+        # is what actually decides it, and the loser has to be told the same
+        # thing the check would have told it -- not handed a 500 for having
+        # arrived a millisecond later.
+        db.rollback()
+        raise ValueError(error_user["already_exists"]) from exc
+
     db.refresh(user)
     return user
 

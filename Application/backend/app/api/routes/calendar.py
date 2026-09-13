@@ -217,7 +217,7 @@ def get_free_blocks(
     try:
         blocks = free_blocks(db, user_id, start, end)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if blocks is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
     return blocks
@@ -234,7 +234,7 @@ def get_week_load(
     try:
         load = week_load(db, user_id, start, end)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if load is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
     return load
@@ -251,7 +251,7 @@ def get_crunch(
     try:
         strip = crunch(db, user_id, start, end)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if strip is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
     return strip
@@ -271,7 +271,7 @@ def add_blackout(user_id: VerifiedUserId, data: TermBlackoutCreate, db: DBSessio
     try:
         row = create_blackout(db, user_id, data)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if row is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
     return row
@@ -284,7 +284,7 @@ def edit_blackout(
     try:
         row = update_blackout(db, user_id, blackout_id, data)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if row is None:
         raise HTTPException(status_code=404, detail="Blocked period not found")
     return row

@@ -48,17 +48,24 @@ def effective_target(course, default_target: float) -> float:
     return course.target_grade if course.target_grade is not None else default_target
 
 
-def course_result_grade(course) -> float | None:
+def course_result_grade(course, average: float | None = None) -> float | None:
     """The single grade a finished course should be represented by.
 
     Prefers the final grade the professor submitted, falls back to the running
     average, and returns None when the course has neither. A past course that
     was never filled in must not drag its year's average toward zero.
+
+    `average` overrides the stored column for a caller that has just recomputed
+    it. It exists so such a caller does not have to assign the fresh value onto
+    the mapped attribute to be seen -- a read that writes to a mapped column is
+    one stray commit away from a GET that changes data.
     """
     if course.final_grade and course.final_grade > 0:
         return course.final_grade
-    if course.average and course.average > 0:
-        return course.average
+
+    running = course.average if average is None else average
+    if running and running > 0:
+        return running
     return None
 
 

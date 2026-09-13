@@ -38,14 +38,26 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
+# Stripped, because "a.com, b.com" is the natural way to write a list and the
+# space made the second entry " b.com", which no Origin header can ever equal --
+# a silently unreachable origin rather than a visible misconfiguration.
+allowed_origins = [
+    origin.strip()
+    for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
+    if origin.strip()
+]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    # Authentication is a Bearer header that the client sets on each request,
+    # and no cookie is ever set, so credentialed CORS grants nothing today. It
+    # only widens what a future wrong ALLOWED_ORIGINS would expose.
+    allow_credentials=False,
+    # The methods and headers the API actually uses, rather than "*". A wildcard
+    # permits verbs no route serves and headers nothing reads.
+    allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 app.include_router(grades.router, prefix="/api/grades", tags=["Grades"])

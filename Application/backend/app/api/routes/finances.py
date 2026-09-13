@@ -328,8 +328,18 @@ def list_user_transactions(
     end: date | None = None,
     limit: int = Query(100, ge=1, le=500),
 ):
-    """Movements, newest first. `start`/`end` bound `occurred_on` inclusively."""
-    return list_transactions(db, user_id, account_id, limit, start, end)
+    """Movements, newest first. `start`/`end` bound `occurred_on` inclusively.
+
+    An impossible window is a 400 and an unknown account a 404, rather than the
+    empty list both used to return -- on a money page "you have nothing" is a
+    worse answer than an error, because it looks like a fact.
+    """
+    try:
+        return list_transactions(db, user_id, account_id, limit, start, end)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.post("/{user_id}/transactions", response_model=Transaction, responses=ACCOUNT_404)
@@ -522,7 +532,7 @@ def create_tuition_payment(user_id: VerifiedUserId, data: TuitionCreate, db: DBS
     try:
         return record_tuition(db, user_id, data)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/{user_id}/courses/{course_id}/cost", response_model=CourseCost, responses=responses["course_both"])
@@ -550,7 +560,7 @@ def edit_tuition_payment(
     try:
         payment = update_tuition(db, user_id, payment_id, data)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if payment is None:
         raise HTTPException(status_code=404, detail="Tuition payment not found")
     return payment

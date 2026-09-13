@@ -349,14 +349,17 @@ def grade_scale_row(average: float) -> tuple[str, float]:
     return "F", 0.0
 
 
-def calculate_letter_grade(course) -> str:
+def calculate_letter_grade(course, average: float | None = None) -> str:
     """Letter for the course's result, or "" when nothing is recorded.
 
     Reads course_result_grade rather than the raw average, so a finished course
     carrying only the professor's final_grade does not read as an F, and an
     untouched course shows no letter at all instead of failing.
+
+    `average` is passed straight through, for a caller holding a freshly
+    computed value it has deliberately not written to the row.
     """
-    result = course_result_grade(course)
+    result = course_result_grade(course, average)
     if result is None:
         return ""
 
