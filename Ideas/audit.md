@@ -153,6 +153,32 @@ difference lands at or below 0.01 and a one-cent error really was accepted, so t
 finding stands; it just needed a value that demonstrates it. Comparison is now in
 whole cents, which needs no tolerance at all.
 
+## Status as of the nullable-average pass
+
+**Closed: #31**, and it exposed a live bug on the dashboard while doing it.
+
+An unmarked course reported `average: 0.0`, and `get_dashboard` picked its weakest
+course with a plain `min` over that figure -- so **the weakest course on the page was
+whichever course you had not started**. On the real gradebook, 7 of 27 courses were
+in that state, and the weakest course moves from one of them to MATH 220 at 77.5,
+which is a real course with real marks.
+
+Two decisions worth keeping:
+
+- **Null means "nothing marked", not "averages zero".** A course whose marks really
+  do average zero still reports `0.0`. That distinction is the whole point, so the
+  flag comes from whether any counting grade exists, not from testing the average
+  against zero -- and a dropped mark does not count, for the same reason it stays out
+  of every average.
+- **The mapped column is never written.** The service attaches `reported_average` and
+  the schema reads it through a `validation_alias`, so deciding what to report never
+  means assigning to `course.average` -- which would be #51 all over again. A test
+  asserts the column still reads 0.0 while the API reports null.
+
+The flag is computed in one grouped query for a list and an EXISTS for a single
+course, so it does not depend on grades being eager-loaded and does not reintroduce
+the N+1 closed at #22.
+
 One correction to #17 found while fixing it: this document calls the unconfirmed
 account delete "permanent", but the server refuses to delete an account that still
 holds transactions and says to archive instead. The exposure was empty accounts only.

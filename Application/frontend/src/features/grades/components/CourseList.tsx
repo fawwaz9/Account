@@ -16,7 +16,9 @@ interface CourseCardProps {
  */
 export function displayGrade(course: Course): number | null {
   if (course.final_grade > 0) return course.final_grade;
-  if (course.average > 0) return course.average;
+  // Null already means "nothing marked"; the > 0 test remains for a course
+  // whose marks average out to zero, which mirrors course_result_grade.
+  if (course.average !== null && course.average > 0) return course.average;
   return null;
 }
 

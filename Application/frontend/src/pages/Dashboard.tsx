@@ -51,11 +51,11 @@ export default function Dashboard() {
             <div className="summaryCourses">
               <p>
                 Strongest <strong>{summary.best_course.course_code}</strong>{" "}
-                <span className="muted">{summary.best_course.average}</span>
+                <span className="muted">{summary.best_course.average ?? "–"}</span>
               </p>
               <p>
                 Weakest <strong>{summary.weakest_course.course_code}</strong>{" "}
-                <span className="muted">{summary.weakest_course.average}</span>
+                <span className="muted">{summary.weakest_course.average ?? "–"}</span>
               </p>
             </div>
           )}

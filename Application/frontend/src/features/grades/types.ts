@@ -12,7 +12,12 @@ export interface Course {
   /** null uses the account default from Settings */
   target_grade: number | null;
   category_weights: Partial<Record<GradeCategory, number>>;
-  average: number;
+  /**
+   * Null when the course has no marked work, rather than 0. Zero is a real
+   * grade and "not marked yet" is not, and showing the second as the first
+   * makes a course you have not started read as one you are failing.
+   */
+  average: number | null;
   start_date: string | null;
   end_date: string | null;
   /** No final exam, so a missing final grade is not flagged in Attention. */
@@ -71,7 +76,8 @@ export interface CourseDetail {
   professor: string | null;
   final_grade: number;
   category_weights: Partial<Record<GradeCategory, number>>;
-  average: number;
+  /** Null when nothing is marked. See Course.average. */
+  average: number | null;
   target_grade: number | null;
   letter_grade: string;
   grade_points: number;
@@ -307,7 +313,8 @@ export interface CourseDashboardEntry {
   course_id: string;
   course_code: string;
   course_name: string;
-  average: number;
+  /** Null when nothing is marked. See Course.average. */
+  average: number | null;
   needed_final_score: number | null;
   unfinished_categories: string[];
 }
@@ -316,7 +323,8 @@ export interface CourseNeedingFinalScore {
   course_id: string;
   course_code: string;
   course_name: string;
-  average: number;
+  /** Null when nothing is marked. See Course.average. */
+  average: number | null;
   needed_final_score: number | null;
   unfinished_categories: string[];
 }

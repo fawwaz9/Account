@@ -123,7 +123,17 @@ class CourseUpdate(BaseModel):
 
 class Course(CourseBase):
     id: UUID = Field(default_factory=uuid4)
-    average: float = 0.0
+    #: Null when the course has no marked work, rather than 0.0.
+    #:
+    #: Zero is a real grade and "not marked yet" is not, and reporting the
+    #: second as the first makes a course you have not started read as a
+    #: course you are failing. Same reason the cumulative average is nullable.
+    #:
+    #: Read from `reported_average`, which the service attaches, specifically so
+    #: that deciding what to report never means assigning to the mapped
+    #: `average` column -- a read that writes is one stray commit from a GET
+    #: that changes data.
+    average: float | None = Field(default=None, validation_alias="reported_average")
     # Both computed server-side so one grade scale and one term comparison
     # serve the list, the course page, and search alike.
     letter_grade: str = Field(default="", description="Letter grade for the current average")
@@ -135,6 +145,8 @@ class Course(CourseBase):
 
     class Config:
         from_attributes = True
+        # So `Course(average=...)` still works by field name alongside the alias.
+        populate_by_name = True
 
 class CourseDetail(Course):
     grades: List[Grade] =  Field(default_factory=list)

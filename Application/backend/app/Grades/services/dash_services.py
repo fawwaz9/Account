@@ -76,9 +76,10 @@ def get_dashboard(db: Session, user_id: uuid.UUID, target_grade: float = DEFAULT
             continue
 
         weights = course.category_weights
-        # Read the stored column, same as the course list and course page, so
-        # every surface reports one number per course.
-        average = course.average
+        # Read what the course list and the course page report, so every surface
+        # shows one number per course -- including the null that means "nothing
+        # marked yet" rather than a zero that means "scored nothing".
+        average = course.reported_average
         unfinished_categories = [
             category for category, weight in weights.items()
             # Bonus is optional work, so an empty bonus category is not something
@@ -136,8 +137,13 @@ def get_dashboard(db: Session, user_id: uuid.UUID, target_grade: float = DEFAULT
     completed_credits, in_progress_credits = credits_by_state(course_list)
     required_credits, elective_credits = completed_credits_by_kind(course_list)
 
-    best_course = max(entries, key=lambda entry: entry.average)
-    weakest_course = min(entries, key=lambda entry: entry.average)
+    # Only courses with a mark can be the best or the weakest one. An unmarked
+    # course used to carry an average of 0.0 and was therefore reported as the
+    # weakest course on the page -- a course not started reading as a course
+    # being failed, which is the whole reason this figure is nullable.
+    scored = [entry for entry in entries if entry.average is not None]
+    best_course = max(scored, key=lambda entry: entry.average) if scored else None
+    weakest_course = min(scored, key=lambda entry: entry.average) if scored else None
     courses_needing_final_score = [
         entry for entry in entries if entry.needed_final_score is not None and entry.needed_final_score > 0
     ]
