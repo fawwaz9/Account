@@ -49,6 +49,25 @@ def balances_by_account(db: Session, user_id: uuid.UUID) -> dict[uuid.UUID, floa
     return {account_id: round(total or 0.0, 2) for account_id, total in rows}
 
 
+def balance_of(db: Session, user_id: uuid.UUID, account_id: uuid.UUID) -> float:
+    """One account's balance, summed by the database rather than in Python.
+
+    `balances_by_account` groups the user's whole ledger, which is right when
+    every account's figure is wanted and wasteful when one is: answering "what
+    is in Chequing" used to read and sum every transaction in every other
+    account and then throw all of it away.
+    """
+    total = (
+        db.query(func.sum(TransactionModel.amount))
+        .filter(
+            TransactionModel.user_id == user_id,
+            TransactionModel.account_id == account_id,
+        )
+        .scalar()
+    )
+    return round(total or 0.0, 2)
+
+
 def attach_balances(accounts: list[AccountModel], balances: dict[uuid.UUID, float]):
     for account in accounts:
         account.balance = balances.get(account.id, 0.0)
@@ -80,7 +99,8 @@ def get_account(db: Session, user_id: uuid.UUID, account_id: uuid.UUID):
     if account is None:
         return None
 
-    return attach_balances([account], balances_by_account(db, user_id))[0]
+    account.balance = balance_of(db, user_id, account_id)
+    return account
 
 
 def create_account(db: Session, user_id: uuid.UUID, data: AccountCreate):
@@ -145,7 +165,8 @@ def update_account(db: Session, user_id: uuid.UUID, account_id: uuid.UUID, data:
 
     db.commit()
     db.refresh(account)
-    return attach_balances([account], balances_by_account(db, user_id))[0]
+    account.balance = balance_of(db, user_id, account_id)
+    return account
 
 
 def delete_account(db: Session, user_id: uuid.UUID, account_id: uuid.UUID):

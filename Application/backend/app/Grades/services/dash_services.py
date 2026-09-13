@@ -98,7 +98,9 @@ def get_dashboard(db: Session, user_id: uuid.UUID, target_grade: float = DEFAULT
         needed_final_score = None
         if expects_a_final(course) and weights.get(GradeCategory.FINAL.value, 0.0) > 0:
             try:
-                required_final = calculate_required_final(db, user_id, course.id, target_grade)
+                required_final = calculate_required_final(
+                    db, user_id, course.id, target_grade, course=course,
+                )
                 needed_final_score = required_final.get("needed")
             except ValueError:
                 needed_final_score = None
