@@ -1,0 +1,137 @@
+# Jobs
+
+> The build log, including what each stage's plan got wrong, is at
+> [../jobs-plan.md](../jobs-plan.md). This is the standing design note.
+
+## Context
+
+One or several jobs, and the three questions they raise: *when am I working*,
+*what am I earning*, and *did the cheque match the hours*.
+
+Deliberately two-faced. **Time** goes to the Calendar, so a shift competes with
+lectures for the same hours and the existing free-block machinery sees it.
+**Money** goes to the Budget only at the point a cheque arrives, and only the
+net — every rate, gross figure and analysis lives here, because this is the only
+place that can compute them.
+
+**Decisions taken:** shifts are scheduled then confirmed, and an unconfirmed past
+shift counts at its scheduled hours and says so; a job is hourly, salaried or
+contract, each with its own expected-pay rule; a paycheque records gross and
+named deductions and sends only the net, split by income share; a shift is a new
+`EventKind` on the existing events table; tips are marked cash or on-cheque and
+only cash may reach the ledger.
+
+## What it reuses, and what that bought
+
+| Existing | What it gave |
+|---|---|
+| the recurrence engine | "every Tue and Thu" as the engine's fourth consumer, free |
+| `free_blocks` | work competes with study, with no code that knows what work is |
+| `CRUNCH_WEIGHTS.get(kind, 0)` | a shift scores zero and drops out of a measure of academic pressure |
+| blackout scoping | a reading break cannot cancel a shift, because blackouts touch course events only |
+| `split_income` | the net behaves like any other deposit |
+| `tuition_payments` | the structural precedent, near-mechanically reversed |
+| `week_load` | hours against class time, once split by kind |
+
+Four behaviours for the price of one column and one enum member. That table is
+the argument for writing *What already exists* before designing anything.
+
+## Data model
+
+`jobs` — name, employer, `kind`, `hourly_rate` (hourly only), `period_amount`
+(salaried only), `started_on`, `ended_on` (null while current), `archived`, and
+the five shared `recur_*` columns plus `pay_starts_on` for the pay schedule.
+Nothing is ever materialised from that rule: it answers "when is the next cheque",
+and a cheque exists only because one arrived and was entered.
+
+A job holds **only the pay field its own kind uses**. Two answers to "what should
+this have paid" with nothing to choose between them is worse than one missing
+answer. That rule cannot live on `JobUpdate` — a patch changing only `kind`
+cannot see the rate already stored — so `check_pay_fields` enforces it in the
+service and clears whichever field the new kind does not use.
+
+`events.job_id` — one nullable column beside `course_id`, plus `EventKind.SHIFT`.
+
+`shift_records` — what actually happened on one date: worked times, `confirmed`,
+`tip_amount`, `tip_is_cash`, `tip_transaction_id`, `rate_override`, notes. Keyed
+by **`(event_id, on_date)`**, because a repeating shift is one row expanded on
+read and there is nothing anywhere that represents "this Friday". A row exists
+only once there is something to say about that date.
+
+`paycheques` + `paycheque_deductions` — gross, period, `expected_gross`, and a
+`group_id` rather than a transaction id, because the net splits across accounts
+and a deposit is already several rows tied by that column.
+
+## The distinctions that carry the module
+
+**Scheduled vs worked.** An unconfirmed past shift counts at its scheduled hours
+and is flagged `assumed`. Dropping it would make a fortnight nobody did the admin
+for read as a fortnight nobody worked; auto-confirming it would claim as fact
+something never checked.
+
+**Earned vs paid.** Earned comes from the shifts and is a prediction; paid comes
+from cheques that arrived. Reported apart everywhere, because one combined figure
+would hide a fortnight worked that nobody has paid for — the thing the page
+exists to surface.
+
+**Gross vs net.** Deductions are money earned that never entered an account.
+Recording them as income would invent a deposit; dropping them would make the
+gross unexplainable. They sit on the cheque; only the net reaches the ledger.
+
+**Cash vs on-cheque tips.** A cash tip is money already in hand and writes its own
+income row. A tip paid through payroll arrives inside the cheque's gross, so a
+row of its own would count it twice. A cash tip with nowhere to go — no account
+takes an income share — still records, reporting `tip_in_ledger: false`: logging
+your hours must not fail over an unrelated budget setting.
+
+**Expected, per kind.** Hourly compares hours × rate. Salaried compares the period
+amount and treats hours as what the job *costs* you, never as evidence of
+underpayment. Contract compares nothing, because you invoiced it. Converting a
+salary to an implied hourly rate would make a long week read as a pay cut.
+
+## The four figures
+
+One service, one pass, in the shape of `load_service`:
+
+- **Week / month / term**, per job and total, hours beside money. Term dates from
+  the courses' own span.
+- **Effective hourly rate** — net ÷ hours, beside the advertised rate. Measured
+  over the periods cheques actually *covered*, not every hour worked: otherwise
+  unpaid hours drag it down and a cheque still to come reads as a pay cut.
+- **Hours against class time** — from `week_load`'s `work_minutes` /
+  `class_minutes` split.
+- **Unpaid, and when** — hours since the last cheque's period, plus the next date
+  the pay rule produces.
+
+## Notes
+
+- `expected_gross` is frozen when the cheque is recorded and never recomputed. A
+  shift edited months later must not overturn a verdict already reached — the
+  same reason tuition stores `credits_counted`.
+- `record_deposit` commits on its own, so it cannot be reused: the rows and the
+  cheque must land in one transaction. `deposit_rows` builds them unsaved from
+  the same `split_income`.
+- A cash tip is **several** rows, not one. The record points at one; the group
+  finds the rest. Deleting only the row it points at orphans the others.
+- `db.refresh()` reloads from the database and discards pending edits. It silently
+  undid a corrected gross. `db.flush()` was what was wanted.
+- Do not delete deductions by hand: the relationship's `delete-orphan` cascade
+  does it, and doing both leaves SQLAlchemy warning on every commit. The suite
+  runs with `-W error::sqlalchemy.exc.SAWarning` to catch the next one.
+- Any service taking an `on_day` must thread it into everything it calls.
+  `window_earnings` did not, so "past" meant the wall clock rather than the day
+  being reported on.
+- `SHIFT` must stay out of `CLASS_KINDS` — but that is not what protects shifts
+  from a timetable rewrite; the `course_id` match does. Two tests, for two
+  different things.
+
+## Not built, deliberately
+
+- **Overtime rules.** Offered and declined: a per-shift rate override covers the
+  stat holiday and the night differential without a provincial rule table.
+- **A cash account.** A cash tip splits by income share like any other income,
+  which claims it is in the bank when it is in a pocket. A student who wants it
+  apart can give a cash account its own share. Worth revisiting if that proves
+  awkward.
+- **Invoices as their own record.** A contract cheque *is* the invoice being paid;
+  there is nothing separate to track until one needs chasing.
