@@ -88,13 +88,25 @@ export default function GradesPage() {
                 <h2>{viewingYear ? `Year ${selectedYear}` : "Current Courses"}</h2>
 
                 {viewingYear ? (
-                  <button
-                    type="button"
-                    className="buttons addCourseButton"
-                    onClick={() => setSelectedYear(null)}
-                  >
-                    Current Courses
-                  </button>
+                  <span className="no-print sectionHeadingActions">
+                    {/* Only offered on a specific year: "the current term"
+                        moves, so it is not the record worth keeping that a
+                        past year already is. */}
+                    <button
+                      type="button"
+                      className="buttons addCourseButton"
+                      onClick={() => window.print()}
+                    >
+                      Print this year
+                    </button>
+                    <button
+                      type="button"
+                      className="buttons addCourseButton"
+                      onClick={() => setSelectedYear(null)}
+                    >
+                      Current Courses
+                    </button>
+                  </span>
                 ) : (
                   <button
                     type="button"

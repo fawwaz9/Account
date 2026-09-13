@@ -105,6 +105,22 @@ wrong, and the engine was left alone.
 - A literal path under `/courses/` must be declared above `/courses/{course_id}`.
   `/courses/resolve` was not, and 422'd.
 
+## Printing a term
+
+No dependency: a print stylesheet and `window.print()`, which already opens a
+save-as-PDF dialog on every platform that matters here. The button only
+appears on a specific past or future year, never on "Current Courses" -- a
+term that has stopped moving is a record worth keeping; the current term is
+still changing under you, so printing it today freezes something that will be
+wrong by next week.
+
+Everything that is screen furniture rather than the record opts out with
+`.no-print` (the print button itself, the archived toggle) or is hidden by
+`layout.css`'s own print rule (the sidebar, the topbar) -- no page needs to
+know about another page's chrome. `.courses` and `.termGroup` both get
+`break-inside: avoid`, the one thing a printed list must not do: split a
+course's code and grade across a page boundary.
+
 ## Still open
 
 Category blind spots across courses; a term retrospective once a term closes;
