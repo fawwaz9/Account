@@ -25,9 +25,10 @@ from app._database.models import (
     UserModel,
 )
 from app.Finances.services.account_service import delete_account
-from app.Users.services.user_service import delete_user
+from app.Users.schemas.user import DELETION_GRACE_DAYS
+from app.Users.services.user_service import delete_user, purge_expired_users
 from conftest import make_account, make_course, make_user
-from datetime import date
+from datetime import date, timedelta
 
 
 # ------------------------------------------------------- foreign keys are on --
@@ -109,8 +110,14 @@ def test_the_same_account_may_have_a_target_in_another_month(db, user):
 
 # -------------------------------------------------------- deleting a user --
 
-def test_deleting_a_user_leaves_nothing_behind(db, user):
-    """Every table the user owns, not just the two that were listed."""
+def test_purging_a_user_leaves_nothing_behind(db, user):
+    """Every table the user owns, not just the two that were listed.
+
+    Goes through the purge rather than `delete_user`, because deletion is a
+    request now: `delete_user` marks the account and the purge is what actually
+    removes it once the grace period has run out. The cascades this asserts are
+    the purge's to honour.
+    """
     account = make_account(db, user.id, "Chequing")
     make_course(db, user.id, "COSC 111")
     db.add(SpendCategoryModel(id=uuid.uuid4(), user_id=user.id, name="Food"))
@@ -130,6 +137,8 @@ def test_deleting_a_user_leaves_nothing_behind(db, user):
     db.commit()
 
     delete_user(db, user.id)
+    # Far enough past the deadline that the account is due to go.
+    purge_expired_users(db, on_day=date.today() + timedelta(days=DELETION_GRACE_DAYS + 1))
 
     for model in (
         UserModel, AccountModel, CourseModel, SpendCategoryModel,

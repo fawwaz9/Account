@@ -51,6 +51,19 @@ class UserModel(Base):
     # what is actually needed is "invalidate everything outstanding".
     session_epoch = Column(Integer, nullable=False, default=0, server_default="0")
 
+    #: When deletion was *requested*, not when it happened. Null for a live
+    #: account.
+    #:
+    #: Deletion used to take effect the instant the request landed, which for a
+    #: compromised account meant a stolen token could destroy an entire academic
+    #: record with no way back. The row and everything under it stay for
+    #: DELETION_GRACE_DAYS, and a purge at startup removes what is past that.
+    #:
+    #: Signing in deliberately still works while this is set: there is no email
+    #: system here, so blocking sign-in would make an account no one could ever
+    #: restore. The client sees the date and offers to undo it.
+    deleted_at = Column(DateTime, nullable=True)
+
     # Which term the student is in right now. Everything past/current/future on
     # the grades page is decided by comparing a course against these.
     current_school_year = Column(Integer, nullable=True)

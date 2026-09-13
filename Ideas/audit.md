@@ -201,6 +201,35 @@ disabled button, which now says why on the page as well as on hover.
   were right, so the comment moved to match them.
 - **#36** needed row identity, not a different key expression: rows carry an `id` now.
 
+## Status as of the soft-delete pass
+
+**Closed: #40**, which needed #28's completed cascades underneath it and so waited
+for that to land rather than being built on a deletion that still leaked.
+
+Deletion is a request now. `delete_user` marks `deleted_at`, revokes every session
+in the same moment, and removes nothing; `purge_expired_users` does the removing
+once the thirty-day window has passed, and runs at startup for the same reason due
+payments are written on read -- idempotent work, done when something is already
+happening. A machine left off for a month catches up when it starts, which is
+correct: the deadline passed whether or not the server was running.
+
+Three decisions worth keeping:
+
+- **Signing in still works while deletion is pending.** There is no email system
+  here, so blocking sign-in would make an account that nobody could ever restore --
+  the grace period would be decoration. The client reads `deletes_on` and offers to
+  undo it.
+- **Asking twice does not move the deadline.** Otherwise repeating the request
+  quietly buys another thirty days, and the account never goes.
+- **The purge deletes one row at a time through the ORM, not in bulk.** A bulk
+  statement bypasses the cascades, and the mutation test for it fails with a foreign
+  key violation rather than silently orphaning -- which is #28 and #29 doing their
+  job on a fault introduced a fortnight later.
+
+Worth knowing: **there is no UI for account deletion at all**, and never was. The
+DELETE endpoint has no caller in the frontend, so restore needs none either; the API
+is the whole surface today.
+
 One correction to #17 found while fixing it: this document calls the unconfirmed
 account delete "permanent", but the server refuses to delete an account that still
 holds transactions and says to archive instead. The exposure was empty accounts only.
