@@ -24,6 +24,11 @@ import { useAuth } from "../../../app/auth/AuthContext";
 /** Accounts with their balances, and the recent ledger, loaded together. */
 export function useBudget() {
   const { user } = useAuth();
+  // The id, not the object. `refreshUser()` builds a fresh `user` every time,
+  // so depending on the object meant one Settings save re-ran every mounted
+  // hook's entire fetch -- the id is what this actually needs, and it does not
+  // change.
+  const userId = user?.id;
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<SpendCategory[]>([]);
@@ -44,7 +49,7 @@ export function useBudget() {
   const latestRequest = useRef(0);
 
   const load = useCallback(async () => {
-    if (!user) {
+    if (!userId) {
       setLoading(false);
       return;
     }
@@ -61,7 +66,7 @@ export function useBudget() {
       // keyed by (rule, date) -- so doing this on every load charges nothing
       // twice. Failures are swallowed deliberately: not being able to catch up
       // must not stop the budget from rendering at all.
-      await runRecurring(user.id).catch(() => undefined);
+      await runRecurring(userId).catch(() => undefined);
       if (ticket !== latestRequest.current) return;
 
       // Balances derive from transactions, so the two must be read together or
@@ -75,20 +80,20 @@ export function useBudget() {
         nextUpcoming,
         nextSafe,
       ] = await Promise.all([
-        fetchAccounts(user.id),
+        fetchAccounts(userId),
         // Only what is genuinely recent; the whole history lives on each
         // account's own page.
-        fetchTransactions(user.id, { start: daysAgo(1), end: localToday() }),
-        fetchCategories(user.id),
-        fetchBudgetSummary(user.id, month),
-        fetchRecurring(user.id),
+        fetchTransactions(userId, { start: daysAgo(1), end: localToday() }),
+        fetchCategories(userId),
+        fetchBudgetSummary(userId, month),
+        fetchRecurring(userId),
         // Six weeks ahead: far enough to see the next rent and the next
         // subscription, near enough that it is still what you are committed to
         // rather than a forecast.
-        fetchUpcoming(user.id, localToday(), daysAhead(42)),
+        fetchUpcoming(userId, localToday(), daysAhead(42)),
         // Read after runRecurring above, so a payment written on this load
         // already counts as committed rather than as cash still in hand.
-        fetchSafeToSpend(user.id),
+        fetchSafeToSpend(userId),
       ]);
       if (ticket !== latestRequest.current) return;
       setAccounts(nextAccounts);
@@ -106,7 +111,7 @@ export function useBudget() {
       // would say "done" while the current request is still in flight.
       if (ticket === latestRequest.current) setLoading(false);
     }
-  }, [user, month]);
+  }, [userId, month]);
 
   useEffect(() => {
     load();

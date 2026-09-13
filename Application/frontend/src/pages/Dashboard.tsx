@@ -12,7 +12,7 @@ export default function Dashboard() {
   const { user } = useAuth();
 
   const { summary, error: summaryError } = useDashboard();
-  const { summary: budget, totalBalance } = useBudgetGlance();
+  const { summary: budget, totalBalance, error: budgetError } = useBudgetGlance();
   const { blocks: freeBlocks, load: weekLoad } = useTimeGlance();
   // Nothing to say without a timetable, so the section stays away
   // rather than showing a row of zeroes.
@@ -23,9 +23,14 @@ export default function Dashboard() {
 
   return (
     <div className="dashboard">
-      <h1 className="title">Welcome, {user?.name}</h1>
+      {/* The comma only appears with a name behind it. While /users/me is in
+          flight this rendered "Welcome, " -- a greeting addressed to nobody. */}
+      <h1 className="title">{user?.name ? `Welcome, ${user.name}` : "Welcome"}</h1>
 
-      {summaryError && <p className="muted">{summaryError}</p>}
+      {summaryError && <p className="muted" role="alert">{summaryError}</p>}
+      {/* Discarded entirely once, so a failed budget fetch rendered as no
+          budget section at all -- indistinguishable from having no money. */}
+      {budgetError && <p className="muted" role="alert">{budgetError}</p>}
 
       {hasCourses && summary && (
         <section className="gradeSummary">

@@ -13,6 +13,11 @@ export function useAccountActivity(accountId: string | undefined) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
+  // The id, not the object. `refreshUser()` builds a fresh `user` every time,
+  // so depending on the object meant one Settings save re-ran every mounted
+  // hook's entire fetch -- the id is what this actually needs, and it does not
+  // change.
+  const userId = user?.id;
 
   // Every load takes a ticket, and only the newest one is allowed to write state.
   // Stepping the month picker quickly fires several loads at once: without this,
@@ -23,7 +28,7 @@ export function useAccountActivity(accountId: string | undefined) {
   const latestRequest = useRef(0);
 
   const load = useCallback(async () => {
-    if (!user || !accountId) {
+    if (!userId || !accountId) {
       setLoading(false);
       return;
     }
@@ -38,13 +43,13 @@ export function useAccountActivity(accountId: string | undefined) {
       // reason the budget page reads balances and transactions together: two
       // round trips can straddle an edit and disagree on screen.
       const [nextActivity, nextTransactions, nextCategories] = await Promise.all([
-        fetchAccountActivity(user.id, accountId, month),
-        fetchTransactions(user.id, {
+        fetchAccountActivity(userId, accountId, month),
+        fetchTransactions(userId, {
           accountId,
           start: month,
           end: lastOfMonth(month),
         }),
-        fetchCategories(user.id),
+        fetchCategories(userId),
       ]);
       if (ticket !== latestRequest.current) return;
       setActivity(nextActivity);
@@ -58,7 +63,7 @@ export function useAccountActivity(accountId: string | undefined) {
       // would say "done" while the current request is still in flight.
       if (ticket === latestRequest.current) setLoading(false);
     }
-  }, [user, accountId, month]);
+  }, [userId, accountId, month]);
 
   useEffect(() => {
     load();

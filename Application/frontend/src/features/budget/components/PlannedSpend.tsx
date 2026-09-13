@@ -99,6 +99,7 @@ export default function PlannedSpend({
                 <ProgressBar
                   value={entry.actual}
                   max={entry.planned}
+                  percent={entry.used_percent}
                   label={`${entry.account_name} spend against target`}
                 />
 

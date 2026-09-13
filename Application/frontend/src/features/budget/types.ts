@@ -75,7 +75,16 @@ export interface AccountBudget {
   account_id: string;
   account_name: string;
   planned: number;
-  /** Expenses only -- transfers move money rather than spending it */
+  /**
+   * Expenses **plus the outgoing half of a transfer**: money moved out of a pot
+   * has left it as surely as money spent from it, so a target ignoring transfers
+   * would under-report. Only the negative leg counts; the matching positive one
+   * lands on the receiving account as money arriving.
+   *
+   * This said "expenses only -- transfers move money rather than spending it",
+   * which is the opposite of what budget_service does. The numbers were right;
+   * the comment was a trap for whoever read it next.
+   */
   actual: number;
   remaining: number;
   used_percent: number;
