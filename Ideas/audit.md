@@ -58,6 +58,24 @@ left are #24/#25 (which also close the seeding races at #26), #28+#40 together
 (incomplete cascades *and* no soft delete), and #29 (SQLite without WAL or a busy
 timeout).
 
+## Status as of the dead-code pass
+
+**Closed: #56**, plus the `pip freeze` requirements file from the "Also medium" tail.
+
+Sixteen files removed, every one verified unreferenced first rather than deleted on
+the strength of being empty: eleven zero-byte frontend modules, two zero-byte
+`errors.py`, `temp_data/store.py`, `api/api.txt`, and `_database/check_state.py` --
+which really did print every user's id, name and email to stdout at import.
+
+`requirements.txt` went from a 58-line `pip freeze` to 9 direct dependencies, which
+is 66 installed packages down to 42. **pytest was never declared at all**, so a fresh
+clone following the README could not run a single test. Verified by building a
+throwaway virtualenv from the pruned file alone and running the whole suite against
+it: 562 passed, and the app still imports with all 137 routes.
+
+`package.json` needed nothing -- the `axios` dependency this document names is already
+gone from it.
+
 ## Status as of the database-integrity pass
 
 **Closed: #24, #25, #26, #28, #29, #38, #39.** Every foreign key and filter column is
