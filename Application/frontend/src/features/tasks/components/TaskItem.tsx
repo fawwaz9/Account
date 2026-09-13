@@ -65,21 +65,27 @@ export default function TaskItem({
       {/* A select rather than a badge you click through: coursework arrives with
           a priority already on it, so the common interaction is correcting one
           rather than setting one, and a cycle-on-click control makes going from
-          5 to 4 a four-click job. */}
-      <select
-        className={`taskPriority taskPriority-${task.priority}`}
-        value={task.priority}
-        onChange={(event) => onPriority(task, Number(event.target.value))}
-        disabled={busy}
-        title={`Priority: ${PRIORITY_LABELS[task.priority]}`}
-        aria-label={`Priority of ${task.title}`}
-      >
-        {PRIORITY_STEPS.map((step) => (
-          <option key={step} value={step}>
-            {step} · {PRIORITY_LABELS[step]}
-          </option>
-        ))}
-      </select>
+          5 to 4 a four-click job. The select's own text is transparent and a
+          centred span sits over it showing just the number -- the closed badge
+          stays a clean digit while the open menu still explains what each step
+          means. */}
+      <span className={`taskPriorityWrap taskPriority-${task.priority}`}>
+        <select
+          className="taskPriority"
+          value={task.priority}
+          onChange={(event) => onPriority(task, Number(event.target.value))}
+          disabled={busy}
+          title={`Priority: ${PRIORITY_LABELS[task.priority]}`}
+          aria-label={`Priority of ${task.title}`}
+        >
+          {PRIORITY_STEPS.map((step) => (
+            <option key={step} value={step}>
+              {step} · {PRIORITY_LABELS[step]}
+            </option>
+          ))}
+        </select>
+        <span className="taskPriorityBadge" aria-hidden="true">{task.priority}</span>
+      </span>
 
       <div className="taskBody">
         <p className="taskTitle">{task.title}</p>
