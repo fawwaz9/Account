@@ -95,6 +95,9 @@ Shipped so far (do not re-propose)
         Shifts entered one at a time, which is how part-time work arrives. The
           weekly pattern is still there for jobs that repeat, and saving one no
           longer deletes the shifts you typed in by hand.
+        Removing a one-off shift, for a mistake or one never confirmed. Takes
+          any cash tip already in the ledger with it, and asks first only when
+          something was actually confirmed.
 
 
 What is left, by module. Tasks and Calendar no longer appear: everything that
@@ -290,6 +293,12 @@ Worth knowing before picking anything up
 - A repeat materialises differently per module, and the differences are the
   point: class times never become rows, payments become rows only once they have
   happened, tasks become rows a little way ahead so each can be ticked off.
+- Deleting a shift found a second version of the orphaned-ledger-row fault.
+  remove_shift bulk-deleted the ShiftRecordModel directly, which never touched
+  the transactions a confirmed cash tip had already written -- the same shape as
+  the orphaned tuition payment and paycheque, just one module later. Fixed by
+  walking the tip's group_id before the record goes, mutation-tested by
+  reverting to the bulk delete.
 - A job's shifts come in two shapes and both are events. A one-off has no rule
   and is the default path, because part-time hours are rarely the same twice; a
   weekly pattern is the exception. set_class_schedule-style replacement is

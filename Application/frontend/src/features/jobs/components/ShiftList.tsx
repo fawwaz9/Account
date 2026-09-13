@@ -4,6 +4,7 @@ import { clockTime, dueLabel } from "../../../shared/utils/dateUtils";
 interface ShiftListProps {
   readonly shifts: ShiftOccurrence[];
   readonly onConfirm: (shift: ShiftOccurrence) => void;
+  readonly onRemove: (shift: ShiftOccurrence) => void;
   readonly busy: boolean;
 }
 
@@ -15,7 +16,7 @@ interface ShiftListProps {
  * fortnight of assumed hours should look like a fortnight of work with a
  * question over it.
  */
-export default function ShiftList({ shifts, onConfirm, busy }: ShiftListProps) {
+export default function ShiftList({ shifts, onConfirm, onRemove, busy }: ShiftListProps) {
   if (shifts.length === 0) {
     return <p className="calMuted">No shifts scheduled. Set a pattern on a job to fill this in.</p>;
   }
@@ -69,6 +70,25 @@ export default function ShiftList({ shifts, onConfirm, busy }: ShiftListProps) {
                 disabled={busy}
               >
                 {shift.assumed ? "Confirm" : "Log"}
+              </button>
+            )}
+
+            {/* Only a shift entered on its own has a row to remove. A pattern
+                date is cancelled on the calendar instead -- it has none. */}
+            {!shift.repeats && (
+              <button
+                type="button"
+                className="shiftRemove"
+                onClick={() => onRemove(shift)}
+                disabled={busy}
+                aria-label={`Remove the ${shift.job_name} shift on ${shift.on_date}`}
+                title={
+                  shift.confirmed
+                    ? "Remove this shift, including anything already confirmed"
+                    : "Remove this shift"
+                }
+              >
+                Remove
               </button>
             )}
           </li>

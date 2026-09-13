@@ -227,6 +227,11 @@ class ShiftOccurrence(BaseModel):
     #: confirmed with different times.
     counted_minutes: int = 0
     confirmed: bool = False
+    #: False for a shift entered on its own, true for one a weekly pattern
+    #: produced. Only a one-off can be deleted outright; a pattern date is
+    #: cancelled through the calendar's existing skip, since it has no row of
+    #: its own to remove.
+    repeats: bool = False
     #: True for a past shift nobody has confirmed: its hours are being assumed
     #: from the schedule rather than known. Kept visible so a total can say how
     #: much of itself is a guess.
