@@ -140,12 +140,16 @@ def update_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, data: C
     for key, value in update_data.items():
         setattr(course, key, value)
 
-    db.commit()
-    db.refresh(course)
-
     if category_weights is not None:
+        # Left pending above and committed here, in one transaction with the
+        # weights. The field changes used to be committed *first*, so a weight
+        # the validator rejects returned a 400 that had already changed the
+        # record -- the caller saw a failure and the row moved anyway.
         apply_category_weights(db, user_id, course_id, category_weights)
-        db.refresh(course)
+    else:
+        db.commit()
+
+    db.refresh(course)
 
     # db.refresh expires the instance, so recompute after the last one rather
     # than relying on what get_course attached before the writes.
@@ -182,12 +186,18 @@ def search_courses(db: Session, user_id: uuid.UUID, query: str):
     if user is None:
         return None
 
-    like_query = f"%{query}%"
+    # `%` and `_` are wildcards to LIKE, so without escaping them a search for
+    # "_" matches every course and "100%" matches nothing it should. Not an
+    # injection -- the value is parameterised either way -- just a search that
+    # quietly does something other than what was typed.
+    escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    like_query = f"%{escaped}%"
     matches = (
         db.query(CourseModel)
         .filter(
             CourseModel.user_id == user_id,
-            (CourseModel.code.ilike(like_query)) | (CourseModel.name.ilike(like_query)),
+            (CourseModel.code.ilike(like_query, escape="\\"))
+            | (CourseModel.name.ilike(like_query, escape="\\")),
         )
         .all()
     )

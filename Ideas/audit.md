@@ -104,6 +104,33 @@ Verified against a copy of the real database: 0 foreign-key violations before or
 row counts unchanged, and the hot queries now report `SEARCH ... USING INDEX` where
 they previously reported `SCAN`.
 
+## Status as of the service-correctness pass
+
+**Closed: #27, #41, #43, #44, #45, #46, #49, #51, #52**, plus the unstripped
+`ALLOWED_ORIGINS` split from the low-tier tail.
+
+The theme is the same in every one: the server answered confidently and wrongly.
+
+- **#27** is worse than "commits twice". The schema validator sums only the weights
+  *submitted*, while the service merges them over the ones the course already has and
+  checks that total -- so a patch that is fine alone and only breaks the ceiling once
+  merged is the one that reaches the half-applied commit. The first test written for
+  this was vacuous for exactly that reason: `CourseUpdate` rejected the payload before
+  the service ever ran, and the mutation test is what exposed it.
+- **#49** had the same shape. A test that registers the same address twice never
+  reaches the insert -- the pre-check catches it, and the pre-check is precisely the
+  path that does not race. It only tests anything once the check is neutralised.
+- **#46** was two bugs. `payload["name"]` 500s on a token granted without the profile
+  scope, and a transport failure reaching Google's JWKS endpoint arrives as
+  `GoogleAuthError`, not `ValueError`, so it escaped the handler entirely. A network
+  failure is now a 503 rather than a 401: "we could not tell" is not "your token is
+  bad", and logging it as a rejected sign-in would make a Google outage read as a
+  burst of failed logins.
+- **#43/#44** returned `200 []`, which on a money page is the one answer that is
+  certainly wrong -- it reads as a fact rather than a failure.
+- **#45** was not one route. Fourteen `raise HTTPException` sites across four routers
+  were missing `from exc`.
+
 One correction to #17 found while fixing it: this document calls the unconfirmed
 account delete "permanent", but the server refuses to delete an account that still
 holds transactions and says to archive instead. The exposure was empty accounts only.

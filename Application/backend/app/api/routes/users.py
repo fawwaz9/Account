@@ -66,7 +66,7 @@ def edit_user(user_id: VerifiedUserId, user: UserUpdate, db: DBSession):
     try:
         updated_user = update_user(db, user_id, user)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if updated_user is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])

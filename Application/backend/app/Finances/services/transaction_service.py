@@ -136,9 +136,19 @@ def list_transactions(
     A caller that wants a specific stretch of time must therefore narrow with
     `start`/`end` rather than fetch a page and filter it, or the rows it drops
     are silently the ones furthest back.
+
+    Raises for a window that cannot contain anything, and for an account that
+    does not exist. Both used to answer `200 []`, which reads as "you have no
+    transactions" -- the one answer that is certainly wrong, and the hardest
+    kind of bug to notice on a money page.
     """
+    if start is not None and end is not None and start > end:
+        raise ValueError("The start of the range is after its end")
+
     query = db.query(TransactionModel).filter(TransactionModel.user_id == user_id)
     if account_id is not None:
+        if owned_account(db, user_id, account_id) is None:
+            raise LookupError("That account does not exist")
         query = query.filter(TransactionModel.account_id == account_id)
     if start is not None:
         query = query.filter(TransactionModel.occurred_on >= start)

@@ -62,7 +62,7 @@ def add_course(user_id: VerifiedUserId, course: CourseCreate, db: DBSession):
     try:
         new_course = create_course(db, user_id, course)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if new_course is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
@@ -120,7 +120,7 @@ def edit_course(user_id: VerifiedUserId, course_id: UUID, course: CourseUpdate, 
     try:
         updated_course = update_course(db, user_id, course_id, course)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if updated_course is None:
         raise HTTPException(status_code=404, detail=error_course["not_found"])
@@ -161,7 +161,7 @@ def edit_course_category_weights(user_id: VerifiedUserId, course_id: UUID, categ
     try:
         updated_weights = update_category_weights(db, user_id, course_id, category_weights.category_weights)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if updated_weights is None:
         raise HTTPException(status_code=404, detail=error_course["not_found"])
@@ -174,12 +174,15 @@ def get_course_average(user_id: VerifiedUserId, course_id: UUID, db: DBSession):
     if course is None:
         raise HTTPException(status_code=404, detail=error_course["not_found"])
 
+    # Into a local, never onto course.average. Assigning to a mapped column
+    # inside a GET makes the read a pending write, and it stays harmless only
+    # for as long as nothing downstream in the request happens to commit.
     try:
-        course.average = calculate_current_average(course)
+        average = calculate_current_average(course)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    return {"course_id": course.id, "average": course.average}
+    return {"course_id": course.id, "average": average}
 
 @router.get("/{user_id}/courses/{course_id}/letter-grade", responses=responses["course_404"])
 def get_course_letter_grade(user_id: VerifiedUserId, course_id: UUID, db: DBSession):
@@ -187,11 +190,11 @@ def get_course_letter_grade(user_id: VerifiedUserId, course_id: UUID, db: DBSess
     if course is None:
         raise HTTPException(status_code=404, detail=error_course["not_found"])
 
-    course.average = calculate_current_average(course)
+    average = calculate_current_average(course)
     return {
         "course_id": course.id,
-        "average": course.average,
-        "letter_grade": calculate_letter_grade(course),
+        "average": average,
+        "letter_grade": calculate_letter_grade(course, average),
     }
 
 @router.get("/{user_id}/courses/{course_id}/grade-band", responses=responses["course_both"])
@@ -236,7 +239,7 @@ def create_grade(user_id: VerifiedUserId, course_id: UUID, grade: GradeCreate, d
     try:
         new_grade = add_grade(db, user_id, course_id, grade)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if new_grade is None:
         raise HTTPException(status_code=404, detail=error_course["not_found"])
@@ -270,7 +273,7 @@ def edit_grade(user_id: VerifiedUserId, course_id: UUID, grade_id: UUID, grade: 
     try:
         updated_grade = update_grade(db, user_id, course_id, grade_id, grade)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if updated_grade is None:
         raise HTTPException(status_code=404, detail=error_grade["not_found"])
@@ -294,7 +297,7 @@ def record_single_grade(user_id: VerifiedUserId, course_id: UUID, grade_id: UUID
     try:
         grade = record_grade(db, user_id, course_id, grade_id, score)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if grade is None:
         raise HTTPException(status_code=404, detail=error_grade["not_found"])

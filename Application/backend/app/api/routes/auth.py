@@ -4,7 +4,7 @@ from app._database.dependencies import DBSession
 from app.Auth.dependencies import CurrentUser
 from app.Auth.schemas.credentials import LoginRequest, RegisterRequest, SetPasswordRequest
 from app.Auth.schemas.token import GoogleAuthRequest, TokenResponse
-from app.Auth.services.google_auth_service import verify_google_token
+from app.Auth.services.google_auth_service import GoogleUnavailable, verify_google_token
 from app.Auth.services.login_throttle import account_key, per_account, per_client
 from app.Auth.services.session_service import create_access_token
 from app.shared import audit
@@ -33,6 +33,14 @@ def login_with_google(payload: GoogleAuthRequest, request: Request, db: DBSessio
     client = client_of(request)
     try:
         user_data = verify_google_token(payload.id_token)
+    except GoogleUnavailable as exc:
+        # Not a rejected sign-in: we could not tell either way. Logged as an
+        # error rather than an auth outcome, so a Google outage does not read in
+        # the audit log as a burst of people failing to sign in.
+        audit.auth_event("google", outcome="error", client=client, detail=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+        ) from exc
     except ValueError as exc:
         audit.auth_event("google", outcome="rejected", client=client, detail=str(exc))
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
