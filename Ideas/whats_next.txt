@@ -81,6 +81,8 @@ Shipped so far (do not re-propose)
           waits. A banner while the app is open, plus a browser notification
           where permission was given, and the limit said out loud rather than
           hidden.
+        Term timeline: every current course on one axis, with today marked and
+          the ones carrying no dates named rather than quietly left out.
 
 
 
@@ -93,7 +95,6 @@ Grades: Think of other functionalities that can merge over to the other.
         When editing courses the manual is the default but syllabus parser will be available under the manual grid.
 
 Calendar:
-        Term timeline: every course's span on one horizontal chart, so overlaps and gaps are obvious.
         Class times that are not weekly, set per meeting rather than per course:
           a lecture can stay weekly while the lab or discussion on the same
           course runs biweekly.
