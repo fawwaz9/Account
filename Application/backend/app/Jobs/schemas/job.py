@@ -127,6 +127,26 @@ class ShiftMeeting(BaseModel):
         return self
 
 
+class ShiftCreate(BaseModel):
+    """One shift on one date.
+
+    The ordinary way a student's shifts arrive: named hours on a named day,
+    rarely the same twice. A weekly pattern is the exception and has its own
+    shape below.
+    """
+
+    on_date: date
+    start_time: time
+    end_time: time
+    location: str | None = Field(default=None, max_length=120)
+
+    @model_validator(mode="after")
+    def validate_shift(self):
+        if self.end_time <= self.start_time:
+            raise ValueError("A shift cannot end before it starts")
+        return self
+
+
 class ShiftScheduleCreate(BaseModel):
     """A job's whole recurring pattern, replacing whatever was there before."""
 

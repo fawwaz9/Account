@@ -70,6 +70,14 @@ export interface ShiftMeeting {
   location: string | null;
 }
 
+/** One shift on one date — the ordinary way part-time hours arrive. */
+export interface ShiftCreate {
+  on_date: string;
+  start_time: string;
+  end_time: string;
+  location: string | null;
+}
+
 export interface ShiftScheduleCreate {
   meetings: ShiftMeeting[];
   starts_on: string | null;

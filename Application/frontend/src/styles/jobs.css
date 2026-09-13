@@ -432,3 +432,40 @@
   gap: 8px;
   padding: 4px 0;
 }
+
+/* ===== Adding shifts =====
+   One at a time is the default, because part-time hours are rarely the same
+   twice. The weekly pattern sits behind a disclosure for the jobs that do
+   repeat. */
+
+.shiftAdded {
+  margin-right: auto;
+  align-self: center;
+  color: #7fd0a0;
+}
+
+.shiftPattern {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid #1f2a44;
+}
+
+.shiftPatternSummary {
+  color: var(--muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.shiftPatternSummary:hover {
+  color: var(--gold);
+}
+
+/* ===== The pay schedule =====
+   Named rather than left as a bare repeat editor: on a job form, an unlabelled
+   recurrence reads as though it governs the shifts. It governs the money. */
+
+.payRepeat {
+  margin: 0;
+  padding: 12px 0 0;
+  border: none;
+}

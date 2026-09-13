@@ -1,6 +1,7 @@
 import { del, get, patch, post, put } from "../../services/apiClient";
 import { endpoints } from "../../services/endpoints";
 import {
+  ShiftCreate,
   EarningsSummary,
   Job,
   JobCreate,
@@ -102,4 +103,20 @@ export async function deletePaycheque(userId: string, paychequeId: string) {
 /** Hours and money over a week, a month and the term, in one call. */
 export async function fetchEarnings(userId: string) {
   return get<EarningsSummary>(endpoints.jobs.earnings(userId));
+}
+
+/**
+ * Add one shift on one date.
+ *
+ * The ordinary path: part-time hours are rarely the same twice, so a shift is
+ * entered as it is given to you. A weekly pattern is the exception, and goes
+ * through setShiftSchedule instead.
+ */
+export async function addShift(userId: string, jobId: string, payload: ShiftCreate) {
+  return post<string>(endpoints.jobs.addShift(userId, jobId), payload);
+}
+
+/** Remove a one-off shift. A date from a pattern is cancelled on the calendar. */
+export async function deleteShift(userId: string, eventId: string) {
+  return del<string>(endpoints.jobs.shift(userId, eventId));
 }
