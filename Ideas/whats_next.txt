@@ -88,6 +88,9 @@ Shipped so far (do not re-propose)
           fortnightly meeting would be stuck on the odd weeks of term.
 
 
+What is left, by module. Tasks and Calendar no longer appear: everything that
+was under them has shipped.
+
 
 Grades: Think of other functionalities that can merge over to the other.
         Cheapest path to a target: which remaining item moves the average most per hour spent.
@@ -104,6 +107,18 @@ Budget:
         Subscription audit: recurring charges detected from the ledger, with the ones you forgot flagged.
         Money Lent gets who and when, plus a nudge when it has been out too long.
         Reimbursement state on a transaction: owed, claimed, received.
+
+Jobs:   All three stages shipped, so these are follow-ups rather than gaps.
+        A fortnightly shift. ShiftMeeting is the same shape as ClassMeeting,
+          which now carries an interval and a first week, so it is the same two
+          fields again -- left out of that change as scope, not oversight.
+        Overtime rules, if a per-shift rate override stops being enough. It was
+          offered and declined once already: an override covers the stat holiday
+          and the night differential without a provincial rule table.
+        Somewhere for cash to live. A cash tip splits by income share like any
+          other income, which claims it is in the bank when it is in a pocket.
+          A cash account with its own share is the workaround; whether that is
+          good enough is worth finding out before building anything.
 
 Grades x Budget (nothing else does this):
         A dollar figure next to a dropped course, since the deadline to drop with a refund is a date on the calendar.
@@ -125,16 +140,22 @@ Wild:
 
 Implementation Plan
 
-The engine now has all three consumers it was written for, the tokenizer has two,
-and the Grades UI debts are cleared. What is left splits into one piece of
-plumbing that unblocks a whole section, a set of derivations that need no new
-tables at all, and the things that genuinely need new storage.
+Everything that was listed under Tasks and Calendar has shipped, and Jobs is
+complete in all three stages. The recurrence engine now has four consumers, the
+tokenizer two. How each module actually works, and why, is written down in
+Ideas/design/ -- start there rather than here when picking something up.
 
-Cheap wins, read-only -- next
-- Term timeline and category blind spots are the two left on the Grades side,
-  and the term retrospective wants a term to have closed first.
-- Safe-to-spend and sinking funds next on the money side: /recurring/upcoming
-  already returns the commitments, so safe-to-spend is a subtraction.
+What is left is genuinely the longer-horizon work: derivations that need a term
+to have closed, the parser that everything else had to settle before, and the
+things that need new storage or a second person.
+
+Next, and cheapest
+- Safe-to-spend on the money side. /recurring/upcoming already returns the
+  commitments, so it is a subtraction over data already exposed.
+- Category blind spots across courses. Derived from what is stored, no new
+  tables, and the one Grades answer nothing else gives: you may be losing marks
+  in labs everywhere rather than in one class.
+- Sinking funds after safe-to-spend, since both read the same commitments.
 
 Parked, now that the question is answered
 - A dropped course's dollar figure. The open question was whether a refund
@@ -146,9 +167,10 @@ Parked, now that the question is answered
   reopening only if the refund case turns out to be common in practice.
 
 Cheap wins, read-only
-- Term timeline, category blind spots, term retrospective. All derived from data
-  already stored: no new tables, no writes, and each one is a service function
-  plus a chart.
+- Category blind spots and the term retrospective. Both derived from data
+  already stored: no new tables, no writes, each a service function plus a
+  chart. The retrospective wants a term to have closed first, so it is waiting
+  on the calendar rather than on anything in the code.
 - The band that shipped is the pattern for the rest of them: project_average in
   grade_service.py shows the shape, including the rule that a projection must
   agree with the live number at the ends or it is a second opinion.
@@ -161,12 +183,10 @@ Cheap wins, read-only
 - Read-only offline: cache the shell, stale-while-revalidate the GETs.
 
 Needs new storage, so later
-- Reminders that notify, as opposed to tasks that wait.
-- Snooze with a reason, kept, so the pattern is readable after a term.
 - Reimbursement state, and who/when on Money Lent.
-- Grade-to-effort log.
-- At-risk-first task sorting needs no storage, but it does need the dashboard's
-  below-target rule reachable from the task list, so it belongs with these.
+- Grade-to-effort log. Worth noting it now has a precedent: shift_records keys
+  on (event_id, on_date) to record what happened on one date of a repeating
+  thing, and hours against a grade is the same shape.
 - What-if sandbox. Read-only in effect, but it needs the whole term recomputed
   from hypothetical inputs, so it wants the averaging code reachable without a
   session first.
@@ -179,18 +199,28 @@ Syllabus parser
   is the default and the parser sits under the grid.
 
 Worth knowing before picking anything up
-- Everything above main sits on `time-and-load`, open as PR #13. The branches it
-  followed -- `repeating-tasks` and `bonus-and-grades-clarity` -- are merged and
-  deleted. Branch off main rather than off unmerged work: stacking caused
-  phantom conflicts twice, identical trees under different SHAs reading as
-  conflicts.
-- The migration it carries is the term_blackouts table. Additive and idempotent
-  like the rest, but back up data/app.db first.
+- Start at Ideas/design/. One note per module plus an overview, and a template
+  for the next one. They carry the reasoning behind decisions that had a real
+  alternative, which is what stops the next person reversing one for looking
+  inconvenient.
+- Branch off main, and off main only. Stacking on unmerged work caused phantom
+  conflicts twice, and once cost an afternoon to a "the fix is not there" report
+  that turned out to be a branch without the fix in it.
+- Back up data/app.db before any migration, and test the migration against a
+  copy with the new columns genuinely dropped first. A --reload dev server
+  applies them on its own, which has already turned one migration check into a
+  false pass.
 - gh is installed and authenticated, so a PR opens from the terminal. The push
-  credential still lives in the macOS keychain.
-- 340 backend tests. The frontend has none: the week view's overlap maths was
-  checked with a one-off esbuild harness, not by anything that runs on its own.
-  Vitest would slot in beside Vite cheaply if that starts to bite.
+  credential lives in the macOS keychain.
+- 510 backend tests, and the suite is worth running with
+  -W error::sqlalchemy.exc.SAWarning: that is how a duplicate cascade delete
+  surfaced. The frontend still has no test runner. Three pieces of layout maths
+  -- the week view's overlap, placeTasks, and the term timeline -- were each
+  checked with a one-off esbuild harness, which runs only when someone remembers
+  to write one. Vitest would slot in beside Vite cheaply.
+- Mutation-test every guard: revert it and confirm the named test fails. Doing
+  that caught three tests this year that asserted something already true by
+  construction and would never have failed.
 - Repeat rules live in five columns shared by events, standing payments and
   repeating tasks, read and written through Calendar/utils/rule_columns.py.
 - Bonus is the one category whose weight is not part of the denominator. Anything
