@@ -123,24 +123,27 @@ export default function JobsPage() {
       )}
 
       {jobs.length > 0 && (
-        <>
-          {shiftError && <p className="calError">{shiftError}</p>}
-          <ShiftList
-            shifts={shifts}
-            onConfirm={setConfirming}
-            onRemove={handleRemoveShift}
-            busy={loading || removingShift}
-          />
-        </>
-      )}
+        // Side by side: what you have worked and what has arrived for it are
+        // the same story from two ends, and reading them as one column put
+        // several paycheque rows between a shift and the reason to look at it.
+        <div className="jobSplit">
+          <div>
+            {shiftError && <p className="calError">{shiftError}</p>}
+            <ShiftList
+              shifts={shifts}
+              onConfirm={setConfirming}
+              onRemove={handleRemoveShift}
+              busy={loading || removingShift}
+            />
+          </div>
 
-      {jobs.length > 0 && (
-        <PaychequeList
-          paycheques={paycheques}
-          onAdd={() => { setPayingCheque(null); setRecordingPay(true); }}
-          onEdit={(cheque) => { setPayingCheque(cheque); setRecordingPay(true); }}
-          busy={loading}
-        />
+          <PaychequeList
+            paycheques={paycheques}
+            onAdd={() => { setPayingCheque(null); setRecordingPay(true); }}
+            onEdit={(cheque) => { setPayingCheque(cheque); setRecordingPay(true); }}
+            busy={loading}
+          />
+        </div>
       )}
 
       <JobModal

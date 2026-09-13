@@ -183,11 +183,6 @@ Cheap wins, read-only
 - The band that shipped is the pattern for the rest of them: project_average in
   grade_service.py shows the shape, including the rule that a projection must
   agree with the live number at the ends or it is a second opinion.
-- Safe-to-spend and sinking funds. /recurring/upcoming already returns the
-  commitments, so safe-to-spend is a subtraction.
-- Subscription audit reads the ledger for repeats that have no standing
-  instruction behind them -- which is only possible now that standing
-  instructions exist to compare against.
 - PDF export: a print stylesheet and window.print(). No dependency.
 - Read-only offline: cache the shell, stale-while-revalidate the GETs.
 
@@ -221,7 +216,7 @@ Worth knowing before picking anything up
   false pass.
 - gh is installed and authenticated, so a PR opens from the terminal. The push
   credential lives in the macOS keychain.
-- 510 backend tests, and the suite is worth running with
+- 562 backend tests, and the suite is worth running with
   -W error::sqlalchemy.exc.SAWarning: that is how a duplicate cascade delete
   surfaced. The frontend still has no test runner. Three pieces of layout maths
   -- the week view's overlap, placeTasks, and the term timeline -- were each
