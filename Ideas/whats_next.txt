@@ -141,6 +141,9 @@ Shipped so far (do not re-propose)
         Standing instructions beside what is coming up, rather than stacked --
           equal columns, so the near-term reason to change a rule sits next to
           the rule instead of below the whole list of them.
+        Printing a term: a print stylesheet and window.print(), so a past or
+          future year -- never the current, still-moving one -- can be saved
+          as a PDF worth keeping.
 
 
 What is left, by module. Tasks and Calendar no longer appear: everything that
@@ -180,7 +183,6 @@ Quality of Life:
         Weekly digest on the dashboard: what is due, what moved, what you spent.
         Keyboard shortcuts for the four things you do twenty times a day.
         Offline-capable, because campus wifi. Only read-only offline should be implemented.
-        Export a term as a PDF worth keeping.
 
 Wild:
         Grade-to-effort log: record hours against each grade, then find out whether effort actually correlates with your marks.
@@ -226,7 +228,6 @@ Cheap wins, read-only
 - The band that shipped is the pattern for the rest of them: project_average in
   grade_service.py shows the shape, including the rule that a projection must
   agree with the live number at the ends or it is a second opinion.
-- PDF export: a print stylesheet and window.print(). No dependency.
 - Read-only offline: cache the shell, stale-while-revalidate the GETs.
 
 Needs new storage, so later
@@ -260,6 +261,7 @@ Worth knowing before picking anything up
 - gh is installed and authenticated, so a PR opens from the terminal. The push
   credential lives in the macOS keychain.
 - 635 backend tests, and the suite is worth running with
+- 562 backend tests (unchanged -- this one is frontend-only), and the suite is worth running with
   -W error::sqlalchemy.exc.SAWarning: that is how a duplicate cascade delete
   surfaced. The frontend still has no test runner. Three pieces of layout maths
   -- the week view's overlap, placeTasks, and the term timeline -- were each

@@ -865,3 +865,60 @@
   color: var(--muted);
   vertical-align: middle;
 }
+
+/* ===== Printing a term =====
+   "Export a term as a PDF" needs no library: a print stylesheet plus
+   window.print() already gets a save-as-PDF dialog on every platform that
+   matters here. Only the term being viewed prints -- the current-term default
+   view, the search box and the sidebar panels are all screen furniture, not
+   part of the record. */
+
+@media print {
+  .gradesMenu,
+  .archivedToggle,
+  .gradesColumn:last-child {
+    display: none;
+  }
+
+  .gradesGrid {
+    display: block;
+  }
+
+  .courses .courseBox {
+    background: none;
+    border: 1px solid #999;
+    box-shadow: none;
+    width: 100%;
+  }
+
+  .courses .courseBox:hover {
+    transform: none;
+    filter: none;
+  }
+
+  .averageCircle {
+    background: none;
+    border: 1px solid #333;
+    color: #000;
+  }
+
+  .courses {
+    /* Keeps one course's code, grade and circle together rather than split
+       across a page break, the one thing a printed list must not do. */
+    break-inside: avoid;
+  }
+
+  .termGroup {
+    break-inside: avoid;
+  }
+
+  .termHeading {
+    color: #000;
+  }
+}
+
+.sectionHeadingActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

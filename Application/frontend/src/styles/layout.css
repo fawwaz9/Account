@@ -271,3 +271,31 @@
 @media (prefers-reduced-motion: reduce) {
   .authBootstrapSpinner { animation: none; }
 }
+
+/* ===== Printing =====
+   A page that prints is one page: the sidebar and topbar exist to navigate
+   between pages, which a printed sheet has already stopped doing. Anything
+   else that is only useful on screen -- a button, a search box, a sidebar
+   panel -- opts in with .no-print rather than this file knowing about every
+   page that adds one. */
+
+@media print {
+  .sidebar,
+  .topbar,
+  .no-print {
+    display: none !important;
+  }
+
+  .appShell,
+  .appMain,
+  .appContent {
+    display: block;
+    height: auto;
+    overflow: visible;
+  }
+
+  body {
+    background: #fff;
+    color: #000;
+  }
+}
