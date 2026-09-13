@@ -6,9 +6,11 @@ import SemesterSummary from "../../features/grades/components/SemesterSummary";
 import CreditsBar from "../../features/grades/components/CreditsBar";
 import YearCourses from "../../features/grades/components/YearCourses";
 import AttentionPanel from "../../features/grades/components/AttentionPanel";
+import BlindSpotsPanel from "../../features/grades/components/BlindSpotsPanel";
 import GradeTrendChart from "../../features/grades/components/GradeTrendChart";
 import { useCourses } from "../../features/grades/hooks/useCourses";
 import { useDashboard } from "../../features/grades/hooks/useDashboard";
+import { useBlindSpots } from "../../features/grades/hooks/useBlindSpots";
 import { Course } from "../../features/grades/types";
 import { useAuth } from "../../app/auth/AuthContext";
 
@@ -20,6 +22,7 @@ interface TermGroup {
 export default function GradesPage() {
   const { courses, loading, error, reload } = useCourses();
   const { summary, reload: reloadSummary } = useDashboard();
+  const { spots } = useBlindSpots();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [showArchived, setShowArchived] = useState(false);
@@ -197,6 +200,8 @@ export default function GradesPage() {
             <GradeTrendChart points={summary?.term_history ?? []} />
 
             <AttentionPanel items={summary?.attention ?? []} userId={user?.id} />
+
+            <BlindSpotsPanel spots={spots} />
           </div>
         </div>
       </div>

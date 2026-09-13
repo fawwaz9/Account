@@ -216,3 +216,28 @@ def test_category_points_leave_the_course_average_alone(db, user):
     assert category_points(course, "Assignment") == 11.83
     # Unchanged by the Decimal path above.
     assert calculate_current_average(course) == 82.22
+
+
+def test_add_grade_can_create_an_already_excluded_mark(db, user):
+    """A grade posted through the ordinary create path, not GradeModel directly.
+
+    add_grade used to build the row field by field and never read
+    grade_data.excluded, so a mark created with the flag already set silently
+    came back counting toward the average -- caught only because every other
+    test in this file writes GradeModel directly and never exercised add_grade
+    with the flag on.
+    """
+    from app.Grades.schemas.grade import GradeCreate
+    from app.Grades.services.grade_service import add_grade, calculate_current_average
+
+    course = make_course(db, user.id, "COSC 196", category_weights={"Quiz": 100.0})
+    add_grade(db, user.id, course.id, GradeCreate(
+        name="Q1", score=100.0, max_score=100.0, category="Quiz", excluded=False,
+    ))
+    grade = add_grade(db, user.id, course.id, GradeCreate(
+        name="Q2", score=0.0, max_score=100.0, category="Quiz", excluded=True,
+    ))
+
+    assert grade.excluded is True
+    db.refresh(course)
+    assert calculate_current_average(course) == 100.0

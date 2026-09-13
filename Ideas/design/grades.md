@@ -120,9 +120,49 @@ Everything that is screen furniture rather than the record opts out with
 know about another page's chrome. `.courses` and `.termGroup` both get
 `break-inside: avoid`, the one thing a printed list must not do: split a
 course's code and grade across a page boundary.
+## Category blind spots
+
+Read-only, no tables: pools every marked, non-bonus item of one category --
+labs, quizzes, midterms -- across every graded course, and compares that pooled
+percentage to the same pooling done across every category. A category is
+reported only once it sits **2 or more points below** the student's own
+overall average **in at least two different courses** -- the second guard is
+the whole point of the feature. One course's weak labs is that course's
+problem; the pattern this looks for only exists once courses are compared, and
+a single-course dip is what "not in one class" in the original ask was
+excluding.
+
+Severity uses the same three bands as the tasks page's risk badge (0-5 mild,
+5-10 moderate, over 10 severe) rather than a new scale, so a student who
+already reads one badge does not have to learn a second.
+
+**Weighted by marks, not by category weight.** The comparison is earned over
+possible, pooled across every item -- the same arithmetic
+`calculate_grade_category_average` already does for one course, just not reset
+between courses. Weighting by each course's *category weight* instead would
+answer "which category costs the most," a different question from "where are
+marks actually being lost relative to everywhere else."
+
+Bonus is excluded by construction (`is_additive`), a dropped mark by
+`counts_toward_average`, and an unmarked item by `is_marked` -- three existing
+predicates, no new ones needed. A transfer-credit course contributes nothing,
+since `is_graded` already says it carries no marks at all.
+
+**Found and fixed on the way in:** `add_grade` and `add_grades_bulk` built their
+`GradeModel` row field by field and never read `grade_data.excluded`, so a
+grade created already dropped came back counting toward the average anyway.
+Never caught before because every existing dropped-mark test writes the model
+row directly rather than going through the create path -- this one only
+surfaced because the blind-spot tests call `add_grade` itself. Fixed in both
+functions, mutation-tested.
+
+Verified against the real gradebook: Midterm and Final both come back moderate
+(9.4 and 5.4 points below the coursework average, respectively) across every
+current course -- a real, plausible pattern, not a false positive from the
+detector.
 
 ## Still open
 
-Category blind spots across courses; a term retrospective once a term closes;
-the syllabus parser, deliberately late because it depends on due dates, category
-weights and the tokenizer all being settled — they now are.
+A term retrospective once a term closes; the syllabus parser, deliberately
+late because it depends on due dates, category weights and the tokenizer all
+being settled — they now are.

@@ -15,6 +15,7 @@ from app.Grades.services.course_service import (
     update_course,
 )
 from app.Grades.schemas.dashboard import UserGradeDashboard
+from app.Grades.schemas.blind_spot import CategoryBlindSpot
 from app.Grades.schemas.grade import Grade, GradeCreate, GradeUpdate
 from app.Grades.services.grade_service import (
     add_grade,
@@ -33,9 +34,32 @@ from app.Grades.services.grade_service import (
 )
 from app.Grades.services.course_lookup import resolve_course
 from app.Grades.services.dash_services import DEFAULT_TARGET_GRADE, get_dashboard
+from app.Grades.services.blind_spot_service import category_blind_spots
 from app.shared import audit
 
 router = APIRouter()
+
+@router.get(
+    "/{user_id}/category-blind-spots",
+    response_model=list[CategoryBlindSpot],
+    responses=responses["user_404"],
+)
+def get_category_blind_spots(user_id: VerifiedUserId, db: DBSession):
+    """A category consistently worse than the student's own average, in more
+    than one course -- labs everywhere, not one hard class.
+
+    Read-only, and derived fresh every time from the grades already stored:
+    every marked item of a category, pooled across every graded course, against
+    the same pooling across every category. Nothing is reported unless it shows
+    up in at least two courses -- one course's weak labs is that course's
+    problem, not a pattern.
+    """
+    findings = category_blind_spots(db, user_id)
+    if findings is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+
+    return findings
+
 
 @router.get("/{user_id}/grades/dashboard", response_model=UserGradeDashboard, responses=responses["user_404"])
 def grade_dashboard(
