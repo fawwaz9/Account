@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { fetchJobs, fetchPaycheques, fetchShifts } from "../api";
-import { Job, Paycheque, ShiftOccurrence } from "../types";
+import { fetchEarnings, fetchJobs, fetchPaycheques, fetchShifts } from "../api";
+import { EarningsSummary, Job, Paycheque, ShiftOccurrence } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { addDays, today } from "../../../shared/utils/dateUtils";
 
@@ -19,6 +19,7 @@ export function useJobs(includeArchived = false) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [shifts, setShifts] = useState<ShiftOccurrence[]>([]);
   const [paycheques, setPaycheques] = useState<Paycheque[]>([]);
+  const [earnings, setEarnings] = useState<EarningsSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,15 +36,17 @@ export function useJobs(includeArchived = false) {
     try {
       const from = addDays(today(), -BEHIND_DAYS);
       const to = addDays(today(), AHEAD_DAYS);
-      const [nextJobs, nextShifts, nextCheques] = await Promise.all([
+      const [nextJobs, nextShifts, nextCheques, nextEarnings] = await Promise.all([
         fetchJobs(user.id, includeArchived),
         fetchShifts(user.id, from, to),
         fetchPaycheques(user.id),
+        fetchEarnings(user.id),
       ]);
       if (ticket !== latestRequest.current) return;
       setJobs(nextJobs);
       setShifts(nextShifts);
       setPaycheques(nextCheques);
+      setEarnings(nextEarnings);
     } catch (err) {
       if (ticket !== latestRequest.current) return;
       setError(err instanceof Error ? err.message : "Could not load your jobs");
@@ -54,5 +57,5 @@ export function useJobs(includeArchived = false) {
 
   useEffect(() => { void load(); }, [load]);
 
-  return { jobs, shifts, paycheques, loading, error, reload: load };
+  return { jobs, shifts, paycheques, earnings, loading, error, reload: load };
 }

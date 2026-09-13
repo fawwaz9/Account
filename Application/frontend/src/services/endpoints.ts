@@ -54,6 +54,7 @@ export const endpoints = {
     shifts: (userId: string) => `jobs/${userId}/jobs/shifts`,
     shiftRecord: (userId: string, eventId: string, onDate: string) =>
       `jobs/${userId}/jobs/shifts/${eventId}/${onDate}`,
+    earnings: (userId: string) => `jobs/${userId}/earnings`,
     paycheques: (userId: string) => `jobs/${userId}/paycheques`,
     /** Declared above /paycheques/{id} on the server, or "preview" parses as an id. */
     paychequePreview: (userId: string) => `jobs/${userId}/paycheques/preview`,

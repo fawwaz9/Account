@@ -30,8 +30,15 @@ class WeekLoad(BaseModel):
 
     starts_on: date
     ends_on: date
-    #: Minutes of timed events: classes, labs, exams.
+    #: Minutes of every timed event, work included. Unchanged in meaning, so
+    #: anything already reading it still gets the whole commitment.
     booked_minutes: int = 0
+    #: The part of `booked_minutes` that is paid work. Split out rather than
+    #: replaced, because "am I over-committed" wants the total while "is the job
+    #: eating the term" wants these two side by side.
+    work_minutes: int = 0
+    #: The part that is a class, a lab or a discussion.
+    class_minutes: int = 0
     #: Minutes you estimated against tasks due in the window.
     estimated_minutes: int = 0
     task_count: int = 0

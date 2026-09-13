@@ -1,6 +1,7 @@
 import { del, get, patch, post, put } from "../../services/apiClient";
 import { endpoints } from "../../services/endpoints";
 import {
+  EarningsSummary,
   Job,
   JobCreate,
   JobUpdate,
@@ -96,4 +97,9 @@ export async function updatePaycheque(
 /** Removes the cheque and the ledger rows it wrote. */
 export async function deletePaycheque(userId: string, paychequeId: string) {
   return del<Paycheque>(endpoints.jobs.paycheque(userId, paychequeId));
+}
+
+/** Hours and money over a week, a month and the term, in one call. */
+export async function fetchEarnings(userId: string) {
+  return get<EarningsSummary>(endpoints.jobs.earnings(userId));
 }
