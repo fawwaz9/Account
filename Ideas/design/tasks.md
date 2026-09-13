@@ -127,6 +127,42 @@ is the one place it changes a decision.
 Waking a task early clears `snoozed_until` and keeps the history. Undoing a
 snooze does not undo having made it.
 
+## Reminders, and the honest limit
+
+A reminder is not a task: it has no life before or after its moment, being told
+is the point, and there is nothing to tick off. Forcing one through a task made
+it a chore that never quite closed — the same reason a sat exam is an event
+rather than a task.
+
+**`remind_at` is naive local wall time**, deliberately unlike every other
+DateTime in the app, which is naive UTC. "Remind me at 09:00" means nine o'clock
+where the student is standing, and should still mean that after the clocks change
+or after a flight; storing UTC would move an existing reminder by an hour every
+spring. So the comparison goes through the timezone preference, and a test pins a
+fixed instant to prove it: at 17:30 local (23:30 UTC), a reminder set for 20:00
+is *not* due — a UTC comparison would have fired it two and a half hours early.
+
+**There is no scheduler and no push.** The client asks what is due on an interval
+while it is open, and that is the whole mechanism. A browser notification is
+fired as well where permission was granted, but the in-app banner is the reliable
+path and stays until acknowledged.
+
+The banner says the limit out loud. A notification you half-trust is worse than
+one whose limits you know, and the alternative — a service worker, VAPID keys and
+a process outliving the request — is a large amount of infrastructure for a
+locally-run app.
+
+Permission is requested **when the first reminder is saved**, never on page load
+and never before the save: a prompt with no context is the one people dismiss
+forever, and there is no second chance to ask.
+
+`fired_at` is stamped once and never re-stamped. A reminder surfaced on Monday
+and still not dismissed on Wednesday is the same reminder; re-stamping it would
+make it read as new on every page load, which is how a notification becomes
+something you learn to ignore. Moving the time clears both `fired_at` and
+`dismissed_at`, or pushing one to tomorrow would leave it looking already fired
+and it would never surface again.
+
 ## Quick capture
 
 A line of text into a task, through the shared tokenizer: course code, date word,
@@ -167,7 +203,10 @@ task three weeks out is not work you can start, but it must not vanish either.
 
 ## Still open
 
-Reminders — the only item left here, and the only one needing a delivery
-mechanism the app does not have. Decided already: in-app, plus a browser
-notification while the tab is open, with permission requested when the first
-reminder is created rather than on page load.
+Nothing. At-risk-first sorting, priority, completion timing, snooze and reminders
+have all landed; what remains on the Tasks side is whatever the next term turns
+up.
+
+The one thing worth revisiting is delivery: reminders reach you only while the
+app is open. If that proves too weak in practice, the step up is a service
+worker and push, and it should be taken deliberately rather than by degrees.

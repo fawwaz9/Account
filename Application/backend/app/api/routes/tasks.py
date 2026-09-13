@@ -16,6 +16,15 @@ from app.Tasks.schemas.recurring_task import (
     RecurringTaskRun,
     RecurringTaskUpdate,
 )
+from app.Tasks.schemas.reminder import Reminder, ReminderCreate, ReminderUpdate
+from app.Tasks.services.reminder_service import (
+    create_reminder,
+    delete_reminder,
+    dismiss_reminder,
+    due_reminders,
+    list_reminders,
+    update_reminder,
+)
 from app.Tasks.schemas.task import (
     SnoozeRequest,
     Task,
@@ -104,6 +113,114 @@ def add_task(user_id: VerifiedUserId, task: TaskCreate, db: DBSession):
         raise HTTPException(status_code=404, detail=error_user["not_found"])
 
     return created
+
+
+@router.get(
+    "/{user_id}/reminders",
+    response_model=list[Reminder],
+    responses=responses["user_404"],
+)
+def get_reminders(
+    user_id: VerifiedUserId,
+    db: DBSession,
+    include_dismissed: bool = Query(
+        default=False, description="Also return ones already acknowledged"
+    ),
+):
+    reminders = list_reminders(db, user_id, include_dismissed)
+    if reminders is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+
+    return reminders
+
+
+@router.post(
+    "/{user_id}/reminders",
+    response_model=Reminder,
+    responses=responses["user_both"],
+)
+def add_reminder(user_id: VerifiedUserId, reminder: ReminderCreate, db: DBSession):
+    """Create one. `remind_at` is local wall time, sent without an offset."""
+    try:
+        created = create_reminder(db, user_id, reminder)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if created is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+
+    return created
+
+
+# Above /reminders/{reminder_id}, or "due" is parsed as an id.
+@router.get(
+    "/{user_id}/reminders/due",
+    response_model=list[Reminder],
+    responses=responses["user_404"],
+)
+def get_due_reminders(user_id: VerifiedUserId, db: DBSession):
+    """What should be on screen now, marking that it has been surfaced.
+
+    There is no scheduler: this is the whole delivery mechanism, so a reminder
+    fires when the app is open and not before. The interface says so rather than
+    letting anything important be trusted to it.
+    """
+    reminders = due_reminders(db, user_id)
+    if reminders is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+
+    return reminders
+
+
+@router.patch(
+    "/{user_id}/reminders/{reminder_id}",
+    response_model=Reminder,
+    responses=TASK_BOTH,
+)
+def edit_reminder(
+    user_id: VerifiedUserId,
+    reminder_id: UUID,
+    reminder: ReminderUpdate,
+    db: DBSession,
+):
+    """Change one. Moving the time makes it un-fired and un-dismissed again."""
+    try:
+        updated = update_reminder(db, user_id, reminder_id, reminder)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Reminder not found")
+
+    return updated
+
+
+@router.post(
+    "/{user_id}/reminders/{reminder_id}/dismiss",
+    response_model=Reminder,
+    responses=TASK_404,
+)
+def acknowledge_reminder(user_id: VerifiedUserId, reminder_id: UUID, db: DBSession):
+    """Acknowledge it. The row stays -- what you were reminded of is a record."""
+    dismissed = dismiss_reminder(db, user_id, reminder_id)
+    if dismissed is None:
+        raise HTTPException(status_code=404, detail="Reminder not found")
+
+    return dismissed
+
+
+@router.delete(
+    "/{user_id}/reminders/{reminder_id}",
+    response_model=Reminder,
+    responses=TASK_404,
+)
+def remove_reminder(user_id: VerifiedUserId, reminder_id: UUID, db: DBSession):
+    deleted = delete_reminder(db, user_id, reminder_id)
+    if deleted is None:
+        raise HTTPException(status_code=404, detail="Reminder not found")
+
+    audit.deletion("reminder", user_id=user_id, target_id=reminder_id, detail=deleted.title)
+    return deleted
 
 
 @router.get("/{user_id}/quick-capture", response_model=QuickCapturePreview, responses=responses["user_404"])

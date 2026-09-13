@@ -46,6 +46,13 @@ export const endpoints = {
     /** Declared above /tasks/{task_id} on the server, or "timing" parses as an id. */
     timing: (userId: string) => `tasks/${userId}/tasks/timing`,
     snooze: (userId: string, taskId: string) => `tasks/${userId}/tasks/${taskId}/snooze`,
+    reminders: (userId: string) => `tasks/${userId}/reminders`,
+    /** Declared above /reminders/{id} on the server, or "due" parses as an id. */
+    remindersDue: (userId: string) => `tasks/${userId}/reminders/due`,
+    reminder: (userId: string, reminderId: string) =>
+      `tasks/${userId}/reminders/${reminderId}`,
+    dismissReminder: (userId: string, reminderId: string) =>
+      `tasks/${userId}/reminders/${reminderId}/dismiss`,
     snoozes: (userId: string, taskId: string) => `tasks/${userId}/tasks/${taskId}/snoozes`,
   },
   jobs: {

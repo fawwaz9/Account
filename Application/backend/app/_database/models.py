@@ -364,6 +364,44 @@ class TaskModel(Base):
     )
 
 
+class ReminderModel(Base):
+    """Something that notifies, as opposed to a task that waits.
+
+    A task sits on a list until you deal with it. A reminder is the other thing:
+    it has no life before or after the moment it fires, and ticking it off is
+    not the point -- being told is. Forcing one through a task made it a chore
+    that never quite closed, which is the same reason a sat exam is an event
+    rather than a task.
+
+    `remind_at` is stored as **naive local wall time**, deliberately unlike
+    `completed_at`, which is naive UTC. "Remind me at 09:00" means nine o'clock
+    where the student is standing, and it should still mean that after the
+    clocks change or after a flight. Storing UTC would silently move an existing
+    reminder by an hour every spring. The comparison is therefore against the
+    student's own local now, resolved through their timezone preference.
+    """
+
+    __tablename__ = "reminders"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False)
+    title = Column(String, nullable=False)
+    notes = Column(String, nullable=True)
+    #: Local wall time. See the note above.
+    remind_at = Column(DateTime, nullable=False)
+    #: Optional, so a reminder about a course can say which.
+    course_id = Column(Uuid, ForeignKey("courses.id"), nullable=True)
+    #: When it was first surfaced. Set once, so a reminder shown on Monday and
+    #: still not dismissed on Wednesday does not read as new again.
+    fired_at = Column(DateTime, nullable=True)
+    #: Dismissed reminders stay: what you were reminded of is a record, and
+    #: deleting it on acknowledgement would make the list unreviewable.
+    dismissed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+
+    course = relationship("CourseModel")
+
+
 class TaskSnoozeModel(Base):
     """One time a task was pushed back, and the reason given.
 
