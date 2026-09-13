@@ -495,3 +495,22 @@
   border-color: #e0685f;
   color: #e0685f;
 }
+
+/* ===== Shifts beside paycheques =====
+   What you have worked and what has arrived for it are the same story from two
+   ends, and stacking them put several paycheque rows between a shift and the
+   reason to look at it. Equal columns, like earnWindows: neither list is a
+   sidebar to the other. */
+
+.jobSplit {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+  gap: 20px;
+  align-items: start;
+  margin-top: 24px;
+}
+
+.jobSplit .shiftSection,
+.jobSplit .paySection {
+  margin: 0;
+}
