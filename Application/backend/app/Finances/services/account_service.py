@@ -3,7 +3,14 @@ import uuid
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app._database.models import AccountModel, TransactionModel, UserModel
+from app._database.models import (
+    AccountModel,
+    BudgetTargetModel,
+    RecurringTransactionModel,
+    SinkingFundModel,
+    TransactionModel,
+    UserModel,
+)
 from app.Finances.schemas.account import DEFAULT_ACCOUNTS, AccountCreate, AccountUpdate
 
 
@@ -142,10 +149,20 @@ def update_account(db: Session, user_id: uuid.UUID, account_id: uuid.UUID, data:
 
 
 def delete_account(db: Session, user_id: uuid.UUID, account_id: uuid.UUID):
-    """Refuses while the account still holds history.
+    """Refuses while anything still points at the account.
 
     Deleting would cascade its transactions away, silently changing balances
     elsewhere if any were transfer halves. Archiving is the safe route.
+
+    Standing instructions and sinking funds are refused rather than removed,
+    because each is a decision the student made and neither is history that
+    tidying an account should quietly revoke: a rent instruction deleted as a
+    side effect stops paying rent. They are named in the message so it is
+    obvious what to repoint or stop first.
+
+    Budget targets are the exception and go with the account. A target is a
+    planning number scoped to one account and one month -- it has no meaning
+    once the account is gone, and nothing reads it as history.
     """
     account = (
         db.query(AccountModel)
@@ -164,6 +181,45 @@ def delete_account(db: Session, user_id: uuid.UUID, account_id: uuid.UUID):
         raise ValueError(
             f"{account.name} has {count} transactions. Archive it instead of deleting."
         )
+
+    rules = (
+        db.query(RecurringTransactionModel)
+        .filter(
+            RecurringTransactionModel.user_id == user_id,
+            (RecurringTransactionModel.account_id == account_id)
+            | (RecurringTransactionModel.to_account_id == account_id),
+        )
+        .all()
+    )
+    if rules:
+        named = ", ".join(rule.description or rule.kind for rule in rules[:3])
+        raise ValueError(
+            f"{account.name} is still used by {len(rules)} standing "
+            f"instruction{'s' if len(rules) != 1 else ''} ({named}). "
+            "Stop or repoint them first."
+        )
+
+    funds = (
+        db.query(SinkingFundModel)
+        .filter(
+            SinkingFundModel.user_id == user_id,
+            (SinkingFundModel.from_account_id == account_id)
+            | (SinkingFundModel.to_account_id == account_id),
+        )
+        .all()
+    )
+    if funds:
+        named = ", ".join(fund.name for fund in funds[:3])
+        raise ValueError(
+            f"{account.name} is still used by {len(funds)} sinking "
+            f"fund{'s' if len(funds) != 1 else ''} ({named}). "
+            "Remove or repoint them first."
+        )
+
+    db.query(BudgetTargetModel).filter(
+        BudgetTargetModel.user_id == user_id,
+        BudgetTargetModel.account_id == account_id,
+    ).delete(synchronize_session=False)
 
     db.delete(account)
     db.commit()

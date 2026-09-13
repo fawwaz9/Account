@@ -396,24 +396,51 @@ def remove_shift(db: Session, user_id: uuid.UUID, event_id: uuid.UUID):
         .filter(ShiftRecordModel.event_id == event_id)
         .all()
     )
-    for record in records:
-        if record.tip_transaction_id is not None:
-            anchor = (
-                db.query(TransactionModel)
-                .filter(
-                    TransactionModel.id == record.tip_transaction_id,
-                    TransactionModel.user_id == user_id,
-                )
-                .first()
-            )
-            if anchor is not None:
-                db.query(TransactionModel).filter(
-                    TransactionModel.user_id == user_id,
-                    TransactionModel.group_id == anchor.group_id,
-                ).delete(synchronize_session=False) if anchor.group_id is not None else db.delete(anchor)
-        db.delete(record)
 
+    # Worked out before anything is deleted, and acted on after the records are
+    # gone. `shift_records.tip_transaction_id` is a foreign key, so removing the
+    # ledger row while a record still points at it is a constraint violation,
+    # not merely untidy ordering -- which is exactly what enforcing foreign keys
+    # turned from a silent dangling pointer into a visible error.
+    tip_groups: list[uuid.UUID] = []
+    tip_rows: list[uuid.UUID] = []
+    for record in records:
+        if record.tip_transaction_id is None:
+            continue
+
+        anchor = (
+            db.query(TransactionModel)
+            .filter(
+                TransactionModel.id == record.tip_transaction_id,
+                TransactionModel.user_id == user_id,
+            )
+            .first()
+        )
+        if anchor is None:
+            continue
+
+        if anchor.group_id is not None:
+            tip_groups.append(anchor.group_id)
+        else:
+            tip_rows.append(anchor.id)
+
+    for record in records:
+        db.delete(record)
     db.delete(event)
+    db.flush()
+
+    for group_id in tip_groups:
+        db.query(TransactionModel).filter(
+            TransactionModel.user_id == user_id,
+            TransactionModel.group_id == group_id,
+        ).delete(synchronize_session=False)
+
+    for row_id in tip_rows:
+        db.query(TransactionModel).filter(
+            TransactionModel.user_id == user_id,
+            TransactionModel.id == row_id,
+        ).delete(synchronize_session=False)
+
     db.commit()
     return event_id
 

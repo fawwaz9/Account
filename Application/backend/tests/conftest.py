@@ -1,19 +1,23 @@
 """Test fixtures: every test gets a fresh in-memory database.
 
-Deliberately does not import app._database.db, whose engine is bound to the real
-data/app.db file. A test that can reach the live ledger is worse than no test.
+Deliberately never uses ``SessionLocal`` or the engine in app._database.db,
+which are bound to the real data/app.db file. A test that can reach the live
+ledger is worse than no test. The module itself is in the import graph either
+way -- models.py imports ``Base`` from it -- and importing it issues no DDL;
+what matters is that nothing here binds a session to that engine.
 """
 import sys
 import uuid
 from pathlib import Path
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from app._database.db import apply_sqlite_pragmas  # noqa: E402
 from app._database.models import (  # noqa: E402
     AccountModel,
     Base,
@@ -33,6 +37,14 @@ def db():
         # empty database and create_all appears to have done nothing.
         poolclass=StaticPool,
     )
+
+    # The same pragmas the real engine sets, so the suite runs under the rules
+    # the app runs under. Without foreign_keys ON here, every cascade test
+    # passes whether or not the cascade is actually enforced.
+    @event.listens_for(engine, "connect")
+    def _pragmas(dbapi_connection, _record):
+        apply_sqlite_pragmas(dbapi_connection)
+
     Base.metadata.create_all(bind=engine)
     session = sessionmaker(autocommit=False, autoflush=False, bind=engine)()
     try:

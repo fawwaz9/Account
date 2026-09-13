@@ -58,6 +58,34 @@ left are #24/#25 (which also close the seeding races at #26), #28+#40 together
 (incomplete cascades *and* no soft delete), and #29 (SQLite without WAL or a busy
 timeout).
 
+## Status as of the database-integrity pass
+
+**Closed: #24, #25, #26, #28, #29, #38, #39.** Every foreign key and filter column is
+now indexed (49 indexes, 0 before), all four unique constraints exist as unique
+indexes, SQLite runs with WAL, a 5s busy timeout and `foreign_keys=ON`, backfills are
+keyed by `(table, column)`, and DDL runs in a lifespan hook rather than at import.
+
+Three things are worth keeping from how it went:
+
+- **Turning on foreign keys is what found the bugs, not the indexes.** The test suite
+  went from 562 green to two failures the moment enforcement was on, and both were
+  real: `remove_shift` deleted a cash tip's ledger rows while `shift_records.
+  tip_transaction_id` still pointed at them, and `delete_account` would now 500 rather
+  than silently orphan a standing instruction. The suite had passed for weeks against
+  a database where every `ForeignKey` was a comment.
+- **#28 was bigger than "two missing cascades".** `UserModel` declared exactly two --
+  courses and accounts -- so *fourteen* other tables were orphaned on delete, not the
+  two this document names. They are declared now, and a test asserts nothing survives
+  a delete rather than trusting the declaration.
+- **`delete_account` now refuses rather than cascades** for standing instructions and
+  sinking funds, and cascades only budget targets. A rent instruction deleted as a
+  side effect of tidying an account stops paying rent; a budget target is a planning
+  number scoped to that account and means nothing without it.
+
+Verified against a copy of the real database: 0 foreign-key violations before or after,
+row counts unchanged, and the hot queries now report `SEARCH ... USING INDEX` where
+they previously reported `SCAN`.
+
 One correction to #17 found while fixing it: this document calls the unconfirmed
 account delete "permanent", but the server refuses to delete an account that still
 holds transactions and says to archive instead. The exposure was empty accounts only.
