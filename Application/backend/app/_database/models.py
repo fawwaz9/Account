@@ -165,8 +165,14 @@ class AccountModel(Base):
     id = Column(Uuid, primary_key=True, default=uuid.uuid4)
     user_id = Column(Uuid, ForeignKey("users.id"), nullable=False)
     name = Column(String, nullable=False)
-    #: spending | savings | investment | emergency | other -- drives styling and
-    #: sensible defaults, not behaviour.
+    #: spending | savings | investment | emergency | other.
+    #:
+    #: Mostly styling and sensible defaults, with one exception that is worth
+    #: knowing about: safe-to-spend counts only "spending" accounts, because
+    #: savings and investments are money already decided against. That is the
+    #: single place this column drives behaviour. If per-account control is ever
+    #: wanted, add an explicit `counts_as_spendable` rather than loading more
+    #: meaning onto this -- `group_id` already shows where that ends up.
     kind = Column(String, nullable=False, default="spending")
     #: Share of incoming money this account takes by default, as a percentage.
     income_share = Column(Float, nullable=False, default=0.0)

@@ -12,6 +12,8 @@ from app.Finances.schemas.account import (
     AccountCreate,
     AccountUpdate,
 )
+from app.Finances.schemas.safe import SafeToSpend
+from app.Finances.services.safe_service import safe_to_spend
 from app.Finances.schemas.budget import (
     BudgetSummary,
     TermBudget,
@@ -79,6 +81,26 @@ TRANSACTION_404 = {404: {"description": "Transaction not found"}}
 
 
 # ----------------------------------------------------------------- accounts --
+
+@router.get(
+    "/{user_id}/safe-to-spend",
+    response_model=SafeToSpend,
+    responses=responses["user_404"],
+)
+def get_safe_to_spend(user_id: VerifiedUserId, db: DBSession):
+    """What can be spent between now and the next time money arrives.
+
+    The window ends the day before the next pay date, or at the end of the month
+    when no job has a pay rule. Two figures come back: `safe_now` is cash in a
+    spending account less what is committed, and `safe_soon` adds confirmed work
+    not yet paid for. The first is the answer; the second is context.
+    """
+    safe = safe_to_spend(db, user_id)
+    if safe is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+
+    return safe
+
 
 @router.get("/{user_id}/accounts", response_model=list[Account], responses=responses["user_404"])
 def list_accounts(user_id: VerifiedUserId, db: DBSession, include_archived: bool = False):

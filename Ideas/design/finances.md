@@ -99,9 +99,43 @@ over the term's own dates rather than a calendar month.
   transaction must build them itself — see `deposit_rows` in the Jobs module.
 - Per-credit rates are additive across a term's payments.
 
+## Safe to spend
+
+The one figure on the budget page that answers a question rather than recording
+one, so it leads the page and it is a single headline.
+
+```
+safe_now  = spending balances − committed − unfunded earmarks
+safe_soon = safe_now + confirmed work not yet paid
+```
+
+**The window ends the day before the next cheque**, taken from whichever job's
+pay rule produces the soonest one, falling back to month end when no job has a
+rule. A rolling thirty days can span two rents or none; a calendar month reports
+two days of runway on the 29th. The period you actually have to make money last
+is the one before more arrives — and that answer only became available once Jobs
+knew about pay schedules.
+
+**Only spending accounts count.** This is the single place `accounts.kind`
+drives behaviour rather than styling, and the column itself now says so. Against
+real data the difference is stark: roughly $27,800 across every account, against
+what is actually in the spending pot.
+
+**Two figures, one headline.** `safe_now` is the answer; `safe_soon` sits under
+it as context. A cheque can be late or short — catching that is part of why Jobs
+exists — so a headline including unearned money would be optimistic exactly
+where being wrong causes an overdraft.
+
+Nothing that has not arrived is ever counted: incoming standing instructions
+inside the window are filtered out too, not only unpaid work.
+
+A negative result is reported rather than clamped. Being over-committed is the
+most useful thing this figure can say, so it changes colour rather than tone —
+and `per_day` goes null, because a daily allowance of minus money is not
+guidance.
+
 ## Still open
 
-Safe-to-spend (a subtraction over `/recurring/upcoming`, which already returns
-the commitments); sinking funds; a subscription audit reading the ledger for
+Sinking funds; a subscription audit reading the ledger for
 repeats with no standing instruction behind them; reimbursement state; who and
 when on Money Lent.

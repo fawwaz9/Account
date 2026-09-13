@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  fetchSafeToSpend,
   fetchAccounts,
   fetchBudgetSummary,
   fetchCategories,
@@ -11,6 +12,7 @@ import {
 import {
   Account,
   BudgetSummary,
+  SafeToSpend,
   RecurringTransaction,
   SpendCategory,
   Transaction,
@@ -28,6 +30,7 @@ export function useBudget() {
   const [summary, setSummary] = useState<BudgetSummary | null>(null);
   const [recurring, setRecurring] = useState<RecurringTransaction[]>([]);
   const [upcoming, setUpcoming] = useState<UpcomingCharge[]>([]);
+  const [safe, setSafe] = useState<SafeToSpend | null>(null);
   const [month, setMonth] = useState(currentMonth());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -70,6 +73,7 @@ export function useBudget() {
         nextSummary,
         nextRecurring,
         nextUpcoming,
+        nextSafe,
       ] = await Promise.all([
         fetchAccounts(user.id),
         // Only what is genuinely recent; the whole history lives on each
@@ -82,6 +86,9 @@ export function useBudget() {
         // subscription, near enough that it is still what you are committed to
         // rather than a forecast.
         fetchUpcoming(user.id, localToday(), daysAhead(42)),
+        // Read after runRecurring above, so a payment written on this load
+        // already counts as committed rather than as cash still in hand.
+        fetchSafeToSpend(user.id),
       ]);
       if (ticket !== latestRequest.current) return;
       setAccounts(nextAccounts);
@@ -90,6 +97,7 @@ export function useBudget() {
       setSummary(nextSummary);
       setRecurring(nextRecurring);
       setUpcoming(nextUpcoming);
+      setSafe(nextSafe);
     } catch (err) {
       if (ticket !== latestRequest.current) return;
       setError(err instanceof Error ? err.message : "Could not load your budget");
@@ -105,6 +113,7 @@ export function useBudget() {
   }, [load]);
 
   return {
+    safe,
     accounts,
     transactions,
     categories,

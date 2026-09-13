@@ -1,4 +1,5 @@
 import { useState } from "react";
+import SafeToSpend from "./SafeToSpend";
 import Sectors from "./Sectors";
 import Transactions from "./Transactions";
 import AddMoneyModal from "./AddMoneyModal";
@@ -22,7 +23,7 @@ export default function BudgetView() {
   const { user } = useAuth();
   const {
     accounts, transactions, categories, summary, recurring, upcoming,
-    month, setMonth, loading, error, reload,
+    safe, month, setMonth, loading, error, reload,
   } = useBudget();
   // Reused rather than refetched: the course picker needs the same list the
   // Grades page already loads.
@@ -102,6 +103,11 @@ export default function BudgetView() {
 
       {!loading && !error && (
         <>
+          {/* First, because it is the only thing on this page that answers a
+              question rather than recording one. Everything below is the
+              working; this is the conclusion. */}
+          <SafeToSpend safe={safe} />
+
           <Sectors accounts={accounts} onEdit={setEditingAccount} />
 
           {/* Above the monthly view on purpose: the month is the wrong unit for
