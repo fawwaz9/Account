@@ -222,15 +222,30 @@ export default function JobModal({ open, job, onClose, onSaved }: JobModalProps)
           </label>
         </div>
 
-        {/* Only once there is a first pay date for the rule to run from -- the
-            API refuses a schedule without one. */}
-        {form.pay_starts_on && (
-          <RecurrenceEditor
-            value={form.pay_schedule}
+        {/* Named, because a bare repeat editor on a job form reads as though it
+            governs the shifts. It does not: shifts are added on their own, and
+            this is only how often the money arrives. Safe-to-spend reads it to
+            decide how long your balance has to last. */}
+        <fieldset className="payRepeat">
+          <legend className="calFieldLabel">Does the paycheque repeat?</legend>
+          <p className="small-text muted">
+            How often you are paid, not when you work. Shifts are added
+            separately. Leave the date empty if the pay is irregular — nothing
+            will be predicted.
+          </p>
+
+          {form.pay_starts_on ? (
+            <RecurrenceEditor
+              value={form.pay_schedule}
             onChange={(schedule) => update("pay_schedule", schedule)}
-            startsOn={form.pay_starts_on}
-          />
-        )}
+              startsOn={form.pay_starts_on}
+            />
+          ) : (
+            <p className="small-text muted">
+              Set a first pay date above to say how often it repeats.
+            </p>
+          )}
+        </fieldset>
 
         {error && <p className="calError">{error}</p>}
 

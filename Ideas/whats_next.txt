@@ -92,6 +92,9 @@ Shipped so far (do not re-propose)
         Sinking funds: what something costs and when it is due, with the monthly
           figure derived rather than stored, so a missed month raises the rest
           instead of moving the date. Setting aside writes a real transfer.
+        Shifts entered one at a time, which is how part-time work arrives. The
+          weekly pattern is still there for jobs that repeat, and saving one no
+          longer deletes the shifts you typed in by hand.
 
 
 What is left, by module. Tasks and Calendar no longer appear: everything that
@@ -287,6 +290,14 @@ Worth knowing before picking anything up
 - A repeat materialises differently per module, and the differences are the
   point: class times never become rows, payments become rows only once they have
   happened, tasks become rows a little way ahead so each can be ticked off.
+- A job's shifts come in two shapes and both are events. A one-off has no rule
+  and is the default path, because part-time hours are rarely the same twice; a
+  weekly pattern is the exception. set_class_schedule-style replacement is
+  therefore narrowed to rows with recur_freq set -- otherwise saving a pattern
+  silently deleted a fortnight of hand-entered shifts.
+- The repeat on the job form is the PAYCHEQUE's, not the shifts'. Unlabelled it
+  read as though it governed when you work; it is named and explained now, and
+  safe-to-spend is what reads it.
 - A shift is the engine's fourth consumer and cost nothing: it is an event with
   a job_id and a rule, exactly as a lecture is an event with a course_id and a
   rule. Free blocks already subtract any timed occurrence, crunch scores an

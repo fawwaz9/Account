@@ -61,6 +61,8 @@ export const endpoints = {
     schedule: (userId: string, jobId: string) => `jobs/${userId}/jobs/${jobId}/schedule`,
     /** Declared above /jobs/{job_id} on the server, or "shifts" parses as an id. */
     shifts: (userId: string) => `jobs/${userId}/jobs/shifts`,
+    addShift: (userId: string, jobId: string) => `jobs/${userId}/jobs/${jobId}/shifts`,
+    shift: (userId: string, eventId: string) => `jobs/${userId}/jobs/shifts/${eventId}`,
     shiftRecord: (userId: string, eventId: string, onDate: string) =>
       `jobs/${userId}/jobs/shifts/${eventId}/${onDate}`,
     earnings: (userId: string) => `jobs/${userId}/earnings`,
