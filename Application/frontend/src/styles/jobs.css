@@ -205,3 +205,108 @@
   .shiftHours { grid-area: hours; text-align: right; }
   .shiftState, .shiftConfirm { grid-area: action; justify-self: end; }
 }
+
+/* ===== Paycheques =====
+   Gross and net both visible, because the gap between them is the thing this
+   page can answer and the ledger cannot: the ledger only ever saw the net. */
+
+.paySection {
+  margin-top: 28px;
+}
+
+.payList {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.payRow {
+  display: grid;
+  grid-template-columns: minmax(88px, auto) minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 4px;
+  border-bottom: 1px solid rgba(31, 42, 68, 0.7);
+}
+
+.payWhen {
+  color: var(--gold);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.payBody {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.payJob {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
+}
+
+.payNetCell {
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.payVariance {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+/* Only a short cheque is coloured. Matching is the expected case, and being
+   paid more than expected is not a problem to flag. */
+.payVarianceShort {
+  color: #e0685f;
+  font-weight: 600;
+}
+
+.payDeductions {
+  margin: 0;
+  padding: 12px 0 0;
+  border: none;
+}
+
+.payNet {
+  margin: 12px 0 0;
+  font-size: 0.95rem;
+}
+
+.payPreview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--gold);
+  border-radius: 0 6px 6px 0;
+  background: rgba(212, 175, 55, 0.1);
+  font-size: 0.82rem;
+}
+
+.payPreviewShort {
+  border-left-color: #e0685f;
+  background: rgba(224, 104, 95, 0.12);
+}
+
+@media (max-width: 640px) {
+  .payRow {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "when   net"
+      "body   variance"
+      "action action";
+    row-gap: 4px;
+  }
+  .payWhen { grid-area: when; }
+  .payBody { grid-area: body; }
+  .payNetCell { grid-area: net; text-align: right; }
+  .payVariance { grid-area: variance; text-align: right; }
+  .payRow .jobButton { grid-area: action; justify-self: start; }
+}

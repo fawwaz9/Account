@@ -213,5 +213,9 @@ class ShiftOccurrence(BaseModel):
     assumed: bool = False
     tip_amount: float = 0.0
     tip_is_cash: bool = True
+    #: Whether this tip has actually reached the budget. False for a tip paid on
+    #: the cheque, which arrives inside its gross instead, and false for a cash
+    #: tip that had nowhere to go because no account takes an income share.
+    tip_in_ledger: bool = False
     rate_override: float | None = None
     notes: str | None = None

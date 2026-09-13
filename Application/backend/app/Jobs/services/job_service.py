@@ -27,7 +27,14 @@ from datetime import date, datetime, time, timedelta
 
 from sqlalchemy.orm import Session
 
-from app._database.models import EventModel, JobModel, ShiftRecordModel
+from app._database.models import (
+    EventModel,
+    JobModel,
+    ShiftRecordModel,
+    TransactionModel,
+)
+from app.Finances.schemas.transaction import TransactionKind
+from app.Finances.services.deposit_service import active_accounts, split_income
 from app.Calendar.schemas.event import EventKind
 from app.Calendar.services.event_service import list_occurrences
 from app.Calendar.utils.recurrence import (
@@ -51,6 +58,7 @@ from app.Jobs.schemas.job import (
 from app.Tasks.services.task_service import user_exists
 
 SHIFT = EventKind.SHIFT.value
+INCOME = TransactionKind.INCOME.value
 
 #: How far ahead the next pay date is looked for. A rule that produces nothing
 #: inside a year has effectively stopped, and walking further is a spin.
@@ -387,6 +395,7 @@ def list_shifts(
             assumed=item.on_date <= anchor and not confirmed,
             tip_amount=record.tip_amount if record else 0.0,
             tip_is_cash=record.tip_is_cash if record else True,
+            tip_in_ledger=bool(record and record.tip_transaction_id is not None),
             rate_override=record.rate_override if record else None,
             notes=record.notes if record else None,
         ))
@@ -447,6 +456,105 @@ def confirm_shift(
     record.rate_override = data.rate_override
     record.notes = data.notes
 
+    sync_cash_tip(db, user_id, record, event)
+
     db.commit()
     db.refresh(record)
     return ShiftRecord.model_validate(record)
+
+
+def sync_cash_tip(
+    db: Session, user_id: uuid.UUID, record: ShiftRecordModel, event: EventModel
+) -> None:
+    """Keep the ledger row for a cash tip in step with the record.
+
+    Cash is money already in hand, so it is the one part of a shift that reaches
+    the budget without waiting for a cheque. A tip paid through payroll does not:
+    it arrives inside the cheque's gross, and writing a row for it here as well
+    would count it twice.
+
+    Written and unwritten rather than only written, because a tip can be
+    corrected to zero, or marked as having gone on the cheque after all, and
+    either leaves a row that no longer describes anything.
+    """
+    wants_row = record.tip_amount > 0 and record.tip_is_cash
+
+    # A tip splits across accounts like any other income, so it is several rows
+    # tied by a group -- the record points at one of them, and the group is what
+    # finds the rest. Deleting only the row it points at would orphan the others.
+    anchor = None
+    if record.tip_transaction_id is not None:
+        anchor = (
+            db.query(TransactionModel)
+            .filter(
+                TransactionModel.id == record.tip_transaction_id,
+                TransactionModel.user_id == user_id,
+            )
+            .first()
+        )
+
+    existing = []
+    if anchor is not None:
+        existing = (
+            db.query(TransactionModel)
+            .filter(
+                TransactionModel.user_id == user_id,
+                TransactionModel.group_id == anchor.group_id,
+            )
+            .all()
+            if anchor.group_id is not None
+            else [anchor]
+        )
+
+    if not wants_row:
+        for row in existing:
+            db.delete(row)
+        record.tip_transaction_id = None
+        db.flush()
+        return
+
+    job = db.query(JobModel).filter(JobModel.id == record.job_id).first()
+    description = f"{job.name if job else 'Shift'} tips"
+
+    # Rewritten rather than patched: the amount changed, so the split changed,
+    # and reconciling row-by-row against a new split is more ways to be wrong.
+    for row in existing:
+        db.delete(row)
+    record.tip_transaction_id = None
+    db.flush()
+
+    # Split like any other income, so cash lands wherever the student has said
+    # incoming money goes. A student who wants cash tracked apart can give a
+    # cash account its own income share.
+    accounts = active_accounts(db, user_id)
+    split = split_income(round(record.tip_amount, 2), accounts)
+    if not split:
+        # No account takes a share, so there is nowhere to put it. Recording the
+        # tip on the shift still happens -- refusing would block logging your
+        # hours over an unrelated budget setting -- and `tip_in_ledger` says the
+        # money has not reached the budget, so the gap is visible rather than
+        # silent.
+        record.tip_transaction_id = None
+        db.flush()
+        return
+
+    group_id = uuid.uuid4()
+    rows = [
+        TransactionModel(
+            id=uuid.uuid4(),
+            user_id=user_id,
+            account_id=entry.account_id,
+            kind=INCOME,
+            amount=entry.amount,
+            description=description,
+            occurred_on=record.on_date,
+            group_id=group_id,
+        )
+        for entry in split
+        if entry.amount > 0
+    ]
+    db.add_all(rows)
+    db.flush()
+    # The first row is what the record points at; the group ties the rest to it.
+    record.tip_transaction_id = rows[0].id if rows else None
+    db.flush()

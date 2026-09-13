@@ -14,6 +14,20 @@ from app.Jobs.schemas.job import (
     ShiftRecordUpsert,
     ShiftScheduleCreate,
 )
+from app.Jobs.schemas.paycheque import (
+    Paycheque,
+    PaychequeCreate,
+    PaychequePreview,
+    PaychequeUpdate,
+)
+from app.Jobs.services.paycheque_service import (
+    delete_paycheque,
+    get_paycheque,
+    list_paycheques,
+    preview_paycheque,
+    record_paycheque,
+    update_paycheque,
+)
 from app.Jobs.services.job_service import (
     confirm_shift,
     create_job,
@@ -110,6 +124,119 @@ def record_shift(
         raise HTTPException(status_code=404, detail="Shift not found")
 
     return saved
+
+
+# Every literal path stays above /jobs/{job_id}, or it is parsed as a job id.
+@router.get(
+    "/{user_id}/paycheques",
+    response_model=list[Paycheque],
+    responses=responses["user_404"],
+)
+def get_paycheques(
+    user_id: VerifiedUserId,
+    db: DBSession,
+    job_id: UUID | None = Query(default=None, description="Only this job's cheques"),
+):
+    cheques = list_paycheques(db, user_id, job_id)
+    if cheques is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+
+    return cheques
+
+
+@router.post(
+    "/{user_id}/paycheques",
+    response_model=Paycheque,
+    responses=responses["user_both"],
+)
+def add_paycheque(user_id: VerifiedUserId, paycheque: PaychequeCreate, db: DBSession):
+    """Record a cheque. Only the net reaches the ledger, split by income share."""
+    try:
+        created = record_paycheque(db, user_id, paycheque)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if created is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    return created
+
+
+@router.get(
+    "/{user_id}/paycheques/preview",
+    response_model=PaychequePreview,
+    responses=JOB_404,
+)
+def preview(
+    user_id: VerifiedUserId,
+    db: DBSession,
+    job_id: UUID = Query(..., description="The job being paid"),
+    period_start: date = Query(..., description="First date of the pay period"),
+    period_end: date = Query(..., description="Last date of the pay period"),
+):
+    """What the shifts in this period say the cheque should come to."""
+    if period_end < period_start:
+        raise HTTPException(status_code=400, detail="A pay period cannot end before it starts")
+
+    expected = preview_paycheque(db, user_id, job_id, period_start, period_end)
+    if expected is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    return expected
+
+
+@router.get(
+    "/{user_id}/paycheques/{paycheque_id}",
+    response_model=Paycheque,
+    responses=JOB_404,
+)
+def get_single_paycheque(user_id: VerifiedUserId, paycheque_id: UUID, db: DBSession):
+    cheque = get_paycheque(db, user_id, paycheque_id)
+    if cheque is None:
+        raise HTTPException(status_code=404, detail="Paycheque not found")
+
+    return cheque
+
+
+@router.patch(
+    "/{user_id}/paycheques/{paycheque_id}",
+    response_model=Paycheque,
+    responses=JOB_BOTH,
+)
+def edit_paycheque(
+    user_id: VerifiedUserId,
+    paycheque_id: UUID,
+    paycheque: PaychequeUpdate,
+    db: DBSession,
+):
+    """Correct a cheque. Its ledger rows are rewritten to match."""
+    try:
+        updated = update_paycheque(db, user_id, paycheque_id, paycheque)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Paycheque not found")
+
+    return updated
+
+
+@router.delete(
+    "/{user_id}/paycheques/{paycheque_id}",
+    response_model=Paycheque,
+    responses=JOB_404,
+)
+def remove_paycheque(user_id: VerifiedUserId, paycheque_id: UUID, db: DBSession):
+    """Remove a cheque and the ledger rows it wrote."""
+    deleted = delete_paycheque(db, user_id, paycheque_id)
+    if deleted is None:
+        raise HTTPException(status_code=404, detail="Paycheque not found")
+
+    audit.deletion(
+        "paycheque", user_id=user_id, target_id=paycheque_id,
+        detail=f"{deleted.job_name} {deleted.gross_amount}",
+    )
+    return deleted
 
 
 @router.get("/{user_id}/jobs/{job_id}", response_model=Job, responses=JOB_404)

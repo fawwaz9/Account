@@ -119,3 +119,63 @@ export interface ShiftRecordUpsert {
   rate_override: number | null;
   notes: string | null;
 }
+
+/* ===== Paycheques ===== */
+
+/** Mirrors app/Jobs/schemas/paycheque.py. */
+
+export interface DeductionEntry {
+  description: string;
+  /** Positive. The sign is in the name. */
+  amount: number;
+}
+
+export interface Deduction extends DeductionEntry {
+  id: string;
+}
+
+export interface Paycheque {
+  id: string;
+  job_id: string;
+  job_name: string;
+  occurred_on: string;
+  gross_amount: number;
+  deductions: Deduction[];
+  /** Gross less every deduction, computed by the API rather than stored. */
+  net_amount: number;
+  period_start: string | null;
+  period_end: string | null;
+  /** What the hours said it should be, frozen when the cheque was recorded. */
+  expected_gross: number | null;
+  /** Positive means the cheque was larger than expected. Null when nothing was expected. */
+  variance: number | null;
+  notes: string | null;
+}
+
+export interface PaychequeCreate {
+  job_id: string;
+  occurred_on: string;
+  gross_amount: number;
+  period_start: string | null;
+  period_end: string | null;
+  deductions: DeductionEntry[];
+  /** Empty splits the net by each account's income share. */
+  allocations: { account_id: string; amount: number }[];
+  notes: string | null;
+}
+
+export type PaychequeUpdate = Partial<Omit<PaychequeCreate, "job_id">>;
+
+export interface PaychequePreview {
+  job_id: string;
+  period_start: string;
+  period_end: string;
+  /** Null for a contract job: there is nothing to predict from hours. */
+  expected_gross: number | null;
+  shift_count: number;
+  counted_minutes: number;
+  /** How many of those shifts are assumed rather than confirmed. */
+  assumed_count: number;
+  /** Tips paid through payroll, already inside the gross. */
+  on_cheque_tips: number;
+}

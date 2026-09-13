@@ -4,6 +4,10 @@ import {
   Job,
   JobCreate,
   JobUpdate,
+  Paycheque,
+  PaychequeCreate,
+  PaychequePreview,
+  PaychequeUpdate,
   ShiftOccurrence,
   ShiftRecordUpsert,
   ShiftScheduleCreate,
@@ -55,4 +59,41 @@ export async function recordShift(
   payload: ShiftRecordUpsert
 ) {
   return put<unknown>(endpoints.jobs.shiftRecord(userId, eventId, onDate), payload);
+}
+
+/* ===== Paycheques ===== */
+
+export async function fetchPaycheques(userId: string, jobId?: string) {
+  const base = endpoints.jobs.paycheques(userId);
+  return get<Paycheque[]>(jobId ? `${base}?job_id=${jobId}` : base);
+}
+
+/** What the shifts in a period say the cheque should come to. */
+export async function previewPaycheque(
+  userId: string,
+  jobId: string,
+  periodStart: string,
+  periodEnd: string
+) {
+  return get<PaychequePreview>(
+    `${endpoints.jobs.paychequePreview(userId)}` +
+      `?job_id=${jobId}&period_start=${periodStart}&period_end=${periodEnd}`
+  );
+}
+
+export async function recordPaycheque(userId: string, payload: PaychequeCreate) {
+  return post<Paycheque>(endpoints.jobs.paycheques(userId), payload);
+}
+
+export async function updatePaycheque(
+  userId: string,
+  paychequeId: string,
+  payload: PaychequeUpdate
+) {
+  return patch<Paycheque>(endpoints.jobs.paycheque(userId, paychequeId), payload);
+}
+
+/** Removes the cheque and the ledger rows it wrote. */
+export async function deletePaycheque(userId: string, paychequeId: string) {
+  return del<Paycheque>(endpoints.jobs.paycheque(userId, paychequeId));
 }
