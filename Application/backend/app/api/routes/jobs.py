@@ -14,6 +14,8 @@ from app.Jobs.schemas.job import (
     ShiftRecordUpsert,
     ShiftScheduleCreate,
 )
+from app.Jobs.schemas.earnings import EarningsSummary
+from app.Jobs.services.earnings_service import earnings_summary
 from app.Jobs.schemas.paycheque import (
     Paycheque,
     PaychequeCreate,
@@ -124,6 +126,25 @@ def record_shift(
         raise HTTPException(status_code=404, detail="Shift not found")
 
     return saved
+
+
+@router.get(
+    "/{user_id}/earnings",
+    response_model=EarningsSummary,
+    responses=responses["user_404"],
+)
+def get_earnings(user_id: VerifiedUserId, db: DBSession):
+    """Hours and money over a week, a month and the term, from one pass.
+
+    Earned and paid are reported separately throughout: earned comes from the
+    shifts and is a prediction, paid comes from cheques that arrived. One
+    combined figure would hide a fortnight of work nobody has paid for.
+    """
+    summary = earnings_summary(db, user_id)
+    if summary is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+
+    return summary
 
 
 # Every literal path stays above /jobs/{job_id}, or it is parsed as a job id.

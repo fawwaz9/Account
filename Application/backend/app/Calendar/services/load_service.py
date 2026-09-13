@@ -13,7 +13,10 @@ from sqlalchemy.orm import Session
 
 from app._database.models import UserModel
 
-from app.Calendar.schemas.event import EventKind
+from app.Calendar.schemas.event import CLASS_KINDS, EventKind
+
+#: Lecture, lab, discussion, as stored values.
+CLASS_KIND_VALUES = {kind.value for kind in CLASS_KINDS}
 from app.Calendar.schemas.load import CrunchStrip, CrunchWeek, FreeBlock, WeekLoad
 from app.Calendar.services.event_service import list_occurrences
 from app.Tasks.services.task_service import list_tasks
@@ -157,13 +160,20 @@ def week_load(
         return None
 
     booked = 0
+    work = 0
+    classes = 0
     events = 0
     for item in occurrences:
         events += 1
         if item.start_time is None:
             continue
         end = item.end_time or item.start_time
-        booked += max(0, minutes_between(item.start_time, end))
+        minutes = max(0, minutes_between(item.start_time, end))
+        booked += minutes
+        if item.kind == EventKind.SHIFT.value:
+            work += minutes
+        elif item.kind in CLASS_KIND_VALUES:
+            classes += minutes
 
     tasks = list_tasks(db, user_id, start=window_start, end=window_end) or []
     estimated = sum(task.estimated_minutes or 0 for task in tasks)
@@ -173,6 +183,8 @@ def week_load(
         starts_on=window_start,
         ends_on=window_end,
         booked_minutes=booked,
+        work_minutes=work,
+        class_minutes=classes,
         estimated_minutes=estimated,
         task_count=len(tasks),
         unestimated_tasks=unestimated,

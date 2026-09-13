@@ -4,6 +4,7 @@ import JobModal from "../features/jobs/components/JobModal";
 import ShiftList from "../features/jobs/components/ShiftList";
 import ShiftScheduleModal from "../features/jobs/components/ShiftScheduleModal";
 import ConfirmShiftModal from "../features/jobs/components/ConfirmShiftModal";
+import Earnings from "../features/jobs/components/Earnings";
 import PaychequeList from "../features/jobs/components/PaychequeList";
 import PaychequeModal from "../features/jobs/components/PaychequeModal";
 import { useJobs } from "../features/jobs/hooks/useJobs";
@@ -23,7 +24,7 @@ import "../styles/jobs.css";
  */
 export default function JobsPage() {
   const [showArchived, setShowArchived] = useState(false);
-  const { jobs, shifts, paycheques, loading, error, reload } = useJobs(showArchived);
+  const { jobs, shifts, paycheques, earnings, loading, error, reload } = useJobs(showArchived);
 
   const [editing, setEditing] = useState<Job | null>(null);
   const [adding, setAdding] = useState(false);
@@ -67,6 +68,8 @@ export default function JobsPage() {
 
       {error && <p className="calError">{error}</p>}
       {loading && jobs.length === 0 && <p className="calMuted" role="status">Loading…</p>}
+
+      <Earnings earnings={earnings} />
 
       {!loading && jobs.length === 0 ? (
         <p className="calMuted">

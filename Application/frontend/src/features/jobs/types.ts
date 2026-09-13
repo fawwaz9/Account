@@ -179,3 +179,68 @@ export interface PaychequePreview {
   /** Tips paid through payroll, already inside the gross. */
   on_cheque_tips: number;
 }
+
+/* ===== Earnings ===== */
+
+/** Mirrors app/Jobs/schemas/earnings.py. */
+
+export interface JobEarnings {
+  job_id: string;
+  job_name: string;
+  kind: string;
+  shift_count: number;
+  counted_minutes: number;
+  /** How many of those shifts are assumed rather than confirmed. */
+  assumed_count: number;
+  gross_earned: number;
+  cash_tips: number;
+}
+
+export interface EarningsWindow {
+  label: string;
+  starts_on: string;
+  ends_on: string;
+  counted_minutes: number;
+  /** What the hours say. A prediction. */
+  gross_earned: number;
+  cash_tips: number;
+  /** What cheques actually paid. Kept apart from earned on purpose. */
+  gross_paid: number;
+  deducted: number;
+  net_paid: number;
+  per_job: JobEarnings[];
+}
+
+export interface EffectiveRate {
+  /** Null before anything has been paid, rather than a zero that reads as unpaid work. */
+  net_per_hour: number | null;
+  gross_per_hour: number | null;
+  deduction_percent: number | null;
+  paid_minutes: number;
+}
+
+export interface UpcomingPay {
+  job_id: string;
+  job_name: string;
+  unpaid_minutes: number;
+  /** Null for a contract job, which predicts nothing from hours. */
+  unpaid_estimate: number | null;
+  next_pay_on: string | null;
+}
+
+export interface HoursAgainstClasses {
+  starts_on: string;
+  ends_on: string;
+  work_minutes: number;
+  class_minutes: number;
+  task_minutes: number;
+}
+
+export interface EarningsSummary {
+  week: EarningsWindow;
+  month: EarningsWindow;
+  term: EarningsWindow | null;
+  effective_rate: EffectiveRate;
+  upcoming: UpcomingPay[];
+  this_week: HoursAgainstClasses | null;
+}

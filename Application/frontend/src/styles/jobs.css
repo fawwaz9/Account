@@ -310,3 +310,125 @@
   .payVariance { grid-area: variance; text-align: right; }
   .payRow .jobButton { grid-area: action; justify-self: start; }
 }
+
+/* ===== Earnings =====
+   Earned and paid sit apart on every card, because they answer different
+   questions: earned is what the hours say, paid is what a cheque delivered.
+   The gap between them is the thing this page exists to show. */
+
+.earnSection {
+  margin: 18px 0 26px;
+}
+
+.earnWindows,
+.earnRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 12px;
+}
+
+.earnRow {
+  margin-top: 12px;
+}
+
+.earnCard {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 13px 15px;
+  border: 1px solid #1f2a44;
+  border-radius: 12px;
+  background: var(--panel-2);
+}
+
+.earnLabel {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.earnHeadline {
+  font-size: 1.25rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.earnHeadlineEmpty {
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+/* The unit rides with the figure rather than competing with it. */
+.earnPer {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.earnPaid {
+  margin-top: 2px;
+  padding-top: 5px;
+  border-top: 1px solid rgba(31, 42, 68, 0.8);
+}
+
+/* Not an error: a figure resting partly on assumed hours, saying so. */
+.earnAssumed {
+  color: var(--gold);
+}
+
+.earnPerJob {
+  margin: 6px 0 0;
+  padding: 6px 0 0;
+  border-top: 1px solid rgba(31, 42, 68, 0.8);
+  list-style: none;
+  font-size: 0.78rem;
+}
+
+.earnPerJob li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted);
+}
+
+/* One bar, three claims on the same week. Proportions rather than a chart:
+   what matters is which slice is largest, not the exact hours, and those are
+   printed underneath anyway. */
+.earnBar {
+  display: flex;
+  overflow: hidden;
+  height: 8px;
+  margin: 6px 0 4px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.16);
+}
+
+.earnBarClass { background: #4593d6; }
+.earnBarWork { background: #4fa86f; }
+.earnBarTask { background: var(--gold-soft); }
+
+.earnOwed {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 12px;
+  padding: 12px 15px;
+  border: 1px solid #1f2a44;
+  border-radius: 12px;
+  background: var(--panel-2);
+}
+
+.earnOwedList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.earnOwedList li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+}

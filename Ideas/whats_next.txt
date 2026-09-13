@@ -71,6 +71,9 @@ Shipped so far (do not re-propose)
           cheque, only the net reaches the ledger and splits by income share,
           and what the hours said it should be is checked against what arrived.
           Cash tips reach the budget; tips paid on the cheque are already in it.
+        Jobs, third stage: earnings. Week, month and term in hours and money,
+          the effective rate once tax comes off, work hours beside class hours,
+          and what has been worked but not yet paid for.
 
 
 Tasks:  Reminders, as opposed to tasks: something that notifies rather than waits.
@@ -271,6 +274,19 @@ Worth knowing before picking anything up
   silently undid a corrected gross in update_paycheque; db.flush() is what was
   wanted. The test suite is run with -W error::sqlalchemy.exc.SAWarning, which
   is how the duplicate cascade delete surfaced.
+- Earned and paid are reported apart everywhere on the jobs page. Earned comes
+  from the shifts and is a prediction; paid comes from cheques that arrived. One
+  combined figure would hide a fortnight worked that nobody has paid for, which
+  is the thing the page exists to surface.
+- The effective hourly rate is measured over the periods cheques actually
+  covered, not over every hour worked. Otherwise unpaid hours drag it down and a
+  cheque still to come reads as a pay cut.
+- WeekLoad now splits booked time into work_minutes and class_minutes.
+  booked_minutes still means every timed event, so the split is additive.
+- Any service taking an `on_day` has to thread it into everything it calls.
+  window_earnings did not, so whether a shift counted as past was judged against
+  the wall clock rather than the day being reported on -- figures that drifted
+  with real time and could not be tested at a fixed date.
 - CLASS_KINDS does not protect shifts from a course timetable rewrite --
   set_class_schedule matches on course_id as well, and a shift has none. What
   CLASS_KINDS controls is what a ClassMeeting will accept. The first test of

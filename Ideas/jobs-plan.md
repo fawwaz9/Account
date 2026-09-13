@@ -272,6 +272,63 @@ Verified beyond the suite:
   summing exactly to the net; deleting the cheque returned the transaction count
   to where it started, with no paycheque left behind.
 
-## Stage 3 — not started
+## Stage 3 — done
 
-Reconciliation and the earnings page.
+The earnings page and its four figures. Branch `job-earnings`. 465 backend
+tests pass (447 + 18 new). The module is complete.
+
+Built as planned. Four things worth recording:
+
+- **`WeekLoad` gained `work_minutes` and `class_minutes`**, split by kind.
+  Additive: `booked_minutes` still means every timed event, so anything already
+  reading it is unaffected.
+- **The anchor was not being threaded down.** `window_earnings` called
+  `list_shifts` without `on_day`, so whether a shift counted as past was judged
+  against the wall clock rather than the day being reported on. The figures
+  drifted with real time and the service could not be tested at a fixed date.
+  Caught by a test asserting `assumed_count`.
+- **A second vacuous test, caught by mutation.** Making a salaried job take the
+  hourly path broke nothing, because `check_pay_fields` already clears
+  `hourly_rate` on anything not hourly, so the multiplication comes to zero
+  regardless. The `kind` check is therefore defensive, not load-bearing — the
+  docstring now says so — and two tests were added for what it *does* protect:
+  a salaried job's earnings not moving with its hours, and an on-cheque tip not
+  being added to a salary. The second fails under that mutation.
+- **The effective rate is measured over what cheques covered**, not over every
+  hour worked. Otherwise hours not yet paid for drag it down and a cheque still
+  to come reads as a pay cut.
+
+Verified beyond the suite, on a **copy** of the real database:
+
+- Past week 10.0h earning $185.00; this month 15.0h / $277.50; this term 45.0h /
+  $832.50, over a term span read from the real course dates (9 Sep – 11 Oct).
+- A $370 cheque covering 21 Sep – 4 Oct gave an effective rate of **$15.23/h net
+  against $18.50/h gross, 17.6% deducted**, over exactly the 20 hours it covered.
+- Unpaid work since that period: 10.0h ≈ $185, with the next cheque on 23 Oct —
+  correct for a fortnightly rule anchored at 11 September.
+- This week against the real timetable: 22.0h of classes, 10.0h of work.
+
+---
+
+# Where it stands
+
+All three stages shipped. The module does what it set out to:
+
+* **Time** reaches the calendar, where a shift competes with lectures for the
+  same hours and the free-block finder already knows it.
+* **Money** reaches the ledger only at the point a cheque arrives, and only the
+  net, because that is the only part that ever entered an account.
+* **Everything else** — gross, deductions, rates, hours, what is owed, what a
+  cheque should have been — lives on the jobs page, which is the only place that
+  can answer it.
+
+## Not built, and deliberately
+
+- **Overtime rules.** Offered and declined: a per-shift rate override covers the
+  stat holiday and the night differential without a provincial rule table.
+- **A cash account.** A cash tip splits by income share like any other income,
+  which claims it is in the bank when it is in a pocket. A student who wants it
+  tracked apart can give a cash account its own share. Worth revisiting if that
+  proves awkward.
+- **Invoices as their own record.** A contract cheque is the invoice being paid;
+  there is no separate thing to track until one needs chasing.
