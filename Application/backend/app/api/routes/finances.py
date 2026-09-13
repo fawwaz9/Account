@@ -13,6 +13,8 @@ from app.Finances.schemas.account import (
     AccountUpdate,
 )
 from app.Finances.schemas.safe import SafeToSpend
+from app.Finances.schemas.subscription import SubscriptionCandidate, SubscriptionConfirm
+from app.Finances.schemas.recurring import RecurringTransaction
 from app.Finances.schemas.sinking import (
     ContributionRequest,
     SinkingFund,
@@ -28,6 +30,7 @@ from app.Finances.services.sinking_service import (
     update_fund,
 )
 from app.Finances.services.safe_service import safe_to_spend
+from app.Finances.services.subscription_service import confirm_subscription, find_subscriptions
 from app.Finances.schemas.budget import (
     BudgetSummary,
     TermBudget,
@@ -231,6 +234,51 @@ def get_safe_to_spend(user_id: VerifiedUserId, db: DBSession):
         raise HTTPException(status_code=404, detail=error_user["not_found"])
 
     return safe
+
+
+@router.get(
+    "/{user_id}/subscriptions",
+    response_model=list[SubscriptionCandidate],
+    responses=responses["user_404"],
+)
+def get_subscriptions(user_id: VerifiedUserId, db: DBSession):
+    """Recurring charges nobody told the app about.
+
+    Only an expense with no standing instruction behind it can appear here --
+    one that already has a `recurring_id` is already known. A run counts once
+    it has repeated three times on a description, an amount within 10% of its
+    own median, and a gap that reads as weekly, fortnightly or monthly. Each
+    finding comes back with a standing instruction already filled in, ready to
+    submit as-is.
+    """
+    subscriptions = find_subscriptions(db, user_id)
+    if subscriptions is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+
+    return subscriptions
+
+
+@router.post(
+    "/{user_id}/subscriptions/confirm",
+    response_model=RecurringTransaction,
+    responses=responses["user_both"],
+)
+def confirm_subscription_route(user_id: VerifiedUserId, payload: SubscriptionConfirm, db: DBSession):
+    """Turn a finding into a standing instruction, and stop re-finding it.
+
+    The charges named in `transaction_ids` are tagged with the new
+    instruction's id -- without that, the same history has no `recurring_id`
+    and qualifies as a pattern again on the very next read.
+    """
+    try:
+        rule = confirm_subscription(db, user_id, payload.transaction_ids, payload.instruction)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if rule is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+
+    return rule
 
 
 @router.get("/{user_id}/accounts", response_model=list[Account], responses=responses["user_404"])

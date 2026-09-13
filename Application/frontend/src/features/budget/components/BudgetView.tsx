@@ -1,6 +1,7 @@
 import { useState } from "react";
 import SafeToSpend from "./SafeToSpend";
 import SinkingFunds from "./SinkingFunds";
+import Subscriptions from "./Subscriptions";
 import SinkingFundModal from "./SinkingFundModal";
 import Sectors from "./Sectors";
 import Transactions from "./Transactions";
@@ -163,6 +164,10 @@ export default function BudgetView() {
 
             {spendByCategory.length > 0 && <WhereItWent entries={spendByCategory} />}
           </div>
+
+          {/* Above Recurring: a finding here is what turns into one of the rules
+              listed below it, so the case comes before the list it feeds. */}
+          <Subscriptions nonce={termNonce} onConfirmed={reloadAll} />
 
           <Recurring
             rules={recurring}

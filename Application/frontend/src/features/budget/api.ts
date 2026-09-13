@@ -6,6 +6,7 @@ import {
   SinkingFundCreate,
   SinkingFundUpdate,
   SafeToSpend,
+  SubscriptionCandidate,
   Account,
   AccountActivity,
   AccountCreate,
@@ -285,6 +286,22 @@ export async function fetchTermBudget(userId: string) {
  */
 export async function fetchSafeToSpend(userId: string) {
   return get<SafeToSpend>(endpoints.finances.safeToSpend(userId));
+}
+
+/* ===== Subscription audit ===== */
+
+export async function fetchSubscriptions(userId: string) {
+  return get<SubscriptionCandidate[]>(endpoints.finances.subscriptions(userId));
+}
+
+export async function confirmSubscription(
+  userId: string,
+  candidate: SubscriptionCandidate
+): Promise<RecurringTransaction> {
+  return post<RecurringTransaction>(endpoints.finances.confirmSubscription(userId), {
+    transaction_ids: candidate.occurrences.map((occurrence) => occurrence.transaction_id),
+    instruction: candidate.suggested,
+  });
 }
 
 /* ===== Sinking funds ===== */
