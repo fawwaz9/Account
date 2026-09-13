@@ -77,9 +77,11 @@ Shipped so far (do not re-propose)
         Snooze with a reason. A task leaves the list until a date and comes back
           in its own place, because the due date never moves -- and every snooze
           is kept, so three citing the same thing reads as a blocked task.
+        Reminders, as opposed to tasks: something that notifies rather than
+          waits. A banner while the app is open, plus a browser notification
+          where permission was given, and the limit said out loud rather than
+          hidden.
 
-
-Tasks:  Reminders, as opposed to tasks: something that notifies rather than waits.
 
 
 Grades: Think of other functionalities that can merge over to the other.
@@ -285,6 +287,14 @@ Worth knowing before picking anything up
   cheque still to come reads as a pay cut.
 - WeekLoad now splits booked time into work_minutes and class_minutes.
   booked_minutes still means every timed event, so the split is additive.
+- reminders.remind_at is naive LOCAL wall time, deliberately unlike every other
+  DateTime in the app, which is naive UTC. "Remind me at 09:00" means nine
+  o'clock where the student is and must survive a clock change, so the
+  comparison goes through their timezone preference. Comparing against UTC
+  would have fired a 20:00 reminder at 17:30 local -- two and a half hours early.
+- Reminders have no scheduler and no push. The client asks what is due while it
+  is open, and the banner says so, because a notification you half-trust is
+  worse than one whose limits you know.
 - Snoozing never moves due_date. Moving it would hide the deferral rather than
   record it, and would leave the completion-timing figure measuring against a
   date the student chose instead of the one they were given. The snooze history

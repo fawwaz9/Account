@@ -7,7 +7,10 @@ import RepeatingModal from "../features/tasks/components/RepeatingModal";
 import ExamStrip from "../features/tasks/components/ExamStrip";
 import CompletionTimingBlock from "../features/tasks/components/CompletionTiming";
 import SnoozeModal from "../features/tasks/components/SnoozeModal";
+import ReminderBanner from "../features/tasks/components/ReminderBanner";
+import ReminderModal from "../features/tasks/components/ReminderModal";
 import { useTasks } from "../features/tasks/hooks/useTasks";
+import { useReminders } from "../features/tasks/hooks/useReminders";
 import {
   createTask,
   deleteRepeating,
@@ -55,6 +58,9 @@ export default function TasksPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [timing, setTiming] = useState<CompletionTiming | null>(null);
   const [snoozing, setSnoozing] = useState<Task | null>(null);
+  const [remindersOpen, setRemindersOpen] = useState(false);
+  const { due: dueReminders, dismiss: dismissDue, refresh: refreshReminders } =
+    useReminders();
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [editingRule, setEditingRule] = useState<RecurringTask | null>(null);
@@ -150,11 +156,20 @@ export default function TasksPage() {
           />
           Show completed
         </label>
+        <button
+          type="button"
+          className="calButton"
+          onClick={() => setRemindersOpen(true)}
+        >
+          Reminders
+        </button>
       </div>
 
       {/* Full width, above the split: it is a scrolling row of cards that wants
           the room, and what is coming is context for both columns rather than
           belonging to either. */}
+      <ReminderBanner due={dueReminders} onDismiss={dismissDue} />
+
       <ExamStrip />
 
       {error && <p className="calError">{error}</p>}
@@ -271,6 +286,13 @@ export default function TasksPage() {
           </div>
         </div>
       </div>
+
+      <ReminderModal
+        open={remindersOpen}
+        courses={courses}
+        onClose={() => setRemindersOpen(false)}
+        onSaved={refreshReminders}
+      />
 
       <SnoozeModal
         task={snoozing}

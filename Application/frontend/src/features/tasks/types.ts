@@ -47,6 +47,35 @@ export interface SnoozeRequest {
   reason: string | null;
 }
 
+/** Mirrors app/Tasks/schemas/reminder.py. */
+export interface Reminder {
+  id: string;
+  title: string;
+  notes: string | null;
+  /**
+   * Local wall time, sent and received without an offset. "Remind me at 09:00"
+   * means nine o'clock where you are, and should still mean that after the
+   * clocks change — which is why this is not UTC like every other timestamp.
+   */
+  remind_at: string;
+  course_id: string | null;
+  course_code: string | null;
+  fired_at: string | null;
+  dismissed_at: string | null;
+  created_at: string | null;
+  /** Its moment has passed and nobody has dismissed it. Computed by the API. */
+  due: boolean;
+}
+
+export interface ReminderCreate {
+  title: string;
+  notes: string | null;
+  remind_at: string;
+  course_id: string | null;
+}
+
+export type ReminderUpdate = Partial<ReminderCreate>;
+
 export interface TaskSnooze {
   id: string;
   snoozed_at: string;

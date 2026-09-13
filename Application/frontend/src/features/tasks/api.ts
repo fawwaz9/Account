@@ -8,6 +8,8 @@ import {
   RecurringTaskCreate,
   RecurringTaskRun,
   RecurringTaskUpdate,
+  Reminder,
+  ReminderCreate,
   SnoozeRequest,
   Task,
   TaskCreate,
@@ -77,6 +79,37 @@ export async function fetchSnoozes(userId: string, taskId: string) {
 /** How early or late work has been finished lately. */
 export async function fetchTaskTiming(userId: string) {
   return get<CompletionTiming>(endpoints.tasks.timing(userId));
+}
+
+/* ===== Reminders ===== */
+
+export async function fetchReminders(userId: string, includeDismissed = false) {
+  const base = endpoints.tasks.reminders(userId);
+  return get<Reminder[]>(includeDismissed ? `${base}?include_dismissed=true` : base);
+}
+
+/**
+ * What should be on screen now.
+ *
+ * This is the whole delivery mechanism: there is no scheduler and no push, so a
+ * reminder fires while the app is open and not before. Asking marks them as
+ * surfaced, which is why it is not called on every render.
+ */
+export async function fetchDueReminders(userId: string) {
+  return get<Reminder[]>(endpoints.tasks.remindersDue(userId));
+}
+
+export async function createReminder(userId: string, payload: ReminderCreate) {
+  return post<Reminder>(endpoints.tasks.reminders(userId), payload);
+}
+
+/** Acknowledge one. The row stays: what you were reminded of is a record. */
+export async function dismissReminder(userId: string, reminderId: string) {
+  return post<Reminder>(endpoints.tasks.dismissReminder(userId, reminderId), {});
+}
+
+export async function deleteReminder(userId: string, reminderId: string) {
+  return del<Reminder>(endpoints.tasks.reminder(userId, reminderId));
 }
 
 /* ===== Repeating tasks ===== */
