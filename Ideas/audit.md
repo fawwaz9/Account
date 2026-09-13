@@ -230,6 +230,28 @@ Worth knowing: **there is no UI for account deletion at all**, and never was. Th
 DELETE endpoint has no caller in the frontend, so restore needs none either; the API
 is the whole surface today.
 
+## Status as of the accessibility pass
+
+Closes three of the "Also medium" items: the `h1 -> h3` heading jump on the course
+page, account kind conveyed by colour alone, and `CourseSearch` claiming
+`role="combobox"` without the parts that make one work.
+
+The combobox is the interesting one. It had the role, `aria-expanded`,
+`aria-controls` and `aria-autocomplete` -- everything except the two things that
+carry the actual state. Arrow keys moved a purely visual highlight: nothing set
+`aria-activedescendant`, and the results were list items rather than options, so a
+screen-reader user was told a list existed and then never told which row they were
+on. Declaring the role without those is arguably worse than not declaring it, since
+it promises behaviour that is not there.
+
+Account kind was a 3px coloured stripe and nothing else, across five kinds. The
+stripe stays as decoration and is now `aria-hidden`, with the kind written out
+beside the name -- the same treatment the Jobs page already gives hourly, salaried
+and contract.
+
+Still open from that tail: inputs labelled by placeholder only, which is a wider
+sweep across a dozen forms.
+
 One correction to #17 found while fixing it: this document calls the unconfirmed
 account delete "permanent", but the server refuses to delete an account that still
 holds transactions and says to archive instead. The exposure was empty accounts only.

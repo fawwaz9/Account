@@ -946,3 +946,18 @@
 .sinkOverdueNote {
   color: #e0685f;
 }
+
+/* The account kind in words beside the name. The coloured stripe stays as
+   decoration, but it can no longer be the only thing carrying the meaning. */
+.sectorKindLabel {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.18);
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  vertical-align: middle;
+}

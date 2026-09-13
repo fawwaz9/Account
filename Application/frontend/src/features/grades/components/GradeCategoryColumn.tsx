@@ -15,7 +15,10 @@ export default function GradeCategoryColumn({ title, category, items, onEditItem
   return (
     <div className="categoryColumn">
       <div className="categoryTitle">
-        <h3>{title}</h3>
+        {/* h2, not h3. The page heading is the course title, and skipping a
+            level leaves anyone navigating by headings unable to tell whether
+            they have missed a section. */}
+        <h2>{title}</h2>
         <button
           type="button"
           className="addGradeButton"
