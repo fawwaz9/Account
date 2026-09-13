@@ -105,6 +105,9 @@ export default function CourseSearch() {
 
   return (
     <div className="courseSearch" ref={containerRef}>
+      {/* The combobox role was here without the two parts that make it work:
+          nothing said which row the arrow keys were on, and the results were
+          not options. The highlight was visual only. */}
       <input
         className="search-courses"
         id="search-courses"
@@ -113,6 +116,12 @@ export default function CourseSearch() {
         aria-expanded={showDropdown}
         aria-controls={listId}
         aria-autocomplete="list"
+        aria-activedescendant={
+          highlighted >= 0 && results[highlighted]
+            ? `${listId}-option-${results[highlighted].id}`
+            : undefined
+        }
+        aria-label="Search all courses"
         placeholder="Search all courses..."
         value={query}
         onChange={(event) => setQuery(event.target.value)}
@@ -121,7 +130,7 @@ export default function CourseSearch() {
       />
 
       {showDropdown && (
-        <ul className="searchResults" id={listId}>
+        <ul className="searchResults" id={listId} role="listbox" aria-label="Course results">
           {(() => {
             if (loading) {
               return <li className="searchStatus">Searching...</li>;
@@ -133,9 +142,11 @@ export default function CourseSearch() {
               return <li className="searchStatus">No courses match &ldquo;{query}&rdquo;.</li>;
             }
             return results.map((course, index) => (
-              <li key={course.id}>
+              <li key={course.id} role="option" aria-selected={index === highlighted}
+                  id={`${listId}-option-${course.id}`}>
                 <button
                   type="button"
+                  tabIndex={-1}
                   className={index === highlighted ? "searchResult searchResultActive" : "searchResult"}
                   onClick={() => openCourse(course)}
                   onMouseEnter={() => setHighlighted(index)}
