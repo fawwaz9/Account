@@ -114,9 +114,32 @@ single `list_occurrences` call.
   due at end of day stays in the all-day band, since that is what a bare due date
   means.
 
+## The term timeline
+
+Every current course on one axis. Deliberately **no backend**: the page already
+holds each course with its dates and its `term_bucket`, so the span is two lines
+of arithmetic over data already fetched, and an endpoint would only be a second
+place for the same answer to live.
+
+That is not a hole in "compute on the server". The rule exists because a derived
+*figure* computed twice can disagree — an average, a total. A bar's position is
+layout over server-supplied facts, and the facts here (the dates, and which term
+a course is in) are still computed server-side.
+
+`timeline.ts` is kept out of the component for the same reason `weekLayout.ts`
+is: position arithmetic goes wrong silently, because a bar an inch off looks
+like a design choice rather than a bug. Fourteen assertions cover it, including
+that no bar can be laid outside the axis and that a one-day course keeps a floor
+width rather than vanishing into a hairline.
+
+Courses with no dates are **named underneath, not dropped**. Most courses in this
+app carry none, so a chart showing three of six would under-report the term while
+looking complete.
+
 ## Still open
 
-A term timeline — every course's span on one horizontal chart. Non-weekly class
-times, per meeting: biweekly is nearly free, but the meetings share one
-`starts_on`, so it needs a per-meeting first date or every biweekly lab lands on
-the odd weeks of term. Monthly needs `BYSETPOS` and is a separate decision.
+Non-weekly class times, per meeting. Biweekly is nearly free — the engine already
+honours `interval` and each meeting is already its own event row — but the
+meetings share one `starts_on`, so it needs a per-meeting first date as well, or
+every biweekly lab lands on the odd weeks of term. Monthly needs `BYSETPOS` and
+is a separate decision.

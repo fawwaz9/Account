@@ -932,3 +932,78 @@
   border-left-color: #4fa86f;
   background: rgba(79, 168, 111, 0.22);
 }
+
+/* ===== Term timeline =====
+   Every course in the term on one axis. The month grid answers "what is this
+   week"; this answers "what shape is the term" -- which courses overlap, where
+   the gaps are, and how much has already gone. None of that is visible
+   anywhere else: a course's dates live on its own page, so comparing six means
+   six visits and a memory.
+
+   Pure CSS bars, like the crunch radar. What matters is relative length and
+   overlap, and a charting dependency for two divs and a percentage is a poor
+   trade. */
+
+.termLine {
+  margin-top: 22px;
+}
+
+.termChart {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.termRow {
+  display: grid;
+  grid-template-columns: minmax(78px, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.termCode {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.termTrack {
+  position: relative;
+  height: 16px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.14);
+}
+
+.termBar {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border-radius: 999px;
+  background: rgba(69, 147, 214, 0.55);
+}
+
+/* Under the bars, so a course running today is not cut in half by its own
+   marker -- the line is context, not a division. */
+.termToday {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: var(--gold);
+  border-radius: 1px;
+}
+
+.termUndated {
+  margin: 10px 0 0;
+}
+
+@media (max-width: 560px) {
+  .termRow {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+}

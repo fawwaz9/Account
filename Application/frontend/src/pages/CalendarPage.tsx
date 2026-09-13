@@ -6,6 +6,7 @@ import EventModal from "../features/calender/components/EventModal";
 import Modal from "../shared/components/Modal";
 import { useCalender } from "../features/calender/hooks/useCalender";
 import TimeInsights from "../features/calender/components/TimeInsights";
+import TermTimeline from "../features/calender/components/TermTimeline";
 import BlackoutsModal from "../features/calender/components/BlackoutsModal";
 import {
   deleteEvent,
@@ -235,6 +236,11 @@ export default function CalendarPage() {
           )}
         </>
       )}
+
+      {/* Both views. Unlike the free blocks above, the shape of a term does not
+          need a time axis to mean something -- and it answers a question the
+          month grid raises as readily as the week one. */}
+      <TermTimeline courses={courses} />
 
       {selected && (
         <Modal
