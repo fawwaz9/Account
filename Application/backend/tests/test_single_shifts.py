@@ -10,6 +10,7 @@ import uuid
 import pytest
 
 from app._database.models import EventModel, ShiftRecordModel
+from tests.conftest import make_account
 from app.Jobs.schemas.job import (
     JobCreate,
     JobKind,
@@ -41,6 +42,12 @@ def job(db, user):
         name="Campus Bookstore", kind=JobKind.HOURLY, hourly_rate=18.5,
         started_on=TERM_START,
     ))
+
+
+@pytest.fixture
+def accounts_ready(db, user):
+    """An account taking an income share, so a cash tip has somewhere to land."""
+    return make_account(db, user.id, "Chequing", share=100.0)
 
 
 def one_off(db, user, job, *, on, start=(9, 0), end=(14, 0)):
@@ -194,3 +201,52 @@ def test_a_one_off_reduces_free_time_like_any_other(db, user, job):
     after = sum(b.minutes for b in free_blocks(db, user.id, MON, MON, now=now))
 
     assert after == before - 300
+
+
+# --- deleting a shift, and what it must take with it ----------------------
+
+def test_a_one_off_shift_says_it_does_not_repeat(db, user, job):
+    one_off(db, user, job, on=MON)
+
+    assert week(db, user)[0].repeats is False
+
+
+def test_a_pattern_date_says_it_repeats(db, user, job):
+    pattern(db, user, job, days=["MO"])
+
+    assert week(db, user)[0].repeats is True
+
+
+def test_deleting_a_confirmed_shift_with_a_cash_tip_removes_the_tip_from_the_ledger(
+    db, user, job, accounts_ready
+):
+    """The mistake case: a shift confirmed with a tip, then found to be wrong.
+
+    A bulk delete of just the ShiftRecordModel would leave the tip's ledger
+    rows behind, explaining money no shift accounts for any more -- the same
+    fault an orphaned tuition payment or paycheque was made of.
+    """
+    from app._database.models import TransactionModel
+
+    event_id = one_off(db, user, job, on=MON)
+    confirm_shift(db, user.id, event_id, MON, ShiftRecordUpsert(
+        tip_amount=45.0, tip_is_cash=True))
+    assert db.query(TransactionModel).filter(TransactionModel.kind == "income").count() > 0
+
+    remove_shift(db, user.id, event_id)
+
+    assert db.query(TransactionModel).filter(TransactionModel.kind == "income").count() == 0
+    assert db.query(ShiftRecordModel).count() == 0
+
+
+def test_deleting_an_unconfirmed_shift_touches_no_ledger_rows(db, user, job, accounts_ready):
+    """The ordinary case: nothing was ever recorded, so nothing to clean up."""
+    from app._database.models import TransactionModel
+
+    before = db.query(TransactionModel).count()
+    event_id = one_off(db, user, job, on=MON)
+
+    remove_shift(db, user.id, event_id)
+
+    assert db.query(TransactionModel).count() == before
+    assert week(db, user) == []

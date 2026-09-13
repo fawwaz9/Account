@@ -8,7 +8,9 @@ import Earnings from "../features/jobs/components/Earnings";
 import PaychequeList from "../features/jobs/components/PaychequeList";
 import PaychequeModal from "../features/jobs/components/PaychequeModal";
 import { useJobs } from "../features/jobs/hooks/useJobs";
+import { deleteShift } from "../features/jobs/api";
 import { Job, Paycheque, ShiftOccurrence } from "../features/jobs/types";
+import { useAuth } from "../app/auth/AuthContext";
 import "../styles/calendar.css";
 import "../styles/jobs.css";
 
@@ -23,6 +25,7 @@ import "../styles/jobs.css";
  * next stage) what they earn.
  */
 export default function JobsPage() {
+  const { user } = useAuth();
   const [showArchived, setShowArchived] = useState(false);
   const { jobs, shifts, paycheques, earnings, loading, error, reload } = useJobs(showArchived);
 
@@ -32,6 +35,34 @@ export default function JobsPage() {
   const [confirming, setConfirming] = useState<ShiftOccurrence | null>(null);
   const [payingCheque, setPayingCheque] = useState<Paycheque | null>(null);
   const [recordingPay, setRecordingPay] = useState(false);
+  const [removingShift, setRemovingShift] = useState(false);
+  const [shiftError, setShiftError] = useState<string | null>(null);
+
+  async function handleRemoveShift(shift: ShiftOccurrence) {
+    if (!user) return;
+    // A confirmed shift can carry a cash tip already in the ledger, so removing
+    // one is worth a beat of friction rather than a single unprotected click.
+    if (
+      shift.confirmed &&
+      !window.confirm(
+        `Remove the ${shift.job_name} shift on ${shift.on_date}? ` +
+          "Anything already confirmed for it, including a cash tip in your budget, goes with it."
+      )
+    ) {
+      return;
+    }
+
+    setRemovingShift(true);
+    setShiftError(null);
+    try {
+      await deleteShift(user.id, shift.event_id);
+      await reload();
+    } catch (err) {
+      setShiftError(err instanceof Error ? err.message : "Could not remove that shift");
+    } finally {
+      setRemovingShift(false);
+    }
+  }
 
   // Minutes per job across the window, so a card can say what it is worth in
   // time without every card filtering the same list again.
@@ -92,7 +123,15 @@ export default function JobsPage() {
       )}
 
       {jobs.length > 0 && (
-        <ShiftList shifts={shifts} onConfirm={setConfirming} busy={loading} />
+        <>
+          {shiftError && <p className="calError">{shiftError}</p>}
+          <ShiftList
+            shifts={shifts}
+            onConfirm={setConfirming}
+            onRemove={handleRemoveShift}
+            busy={loading || removingShift}
+          />
+        </>
       )}
 
       {jobs.length > 0 && (

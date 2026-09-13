@@ -106,6 +106,9 @@ export interface ShiftOccurrence {
   /** Equal to the scheduled minutes until confirmed with different times. */
   counted_minutes: number;
   confirmed: boolean;
+  /** False for a shift entered on its own; true for one a pattern produced.
+   *  Only a one-off can be removed outright. */
+  repeats: boolean;
   /**
    * A past shift nobody confirmed. Its hours are being assumed from the
    * schedule rather than known, and stay visible so a total can say how much of

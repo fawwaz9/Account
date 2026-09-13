@@ -469,3 +469,29 @@
   padding: 12px 0 0;
   border: none;
 }
+
+/* A shift entered by hand can be taken back out the same way. Muted rather
+   than the gold of "Confirm": removing is not the action most rows need, and
+   giving it the same weight would make an accidental click more likely.
+   padding and box-sizing explicit for the same reason as every other
+   fixed-size control here -- the base .container button rule otherwise wins. */
+.shiftRemove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 4px 10px;
+  border: 1px solid #1f2a44;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: 0.15s ease;
+}
+
+.shiftRemove:hover {
+  border-color: #e0685f;
+  color: #e0685f;
+}
