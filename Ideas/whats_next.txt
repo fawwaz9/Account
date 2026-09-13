@@ -89,6 +89,9 @@ Shipped so far (do not re-propose)
         Safe to spend: what is in a spending account, less what is committed,
           over the window that ends at your next cheque. Work done but not yet
           paid for is shown beside it, never inside it.
+        Sinking funds: what something costs and when it is due, with the monthly
+          figure derived rather than stored, so a missed month raises the rest
+          instead of moving the date. Setting aside writes a real transfer.
 
 
 What is left, by module. Tasks and Calendar no longer appear: everything that
@@ -104,7 +107,6 @@ Grades: Think of other functionalities that can merge over to the other.
         When editing courses the manual is the default but syllabus parser will be available under the manual grid.
 
 Budget:
-        Sinking funds: tuition split across the months before it is due, so January is not a shock.
         Subscription audit: recurring charges detected from the ledger, with the ones you forgot flagged.
         Money Lent gets who and when, plus a nudge when it has been out too long.
         Reimbursement state on a transaction: owed, claimed, received.
@@ -151,9 +153,7 @@ to have closed, the parser that everything else had to settle before, and the
 things that need new storage or a second person.
 
 Next, and cheapest
-- Sinking funds, next. Safe-to-spend already has an `earmarked` field waiting
-  for them, so the arithmetic on screen does not change shape when they land.
-- Subscription audit after that: it reads the ledger for repeats with no
+- Subscription audit, next: it reads the ledger for repeats with no
   standing instruction behind them, which is only possible because standing
   instructions exist to compare against.
 - Category blind spots across courses. Derived from what is stored, no new
@@ -237,6 +237,15 @@ Worth knowing before picking anything up
   "spending" accounts. It is documented as styling everywhere else, so that one
   exception is written on the column itself. If per-account control is wanted,
   add counts_as_spendable rather than loading more meaning onto kind.
+- A sinking fund's monthly figure is derived on every read, never stored:
+  (target - saved) / months left. A stored schedule goes stale the moment a
+  month is missed or the target moves, and the recovery from either is the same
+  division. A contribution row exists only once the transfer has happened.
+- Safe-to-spend subtracts a fund's contribution only while it is still a
+  promise. Once transferred the money sits in a savings account, which
+  safe-to-spend already excludes, so counting it in both places would take it
+  off twice. Proven against real data: the safe figure is identical either side
+  of a contribution.
 - Safe-to-spend never counts money that has not arrived. Incoming standing
   instructions inside the window are excluded, and work done but not yet paid
   for is a second figure beside the first rather than part of it.

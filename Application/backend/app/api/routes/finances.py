@@ -13,6 +13,20 @@ from app.Finances.schemas.account import (
     AccountUpdate,
 )
 from app.Finances.schemas.safe import SafeToSpend
+from app.Finances.schemas.sinking import (
+    ContributionRequest,
+    SinkingFund,
+    SinkingFundCreate,
+    SinkingFundUpdate,
+)
+from app.Finances.services.sinking_service import (
+    contribute,
+    create_fund,
+    delete_fund,
+    list_funds,
+    undo_contribution,
+    update_fund,
+)
 from app.Finances.services.safe_service import safe_to_spend
 from app.Finances.schemas.budget import (
     BudgetSummary,
@@ -81,6 +95,123 @@ TRANSACTION_404 = {404: {"description": "Transaction not found"}}
 
 
 # ----------------------------------------------------------------- accounts --
+
+FUND_404 = {404: {"description": "Sinking fund not found"}}
+FUND_BOTH = {**FUND_404, 400: {"description": "Invalid fund"}}
+
+
+@router.get(
+    "/{user_id}/sinking-funds",
+    response_model=list[SinkingFund],
+    responses=responses["user_404"],
+)
+def get_sinking_funds(
+    user_id: VerifiedUserId,
+    db: DBSession,
+    include_archived: bool = Query(default=False, description="Also return archived funds"),
+):
+    """Every fund, soonest due first, with this month's figure derived."""
+    funds = list_funds(db, user_id, include_archived)
+    if funds is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+
+    return funds
+
+
+@router.post(
+    "/{user_id}/sinking-funds",
+    response_model=SinkingFund,
+    responses=responses["user_both"],
+)
+def add_sinking_fund(user_id: VerifiedUserId, fund: SinkingFundCreate, db: DBSession):
+    try:
+        created = create_fund(db, user_id, fund)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if created is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+
+    return created
+
+
+@router.patch(
+    "/{user_id}/sinking-funds/{fund_id}",
+    response_model=SinkingFund,
+    responses=FUND_BOTH,
+)
+def edit_sinking_fund(
+    user_id: VerifiedUserId, fund_id: UUID, fund: SinkingFundUpdate, db: DBSession
+):
+    """Change a fund. The monthly figure follows on the next read, not here."""
+    try:
+        updated = update_fund(db, user_id, fund_id, fund)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Sinking fund not found")
+
+    return updated
+
+
+@router.post(
+    "/{user_id}/sinking-funds/{fund_id}/contribute",
+    response_model=SinkingFund,
+    responses=FUND_BOTH,
+)
+def add_contribution(
+    user_id: VerifiedUserId,
+    fund_id: UUID,
+    contribution: ContributionRequest,
+    db: DBSession,
+):
+    """Set this month's money aside for real, writing the transfer."""
+    try:
+        funded = contribute(db, user_id, fund_id, contribution)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if funded is None:
+        raise HTTPException(status_code=404, detail="Sinking fund not found")
+
+    return funded
+
+
+@router.delete(
+    "/{user_id}/sinking-funds/{fund_id}/contributions/{contribution_id}",
+    response_model=SinkingFund,
+    responses=FUND_404,
+)
+def remove_contribution(
+    user_id: VerifiedUserId, fund_id: UUID, contribution_id: UUID, db: DBSession
+):
+    """Take a month's set-aside back, moving the money with it."""
+    undone = undo_contribution(db, user_id, fund_id, contribution_id)
+    if undone is None:
+        raise HTTPException(status_code=404, detail="Contribution not found")
+
+    return undone
+
+
+@router.delete(
+    "/{user_id}/sinking-funds/{fund_id}",
+    response_model=SinkingFund,
+    responses=FUND_404,
+)
+def remove_sinking_fund(user_id: VerifiedUserId, fund_id: UUID, db: DBSession):
+    """Remove a fund and every transfer its contributions wrote.
+
+    Archiving is the way to keep the history; this is for one entered by
+    mistake.
+    """
+    deleted = delete_fund(db, user_id, fund_id)
+    if deleted is None:
+        raise HTTPException(status_code=404, detail="Sinking fund not found")
+
+    audit.deletion("sinking_fund", user_id=user_id, target_id=fund_id, detail=deleted.name)
+    return deleted
+
 
 @router.get(
     "/{user_id}/safe-to-spend",

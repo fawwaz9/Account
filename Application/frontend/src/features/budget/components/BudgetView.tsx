@@ -1,5 +1,7 @@
 import { useState } from "react";
 import SafeToSpend from "./SafeToSpend";
+import SinkingFunds from "./SinkingFunds";
+import SinkingFundModal from "./SinkingFundModal";
 import Sectors from "./Sectors";
 import Transactions from "./Transactions";
 import AddMoneyModal from "./AddMoneyModal";
@@ -47,6 +49,7 @@ export default function BudgetView() {
   }
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
+  const [fundOpen, setFundOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<RecurringTransaction | null>(null);
   const [addingRule, setAddingRule] = useState(false);
   const [ruleBusy, setRuleBusy] = useState(false);
@@ -110,6 +113,14 @@ export default function BudgetView() {
 
           <Sectors accounts={accounts} onEdit={setEditingAccount} />
 
+          {/* Under the accounts, above the month: what is reserved is a claim on
+              the balances just shown, and it changes the safe figure at the top. */}
+          <SinkingFunds
+            nonce={termNonce}
+            onAdd={() => setFundOpen(true)}
+            onChanged={reload}
+          />
+
           {/* Above the monthly view on purpose: the month is the wrong unit for
               tuition and textbooks, so the term is the frame you want first. */}
           <TermBudget nonce={termNonce} />
@@ -172,6 +183,13 @@ export default function BudgetView() {
         submitting={remove.deletingId !== null}
         error={remove.error}
       />
+      <SinkingFundModal
+        open={fundOpen}
+        accounts={accounts}
+        onClose={() => setFundOpen(false)}
+        onSaved={reload}
+      />
+
 
       <EditAccountModal
         account={editingAccount}

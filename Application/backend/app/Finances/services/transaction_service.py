@@ -11,6 +11,7 @@ from app._database.models import (
     TransactionModel,
     TuitionDeductionModel,
     PaychequeModel,
+    SinkingContributionModel,
     TuitionPaymentModel,
 )
 from app.Finances.schemas.transaction import (
@@ -393,6 +394,13 @@ def delete_transaction(
         # Deductions follow through the relationship's delete-orphan cascade.
         for cheque in doomed_cheques:
             db.delete(cheque)
+
+        # A sinking-fund contribution owns the transfer it wrote, so removing
+        # the transfer must remove the contribution -- otherwise the fund goes
+        # on claiming money that is no longer set aside anywhere.
+        db.query(SinkingContributionModel).filter(
+            SinkingContributionModel.group_id == transaction.group_id
+        ).delete(synchronize_session=False)
 
     if transaction.group_id is not None and (is_transfer or scope == "group"):
         db.query(TransactionModel).filter(

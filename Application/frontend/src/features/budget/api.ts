@@ -1,6 +1,10 @@
 import { del, get, patch, post, put } from "../../services/apiClient";
 import { endpoints } from "../../services/endpoints";
 import {
+  ContributionRequest,
+  SinkingFund,
+  SinkingFundCreate,
+  SinkingFundUpdate,
   SafeToSpend,
   Account,
   AccountActivity,
@@ -281,4 +285,48 @@ export async function fetchTermBudget(userId: string) {
  */
 export async function fetchSafeToSpend(userId: string) {
   return get<SafeToSpend>(endpoints.finances.safeToSpend(userId));
+}
+
+/* ===== Sinking funds ===== */
+
+export async function fetchSinkingFunds(userId: string, includeArchived = false) {
+  const base = endpoints.finances.sinkingFunds(userId);
+  return get<SinkingFund[]>(includeArchived ? `${base}?include_archived=true` : base);
+}
+
+export async function createSinkingFund(userId: string, payload: SinkingFundCreate) {
+  return post<SinkingFund>(endpoints.finances.sinkingFunds(userId), payload);
+}
+
+export async function updateSinkingFund(
+  userId: string,
+  fundId: string,
+  payload: SinkingFundUpdate
+) {
+  return patch<SinkingFund>(endpoints.finances.sinkingFund(userId, fundId), payload);
+}
+
+/** Set this month's money aside for real. Writes the transfer. */
+export async function contributeToFund(
+  userId: string,
+  fundId: string,
+  payload: ContributionRequest
+) {
+  return post<SinkingFund>(endpoints.finances.contribute(userId, fundId), payload);
+}
+
+/** Take a month's set-aside back, moving the money with it. */
+export async function undoContribution(
+  userId: string,
+  fundId: string,
+  contributionId: string
+) {
+  return del<SinkingFund>(
+    endpoints.finances.contribution(userId, fundId, contributionId)
+  );
+}
+
+/** Removes the fund and every transfer its contributions wrote. */
+export async function deleteSinkingFund(userId: string, fundId: string) {
+  return del<SinkingFund>(endpoints.finances.sinkingFund(userId, fundId));
 }
