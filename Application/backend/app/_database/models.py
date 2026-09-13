@@ -346,6 +346,9 @@ class TaskModel(Base):
     #: 1 to 5, 5 being the most important. Coursework is seeded from its grade
     #: category and then belongs to the student, who may change it freely.
     priority = Column(Integer, nullable=False, default=3)
+    #: Hidden from the list until this date. The due date never moves with it --
+    #: that is what keeps "how late was this" answerable.
+    snoozed_until = Column(Date, nullable=True)
     done = Column(Boolean, nullable=False, default=False)
     completed_at = Column(DateTime, nullable=True)
     #: Checked-off tasks archive rather than vanish, so the term's record of what
@@ -356,6 +359,36 @@ class TaskModel(Base):
     course = relationship("CourseModel", back_populates="tasks")
     grade = relationship("GradeModel", back_populates="tasks")
     recurring = relationship("RecurringTaskModel", back_populates="tasks")
+    snoozes = relationship(
+        "TaskSnoozeModel", back_populates="task", cascade="all, delete-orphan"
+    )
+
+
+class TaskSnoozeModel(Base):
+    """One time a task was pushed back, and the reason given.
+
+    A row per snooze rather than two columns on the task, because the point is
+    the pattern: three snoozes all citing "waiting on lab partner" is the
+    finding, and the latest reason alone cannot say it. A term's worth of these
+    is readable; a term's worth of overwrites is not.
+
+    The task's `due_date` is deliberately untouched by any of this. Moving it
+    would make every later question about lateness measure against a date the
+    student chose rather than the one they were given.
+    """
+
+    __tablename__ = "task_snoozes"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    task_id = Column(Uuid, ForeignKey("tasks.id"), nullable=False)
+    #: When the snooze was made.
+    snoozed_at = Column(DateTime, nullable=False, default=utc_now)
+    #: What the task was hidden until.
+    until = Column(Date, nullable=False)
+    #: Free text, and the whole reason this table exists.
+    reason = Column(String, nullable=True)
+
+    task = relationship("TaskModel", back_populates="snoozes")
 
 
 class RecurringTransactionModel(Base):

@@ -16,7 +16,13 @@ from app.Tasks.schemas.recurring_task import (
     RecurringTaskRun,
     RecurringTaskUpdate,
 )
-from app.Tasks.schemas.task import Task, TaskCreate, TaskUpdate
+from app.Tasks.schemas.task import (
+    SnoozeRequest,
+    Task,
+    TaskCreate,
+    TaskSnooze,
+    TaskUpdate,
+)
 from app.Tasks.schemas.timing import CompletionTiming
 from app.Tasks.services.recurring_task_service import (
     create_rule,
@@ -33,7 +39,10 @@ from app.Tasks.services.task_service import (
     delete_task,
     get_task,
     list_tasks,
+    snooze_history,
+    snooze_task,
     update_task,
+    wake_task,
 )
 from app.Tasks.services.timing_service import completion_timing
 from app.shared import audit
@@ -53,6 +62,9 @@ def get_tasks(
     db: DBSession,
     include_done: bool = False,
     include_archived: bool = False,
+    include_snoozed: bool = Query(
+        default=False, description="Also return tasks hidden until a later date"
+    ),
     start: date | None = Query(default=None, description="Earliest due date, inclusive"),
     end: date | None = Query(default=None, description="Latest due date, inclusive"),
     course_id: UUID | None = None,
@@ -61,12 +73,16 @@ def get_tasks(
 
     A `start`/`end` window bounds the due date and so excludes undated tasks,
     which is what the calendar wants when it asks for a week.
+
+    A snoozed task is left out until its date passes, and then returns in the
+    position its own due date puts it in -- the due date never moved.
     """
     tasks = list_tasks(
         db,
         user_id,
         include_done=include_done,
         include_archived=include_archived,
+        include_snoozed=include_snoozed,
         start=start,
         end=end,
         course_id=course_id,
@@ -256,6 +272,61 @@ def edit_task(user_id: VerifiedUserId, task_id: UUID, task: TaskUpdate, db: DBSe
         raise HTTPException(status_code=404, detail="Task not found")
 
     return updated
+
+
+@router.post(
+    "/{user_id}/tasks/{task_id}/snooze",
+    response_model=Task,
+    responses=TASK_BOTH,
+)
+def postpone_task(
+    user_id: VerifiedUserId,
+    task_id: UUID,
+    snooze: SnoozeRequest,
+    db: DBSession,
+):
+    """Hide a task until a date, keeping its due date and recording why.
+
+    The due date does not move. That is what keeps the completion-timing figure
+    measuring against the date you were given rather than one you chose.
+    """
+    try:
+        snoozed = snooze_task(db, user_id, task_id, snooze)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if snoozed is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    return snoozed
+
+
+@router.delete(
+    "/{user_id}/tasks/{task_id}/snooze",
+    response_model=Task,
+    responses=TASK_404,
+)
+def resume_task(user_id: VerifiedUserId, task_id: UUID, db: DBSession):
+    """Bring a snoozed task back now. The history of having snoozed it stays."""
+    woken = wake_task(db, user_id, task_id)
+    if woken is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    return woken
+
+
+@router.get(
+    "/{user_id}/tasks/{task_id}/snoozes",
+    response_model=list[TaskSnooze],
+    responses=TASK_404,
+)
+def get_snooze_history(user_id: VerifiedUserId, task_id: UUID, db: DBSession):
+    """Every time this task was pushed back, oldest first."""
+    history = snooze_history(db, user_id, task_id)
+    if history is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    return history
 
 
 @router.delete("/{user_id}/tasks/{task_id}", response_model=Task, responses=TASK_404)

@@ -34,6 +34,24 @@ export interface Task {
    * course, every target and the current-term rule just to colour one row.
    */
   risk: RiskBand | null;
+  /** Hidden from the list until this date. The due date is unaffected. */
+  snoozed_until: string | null;
+  /** How many times it has been pushed back. */
+  snooze_count: number;
+  /** Why it was last pushed back, so a blocked task says so on its own row. */
+  last_snooze_reason: string | null;
+}
+
+export interface SnoozeRequest {
+  until: string;
+  reason: string | null;
+}
+
+export interface TaskSnooze {
+  id: string;
+  snoozed_at: string;
+  until: string;
+  reason: string | null;
 }
 
 /** How far below its target a course has fallen, in percentage points. */

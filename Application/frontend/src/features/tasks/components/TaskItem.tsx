@@ -25,6 +25,8 @@ interface TaskItemProps {
   readonly onToggle: (task: Task) => void;
   readonly onDelete: (task: Task) => void;
   readonly onPriority: (task: Task, priority: number) => void;
+  readonly onSnooze: (task: Task) => void;
+  readonly onWake: (task: Task) => void;
   readonly busy: boolean;
 }
 
@@ -40,6 +42,8 @@ export default function TaskItem({
   onToggle,
   onDelete,
   onPriority,
+  onSnooze,
+  onWake,
   busy,
 }: TaskItemProps) {
   const overdue = !task.done && task.due_date !== null && daysBetween(today(), task.due_date) < 0;
@@ -106,10 +110,36 @@ export default function TaskItem({
           {/* A task the gradebook owns closes itself when the score lands, so
               saying where it came from explains why it cannot be deleted here. */}
           {task.grade_id && <span className="taskTag taskTagAuto">from grades</span>}
+          {/* The count, not the history: the fourth time you push something back
+              for the same reason, the reason is the problem. */}
+          {task.snooze_count > 0 && (
+            <span
+              className="taskTag taskTagSnoozed"
+              title={task.last_snooze_reason ?? "No reason given"}
+            >
+              snoozed {task.snooze_count}x
+            </span>
+          )}
         </div>
 
         {task.notes && <p className="taskNotes">{task.notes}</p>}
       </div>
+
+      {!task.done && (
+        <button
+          type="button"
+          className="taskSnooze"
+          onClick={() => (task.snoozed_until ? onWake(task) : onSnooze(task))}
+          disabled={busy}
+          aria-label={
+            task.snoozed_until
+              ? `Bring back ${task.title}`
+              : `Snooze ${task.title}`
+          }
+        >
+          {task.snoozed_until ? "Bring back" : "Snooze"}
+        </button>
+      )}
 
       {task.grade_id ? (
         <span className="taskMuted" title="Delete the grade to remove this task">—</span>

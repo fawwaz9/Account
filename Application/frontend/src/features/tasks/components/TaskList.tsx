@@ -8,6 +8,8 @@ interface TaskListProps {
   readonly onToggle: (task: Task) => void;
   readonly onDelete: (task: Task) => void;
   readonly onPriority: (task: Task, priority: number) => void;
+  readonly onSnooze: (task: Task) => void;
+  readonly onWake: (task: Task) => void;
   readonly busy: boolean;
   readonly emptyMessage?: string;
 }
@@ -24,6 +26,8 @@ export default function TaskList({
   onToggle,
   onDelete,
   onPriority,
+  onSnooze,
+  onWake,
   busy,
   emptyMessage = "Nothing here.",
 }: TaskListProps) {
@@ -51,6 +55,8 @@ export default function TaskList({
               onToggle={onToggle}
               onDelete={onDelete}
               onPriority={onPriority}
+              onSnooze={onSnooze}
+              onWake={onWake}
               busy={busy}
             />
           ))}

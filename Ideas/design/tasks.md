@@ -103,6 +103,30 @@ One accepted loss: nothing marks an occurrence the student hand-edited, so a
 tweak to a future one is overwritten. That beats every edit appearing to do
 nothing.
 
+## Snooze, and why the due date does not move
+
+A task can be pushed out of the list until a date. `due_date` is untouched:
+moving it would *hide* the deferral rather than record it, and would leave every
+later question about lateness measured against a date the student picked rather
+than the one they were given — which is exactly what the completion-timing figure
+depends on. A test asserts that a snoozed task finished late still reads as late
+against its original date.
+
+The task comes back on its own when the date passes, in the position its own due
+date puts it in. Nothing runs to make that happen; the list filter simply stops
+excluding it.
+
+`task_snoozes` is a table rather than two columns on the task, because **the
+pattern is the point**. Three snoozes citing "waiting on lab partner" says the
+task is blocked on a person; a latest-reason column cannot say it, because each
+snooze would overwrite the evidence of the one before. The row carries only the
+count and the latest reason — a list of tasks does not need a term of history
+travelling with it — and the full history is fetched when the modal opens, which
+is the one place it changes a decision.
+
+Waking a task early clears `snoozed_until` and keeps the history. Undoing a
+snooze does not undo having made it.
+
 ## Quick capture
 
 A line of text into a task, through the shared tokenizer: course code, date word,
@@ -143,7 +167,7 @@ task three weeks out is not work you can start, but it must not vanish either.
 
 ## Still open
 
-Reminders — the only item here needing a delivery mechanism the app does not
-have. Snooze with a reason, kept, so patterns are readable after a term (a
-history table, not two columns: "three snoozes citing *waiting on lab partner*"
-is the finding, and the latest reason alone cannot say it).
+Reminders — the only item left here, and the only one needing a delivery
+mechanism the app does not have. Decided already: in-app, plus a browser
+notification while the tab is open, with permission requested when the first
+reminder is created rather than on page load.

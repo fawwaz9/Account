@@ -6,6 +6,7 @@ import Repeating from "../features/tasks/components/Repeating";
 import RepeatingModal from "../features/tasks/components/RepeatingModal";
 import ExamStrip from "../features/tasks/components/ExamStrip";
 import CompletionTimingBlock from "../features/tasks/components/CompletionTiming";
+import SnoozeModal from "../features/tasks/components/SnoozeModal";
 import { useTasks } from "../features/tasks/hooks/useTasks";
 import {
   createTask,
@@ -14,6 +15,7 @@ import {
   fetchTaskTiming,
   setTaskDone,
   updateTask,
+  wakeTask,
 } from "../features/tasks/api";
 import {
   CompletionTiming,
@@ -52,6 +54,7 @@ export default function TasksPage() {
 
   const [courses, setCourses] = useState<Course[]>([]);
   const [timing, setTiming] = useState<CompletionTiming | null>(null);
+  const [snoozing, setSnoozing] = useState<Task | null>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [editingRule, setEditingRule] = useState<RecurringTask | null>(null);
@@ -121,6 +124,11 @@ export default function TasksPage() {
     );
   }
 
+  async function handleWake(task: Task) {
+    if (!user) return;
+    await withBusy(() => wakeTask(user.id, task.id), "Could not bring that back");
+  }
+
   async function handleStopRepeat(rule: RecurringTask) {
     if (!user) return;
     // Occurrences already ticked off stay: they record work actually done.
@@ -183,6 +191,8 @@ export default function TasksPage() {
               onToggle={handleToggle}
               onDelete={handleDelete}
               onPriority={handlePriority}
+              onSnooze={setSnoozing}
+              onWake={handleWake}
               busy={busy}
               emptyMessage="Nothing overdue."
             />
@@ -195,6 +205,8 @@ export default function TasksPage() {
               onToggle={handleToggle}
               onDelete={handleDelete}
               onPriority={handlePriority}
+              onSnooze={setSnoozing}
+              onWake={handleWake}
               busy={busy}
               emptyMessage="Nothing without a date."
             />
@@ -208,6 +220,8 @@ export default function TasksPage() {
                 onToggle={handleToggle}
                 onDelete={handleDelete}
                 onPriority={handlePriority}
+                onSnooze={setSnoozing}
+                onWake={handleWake}
                 busy={busy}
                 emptyMessage="Nothing finished yet."
               />
@@ -242,6 +256,8 @@ export default function TasksPage() {
               onToggle={handleToggle}
               onDelete={handleDelete}
               onPriority={handlePriority}
+              onSnooze={setSnoozing}
+              onWake={handleWake}
               busy={busy}
               emptyMessage="Clear for a fortnight."
             />
@@ -255,6 +271,12 @@ export default function TasksPage() {
           </div>
         </div>
       </div>
+
+      <SnoozeModal
+        task={snoozing}
+        onClose={() => setSnoozing(null)}
+        onSaved={reload}
+      />
 
       <RepeatingModal
         open={addingRule}
