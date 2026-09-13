@@ -136,10 +136,37 @@ Courses with no dates are **named underneath, not dropped**. Most courses in thi
 app carry none, so a chart showing three of six would under-report the term while
 looking complete.
 
+## Class times that are not weekly
+
+A `ClassMeeting` carries its own `interval` and its own `first_on`, because a
+course routinely mixes them — a weekly lecture beside a fortnightly lab is the
+ordinary case, not an edge one. That suits what was already there:
+`set_class_schedule` turns each meeting into its own event row with its own rule
+columns, and `Rule.interval` was honoured all along.
+
+**Two halves, and the second is easy to miss.** The interval says *how often*;
+`first_on` says *which week the cycle starts on*. The whole timetable shares one
+`starts_on`, so without a per-meeting anchor every fortnightly meeting is pinned
+to the odd weeks of term — and labs commonly begin in week two, which would leave
+one a week out for the whole term while looking perfectly scheduled.
+
+`first_on` must fall on a day the meeting actually runs. Anchoring to any other
+day leaves the first cycle short, because the engine skips forward to the next
+day that does run and a week is counted wrong. It is also bounded by the term, in
+the service rather than the schema — only the service knows those dates, since
+they come from the course when the form omits them.
+
+A weekly meeting ignores `first_on` entirely: every week is an on-week, so there
+is no phase to choose, and the form hides the field rather than asking a question
+with no meaning.
+
+**Monthly is still unreachable.** `byday` is weekly-only, so "the second Tuesday"
+cannot be expressed, and a monthly repeat lands on the day of the month it
+started on. That is the `BYSETPOS` case the engine's docstring names as the point
+to reach for a library rather than extend the rule.
+
 ## Still open
 
-Non-weekly class times, per meeting. Biweekly is nearly free — the engine already
-honours `interval` and each meeting is already its own event row — but the
-meetings share one `starts_on`, so it needs a per-meeting first date as well, or
-every biweekly lab lands on the odd weeks of term. Monthly needs `BYSETPOS` and
-is a separate decision.
+Nothing on the Calendar side. `ShiftMeeting` is the same shape and could take the
+same two fields whenever a fortnightly shift comes up; it was left out here as
+scope rather than as an oversight.

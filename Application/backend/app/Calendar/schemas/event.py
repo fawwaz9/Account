@@ -184,14 +184,35 @@ class EventOccurrence(BaseModel):
     grade_id: UUID | None = None
 
 
+#: The longest gap a class can repeat on. Every eight weeks is already beyond
+#: anything a timetable does; past that it is a mistake rather than a schedule.
+MAX_MEETING_INTERVAL = 8
+
+
 class ClassMeeting(BaseModel):
-    """One recurring block of a course's timetable, as entered in the form."""
+    """One recurring block of a course's timetable, as entered in the form.
+
+    The interval lives here rather than on the schedule, because a course
+    routinely mixes them: a weekly lecture beside a lab that runs every other
+    week is the ordinary case, not an edge one.
+    """
 
     kind: EventKind = Field(default=EventKind.LECTURE)
     days: list[Weekday] = Field(..., min_length=1, description="Days of the week it meets")
     start_time: time
     end_time: time
     location: str | None = Field(default=None, max_length=120)
+    interval: int = Field(
+        default=1, ge=1, le=MAX_MEETING_INTERVAL,
+        description="Every N weeks. 1 is weekly, 2 is fortnightly",
+    )
+    #: Which week the cycle starts on, for anything that is not weekly.
+    #:
+    #: Without it every fortnightly meeting would be pinned to the odd weeks of
+    #: term, because the whole timetable shares one start date -- and labs
+    #: commonly begin in week two. Meaningless when the interval is 1, since
+    #: every week is an on-week.
+    first_on: date | None = None
 
     @model_validator(mode="after")
     def validate_meeting(self):
@@ -200,6 +221,17 @@ class ClassMeeting(BaseModel):
         if self.kind not in CLASS_KINDS:
             allowed = ", ".join(kind.value for kind in CLASS_KINDS)
             raise ValueError(f"A class meeting must be one of: {allowed}")
+
+        if self.first_on is not None:
+            # Anchoring to a day the meeting does not run on leaves the first
+            # cycle looking short -- the engine would skip forward to the next
+            # day that does run, and the student would count a week wrong.
+            code = WEEKDAY_CODES[self.first_on.weekday()]
+            if code not in {day.value for day in self.days}:
+                running = ", ".join(day.value for day in self.days)
+                raise ValueError(
+                    f"The first meeting must fall on a day it runs: {running}"
+                )
 
         return self
 

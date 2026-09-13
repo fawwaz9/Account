@@ -83,6 +83,9 @@ Shipped so far (do not re-propose)
           hidden.
         Term timeline: every current course on one axis, with today marked and
           the ones carrying no dates named rather than quietly left out.
+        Class times that are not weekly, per meeting: a weekly lecture beside a
+          fortnightly lab, each with its own first week -- without which every
+          fortnightly meeting would be stuck on the odd weeks of term.
 
 
 
@@ -93,11 +96,6 @@ Grades: Think of other functionalities that can merge over to the other.
         Syllabus paste: drop the text in, get categories, weights and due dates proposed for review.
         Make syllabus parser the main when adding courses but add a button to do it manually.
         When editing courses the manual is the default but syllabus parser will be available under the manual grid.
-
-Calendar:
-        Class times that are not weekly, set per meeting rather than per course:
-          a lecture can stay weekly while the lab or discussion on the same
-          course runs biweekly.
 
 Budget:
         Safe to spend: balance minus every commitment you already know about, shown as one number.
@@ -137,12 +135,6 @@ Cheap wins, read-only -- next
   and the term retrospective wants a term to have closed first.
 - Safe-to-spend and sinking funds next on the money side: /recurring/upcoming
   already returns the commitments, so safe-to-spend is a subtraction.
-- Biweekly class times, per meeting: a weekly lecture beside a biweekly lab on
-  the same course. The engine already repeats every N weeks and each meeting is
-  already its own event row, so the interval itself is nearly free -- but all the
-  meetings share one start date, so it needs a per-meeting first date too, or
-  every biweekly lab is pinned to the odd weeks of term. Monthly is a separate
-  decision again. All three notes are below.
 
 Parked, now that the question is answered
 - A dropped course's dollar figure. The open question was whether a refund
@@ -359,22 +351,20 @@ Worth knowing before picking anything up
 - The frontend still has no test runner. The week view's overlap maths and now
   placeTasks were both checked with one-off esbuild harnesses, which run only
   when someone remembers to write one. Vitest would slot in beside Vite cheaply.
-- Interval belongs on the meeting, not on the timetable: a weekly lecture and a
-  biweekly lab on one course is the ordinary case, not an edge case. That suits
-  what is already there, because set_class_schedule turns each ClassMeeting into
-  its own event row carrying its own rule columns -- so a per-meeting interval is
-  one field on ClassMeeting and one line where recur_interval=1 is currently
-  hardcoded. The engine needs nothing: Rule.interval is honoured, and the weekly
-  branch steps whole weeks from the Monday of the starting week, so a biweekly
-  Mon/Wed lab keeps both days inside the same on-week rather than drifting apart.
-- The interval is the easy half. The phase is the real gap: every meeting in a
-  timetable shares one starts_on, taken from the form or else the course, and the
-  engine anchors a weekly repeat to the Monday of that week. So a biweekly lab
-  would be pinned to the odd weeks of term with no way to say otherwise -- and
-  labs commonly begin in week two, not week one. Doing this properly means a
-  per-meeting first date as well as an interval; an "on week / off week" toggle
-  is the same thing expressed worse, since it only works while the term start is
-  the reference everyone agrees on.
+- A ClassMeeting carries its own interval and its own first_on. Interval belongs
+  on the meeting rather than the timetable because a weekly lecture beside a
+  fortnightly lab is the ordinary case, and it suits what was already there:
+  set_class_schedule turns each meeting into its own event row with its own rule
+  columns, and Rule.interval was honoured all along.
+- The interval was the easy half; the phase was the real gap. Every meeting in a
+  timetable shares one starts_on, so without a per-meeting first date every
+  fortnightly meeting is pinned to the odd weeks of term -- and labs commonly
+  begin in week two, which would leave one a week out all term while looking
+  correctly scheduled. first_on must fall on a day the meeting runs, or the
+  engine skips to the next day that does and a week is counted wrong, and it is
+  bounded by the term in the service rather than the schema, since only the
+  service knows those dates. A weekly meeting ignores it: every week is an
+  on-week, so there is no phase to choose.
 - Monthly classes are not the same size of job. byday is weekly-only -- the
   Recurrence validator rejects it outright for any other frequency -- and monthly
   steps by day of the month through add_months, which yields nothing for a month

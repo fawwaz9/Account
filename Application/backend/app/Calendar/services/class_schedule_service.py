@@ -77,6 +77,21 @@ def meeting_title(course, meeting: ClassMeeting) -> str:
     return f"{course.code} {MEETING_LABELS.get(meeting.kind, 'Class')}"
 
 
+def check_anchors(data: ClassScheduleCreate, starts_on: date, ends_on: date | None) -> None:
+    """A first meeting outside the term is a typo, and would draw nothing.
+
+    Checked here rather than on the schema because only this function knows the
+    term's dates -- they come from the course when the form leaves them out.
+    """
+    for meeting in data.meetings:
+        if meeting.first_on is None or meeting.interval == 1:
+            continue
+        if meeting.first_on < starts_on:
+            raise ValueError("A first meeting cannot fall before the term starts")
+        if ends_on is not None and meeting.first_on > ends_on:
+            raise ValueError("A first meeting cannot fall after the term ends")
+
+
 def set_class_schedule(
     db: Session,
     user_id: uuid.UUID,
@@ -96,6 +111,7 @@ def set_class_schedule(
         return None
 
     starts_on, ends_on = term_window(course, data)
+    check_anchors(data, starts_on, ends_on)
 
     existing = (
         db.query(EventModel)
@@ -112,6 +128,18 @@ def set_class_schedule(
 
     created: list[EventModel] = []
     for meeting in data.meetings:
+        # The interval says how often; `first_on` says which week the cycle
+        # starts on, and both are needed. Anchoring every meeting to the term
+        # start would pin each fortnightly one to the odd weeks of term, and a
+        # lab that begins in week two -- the common case -- would be a week out
+        # for the whole term while looking perfectly scheduled.
+        #
+        # For a weekly meeting there is no phase to choose, so the term start is
+        # right and `first_on` is ignored.
+        anchor = starts_on
+        if meeting.interval > 1 and meeting.first_on is not None:
+            anchor = meeting.first_on
+
         event = EventModel(
             id=uuid.uuid4(),
             user_id=user_id,
@@ -119,11 +147,11 @@ def set_class_schedule(
             title=meeting_title(course, meeting),
             kind=meeting.kind.value,
             location=meeting.location,
-            starts_on=starts_on,
+            starts_on=anchor,
             start_time=meeting.start_time,
             end_time=meeting.end_time,
             recur_freq=WEEKLY,
-            recur_interval=1,
+            recur_interval=meeting.interval,
             recur_byday=format_byday(day.value for day in meeting.days),
             # Bounded by the term, so a course that ends in December stops
             # drawing lectures in January without anyone having to remember to
