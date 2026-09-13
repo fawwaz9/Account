@@ -118,6 +118,11 @@ Shipped so far (do not re-propose)
           whole cents, so a split can no longer be a cent more than the money
           that actually arrived.
 
+        A course with nothing marked reports no average rather than zero,
+          which also stopped the dashboard naming a course you had not started
+          as your weakest one. A course that genuinely averages zero still
+          says zero -- that distinction is the whole point.
+
 
 What is left, by module. Tasks and Calendar no longer appear: everything that
 was under them has shipped.
@@ -235,7 +240,7 @@ Worth knowing before picking anything up
   false pass.
 - gh is installed and authenticated, so a PR opens from the terminal. The push
   credential lives in the macOS keychain.
-- 609 backend tests, and the suite is worth running with
+- 619 backend tests, and the suite is worth running with
   -W error::sqlalchemy.exc.SAWarning: that is how a duplicate cascade delete
   surfaced. The frontend still has no test runner. Three pieces of layout maths
   -- the week view's overlap, placeTasks, and the term timeline -- were each

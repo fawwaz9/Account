@@ -1,6 +1,6 @@
 import uuid
 from sqlalchemy.orm import Session, selectinload
-from app._database.models import CourseModel, CourseCategoryWeightModel, UserModel
+from app._database.models import CourseModel, CourseCategoryWeightModel, GradeModel, UserModel
 from app.Grades.schemas.course import CourseCreate, CourseUpdate
 from app.Grades.services.grade_service import (
     calculate_gpa_points,
@@ -13,19 +13,63 @@ from app.Grades.utils.enums import SEMESTER_ORDER
 from app.Grades.utils.terms import course_result_grade, term_bucket
 
 
+def courses_with_marks(db: Session, user_id: uuid.UUID) -> set[uuid.UUID]:
+    """Which of a user's courses have at least one mark that counts.
+
+    One grouped query for the whole list rather than reading `course.grades`
+    per course, so this can be used from the list endpoints without turning
+    them into an N+1 -- and without depending on grades being eager-loaded.
+
+    A dropped grade does not count, for the same reason it stays out of every
+    average: it is on the course to be seen, not to be scored.
+    """
+    rows = (
+        db.query(GradeModel.course_id)
+        .join(CourseModel, CourseModel.id == GradeModel.course_id)
+        .filter(
+            CourseModel.user_id == user_id,
+            GradeModel.score.isnot(None),
+            GradeModel.excluded.is_(False),
+        )
+        .distinct()
+        .all()
+    )
+    return {course_id for (course_id,) in rows}
+
+
+def course_has_marks(db: Session, course_id: uuid.UUID) -> bool:
+    """The single-course form of `courses_with_marks`, as an EXISTS."""
+    return (
+        db.query(GradeModel.id)
+        .filter(
+            GradeModel.course_id == course_id,
+            GradeModel.score.isnot(None),
+            GradeModel.excluded.is_(False),
+        )
+        .first()
+        is not None
+    )
+
+
 def attach_course_summary(
     course: CourseModel,
     current_school_year: int | None = None,
     current_semester: str | None = None,
+    has_marks: bool = True,
 ) -> CourseModel:
     """Attach the fields every course carries, cheaply.
 
     Reads only columns already loaded, so it is safe to map over a whole list
-    without lazy-loading each course's grades.
+    without lazy-loading each course's grades. `has_marks` is passed in for the
+    same reason -- working it out here would mean touching `course.grades`.
     """
     course.letter_grade = calculate_letter_grade(course)
     course.grade_points = calculate_gpa_points(course_result_grade(course))
     course.term_bucket = term_bucket(course, current_school_year, current_semester)
+    # Attached under its own name, never assigned onto `course.average`: that
+    # column is mapped, and writing to it during a read is how a GET starts
+    # changing data.
+    course.reported_average = course.average if has_marks else None
     return course
 
 
@@ -99,7 +143,9 @@ def create_course(db: Session, user_id: uuid.UUID, course_data: CourseCreate):
     db.commit()
     db.refresh(course)
     year, semester = current_term_of(db, user_id)
-    return attach_category_averages(attach_course_summary(course, year, semester))
+    return attach_category_averages(
+        attach_course_summary(course, year, semester, course_has_marks(db, course.id))
+    )
 
 
 def get_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
@@ -115,7 +161,9 @@ def get_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
     # meant this route and the course list could return different numbers for
     # the same course, since get_all_courses reads the stored value.
     year, semester = current_term_of(db, user_id)
-    return attach_category_averages(attach_course_summary(course, year, semester))
+    return attach_category_averages(
+        attach_course_summary(course, year, semester, course_has_marks(db, course.id))
+    )
 
 
 def get_all_courses(db: Session, user_id: uuid.UUID):
@@ -140,7 +188,11 @@ def get_all_courses(db: Session, user_id: uuid.UUID):
     # Sorted here so term order lives in one place. The client groups consecutive
     # runs rather than carrying its own idea of what follows Fall.
     courses.sort(key=lambda c: (c.year, SEMESTER_ORDER.get(c.semester, 0), c.code))
-    return [attach_course_summary(course, year, semester) for course in courses]
+    marked = courses_with_marks(db, user_id)
+    return [
+        attach_course_summary(course, year, semester, course.id in marked)
+        for course in courses
+    ]
 
 
 def update_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, data: CourseUpdate):
@@ -168,7 +220,9 @@ def update_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, data: C
     # db.refresh expires the instance, so recompute after the last one rather
     # than relying on what get_course attached before the writes.
     year, semester = current_term_of(db, user_id)
-    return attach_category_averages(attach_course_summary(course, year, semester))
+    return attach_category_averages(
+        attach_course_summary(course, year, semester, course_has_marks(db, course.id))
+    )
 
 
 def delete_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
@@ -190,8 +244,9 @@ def get_course_statistics(db: Session, user_id: uuid.UUID, course_id: uuid.UUID)
         "course_id": course.id,
         "course_code": course.code,
         # Named `average` like every other route; this was the lone
-        # `current_grade` for the same value.
-        "average": course.average,
+        # `current_grade` for the same value. Reports the same null as every
+        # other surface when nothing has been marked.
+        "average": course.reported_average,
     }
 
 
@@ -216,7 +271,10 @@ def search_courses(db: Session, user_id: uuid.UUID, query: str):
         .all()
     )
     # Search reaches every term, so results need their bucket to be labelled.
+    marked = courses_with_marks(db, user_id)
     return [
-        attach_course_summary(course, user.current_school_year, user.current_semester)
+        attach_course_summary(
+            course, user.current_school_year, user.current_semester, course.id in marked
+        )
         for course in matches
     ]

@@ -7,7 +7,8 @@ class CourseDashboardEntry(BaseModel):
     course_id: UUID
     course_code: str
     course_name: str
-    average: float
+    #: Null when the course has nothing marked. See Course.average.
+    average: float | None = None
     needed_final_score: float | None = None
     unfinished_categories: list[str] = Field(default_factory=list)
 
