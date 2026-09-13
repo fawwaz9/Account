@@ -984,3 +984,57 @@
   letter-spacing: 0.04em;
   vertical-align: middle;
 }
+
+/* ===== Subscription audit =====
+   Above Recurring, since a card here is what a click turns into one of the
+   rules listed below it. Nothing is stored, so there is no dismiss -- only
+   act on it or leave it, and it comes back on the next visit either way. */
+
+.subsSection {
+  margin: 24px 0;
+}
+
+.subsList {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+  gap: 12px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.subsCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 13px 15px;
+  border: 1px solid #1f2a44;
+  border-radius: 12px;
+  background: var(--panel-2);
+}
+
+.subsHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.subsName {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.subsAmount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.subsActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+}

@@ -79,6 +79,8 @@ export const endpoints = {
   },
   finances: {
     safeToSpend: (userId: string) => `finances/${userId}/safe-to-spend`,
+    subscriptions: (userId: string) => `finances/${userId}/subscriptions`,
+    confirmSubscription: (userId: string) => `finances/${userId}/subscriptions/confirm`,
     sinkingFunds: (userId: string) => `finances/${userId}/sinking-funds`,
     sinkingFund: (userId: string, fundId: string) =>
       `finances/${userId}/sinking-funds/${fundId}`,

@@ -440,3 +440,31 @@ export interface ContributionRequest {
   amount: number | null;
   occurred_on: string | null;
 }
+
+/* ===== Subscription audit =====
+   Mirrors app/Finances/schemas/subscription.py. Nothing here is stored --
+   every fetch re-derives the pattern from the ledger, so there is no id to
+   dismiss by, only charges to act on. */
+
+export type SubscriptionCadence = "weekly" | "fortnightly" | "monthly";
+
+export interface SubscriptionOccurrence {
+  transaction_id: string;
+  on_date: string;
+  amount: number;
+}
+
+export interface SubscriptionCandidate {
+  /** The most recent charge's own text, so what is shown matches the ledger. */
+  description: string;
+  account_id: string;
+  category_id: string | null;
+  cadence: SubscriptionCadence;
+  median_amount: number;
+  first_seen: string;
+  last_seen: string;
+  next_expected_on: string;
+  occurrences: SubscriptionOccurrence[];
+  /** Ready to submit as-is: confirming turns this straight into a standing instruction. */
+  suggested: RecurringCreate;
+}

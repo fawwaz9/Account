@@ -92,6 +92,10 @@ Shipped so far (do not re-propose)
         Sinking funds: what something costs and when it is due, with the monthly
           figure derived rather than stored, so a missed month raises the rest
           instead of moving the date. Setting aside writes a real transfer.
+        Subscription audit: expenses with no standing instruction behind them,
+          grouped by description, flagged once the amount and the gap between
+          charges both agree on a rhythm, each with a standing instruction
+          already filled in to confirm.
         Shifts entered one at a time, which is how part-time work arrives. The
           weekly pattern is still there for jobs that repeat, and saving one no
           longer deletes the shifts you typed in by hand.
@@ -162,7 +166,6 @@ Grades: Think of other functionalities that can merge over to the other.
         When editing courses the manual is the default but syllabus parser will be available under the manual grid.
 
 Budget:
-        Subscription audit: recurring charges detected from the ledger, with the ones you forgot flagged.
         Money Lent gets who and when, plus a nudge when it has been out too long.
         Reimbursement state on a transaction: owed, claimed, received.
 
@@ -210,6 +213,9 @@ Next, and cheapest
 - Subscription audit, next: it reads the ledger for repeats with no
   standing instruction behind them, which is only possible because standing
   instructions exist to compare against.
+- Category blind spots across courses. Derived from what is stored, no new
+  tables, and the one Grades answer nothing else gives: you may be losing marks
+  in labs everywhere rather than in one class.
 
 Parked, now that the question is answered
 - A dropped course's dollar figure. The open question was whether a refund
@@ -262,6 +268,7 @@ Worth knowing before picking anything up
 - 635 backend tests, and the suite is worth running with
 - 562 backend tests (unchanged -- this one is frontend-only), and the suite is worth running with
 - 575 backend tests, and the suite is worth running with
+- 580 backend tests, and the suite is worth running with
   -W error::sqlalchemy.exc.SAWarning: that is how a duplicate cascade delete
   surfaced. The frontend still has no test runner. Three pieces of layout maths
   -- the week view's overlap, placeTasks, and the term timeline -- were each

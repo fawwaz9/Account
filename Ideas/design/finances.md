@@ -161,6 +161,46 @@ Deleting a fund takes its transfers with it; deleting a transfer clears the
 contribution. Both directions are mutation-tested — a fund left claiming money
 no longer set aside is the orphaned-tuition-payment fault again.
 
-## Still open a subscription audit reading the ledger for
-repeats with no standing instruction behind them; reimbursement state; who and
-when on Money Lent.
+## Subscription audit
+
+Read-only, no tables: every call re-groups the ledger fresh, so there is
+nothing to keep in sync when a transaction is corrected later.
+
+Only an **expense with no `recurring_id`** can be a finding — one already tied
+to a standing instruction is already known, and the whole feature exists to
+surface the ones that are not. Rows group by a normalised description (lower
+case, trailing reference number stripped, so "NETFLIX.COM 8842119" and
+"netflix.com #33012" are the same run), and a group is reported only once it
+clears three separate guards together: it has repeated **3 or more times**, its
+amounts sit within **10% of their own median**, and the gaps between charges all
+land inside one rhythm — 6–8 days, 13–16, or 25–35. All three numbers live in
+one dict beside the function, the same convention as `CRUNCH_WEIGHTS`, so they
+are tunable without reading the matching logic.
+
+**One gap outside the window fails the whole run**, not just that one date. A
+subscription that skipped a month cannot be told apart, from here, from two
+unrelated charges that happened to repeat twice with the same description — and
+the false positive is worse than the miss, since the point of this feature is
+to be trusted enough to act on.
+
+**Each finding carries its own standing instruction, already filled in** —
+amount, account, category, cadence and a starting date one period past the last
+charge — because a pattern nobody can act on is trivia, not an audit.
+
+**Confirming has to do two things, not one.** Creating the `RecurringCreate` is
+the obvious half; the second is tagging the charges that made the case with the
+new rule's id. Skip it and the fix does not hold: those rows still carry no
+`recurring_id`, so the exact same run qualifies as a pattern again on the very
+next read and the card never goes away. `POST /subscriptions/confirm` takes the
+occurrence ids straight from the card that was shown — never re-derived from the
+description on the server — so confirming a stale card cannot tag the wrong
+rows. Mutation-tested: skipping the tagging step is caught by a dedicated test,
+separately from the one confirming the rule itself gets created correctly.
+
+Verified against a copy of the real ledger: 37 real expenses, nothing repeats
+description three times, zero findings — the right answer, not a gap in the
+detector.
+
+## Still open
+
+Reimbursement state, and who and when on Money Lent.
