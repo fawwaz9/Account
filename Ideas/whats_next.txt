@@ -144,6 +144,10 @@ Shipped so far (do not re-propose)
         Printing a term: a print stylesheet and window.print(), so a past or
           future year -- never the current, still-moving one -- can be saved
           as a PDF worth keeping.
+        Category blind spots: a category -- labs, quizzes, midterms -- pooled
+          across every graded course and compared to the student's own overall
+          average, reported only once it is 2+ points behind in two or more
+          courses, so one hard class cannot trigger it alone.
 
 
 What is left, by module. Tasks and Calendar no longer appear: everything that
@@ -152,7 +156,6 @@ was under them has shipped.
 
 Grades: Think of other functionalities that can merge over to the other.
         Cheapest path to a target: which remaining item moves the average most per hour spent.
-        Category blind spots across all courses: you may be losing marks in labs everywhere, not in one class.
         Term retrospective when a term closes: what moved, what slipped, what you predicted vs got.
         Syllabus paste: drop the text in, get categories, weights and due dates proposed for review.
         Make syllabus parser the main when adding courses but add a button to do it manually.
@@ -207,9 +210,6 @@ Next, and cheapest
 - Subscription audit, next: it reads the ledger for repeats with no
   standing instruction behind them, which is only possible because standing
   instructions exist to compare against.
-- Category blind spots across courses. Derived from what is stored, no new
-  tables, and the one Grades answer nothing else gives: you may be losing marks
-  in labs everywhere rather than in one class.
 
 Parked, now that the question is answered
 - A dropped course's dollar figure. The open question was whether a refund
@@ -221,10 +221,9 @@ Parked, now that the question is answered
   reopening only if the refund case turns out to be common in practice.
 
 Cheap wins, read-only
-- Category blind spots and the term retrospective. Both derived from data
-  already stored: no new tables, no writes, each a service function plus a
-  chart. The retrospective wants a term to have closed first, so it is waiting
-  on the calendar rather than on anything in the code.
+- The term retrospective. Derived from data already stored: no new tables, no
+  writes. It wants a term to have closed first, so it is waiting on the
+  calendar rather than on anything in the code.
 - The band that shipped is the pattern for the rest of them: project_average in
   grade_service.py shows the shape, including the rule that a projection must
   agree with the live number at the ends or it is a second opinion.
@@ -262,6 +261,7 @@ Worth knowing before picking anything up
   credential lives in the macOS keychain.
 - 635 backend tests, and the suite is worth running with
 - 562 backend tests (unchanged -- this one is frontend-only), and the suite is worth running with
+- 575 backend tests, and the suite is worth running with
   -W error::sqlalchemy.exc.SAWarning: that is how a duplicate cascade delete
   surfaced. The frontend still has no test runner. Three pieces of layout maths
   -- the week view's overlap, placeTasks, and the term timeline -- were each

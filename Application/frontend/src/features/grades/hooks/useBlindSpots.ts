@@ -1,0 +1,33 @@
+import { useCallback, useEffect, useState } from "react";
+import { fetchBlindSpots } from "../api";
+import { CategoryBlindSpot } from "../types";
+import { useAuth } from "../../../app/auth/AuthContext";
+
+/** A category worse than the student's own average, in more than one course. */
+export function useBlindSpots() {
+  const { user } = useAuth();
+  const [spots, setSpots] = useState<CategoryBlindSpot[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      setSpots(await fetchBlindSpots(user.id));
+    } catch {
+      setSpots([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  return { spots, loading, reload: load };
+}

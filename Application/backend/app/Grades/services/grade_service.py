@@ -103,6 +103,7 @@ def add_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_data:
         weight=weights.get(category_value, 0.0),
         due_date=grade_data.due_date,
         schedule_as=grade_data.schedule_as.value,
+        excluded=grade_data.excluded,
     )
     db.add(grade)
     db.flush()
@@ -148,6 +149,7 @@ def add_grades_bulk(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade
                 weight=weights.get(category_value, 0.0),
                 due_date=grade_data.due_date,
                 schedule_as=grade_data.schedule_as.value,
+                excluded=grade_data.excluded,
             )
             db.add(grade)
             created.append(grade)

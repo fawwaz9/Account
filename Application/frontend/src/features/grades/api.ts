@@ -1,6 +1,7 @@
 import { get, post, patch, del } from "../../services/apiClient";
 import { endpoints } from "../../services/endpoints";
 import { GradeBand,
+  CategoryBlindSpot,
   CategoryWeightsUpdate,
   Course,
   CourseCreate,
@@ -69,6 +70,11 @@ export async function fetchDashboard(userId: string, targetGrade?: number) {
   const path = endpoints.grades.dashboard(userId);
   const query = targetGrade === undefined ? "" : `?target_grade=${targetGrade}`;
   return get<UserGradeDashboard>(`${path}${query}`);
+}
+
+/** A category consistently worse than the student's own average, in more than one course. */
+export async function fetchBlindSpots(userId: string) {
+  return get<CategoryBlindSpot[]>(endpoints.grades.blindSpots(userId));
 }
 
 /** Record a score against an existing (previously ungraded) assignment. */

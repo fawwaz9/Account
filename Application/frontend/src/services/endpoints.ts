@@ -12,6 +12,7 @@ export const endpoints = {
     CategoryWeights: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/category-weights`,
     requiredFinal: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/required-final`,
     resolveCourse: (userId: string) => `grades/${userId}/courses/resolve`,
+    blindSpots: (userId: string) => `grades/${userId}/category-blind-spots`,
     gradeBand: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/grade-band`,
     courseGrades: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/grades`,
     bulkGrades: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/grades/bulk`,

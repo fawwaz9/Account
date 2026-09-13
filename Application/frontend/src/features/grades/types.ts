@@ -276,6 +276,27 @@ export interface AttentionItem {
   message: string;
 }
 
+/* ===== Category blind spots =====
+   Mirrors app/Grades/schemas/blind_spot.py. Pooled across every graded course,
+   so there is no course_id here -- course_codes names which courses fed the
+   finding, not one course to link to. */
+
+export type BlindSpotSeverity = "mild" | "moderate" | "severe";
+
+export interface CategoryBlindSpot {
+  category: string;
+  /** Pooled percentage across every marked item in this category. */
+  average: number;
+  /** The same pooling done across every marked item in every category. */
+  overall_average: number;
+  /** overall_average - average. Always positive -- a strength never appears here. */
+  gap: number;
+  severity: BlindSpotSeverity;
+  course_count: number;
+  item_count: number;
+  course_codes: string[];
+}
+
 export interface TermPoint {
   school_year: number;
   semester: string;
