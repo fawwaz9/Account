@@ -28,6 +28,7 @@ ADDED_COLUMNS: dict[str, dict[str, str]] = {
         "current_semester": "VARCHAR",
         "term_label": "VARCHAR",
         "session_epoch": "INTEGER NOT NULL DEFAULT 0",
+        "deleted_at": "DATETIME",
     },
     "courses": {
         "target_grade": "FLOAT",

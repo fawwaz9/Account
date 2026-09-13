@@ -12,6 +12,7 @@ from app.shared import audit
 from app.Users.services.user_service import (
     delete_user,
     get_user,
+    restore_user,
     update_academic_status,
     update_user,
 )
@@ -76,11 +77,33 @@ def edit_user(user_id: VerifiedUserId, user: UserUpdate, db: DBSession):
 
 @router.delete("/{user_id}", response_model=UserDetail, responses=responses["user_404"])
 def remove_user(user_id: VerifiedUserId, db: DBSession):
+    """Schedule the account for deletion, and end every session at once.
+
+    Nothing is removed today. The account and everything under it stay for the
+    grace period, and the response carries `deletes_on` so the caller can say
+    when it stops being recoverable. Signing in still works until then, which
+    is what makes `POST /{user_id}/restore` reachable at all.
+    """
     deleted_user = delete_user(db, user_id)
     if deleted_user is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
 
-    # Cascades through every course, grade and account the person owned, with no
-    # soft delete behind it. If any single line in this log matters, it is this one.
+    # The most consequential mutation in the app, even now that it is
+    # reversible. If any single line in this log matters, it is this one.
     audit.deletion("user", user_id=user_id, target_id=user_id, detail=deleted_user.email)
     return deleted_user
+
+
+@router.post("/{user_id}/restore", response_model=UserDetail, responses=responses["user_404"])
+def undo_remove_user(user_id: VerifiedUserId, db: DBSession):
+    """Cancel a pending deletion, while the grace period is still running."""
+    restored = restore_user(db, user_id)
+    if restored is None:
+        raise HTTPException(
+            status_code=404, detail="No pending deletion to restore"
+        )
+
+    audit.deletion(
+        "user_restore", user_id=user_id, target_id=user_id, detail=restored.email
+    )
+    return restored

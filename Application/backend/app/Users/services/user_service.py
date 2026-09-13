@@ -1,9 +1,10 @@
+from datetime import date, datetime, time, timedelta
 from uuid import UUID, uuid4
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app._database.models import UserModel
+from app._database.models import UserModel, utc_now
 from app.Auth.schemas.credentials import RegisterRequest
 from app.Auth.services.password_service import (
     burn_one_verification,
@@ -12,7 +13,13 @@ from app.Auth.services.password_service import (
 )
 from app.shared.errors import error_auth, error_user
 from app.Users.schemas.academic_status import AcademicStatusUpdate
-from app.Users.schemas.user import AuthProvider, UserCreate, UserPreferences, UserUpdate
+from app.Users.schemas.user import (
+    DELETION_GRACE_DAYS,
+    AuthProvider,
+    UserCreate,
+    UserPreferences,
+    UserUpdate,
+)
 
 
 def create_user(db: Session, user_data: UserCreate):
@@ -242,11 +249,70 @@ def update_academic_status(db: Session, user_id: UUID, data: AcademicStatusUpdat
     return user
 
 
+def deletes_on(user: UserModel) -> date | None:
+    """The day a deleted account stops being recoverable."""
+    if user.deleted_at is None:
+        return None
+    return (user.deleted_at + timedelta(days=DELETION_GRACE_DAYS)).date()
+
+
 def delete_user(db: Session, user_id: UUID):
+    """Mark the account for deletion, rather than destroying it now.
+
+    Every session is revoked at the same moment, so a stolen token that asked
+    for this cannot carry on using the account while the grace period runs --
+    the owner signs in again, sees the date, and undoes it.
+
+    Nothing is removed here. `purge_expired_users` does that, once the window
+    has actually passed.
+    """
     user = get_user(db, user_id)
     if user is None:
         return None
 
-    db.delete(user)
-    db.commit()
+    if user.deleted_at is None:
+        user.deleted_at = utc_now()
+        user.session_epoch = (user.session_epoch or 0) + 1
+        db.commit()
+        db.refresh(user)
+
     return user
+
+
+def restore_user(db: Session, user_id: UUID):
+    """Cancel a pending deletion. Returns None if there is nothing to cancel."""
+    user = get_user(db, user_id)
+    if user is None or user.deleted_at is None:
+        return None
+
+    user.deleted_at = None
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def purge_expired_users(db: Session, on_day: date | None = None) -> int:
+    """Really delete the accounts whose grace period has run out.
+
+    Deleted one at a time through the ORM rather than in a bulk statement, so
+    the cascades on UserModel actually run -- a bulk delete bypasses them and
+    would leave exactly the orphans those cascades exist to prevent.
+
+    Idempotent, and safe to call on every startup: a user is only past the
+    deadline once, and after this call they are gone.
+    """
+    cutoff = utc_now() - timedelta(days=DELETION_GRACE_DAYS)
+    if on_day is not None:
+        cutoff = datetime.combine(on_day, time.min) - timedelta(days=DELETION_GRACE_DAYS)
+
+    expired = (
+        db.query(UserModel)
+        .filter(UserModel.deleted_at.isnot(None), UserModel.deleted_at <= cutoff)
+        .all()
+    )
+    for user in expired:
+        db.delete(user)
+
+    if expired:
+        db.commit()
+    return len(expired)

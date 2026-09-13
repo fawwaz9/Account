@@ -1,5 +1,5 @@
 import re
-from datetime import datetime, time
+from datetime import date, datetime, time, timedelta
 from enum import Enum
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -140,6 +140,17 @@ class UserUpdate(BaseModel):
         return self
 
 
+#: How long a deleted account can still be brought back.
+#:
+#: Thirty days because the thing being protected is a whole academic record,
+#: and the mistake being protected against -- a misclick, or a stolen session --
+#: is usually noticed within a month.
+#:
+#: Lives here rather than in the service so the schema can derive `deletes_on`
+#: without importing the service back.
+DELETION_GRACE_DAYS = 30
+
+
 class User(UserBase):
     id: UUID = Field(default_factory=uuid4)
     # How the account was originally created. Ask has_password / has_google
@@ -156,6 +167,22 @@ class User(UserBase):
     term_label: str | None = None
     preferences: UserPreferences = Field(default_factory=UserPreferences)
     created_at: datetime | None = None
+
+    #: Set once deletion has been *requested*. The account still works while it
+    #: is set -- this is what the client reads to offer undoing it.
+    deleted_at: datetime | None = None
+    #: The day it stops being recoverable. Derived, so the client never has to
+    #: know what the grace period is.
+    deletes_on: date | None = None
+
+    @model_validator(mode="after")
+    def derive_deletes_on(self):
+        """Always computed from `deleted_at`, never trusted from input."""
+        self.deletes_on = (
+            None if self.deleted_at is None
+            else (self.deleted_at + timedelta(days=DELETION_GRACE_DAYS)).date()
+        )
+        return self
 
     @model_validator(mode="after")
     def validate_auth_consistency(self):

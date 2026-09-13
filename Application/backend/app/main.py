@@ -8,9 +8,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import (
     calendar, finances, grades, jobs, omnibox, recurring, tasks, users, auth,
 )
-from app._database.db import Base, engine
+from app._database.db import Base, SessionLocal, engine
 from app._database import models
 from app._database.migrations import ensure_indexes, ensure_schema
+from app.Users.services.user_service import purge_expired_users
 
 # The audit log needs somewhere to go. uvicorn configures its own loggers but not
 # the application's, so without this every audit.* call is swallowed by the root
@@ -33,6 +34,17 @@ async def lifespan(_app: FastAPI):
     Base.metadata.create_all(bind=engine)
     ensure_schema()
     ensure_indexes()
+
+    # Accounts whose grace period has run out. No scheduler in this app, so it
+    # runs here for the same reason due payments are written on read: idempotent
+    # work, done when something is already happening. A machine left off for a
+    # month catches up the moment it starts, which is the correct outcome --
+    # the deadline passed whether or not the server was running.
+    with SessionLocal() as session:
+        purged = purge_expired_users(session)
+    if purged:
+        logging.getLogger("audit").info("purged %s expired account(s)", purged)
+
     yield
 
 
