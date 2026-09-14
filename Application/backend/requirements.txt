@@ -16,6 +16,11 @@ uvicorn[standard]==0.41.0
 
 # ---- Data ----
 SQLAlchemy==2.0.51
+# The Postgres driver. Version 3, not psycopg2: it is the current generation and
+# first-class in SQLAlchemy 2.0, where psycopg2 is in maintenance. The [binary]
+# extra ships prebuilt wheels, so the Docker build needs no compiler.
+# Not asyncpg -- that needs an async engine, and every service here is sync.
+psycopg[binary]==3.3.5
 pydantic==2.12.5
 pydantic-settings==2.14.2
 

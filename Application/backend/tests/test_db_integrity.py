@@ -12,6 +12,7 @@ from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
 
 from app._database.migrations import BACKFILLS, ensure_indexes
+from app._database.db import IS_SQLITE, connect_args_for, engine
 from app._database.models import (
     AccountModel,
     BudgetTargetModel,
@@ -257,3 +258,35 @@ def test_backfills_are_keyed_by_table_and_column(db):
     tables, so the key has to say which one.
     """
     assert all(isinstance(key, tuple) and len(key) == 2 for key in BACKFILLS)
+
+
+# ------------------------------------------- the engine is dialect-agnostic --
+
+def test_sqlite_gets_the_argument_only_sqlite_accepts():
+    assert connect_args_for("sqlite:///./app.db") == {"check_same_thread": False}
+    # Driver-qualified, which a startswith("sqlite") check would also catch --
+    # included so the parsing is not accidentally equivalent to string matching.
+    assert connect_args_for("sqlite+pysqlite:///./app.db") == {"check_same_thread": False}
+
+
+def test_postgres_gets_no_sqlite_arguments():
+    """The bug this replaces: `check_same_thread` went to every driver.
+
+    psycopg rejects unknown connection options outright, so passing it made any
+    non-SQLite DATABASE_URL fail on its first connection -- while compose
+    advertised the variable as configurable. Asserting the dict is empty rather
+    than merely lacking that one key, because no SQLite-specific argument
+    belongs on any other driver.
+    """
+    assert connect_args_for("postgresql+psycopg://user:pw@host:5432/app") == {}
+    assert connect_args_for("postgresql://user:pw@host/app") == {}
+
+
+def test_the_running_engine_matches_its_url():
+    """Whatever this process is pointed at, the two agree.
+
+    Guards the constant and the engine drifting apart -- IS_SQLITE decides
+    whether the pragmas are installed, and a stale one would silently run
+    SQLite without foreign keys enforced.
+    """
+    assert IS_SQLITE == (engine.dialect.name == "sqlite")

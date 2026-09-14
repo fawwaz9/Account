@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from sqlalchemy import create_engine, event
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 # app/_database/db.py -> app/_database -> app -> backend
@@ -12,10 +13,43 @@ DEFAULT_DB_PATH = BACKEND_DIR / "data" / "app.db"
 # uvicorn happened to be started, so a local run wrote to backend/app.db while
 # docker-compose (DATABASE_URL=sqlite:////app/data/app.db, bind-mounted from
 # backend/data) used a different file entirely, and the two silently diverged.
-DEFAULT_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DEFAULT_DB_PATH}")
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+
+def connect_args_for(database_url: str) -> dict:
+    """The DBAPI arguments this URL's driver will actually accept.
+
+    ``check_same_thread`` is SQLite's alone. It was passed unconditionally, so
+    every non-SQLite ``DATABASE_URL`` died at import with psycopg rejecting an
+    argument it has never heard of -- while ``docker-compose.yml`` advertised the
+    variable as configurable. The database was swappable in documentation only.
+
+    The URL is parsed rather than string-matched: ``make_url`` understands
+    ``sqlite+pysqlite://`` and ``postgresql+psycopg://`` alike, where
+    ``startswith("sqlite")`` is a guess about a structured value that quietly
+    does the wrong thing for the first driver-qualified URL nobody thought of.
+
+    Separate from the engine so it can be tested without one. The bug it fixes
+    only ever surfaced on a first connection, which is exactly the moment a test
+    cannot reach without a live server.
+    """
+    if make_url(database_url).get_backend_name() == "sqlite":
+        return {"check_same_thread": False}
+    return {}
+
+
+#: Whether this process is talking to SQLite. Read below to decide what is worth
+#: setting up: the pragmas, and the directory the file needs to live in.
+IS_SQLITE = make_url(DATABASE_URL).get_backend_name() == "sqlite"
+
+# Only when the database is a file. A Postgres URL wants no directory, and
+# creating one anyway left an empty `data/` beside every deployment that had
+# moved off SQLite -- harmless, but it is the same wrong assumption as the
+# connect argument above, and worth removing with it.
+if IS_SQLITE:
+    DEFAULT_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+engine = create_engine(DATABASE_URL, connect_args=connect_args_for(DATABASE_URL))
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -51,7 +85,7 @@ def apply_sqlite_pragmas(dbapi_connection) -> None:
 # connection-scoped in SQLite, so setting them once at startup would leave every
 # later pooled connection without them. Guarded on the dialect so pointing
 # DATABASE_URL at anything else does not send SQLite pragmas to it.
-if engine.dialect.name == "sqlite":
+if IS_SQLITE:
     @event.listens_for(engine, "connect")
     def _set_sqlite_pragmas(dbapi_connection, _connection_record):
         apply_sqlite_pragmas(dbapi_connection)
