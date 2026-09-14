@@ -201,7 +201,7 @@ alternative in **D5.1**.
 **Verify:** an address on the list can register, one off it gets a clear refusal,
 and the same is true through Google.
 
-### 12. Rate-limit `/register` — **DONE** (`PENDING_SHA`)
+### 12. Rate-limit `/register` — **DONE** (`5aae710`)
 
 **Do:** apply the existing `SlidingWindowLimiter` to the register route.
 
@@ -245,7 +245,7 @@ Run specifically and is worth making with the deployed thing in front of you.
 which is the property step 12 was added for. Revisit after step 32, and see
 **D5.5**.
 
-### 13. Add a React error boundary — **DONE** (`PENDING_SHA`)
+### 13. Add a React error boundary — **DONE** (`5aae710`)
 
 **Do:** wrap the router in one, showing something a person can act on.
 
@@ -268,7 +268,7 @@ children pass through untouched when there is none, and the fallback renders the
 message, the component stack, both actions and `role="alert"` — checked by
 rendering the component, not by reading it.
 
-### 14. Write the security headers for Pages — **DONE** (`PENDING_SHA`)
+### 14. Write the security headers for Pages — **DONE** (`5aae710`)
 
 **Do:** a `_headers` file in the frontend build output with HSTS, CSP,
 `X-Content-Type-Options`, `Referrer-Policy` and `X-Frame-Options`.
@@ -295,7 +295,7 @@ strict, and that is the directive that stops XSS.
 the URL inlined in the bundle are the same string. **Still to check on the real
 deploy — see step 29a.**
 
-### 15. Green light — **DONE** (`PENDING_SHA`)
+### 15. Green light — **DONE** (`5aae710`)
 
 **Do:** run the whole suite, `npx tsc --noEmit`, `npm run build`, and one
 `docker compose up --build` to confirm nothing here broke the image.
