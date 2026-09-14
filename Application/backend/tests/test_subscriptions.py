@@ -10,7 +10,7 @@ import uuid
 
 import pytest
 
-from app._database.models import TransactionModel
+from app._database.models import RecurringTransactionModel, TransactionModel
 from app.Finances.services.subscription_service import confirm_subscription, find_subscriptions, normalize
 from tests.conftest import make_account, make_category
 
@@ -78,8 +78,28 @@ def test_irregular_gaps_are_not_found(db, user, account):
 
 
 def test_a_charge_with_a_recurring_id_is_never_reported(db, user, account):
+    # A real rule, not a fabricated id. `transactions.recurring_id` is a foreign
+    # key and the database enforces it now, so pointing at nothing is rejected
+    # before the assertion is ever reached -- and a run the app already knows
+    # about is exactly what this is meant to be describing.
+    rule = RecurringTransactionModel(
+        id=uuid.uuid4(),
+        user_id=user.id,
+        kind="expense",
+        account_id=account.id,
+        amount=15.99,
+        description="Netflix",
+        starts_on=datetime.date(2026, 6, 15),
+        recur_freq="monthly",
+        recur_interval=1,
+        skipped_dates=[],
+        active=True,
+    )
+    db.add(rule)
+    db.commit()
+
     for on in monthly_dates(datetime.date(2026, 6, 15), 3):
-        charge(db, user, account, 15.99, on, recurring_id=uuid.uuid4())
+        charge(db, user, account, 15.99, on, recurring_id=rule.id)
 
     assert find_subscriptions(db, user.id) == []
 
