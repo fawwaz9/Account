@@ -23,6 +23,7 @@ from app._database.models import (
     SpendCategoryModel,
     TransactionModel,
     UserModel,
+ utc_now,
 )
 from app.Finances.services.account_service import delete_account
 from app.Users.schemas.user import DELETION_GRACE_DAYS
@@ -137,8 +138,13 @@ def test_purging_a_user_leaves_nothing_behind(db, user):
     db.commit()
 
     delete_user(db, user.id)
-    # Far enough past the deadline that the account is due to go.
-    purge_expired_users(db, on_day=date.today() + timedelta(days=DELETION_GRACE_DAYS + 1))
+    # Far enough past the deadline that the account is due to go. Dated from
+    # `utc_now()`, not `date.today()`: `deleted_at` is stamped in UTC, so a local
+    # date disagrees with it for part of every day -- which made this pass in the
+    # morning and fail in the evening anywhere behind UTC.
+    purge_expired_users(
+        db, on_day=utc_now().date() + timedelta(days=DELETION_GRACE_DAYS + 1)
+    )
 
     for model in (
         UserModel, AccountModel, CourseModel, SpendCategoryModel,
