@@ -80,6 +80,50 @@ from app._database.models import (  # noqa: E402
 TEST_DATABASE_URL = normalize_database_url(os.getenv("TEST_DATABASE_URL", "sqlite://"))
 TESTING_SQLITE = make_url(TEST_DATABASE_URL).get_backend_name() == "sqlite"
 
+#: Hosts a throwaway database plausibly lives on. A Postgres container published
+#: on 127.0.0.1 is here; anything reached over a network is not.
+LOCAL_HOSTS = {None, "", "localhost", "127.0.0.1", "::1", "host.docker.internal"}
+
+
+def is_local_database(database_url: str) -> bool:
+    """Whether losing everything in this database would cost nothing."""
+    url = make_url(database_url)
+    if url.get_backend_name() == "sqlite":
+        return True
+    return url.host in LOCAL_HOSTS
+
+
+def allows_remote_testing() -> bool:
+    return os.getenv("TEST_DATABASE_ALLOW_REMOTE", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+# The suite is destructive by design: `_pg_engine` runs `drop_all` before the
+# first test and again after the last, because a run that inherits rows from the
+# previous one is not a clean run.
+#
+# That is correct against a container and catastrophic against the deployed
+# database. The two are one environment variable apart, and the dangerous one is
+# the shorter thing to type -- so after step 20 puts the real data in Supabase,
+# `TEST_DATABASE_URL=$SUPABASE_DATABASE_URL pytest` is a command that looks
+# entirely reasonable and destroys everything.
+#
+# Refused at collection rather than warned about, and refused before any
+# connection is opened. Setting TEST_DATABASE_ALLOW_REMOTE is the deliberate act
+# that says the target really is disposable.
+if not is_local_database(TEST_DATABASE_URL) and not allows_remote_testing():
+    raise pytest.UsageError(
+        f"TEST_DATABASE_URL points at a remote host ({make_url(TEST_DATABASE_URL).host}).\n"
+        "\n"
+        "This suite DROPS EVERY TABLE before it starts and again when it finishes.\n"
+        "Against a container that is correct. Against a database holding real data\n"
+        "it is unrecoverable, and this project has no automated backups yet.\n"
+        "\n"
+        "If that database is genuinely disposable -- a fresh Supabase project with\n"
+        "nothing in it yet, which is exactly what step 19 is for -- say so:\n"
+        "\n"
+        "    TEST_DATABASE_ALLOW_REMOTE=1 TEST_DATABASE_URL=... pytest\n"
+    )
+
 
 def _make_engine(url: str):
     # The app's own pooling settings, so a Postgres run here is configured the

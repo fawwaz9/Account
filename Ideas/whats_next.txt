@@ -534,8 +534,16 @@ Deployment
   invitation-gated at both doors, /health exists, and there is one .env.
 - Part 2 is under way. Step 16 is done (Supabase project created) and step 18
   configured the engine for a pooled remote connection. Step 17 -- pasting the
-  transaction-pooler string into Application/.env as DATABASE_URL -- is the
-  outstanding one, and step 19 runs the suite against Supabase itself.
+  transaction-pooler string into Application/.env as SUPABASE_DATABASE_URL -- is
+  the outstanding one, and step 19 runs the suite against Supabase itself.
+- It goes in as SUPABASE_DATABASE_URL, NOT DATABASE_URL. Nothing reads it
+  automatically; it is somewhere to keep the string. DATABASE_URL is what the
+  app reads, so setting that locally would point dev at the empty cloud database
+  and the app would come up looking wiped, with nothing on screen to say why.
+- The test suite now REFUSES a remote TEST_DATABASE_URL unless
+  TEST_DATABASE_ALLOW_REMOTE is set. conftest drops every table twice per run,
+  which is correct against a container and unrecoverable against Supabase once
+  step 20 has moved the data in -- and the two are one env var apart.
 - Two traps in the connection string are handled in code rather than left to be
   remembered: a bare postgresql:// URL is rewritten to postgresql+psycopg
   (SQLAlchemy would otherwise look for psycopg2, which is not installed), and

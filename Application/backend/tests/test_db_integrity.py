@@ -36,7 +36,7 @@ from app._database.models import (
 from app.Finances.services.account_service import delete_account
 from app.Users.schemas.user import DELETION_GRACE_DAYS
 from app.Users.services.user_service import delete_user, purge_expired_users
-from conftest import make_account, make_course, make_user
+from conftest import allows_remote_testing, is_local_database, make_account, make_course, make_user
 from datetime import date, timedelta
 
 
@@ -391,6 +391,48 @@ def test_a_remote_database_gets_pre_ping_and_a_small_pool():
     # Shorter than SQLAlchemy's 30s default, so a starved request fails visibly
     # instead of looking like a hang.
     assert kwargs["pool_timeout"] < 30
+
+
+# ------------------------------------ not dropping the wrong database --
+
+def test_a_local_container_counts_as_disposable():
+    """The whole point is that the normal case stays frictionless."""
+    for url in ("postgresql+psycopg://postgres:x@localhost:5432/app",
+                "postgresql+psycopg://postgres:x@127.0.0.1:55434/app",
+                "sqlite://",
+                "sqlite:///./app.db"):
+        assert is_local_database(url), url
+
+
+def test_a_database_reached_over_a_network_does_not():
+    """`_pg_engine` drops every table twice per run.
+
+    Against a container that is correct. Against Supabase after step 20 it is
+    unrecoverable, and the two are one environment variable apart -- with the
+    dangerous one being the shorter thing to type.
+    """
+    for url in ("postgresql+psycopg://postgres.abc:pw@aws-0-eu-west-2.pooler.supabase.com:6543/postgres",
+                "postgresql+psycopg://user:pw@db.abcdefgh.supabase.co:5432/postgres",
+                "postgresql+psycopg://user:pw@10.0.0.5:5432/app"):
+        assert not is_local_database(url), url
+
+
+def test_the_opt_in_is_an_explicit_act(monkeypatch):
+    """Unset means no, and so does anything that is not plainly a yes.
+
+    A variable left over as `TEST_DATABASE_ALLOW_REMOTE=0` must not read as
+    permission just because it is present.
+    """
+    monkeypatch.delenv("TEST_DATABASE_ALLOW_REMOTE", raising=False)
+    assert not allows_remote_testing()
+
+    for value in ("0", "false", "no", "", "  "):
+        monkeypatch.setenv("TEST_DATABASE_ALLOW_REMOTE", value)
+        assert not allows_remote_testing(), value
+
+    for value in ("1", "true", "YES", "on"):
+        monkeypatch.setenv("TEST_DATABASE_ALLOW_REMOTE", value)
+        assert allows_remote_testing(), value
 
 
 def test_the_engine_was_built_with_what_these_functions_say():

@@ -345,8 +345,25 @@ The tell is `pooler.supabase.com` in the host and `6543` on the end.
 project was created; if it is lost, Settings → Database → Reset database
 password.
 
-**Put it in `Application/.env` as `DATABASE_URL`.** That file is gitignored, and
-step 10 made it the only one the app reads.
+**Put it in `Application/.env` as `SUPABASE_DATABASE_URL`** — not as
+`DATABASE_URL`. That file is gitignored, and this is a place to keep the string,
+not a setting.
+
+**Why not `DATABASE_URL`:** that is the variable the *application* reads.
+Setting it here points your local dev server at Supabase, and until step 20 that
+database is empty — so the app you have been building would come up with no
+courses, no transactions and no accounts. Nothing would actually be lost, and
+there would be nothing on screen to tell you that.
+
+To add it without the string appearing on screen or in your shell history:
+
+```sh
+cd Application
+read -rs "?Paste the transaction pooler string: " url && \
+  printf '\nSUPABASE_DATABASE_URL=%s\n' "$url" >> .env && echo "saved to .env"
+```
+
+(bash: `read -rsp "Paste the transaction pooler string: " url`.)
 
 **Why pooled:** Cloud Run runs many independent instances, each with its own
 pool. Without a pooler, three instances at five connections each is fifteen
@@ -393,7 +410,22 @@ before this step the same URL failed on `ModuleNotFoundError`. 717 passed,
 
 ### 19. Run the 669 tests against Postgres
 
-**Do:** `TEST_DATABASE_URL=<supabase pooled url>` and run the suite.
+**Do:** point `TEST_DATABASE_URL` at the Supabase string and run the suite.
+
+```sh
+cd Application/backend
+set -a; source ../.env; set +a
+TEST_DATABASE_ALLOW_REMOTE=1 TEST_DATABASE_URL="$SUPABASE_DATABASE_URL" \
+  .venv/bin/python -m pytest tests/ -q
+```
+
+**`TEST_DATABASE_ALLOW_REMOTE` is not decoration.** `_pg_engine` runs
+`drop_all` before the first test and again after the last, because a run that
+inherits rows from the previous one is not a clean run. That is correct against
+a container and unrecoverable against a database with real data in it — and
+after step 20, this database has real data in it. The suite now **refuses** a
+remote host at collection unless that variable says the target is disposable.
+Right now it is; from step 20 onward it is not.
 
 **This is the real work of the port.** The suite is the only description of the
 app's behaviour you have; if it has never run against Postgres you know the port
