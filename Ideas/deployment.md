@@ -23,7 +23,8 @@ below is contestable it names the decision, so `D2.3` means go and argue there.
 | Open PRs | **none — all seven merged** |
 | Part 1 (local code changes) | **Done — steps 1–15, green light passed** |
 | Part 2 (the Postgres port) | **Done — steps 16–21. The data is in Supabase** |
-| Deployed anywhere | No — next is step 22, the Google Cloud project |
+| Part 3 (deploy) | Project, registry and image done — **next is step 25**, Secret Manager |
+| Deployed anywhere | Not yet — the image is pushed and waiting |
 
 Phase 0 was run against a `VACUUM INTO` copy on ports 8200/5273. It confirmed the
 images build, the stack works, auth works end to end, data survives
@@ -651,17 +652,77 @@ gcloud artifacts repositories create account \
 
 **Verify:** `gcloud artifacts repositories list --location=us-west1` shows it.
 
-### 24. Build for `linux/amd64` and push
+### 24. Build for `linux/amd64` and push — **DONE** (`26e249f` pushed)
 
-**Do:** `docker build --platform linux/amd64`, tag for Artifact Registry, push.
+```sh
+cd Application/backend
+gcloud auth configure-docker us-west1-docker.pkg.dev
 
-**Why the flag matters:** your Mac is Apple Silicon, so Phase 0's images were
-`linux/arm64` — verified, not assumed. **Cloud Run runs `amd64`.** Push what was
-built locally without this flag and you deploy an image the platform cannot
-execute, and you find out at deploy time. Audit finding **B8**, decision **D3.0**.
+IMG=us-west1-docker.pkg.dev/account-504419/account/backend
+SHA=$(git rev-parse --short HEAD)
 
-**Verify:** `docker image inspect <tag> --format '{{.Architecture}}'` says
-`amd64`.
+docker build --platform linux/amd64 --provenance=false \
+  -t "${IMG}:${SHA}" -t "${IMG}:latest" .
+
+docker push "${IMG}:${SHA}" && docker push "${IMG}:latest"
+```
+
+**Why `--platform linux/amd64`:** your Mac is Apple Silicon, so Phase 0's images
+were `linux/arm64` — verified, not assumed. **Cloud Run runs `amd64`.** Without
+the flag you deploy an image the platform cannot execute and find out at deploy
+time. Audit finding **B8**, decision **D3.0**.
+
+**D3.0's open question is answered: emulation is not slow.** It asked whether an
+emulated amd64 build would be annoying enough to make `gcloud run deploy
+--source` the better trade. Measured: **31 seconds to build, 14 seconds to
+push.** It is not. Deploy the prebuilt image as D3.1 says.
+
+**Why `--provenance=false`:** buildx otherwise wraps the image in an OCI *index*
+and adds a provenance attestation, so one push produces **three** registry
+versions — the index (tagged) plus two untagged children. That is tidy enough on
+its own, but it collides with the cleanup policy step 23 recommends: those
+children are untagged, and a "delete untagged" rule can remove manifests the
+tagged index still needs. With the flag it is one plain manifest and the problem
+does not exist.
+
+**Use `${IMG}`, not `$IMG`, when a colon follows.** In zsh `$VAR:l` is a
+parameter *modifier* meaning "lowercase", so `"$IMG:latest"` expands to
+`...backendatest` — a real, silently-created, wrongly-named tag. Braces are not
+optional here.
+
+**Run the image before pushing it.** A successful build proves the layers
+assembled, not that the thing starts:
+
+```sh
+docker run --rm --platform linux/amd64 -p 127.0.0.1:8302:8000 \
+  -e DATABASE_URL="sqlite:////app/data/app.db" \
+  -e JWT_SECRET="$(python3 -c 'import secrets;print(secrets.token_hex(32))')" \
+  -e GOOGLE_CLIENT_ID="placeholder.apps.googleusercontent.com" \
+  -e RUN_SCHEMA_ON_STARTUP=1 "${IMG}:${SHA}"
+```
+
+**This is how `GOOGLE_CLIENT_ID` was found to be mandatory.** It has no default
+in `config.py`, so without it `Settings()` raises during import and the
+container exits **1** before serving anything. On Cloud Run that surfaces as
+"the container failed to start and listen on the port", which does not mention
+the variable. It is now in step 27's table.
+
+**Verify, all four:**
+
+```sh
+docker image inspect "${IMG}:${SHA}" --format '{{.Architecture}}/{{.Os}}'   # amd64/linux
+docker exec <container> uname -m                                            # x86_64
+docker manifest inspect "${IMG}:${SHA}" | grep mediaType                    # image.manifest, not index
+gcloud artifacts docker images list "$IMG" --include-tags                   # one version, two tags
+```
+
+Checking the manifest is not paranoia: `.Architecture` on a *local* image is
+right even when the thing pushed is an index that could resolve to something
+else. Confirm what the registry holds, since that is what Cloud Run pulls.
+
+**One number not to read too much into:** bcrypt took **448 ms** inside the
+emulated container against 203 ms natively. That is Rosetta, not Cloud Run —
+real amd64 hardware will be nearer the native figure.
 
 ### 25. Put the secrets in Secret Manager
 
@@ -693,6 +754,7 @@ Settings that are not the defaults, and why:
 | `min-instances` | **0** | scale to zero is the whole point; cold starts are 200 ms–2 s (**D3.2**) |
 | `max-instances` | **3** | the default is **100** — a crawler or a bug could burn a month's allowance in an afternoon, and every instance holds a connection pool (**D3.3**) |
 | `concurrency` | **40** | the default is 80, but FastAPI runs your synchronous routes in a 40-thread pool. At 80, forty requests queue *inside your process* where the autoscaler cannot see them, so it never starts another instance (**D3.4**) |
+| `GOOGLE_CLIENT_ID` | **required** | no default in `config.py`, so `Settings()` raises during import and the container exits 1 before serving. Cloud Run reports only "failed to start and listen on the port", which does not name it. Found at step 24 by running the image |
 | Secrets | from step 25 | |
 | `ALLOWED_ORIGINS` | placeholder for now | corrected at step 30 |
 | `RUN_SCHEMA_ON_STARTUP` | **0** | the schema was built at step 26; re-checking it costs 278 statements per cold start (**step 8**) |
