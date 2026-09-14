@@ -450,7 +450,7 @@ handling. Each is a latent bug SQLite was hiding.
 > *Supabase* specifically, since a pooled connection over a network is not the
 > same thing as a local container.
 
-### 20. Move the data — **script written and rehearsed** (`PENDING_SHA`)
+### 20. Move the data — **script written and rehearsed** (`4a4291c`)
 
 **Do:**
 
