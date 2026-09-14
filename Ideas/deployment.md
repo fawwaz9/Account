@@ -353,7 +353,7 @@ pool. Without a pooler, three instances at five connections each is fifteen
 connections for a handful of concurrent queries — and at the limit, requests are
 *refused* rather than merely slow. **D2.3**.
 
-### 18. Configure the engine for a connection that can go away — **DONE** (`PENDING_SHA`)
+### 18. Configure the engine for a connection that can go away — **DONE** (`5af5592`)
 
 **Do:** `pool_pre_ping=True`, `pool_size` around 2–5, a modest `max_overflow`.
 
