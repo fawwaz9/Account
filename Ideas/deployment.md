@@ -6,7 +6,7 @@ Every step from where this is now to running on the web, in order.
 Pages (the frontend), free, for about twenty invited people.
 
 **Why that target,** and every alternative rejected along the way, is in
-`Ideas/plan-a-decisions.md` — 32 decisions with their reasoning and what would
+`Ideas/plan-a-decisions.md` — 33 decisions with their reasoning and what would
 change my mind. This file is the *doing*; that one is the *why*. Where a step
 below is contestable it names the decision, so `D2.3` means go and argue there.
 
@@ -16,13 +16,13 @@ below is contestable it names the decision, so `D2.3` means go and argue there.
 
 | | |
 |---|---|
-| Backend tests | **719 on SQLite; 717 + 2 skipped on Postgres 16** |
+| Backend tests | **732 on SQLite** |
 | Frontend | `tsc --noEmit` and `vite build` clean |
 | Docker | **Phase 0 done — both images build, full stack verified end to end** |
 | Database | SQLite locally; **must become Postgres** to deploy (nothing free has a persistent disk) |
 | Open PRs | **none — all seven merged** |
 | Part 1 (local code changes) | **Done — steps 1–15, green light passed** |
-| Part 2 (the Postgres port) | Supabase project created; engine configured. **Next: step 17**, then 19 |
+| Part 2 (the Postgres port) | Engine configured, move script written and rehearsed. **Blocked on step 17** — the connection string |
 | Deployed anywhere | No — next is step 16 |
 
 Phase 0 was run against a `VACUUM INTO` copy on ports 8200/5273. It confirmed the
@@ -450,25 +450,66 @@ handling. Each is a latent bug SQLite was hiding.
 > *Supabase* specifically, since a pooled connection over a network is not the
 > same thing as a local container.
 
-### 20. Move the data
+### 20. Move the data — **script written and rehearsed** (`PENDING_SHA`)
 
-**Do:** a script that opens both databases through SQLAlchemy and copies every
-model in foreign-key order. **Run it against a `VACUUM INTO` copy of
-`data/app.db`, never the original.**
+**Do:**
 
-**Why through the ORM rather than a SQL dump:** `sqlalchemy.types.Uuid` stores as
-`CHAR(32)` on SQLite and as native `uuid` on Postgres. A raw dump carries the
-SQLite representation across and produces either type errors or, worse,
-valid-looking wrong data. **D1.4**.
+```sh
+cd Application/backend
+sqlite3 data/app.db "VACUUM INTO '/tmp/app-copy.db'"
+set -a; source ../.env; set +a
+.venv/bin/python scripts/migrate_to_postgres.py --source /tmp/app-copy.db
+```
 
-### 21. Verify the move
+**`VACUUM INTO`, not `cp`.** SQLite in WAL mode keeps recent writes in a sidecar
+file, so a plain copy of the main file can be missing whatever has not been
+checkpointed. `VACUUM INTO` produces a consistent single file whatever the
+writer is doing. The script **refuses to open `data/app.db` at all**, comparing
+resolved paths so a symlink cannot walk around it.
 
-**Do:** count rows per table on both sides, and diff a full dashboard payload
-from each.
+**Why through SQLAlchemy rather than a SQL dump:** `sqlalchemy.types.Uuid` stores
+as `CHAR(32)` on SQLite and as native `uuid` on Postgres; `Boolean` is `0`/`1`
+against `false`/`true`; `JSON` is text against `jsonb`. Reading and writing
+through the same metadata converts each column on the way through. A dump
+carries the SQLite spelling across and produces either a type error or — far
+worse — valid-looking wrong data. **D1.4**.
+
+**One thing this step did not know about, found by looking rather than by
+failing.** `course_category_weights.id` is an integer autoincrement primary key
+— the only one; everything else keys on a UUID the application generates. On
+Postgres that is backed by a sequence, and **inserting explicit ids does not
+advance it**. Without a reset the migration succeeds perfectly and the first
+category weight anyone adds afterwards asks for `id = 1`, collides, and keeps
+colliding forever. Demonstrated both ways against a real copy: with the reset the
+next insert got `224`; without it, `duplicate key value violates unique
+constraint`. The script derives the list from the models rather than naming the
+table, so a future one is covered. **D1.6.**
+
+**Rehearsed in full** against a `VACUUM INTO` copy of the real database into a
+throwaway Postgres 16: 588 rows across 17 tables, every table matching. Native
+`uuid`, `bool`, `dict` and `date` on the far side. The live database was
+checksummed before and after and is byte-identical.
+
+### 21. Verify the move — **folded into step 20**
+
+**Do:** nothing separately. The script verifies before it reports success, and
+exits non-zero if anything disagrees.
+
+**Counting rows is not enough**, which is why this was its own step and is no
+longer. A count proves a table is not missing; it says nothing about whether a
+boolean arrived as the right boolean or a UUID kept its bytes — and those are
+precisely the failures a type conversion produces. So every table is also
+**fingerprinted by value**: each row hashed across all columns, the digests
+combined by XOR so neither side needs an `ORDER BY`. Floats are compared to 12
+significant figures and JSON with sorted keys, so two equal values spelled
+differently still compare equal.
+
+Mutation-tested: appending one character to a single transaction description
+leaves all 95 counts identical and the fingerprint reports `DIFFER`.
 
 **The numbers to match** (as of the last check — re-count first, they move):
 3 users, 27 courses, 126 grades, 95 transactions, 10 accounts, 43 spend
-categories, 223 category weights.
+categories, 223 category weights. **588 rows in total.**
 
 A migration that "looks fine" is how you discover a missing table in March.
 

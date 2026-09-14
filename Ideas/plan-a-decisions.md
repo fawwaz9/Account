@@ -146,6 +146,40 @@ where a single wrong `0` for `false` passes silently.
 after, and diff a full dashboard payload from each. A migration that "looks fine"
 is how you discover a missing table in March.
 
+### D1.6 · Reset the sequence behind the one integer primary key
+
+**Decision.** After copying rows, advance the Postgres sequence for every
+integer autoincrement primary key past the highest id copied — and derive that
+list from the models rather than naming the table.
+
+**Why.** `course_category_weights.id` is the only such column in the schema;
+every other table keys on a UUID the application generates. On Postgres an
+autoincrement integer is backed by a sequence, and **inserting explicit ids does
+not advance it**. So the migration completes, every row count matches, every
+value matches, and the database is in perfect shape — until the first person
+adds a category weight, at which point Postgres hands out `id = 1`, collides
+with a row that has existed since the move, and keeps colliding forever. The
+table becomes permanently unwritable, and nothing about the migration report
+hints at it.
+
+Demonstrated rather than reasoned about: against a real copy, with the reset the
+next insert took id 224; with the sequence left where the move found it, the same
+insert raised `duplicate key value violates unique constraint`.
+
+**Why derived rather than written down.** A hardcoded `("course_category_weights",
+"id")` is correct today and silently wrong the first time somebody adds a table
+with an integer key — and the consequence is invisible until a write. Walking
+the metadata for integer primary keys costs four lines and cannot go stale.
+
+**Alternative: change the column to a UUID as part of the move.** It would make
+the schema uniform and remove the problem rather than manage it. Rejected as the
+wrong thing to bundle into a data migration — it is a schema change with its own
+risks, and it would mean the thing being moved is not the thing that was tested.
+Worth doing later if the uniformity is wanted.
+
+**What would change my mind.** Nothing about the fix. But if more integer keys
+appear, the schema question above becomes worth asking properly.
+
 ### D1.5 · Make the test database configurable, and run the suite both ways
 
 **Decision.** `TEST_DATABASE_URL` in `tests/conftest.py`, defaulting to the

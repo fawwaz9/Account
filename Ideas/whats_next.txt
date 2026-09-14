@@ -540,6 +540,15 @@ Deployment
   automatically; it is somewhere to keep the string. DATABASE_URL is what the
   app reads, so setting that locally would point dev at the empty cloud database
   and the app would come up looking wiped, with nothing on screen to say why.
+- Step 20's move script is written and rehearsed:
+  backend/scripts/migrate_to_postgres.py. It refuses to open data/app.db,
+  requires a VACUUM INTO copy, copies through SQLAlchemy metadata so UUID,
+  Boolean, JSON and Date convert on the way, resets the sequence behind
+  course_category_weights.id, and verifies by hashing every value in every
+  column rather than only counting rows. Rehearsed against a real copy into a
+  throwaway Postgres 16: 588 rows, every table matching.
+- Step 21 no longer exists separately -- verification is part of the move, and
+  the move exits non-zero if anything disagrees.
 - The test suite now REFUSES a remote TEST_DATABASE_URL unless
   TEST_DATABASE_ALLOW_REMOTE is set. conftest drops every table twice per run,
   which is correct against a container and unrecoverable against Supabase once
