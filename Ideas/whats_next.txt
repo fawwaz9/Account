@@ -532,10 +532,18 @@ Deployment
   Everything that was blocking the deploy is now fixed: ALLOWED_ORIGINS is
   configurable, the docs endpoints are off by default, /register is throttled and
   invitation-gated at both doors, /health exists, and there is one .env.
-- Part 2 is under way. Step 16 is done (Supabase project created) and step 18
-  configured the engine for a pooled remote connection. Step 17 -- pasting the
-  transaction-pooler string into Application/.env as SUPABASE_DATABASE_URL -- is
-  the outstanding one, and step 19 runs the suite against Supabase itself.
+- PART 2 IS DONE. The data is in Supabase: 588 rows, every table matching by
+  count and by the value of every column, and all 18 endpoint payloads identical
+  between an app instance on Supabase and one on the SQLite copy. The suite runs
+  730 passed / 2 skipped against Supabase itself (Postgres 17.6, 6m58s -- the
+  time is the network at ~22ms a round trip, not the database).
+- The Supabase region is us-west-2. Cloud Run goes in us-west1 at step 27.
+  scripts/check_db_connection.py prints the region every time it runs, so it
+  never has to be remembered.
+- SQLite is still the local default and data/app.db is still the working copy.
+  Nothing points local development at Supabase, deliberately.
+- Next is step 22: create the Google Cloud project. That is the first thing that
+  costs anything to get wrong.
 - It goes in as SUPABASE_DATABASE_URL, NOT DATABASE_URL. Nothing reads it
   automatically; it is somewhere to keep the string. DATABASE_URL is what the
   app reads, so setting that locally would point dev at the empty cloud database

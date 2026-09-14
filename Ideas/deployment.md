@@ -22,8 +22,8 @@ below is contestable it names the decision, so `D2.3` means go and argue there.
 | Database | SQLite locally; **must become Postgres** to deploy (nothing free has a persistent disk) |
 | Open PRs | **none — all seven merged** |
 | Part 1 (local code changes) | **Done — steps 1–15, green light passed** |
-| Part 2 (the Postgres port) | Engine configured, move script written and rehearsed. **Blocked on step 17** — the connection string |
-| Deployed anywhere | No — next is step 16 |
+| Part 2 (the Postgres port) | **Done — steps 16–21. The data is in Supabase** |
+| Deployed anywhere | No — next is step 22, the Google Cloud project |
 
 Phase 0 was run against a `VACUUM INTO` copy on ports 8200/5273. It confirmed the
 images build, the stack works, auth works end to end, data survives
@@ -318,15 +318,19 @@ and after and is byte-identical: the run was pointed at a scratch directory.
 **Do:** new project, free plan. **Choose the region nearest your users and write
 it down** — Cloud Run goes in the matching one at step 27.
 
-> **Write the region here before step 22:** `________________`. It is the one
-> piece of step 16 that step 27 depends on, and the console does not put it
-> anywhere you will look again.
+> **The region is `us-west-2`** (host `aws-0-us-west-2.pooler.supabase.com`).
+> Cloud Run goes in the matching one at step 27 — `us-west1` is the nearest GCP
+> region. Read back off the connection string rather than remembered, and
+> `scripts/check_db_connection.py` prints it every time it runs.
+>
+> Postgres **17.6**, not 16 — worth knowing, since the local rehearsals ran
+> against a 16 container.
 
 **Why region matters:** every request makes several round trips, and the
 dashboard makes five queries. A careless pairing can cost half a second on a page
 the performance work already got down to five queries. **D2.1**.
 
-### 17. Take the **pooled** connection string
+### 17. Take the **pooled** connection string — **DONE**
 
 **Do:** copy the pooled connection string (Supavisor), not the direct one.
 
@@ -364,6 +368,29 @@ read -rs "?Paste the transaction pooler string: " url && \
 ```
 
 (bash: `read -rsp "Paste the transaction pooler string: " url`.)
+
+**Then check it, before anything depends on it:**
+
+```sh
+cd Application/backend && .venv/bin/python scripts/check_db_connection.py
+```
+
+It reads the string, names the region, confirms the pooler and the port, connects,
+and runs six queries — six because psycopg starts preparing statements at the
+fifth, so anything less never exercises the one setting transaction-mode pooling
+requires. It prints nothing secret: the password is described, never shown.
+
+**What it caught here, which is what this check is for.** The string looked
+perfect and authentication failed. Not a wrong password — the brackets from
+`[YOUR-PASSWORD]` were still around it. `[` and `]` are reserved characters in a
+URL, so the generic advice ("percent-encode them") is *true* and completely
+useless; the answer is to delete two characters. The checker now says that
+specifically, and there is a test holding the two diagnoses in that order.
+
+Other failures it names rather than leaves you to guess at: the direct connection
+instead of the pooler, session mode instead of transaction mode, a username
+truncated on paste, and `DATABASE_URL` used where `SUPABASE_DATABASE_URL` was
+meant.
 
 **Why pooled:** Cloud Run runs many independent instances, each with its own
 pool. Without a pooler, three instances at five connections each is fifteen
@@ -408,7 +435,7 @@ which has no concept of overflow and would reject the argument.
 before this step the same URL failed on `ModuleNotFoundError`. 717 passed,
 2 skipped.
 
-### 19. Run the 669 tests against Postgres
+### 19. Run the 669 tests against Postgres — **DONE**
 
 **Do:** point `TEST_DATABASE_URL` at the Supabase string and run the suite.
 
@@ -450,6 +477,21 @@ handling. Each is a latent bug SQLite was hiding.
 > *Supabase* specifically, since a pooled connection over a network is not the
 > same thing as a local container.
 
+**And repeated against Supabase: 730 passed, 2 skipped, in 6m 58s.** No
+failures and no application change. Worth separating what that proved from what
+the container run had already proved:
+
+- **Postgres 17.6**, not the 16 every local rehearsal used.
+- **A real pooled connection**, at ~22 ms a round trip instead of a local
+  socket. That is the whole reason this step exists separately — the container
+  run could not have caught a pooler problem.
+- **Transaction-mode pooling specifically**, which is where `prepare_threshold`
+  (**D2.6**) either works or produces `prepared statement does not exist` on the
+  fifth execution of a query. It works.
+
+The two skips are the `sqlite_only` tests. Seven minutes rather than twenty
+seconds is the network, not the database.
+
 ### 20. Move the data — **script written and rehearsed** (`4a4291c`)
 
 **Do:**
@@ -490,10 +532,27 @@ throwaway Postgres 16: 588 rows across 17 tables, every table matching. Native
 `uuid`, `bool`, `dict` and `date` on the far side. The live database was
 checksummed before and after and is byte-identical.
 
-### 21. Verify the move — **folded into step 20**
+**And then done for real.** 588 rows into Supabase, every table matching by
+count and by value. Checked first that `purge_expired_users` — which the app
+lifespan runs on startup, and which *deletes* — would be a no-op: no user has
+`deleted_at` set, so it removes nothing. That check is worth repeating before
+pointing anything at a database that now holds the only copy.
+
+### 21. Verify the move — **DONE, and folded into step 20**
 
 **Do:** nothing separately. The script verifies before it reports success, and
 exits non-zero if anything disagrees.
+
+**Plus the check this step originally asked for, which is worth more than it
+sounds.** Two instances of the real application were started side by side — one
+against Supabase, one against the SQLite copy the move read from — and six
+endpoints were fetched from each for all three real users, then compared:
+`grades/dashboard`, `budget-summary`, `tasks`, `events`, `jobs`, `users`.
+
+**All 18 payloads identical.** Compared by digest rather than printed, since they
+carry real grades and transactions. This is a different claim from "every row
+matches": it exercises the joins, the aggregations and the serialisation, so it
+would catch a Postgres result ordering that SQLite happened to give for free.
 
 **Counting rows is not enough**, which is why this was its own step and is no
 longer. A count proves a table is not missing; it says nothing about whether a
