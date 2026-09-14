@@ -16,7 +16,7 @@ below is contestable it names the decision, so `D2.3` means go and argue there.
 
 | | |
 |---|---|
-| Backend tests | **692 on SQLite; 690 + 2 skipped on Postgres 16** |
+| Backend tests | **702 on SQLite; 700 + 2 skipped on Postgres 16** |
 | Frontend | `tsc --noEmit` and `vite build` clean |
 | Docker | **Phase 0 done — both images build, full stack verified end to end** |
 | Database | SQLite locally; **must become Postgres** to deploy (nothing free has a persistent disk) |
@@ -178,7 +178,7 @@ It presents as "the API is down" and appears nowhere in the API's logs.
 **Verify:** set it to a wrong value and confirm the preflight fails; set it right
 and confirm it passes.
 
-### 10. Collapse the two `.env` files into one
+### 10. Collapse the two `.env` files into one — **DONE** (`1f742c6`)
 
 **Do:** keep one, have both the compose file and local runs read it.
 
@@ -187,7 +187,7 @@ and are byte-identical today with nothing keeping them so. When they drift, the
 symptom is tokens signed with one key and verified with another — which reads to
 a user as being randomly logged out. Audit finding **B7**.
 
-### 11. Add the invite gate
+### 11. Add the invite gate — **DONE** (`1f742c6`)
 
 **Do:** an `ALLOWED_SIGNUP_EMAILS` environment variable, checked in
 `create_local_user` **and in the Google sign-in path**.
@@ -371,6 +371,7 @@ Settings that are not the defaults, and why:
 | `ALLOWED_ORIGINS` | placeholder for now | corrected at step 30 |
 | `RUN_SCHEMA_ON_STARTUP` | **0** | the schema was built at step 26; re-checking it costs 278 statements per cold start (**step 8**) |
 | `ENABLE_DOCS` | unset | off is the default, but set nothing rather than something wrong |
+| `ALLOWED_SIGNUP_EMAILS` | **the invited addresses** | unset means anyone who finds the hostname can register; startup warns while it is (**step 11**) |
 
 ### 28. Confirm the API is alive
 
@@ -497,9 +498,9 @@ Add the remaining addresses. You are live.
 | B2 | `ALLOWED_ORIGINS` hardcoded and wrong | **Done** — step 9; step 30 sets the real value |
 | B3 | `/docs` and `/openapi.json` public | **Done** — step 7 |
 | B4 | No TLS | Free from Cloud Run and Pages |
-| B5 | `/register` open to anyone | 11 |
+| B5 | `/register` open to anyone | **Done** — step 11, both doors |
 | B6 | No health endpoint | **Done** — step 6 |
-| B7 | Two `.env` files with duplicate secrets | 10 |
+| B7 | Two `.env` files with duplicate secrets | **Done** — step 10 |
 | B8 | Images build arm64; Cloud Run needs amd64 | 24 |
 | S1 | No security headers | 14 |
 | S2 | No backup discipline | 33, 34 |
