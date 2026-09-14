@@ -584,9 +584,72 @@ Registry APIs.
 **Note:** the card is required even for the always-free tier. It verifies
 identity and is not charged inside the free limits.
 
+### 22a. Install the `gcloud` CLI
+
+**Do:** `brew install --cask google-cloud-sdk`, then `gcloud init` and
+`gcloud auth login`.
+
+**Why it is its own step:** nothing from 24 onward works without it. Step 24
+needs `gcloud auth configure-docker` to let Docker push to Artifact Registry at
+all, and step 27 is `gcloud run deploy`. The console can create the repository
+but cannot push to it.
+
 ### 23. Create an Artifact Registry repository
 
-In the **same region** you chose at step 16.
+In the **same region** you chose at step 16 — for `aws-0-us-west-2` that is
+**`us-west1`**. Both are Oregon; they are about 100 miles apart.
+
+**Only the backend image goes here.** The frontend is a static bundle and goes
+to Cloudflare Pages at step 29 (**D4.1**), so it never becomes a registry
+artifact.
+
+**The form, field by field:**
+
+| Field | Choose | Why |
+|---|---|---|
+| Name | `account` | It becomes part of the image URL: `us-west1-docker.pkg.dev/<project>/account/backend` |
+| Format | **Docker** | You are pushing container images, not Maven or npm packages |
+| Mode | **Standard** | *Remote* is a caching proxy for an upstream registry; *Virtual* fans one endpoint out across several repos. Neither applies |
+| Location type | **Region** | Multi-region costs more and buys nothing for one service |
+| Region | **`us-west1`** | Cloud Run pulls the image on every cold start. Same region means a fast pull and no egress charge; a different one means both, on the path users actually wait on |
+| Encryption | **Google-managed key** | Customer-managed means creating a Cloud KMS key, paying for it, and owning its rotation |
+| Immutable image tags | **Off** | See below |
+| Cleanup policies | **Set one** | See below — this is the one that matters |
+
+**Immutable tags, off — but tag properly anyway.** With them on, a tag can never
+be moved, so pushing `:latest` a second time fails, mid-deploy, with an error
+that does not obviously mean "this is the setting you chose". Leave it off *and*
+tag every image with the git SHA regardless, because **D3.1**'s rollback plan is
+"redeploy the previous tag" and `:latest` alone gives you nothing to roll back
+to.
+
+**Cleanup policy, because the free tier is 0.5 GB.** Measured rather than
+guessed: the backend image is 416 MB locally but **~86 MB stored**, since layers
+are compressed. The number that actually matters is what a *rebuild* adds — the
+Python base and the 154 MB virtualenv layer are reused, and only
+`COPY . .` changes, which is **4 MB**. So code changes are nearly free and a
+`requirements.txt` change is not.
+
+Set a policy that keeps the most recent 3 versions and deletes untagged
+artifacts older than 30 days. **Start it in dry-run mode** and look at what it
+says it would delete before switching it to delete — a policy that removes the
+image Cloud Run is currently serving takes the service down, and "keep most
+recent" is what prevents that.
+
+**Check that vulnerability scanning is off.** Artifact Analysis charges per
+image scanned, and it can already be on if the Container Scanning API got
+enabled with the others at step 22. It is not part of the free tier.
+
+**Or skip the form entirely:**
+
+```sh
+gcloud artifacts repositories create account \
+  --repository-format=docker \
+  --location=us-west1 \
+  --description="Account backend images"
+```
+
+**Verify:** `gcloud artifacts repositories list --location=us-west1` shows it.
 
 ### 24. Build for `linux/amd64` and push
 

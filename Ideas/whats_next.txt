@@ -157,8 +157,15 @@ Shipped so far (do not re-propose)
 What is left, by module. Tasks and Calendar no longer appear: everything that
 was under them has shipped.
 
+Calendar:
+        A line at the exact time of the day it currently is. 
+        Color customization of different category types of events.
 
-Grades: Think of other functionalities that can merge over to the other.
+Tasks:
+        Add time when creating tasks.
+
+Grades: 
+        Think of other functionalities that can merge over to the other.
         Cheapest path to a target: which remaining item moves the average most per hour spent.
         Term retrospective when a term closes: what moved, what slipped, what you predicted vs got.
         Syllabus paste: drop the text in, get categories, weights and due dates proposed for review.
@@ -168,8 +175,10 @@ Grades: Think of other functionalities that can merge over to the other.
 Budget:
         Money Lent gets who and when, plus a nudge when it has been out too long.
         Reimbursement state on a transaction: owed, claimed, received.
+        Functionality to create edit and delete accounts.(Make savings and spending the only defaults that cannot be removed)
+        The option to make an account not count towards total. Like an account recording your debt. Make it seperate from your net worth.
 
-Jobs:   All three stages shipped, so these are follow-ups rather than gaps.
+Jobs:   
         A fortnightly shift. ShiftMeeting is the same shape as ClassMeeting,
           which now carries an interval and a first week, so it is the same two
           fields again -- left out of that change as scope, not oversight.
