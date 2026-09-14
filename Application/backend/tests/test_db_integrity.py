@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app._database.migrations import BACKFILLS, ensure_indexes
 from app._database.db import IS_SQLITE, connect_args_for, engine
+from tests.conftest import sqlite_only
 from app._database.models import (
     AccountModel,
     BudgetTargetModel,
@@ -35,8 +36,14 @@ from datetime import date, timedelta
 
 # ------------------------------------------------------- foreign keys are on --
 
+@sqlite_only
 def test_foreign_keys_are_enforced(db):
-    """Off by default in SQLite, which makes every ForeignKey documentation."""
+    """Off by default in SQLite, which makes every ForeignKey documentation.
+
+    SQLite only, and deliberately so: Postgres has no switch to check. The test
+    immediately below asserts the *behaviour* instead, and that one is worth far
+    more because it passes on both and would catch the pragma silently failing.
+    """
     assert db.execute(text("PRAGMA foreign_keys")).scalar() == 1
 
 
@@ -199,30 +206,35 @@ def test_deleting_an_account_takes_its_budget_targets(db, user):
 
 # ------------------------------------------------------------------ indexes --
 
-def index_names(engine, table: str) -> set[str]:
-    return {index["name"] for index in inspect(engine).get_indexes(table)}
+def index_names(bind, table: str) -> set[str]:
+    return {index["name"] for index in inspect(bind).get_indexes(table)}
 
 
 def test_ensure_indexes_adds_what_an_older_database_lacks(db):
-    """create_all only indexes tables it creates, so an existing one gains none."""
-    engine = db.get_bind()
-    db.commit()
-    with engine.begin() as connection:
-        connection.execute(text("DROP INDEX ix_transactions_account_id"))
-    assert "ix_transactions_account_id" not in index_names(engine, "transactions")
+    """create_all only indexes tables it creates, so an existing one gains none.
 
-    ensure_indexes(bind=engine)
+    Works through `db.connection()` rather than `db.get_bind()`. The two are the
+    same thing on SQLite, where the session is bound to an engine -- but against
+    Postgres the session is bound to a connection inside the test's transaction,
+    and opening a second one with `engine.begin()` deadlocks against it. The
+    session's own connection is the one object that means the same thing on
+    both, and it keeps the dropped index inside the rollback.
+    """
+    connection = db.connection()
+    connection.execute(text("DROP INDEX ix_transactions_account_id"))
+    assert "ix_transactions_account_id" not in index_names(connection, "transactions")
 
-    assert "ix_transactions_account_id" in index_names(engine, "transactions")
+    ensure_indexes(bind=connection)
+
+    assert "ix_transactions_account_id" in index_names(connection, "transactions")
 
 
 def test_ensure_indexes_is_safe_to_run_twice(db):
     """It runs on every startup, so it has to be idempotent."""
-    engine = db.get_bind()
-    db.commit()
+    connection = db.connection()
 
-    ensure_indexes(bind=engine)
-    ensure_indexes(bind=engine)
+    ensure_indexes(bind=connection)
+    ensure_indexes(bind=connection)
 
     assert "ix_transactions_account_id" in index_names(engine, "transactions")
 

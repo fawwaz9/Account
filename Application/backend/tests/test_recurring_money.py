@@ -23,7 +23,7 @@ from app.Finances.services.recurring_service import (
     update_rule,
 )
 from app.Finances.services.transaction_service import list_transactions
-from conftest import make_account, make_category, make_user
+from conftest import make_account, make_category, make_user, sqlite_only
 
 START = date(2026, 1, 1)
 #: Far enough past the start that several monthly payments are owed.
@@ -241,15 +241,24 @@ def test_deleting_an_instruction_keeps_the_money_it_moved(db, user):
     assert balance_of(db, user, account.id) == -4500.0
 
 
+@sqlite_only
 def test_a_broken_rule_does_not_stop_the_others(db, user):
     """One instruction pointing at a gone account must not block the rest.
 
     The database now refuses to delete an account a rule still points at, so
     this state is no longer reachable through the app. It is still reachable in
     a database written *before* foreign keys were enforced, which is every
-    database this project created until now -- so the defensive branch in
+    SQLite database this project created until now -- so the defensive branch in
     `run_due` stays, and the only honest way to set the scenario up is to drop
     enforcement for the two statements that fabricate it.
+
+    **SQLite only, and the reason is the point.** On Postgres this state cannot
+    be fabricated at all: there is no per-connection switch for foreign keys,
+    and no Postgres database of this app has ever existed without them. So the
+    legacy row the defensive branch guards against can never appear there. The
+    branch still earns its place while any SQLite file is still in use -- and
+    once the move to Postgres is complete and no such file remains, this is a
+    test, and a branch, that can be deleted outright.
     """
     good = make_account(db, user.id, "Spending")
     doomed = make_account(db, user.id, "Old")

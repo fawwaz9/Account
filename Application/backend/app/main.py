@@ -2,8 +2,9 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response, status
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 from app.api.routes import (
     calendar, finances, grades, jobs, omnibox, recurring, tasks, users, auth,
@@ -48,7 +49,47 @@ async def lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(lifespan=lifespan)
+#: Whether the interactive docs are served. **Off unless asked for**, which is
+#: the opposite of FastAPI's default and the opposite of what this app did: all
+#: three endpoints were public, publishing every route, parameter and schema to
+#: anyone who looked. Defaulting to off means a forgotten variable hides them
+#: rather than exposing them -- the failure that costs nothing, instead of the
+#: one nobody notices.
+DOCS_ENABLED = os.getenv("ENABLE_DOCS", "").strip().lower() in {"1", "true", "yes", "on"}
+
+app = FastAPI(
+    lifespan=lifespan,
+    docs_url="/docs" if DOCS_ENABLED else None,
+    redoc_url="/redoc" if DOCS_ENABLED else None,
+    # Turned off with them: leaving the schema served is leaving the docs
+    # served, since the pages are only a renderer for this.
+    openapi_url="/openapi.json" if DOCS_ENABLED else None,
+)
+
+
+@app.get("/health", include_in_schema=False)
+def health(response: Response):
+    """Is this process able to do its job, rather than merely running?
+
+    Answers with the database, not just with itself. A check that only proves
+    uvicorn is listening reports healthy while every real request fails on a
+    dead connection -- which, with a database that suspends when idle and a
+    container that is torn down and recreated constantly, is the most likely
+    way this deployment breaks. A probe that cannot see the dependency it is
+    worried about is decoration.
+
+    503 rather than an exception, so a monitor reads a status code instead of a
+    stack trace, and so the body can say which half is unwell.
+    """
+    try:
+        with SessionLocal() as session:
+            session.execute(text("SELECT 1"))
+    except Exception as exc:  # noqa: BLE001 - any failure to reach it is unhealthy
+        logging.getLogger("app.health").warning("health check failed: %s", exc)
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return {"status": "unhealthy", "database": "unreachable"}
+
+    return {"status": "ok", "database": "ok"}
 
 # Stripped, because "a.com, b.com" is the natural way to write a list and the
 # space made the second entry " b.com", which no Origin header can ever equal --

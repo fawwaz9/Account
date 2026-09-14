@@ -1,23 +1,61 @@
-"""Test fixtures: every test gets a fresh in-memory database.
+"""Test fixtures: every test gets a clean database, isolated from the next.
 
 Deliberately never uses ``SessionLocal`` or the engine in app._database.db,
 which are bound to the real data/app.db file. A test that can reach the live
 ledger is worse than no test. The module itself is in the import graph either
 way -- models.py imports ``Base`` from it -- and importing it issues no DDL;
 what matters is that nothing here binds a session to that engine.
+
+**Which database.** ``TEST_DATABASE_URL`` chooses. Unset, it is SQLite in
+memory, which is what it has always been and what keeps the local loop fast.
+Set to a Postgres URL, the same suite runs against the database the app will
+actually be deployed on -- which is the only way to know the port worked rather
+than merely imported.
+
+The two need different isolation, and the difference is worth understanding:
+
+* **SQLite in memory** is free to throw away. Each test builds the whole schema
+  into a private database and drops it with the engine, so isolation is total
+  and costs nothing.
+* **Postgres is not.** Building 23 tables and 49 indexes per test, over a
+  network, would take longer than the suite is worth. So the schema is created
+  once, and each test runs inside a transaction that is rolled back afterwards.
+  ``join_transaction_mode="create_savepoint"`` is what makes that survive the
+  application's own ``commit()`` calls: they release a savepoint instead of
+  committing, so the code under test behaves normally while the outer
+  transaction still rolls everything back.
 """
+import os
 import sys
+import tempfile
 import uuid
 from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine, event
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app._database.db import apply_sqlite_pragmas  # noqa: E402
+# Before anything imports app._database.db, which reads DATABASE_URL once at
+# import and binds `engine` and `SessionLocal` to it for the life of the
+# process. Unset, that is the real data/app.db -- so a test that reaches the
+# application engine reaches the live ledger.
+#
+# Most of this suite never does: the `db` fixture builds its own engine. But
+# anything exercising the ASGI app runs the app's *lifespan*, which issues DDL
+# and runs the expired-account purge through `SessionLocal`. That is a delete
+# statement against whatever this points at, and "the tests do not use it" is
+# an invariant maintained by hand rather than by anything.
+#
+# Overridden rather than defaulted: there is no legitimate reason for the suite
+# to talk to a configured database, and TEST_DATABASE_URL is the knob for
+# choosing where the fixtures run.
+os.environ["DATABASE_URL"] = f"sqlite:///{Path(tempfile.gettempdir()) / 'account-suite-app.db'}"
+
+from app._database.db import apply_sqlite_pragmas, connect_args_for  # noqa: E402
 from app._database.models import (  # noqa: E402
     AccountModel,
     Base,
@@ -28,30 +66,93 @@ from app._database.models import (  # noqa: E402
 )
 
 
-@pytest.fixture
-def db():
-    engine = create_engine(
-        "sqlite://",
-        connect_args={"check_same_thread": False},
+#: Unset means SQLite in memory, which is the default for a reason: it needs no
+#: server, no cleanup and no network, so the suite stays a two-second feedback
+#: loop. Point it at Postgres to run the same tests against the real thing.
+TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL", "sqlite://")
+TESTING_SQLITE = make_url(TEST_DATABASE_URL).get_backend_name() == "sqlite"
+
+
+def _make_engine(url: str):
+    kwargs = {"connect_args": connect_args_for(url)}
+    if make_url(url).get_backend_name() == "sqlite":
         # One shared connection, or ":memory:" gives each connection its own
         # empty database and create_all appears to have done nothing.
-        poolclass=StaticPool,
-    )
+        kwargs["poolclass"] = StaticPool
 
-    # The same pragmas the real engine sets, so the suite runs under the rules
-    # the app runs under. Without foreign_keys ON here, every cascade test
-    # passes whether or not the cascade is actually enforced.
-    @event.listens_for(engine, "connect")
-    def _pragmas(dbapi_connection, _record):
-        apply_sqlite_pragmas(dbapi_connection)
+    engine = create_engine(url, **kwargs)
 
+    if make_url(url).get_backend_name() == "sqlite":
+        # The same pragmas the real engine sets, so the suite runs under the
+        # rules the app runs under. Without foreign_keys ON here, every cascade
+        # test passes whether or not the cascade is actually enforced. Postgres
+        # needs none of this -- it has no switch for its own constraints.
+        @event.listens_for(engine, "connect")
+        def _pragmas(dbapi_connection, _record):
+            apply_sqlite_pragmas(dbapi_connection)
+
+    return engine
+
+
+#: For the handful of tests that are about SQLite itself rather than about the
+#: application -- its pragmas, and a legacy state only a pre-enforcement SQLite
+#: file can hold. Skipped rather than rewritten, because on Postgres they are
+#: asserting something that cannot be true there.
+sqlite_only = pytest.mark.skipif(
+    not TESTING_SQLITE, reason="about SQLite specifically, not about the app"
+)
+
+
+@pytest.fixture(scope="session")
+def _pg_engine():
+    """One engine and one schema for the whole Postgres run.
+
+    Session-scoped because the expensive part is the DDL, not the connection:
+    23 tables and 49 indexes built once instead of 669 times. Dropped at the
+    end so a re-run starts clean rather than inheriting whatever the last one
+    left when it crashed.
+    """
+    engine = _make_engine(TEST_DATABASE_URL)
+    Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
-    session = sessionmaker(autocommit=False, autoflush=False, bind=engine)()
+    try:
+        yield engine
+    finally:
+        Base.metadata.drop_all(bind=engine)
+        engine.dispose()
+
+
+@pytest.fixture
+def db(request):
+    if TESTING_SQLITE:
+        engine = _make_engine(TEST_DATABASE_URL)
+        Base.metadata.create_all(bind=engine)
+        session = sessionmaker(autocommit=False, autoflush=False, bind=engine)()
+        try:
+            yield session
+        finally:
+            session.close()
+            engine.dispose()
+        return
+
+    # Postgres: keep the schema, throw away the rows. The session joins an
+    # outer transaction that is rolled back at the end, so nothing a test wrote
+    # -- committed or not -- is visible to the next one.
+    engine = request.getfixturevalue("_pg_engine")
+    connection = engine.connect()
+    transaction = connection.begin()
+    session = sessionmaker(
+        autocommit=False,
+        autoflush=False,
+        bind=connection,
+        join_transaction_mode="create_savepoint",
+    )()
     try:
         yield session
     finally:
         session.close()
-        engine.dispose()
+        transaction.rollback()
+        connection.close()
 
 
 @pytest.fixture
