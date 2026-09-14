@@ -1,0 +1,98 @@
+/* The crash page.
+
+   Written against the theme variables in globals.css so it matches the rest of
+   the app, but deliberately free of any class defined elsewhere: this is what
+   renders when something below it has already failed, and it should not depend
+   on a stylesheet a broken page happened to import. */
+
+.crashPage {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--bg, #0b0f1a);
+  color: var(--text, #e5e7eb);
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  box-sizing: border-box;
+}
+
+.crashCard {
+  width: 100%;
+  max-width: 560px;
+  background: var(--panel, #111a2e);
+  border: 1px solid var(--border, rgba(212, 175, 55, 0.15));
+  border-radius: 14px;
+  padding: 28px;
+  box-shadow: 0 18px 40px var(--shadow, rgba(0, 0, 0, 0.4));
+  box-sizing: border-box;
+}
+
+.crashTitle {
+  margin: 0 0 12px;
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: var(--gold, #d4af37);
+}
+
+.crashBody {
+  margin: 0 0 22px;
+  line-height: 1.55;
+  color: var(--muted, #9ca3af);
+}
+
+.crashActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.crashButton {
+  flex: 1 1 180px;
+  padding: 10px 16px;
+  border-radius: 9px;
+  border: 1px solid var(--border, rgba(212, 175, 55, 0.15));
+  background: var(--panel-2, #0f172a);
+  color: var(--text, #e5e7eb);
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.crashButton:hover {
+  border-color: var(--gold, #d4af37);
+}
+
+.crashPrimary {
+  background: var(--gold, #d4af37);
+  border-color: var(--gold, #d4af37);
+  color: #0b0f1a;
+  font-weight: 600;
+}
+
+.crashDetails {
+  margin-top: 22px;
+  font-size: 0.85rem;
+  color: var(--muted, #9ca3af);
+}
+
+.crashDetails > summary {
+  cursor: pointer;
+}
+
+.crashStack {
+  margin: 10px 0 0;
+  padding: 12px;
+  max-height: 240px;
+  /* The stack is the one thing here allowed to scroll sideways: wrapping it
+     would make it harder to read, and wrapping the page around it would push
+     the buttons off screen on a phone. */
+  overflow: auto;
+  border-radius: 8px;
+  background: #0b0f1a;
+  border: 1px solid #1f2a44;
+  color: var(--delete, #f87171);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

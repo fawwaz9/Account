@@ -1,4 +1,4 @@
-"""Rate limiting for the one endpoint that verifies a secret.
+"""Rate limiting for the two unauthenticated endpoints that cost real work.
 
 `POST /api/auth/login` ran one bcrypt verification per request with nothing
 bounding how many requests arrived. The careful timing-equalisation in
@@ -14,6 +14,16 @@ memory, so it resets on restart and is not shared between workers. Running more
 than one worker, or putting this behind several instances, needs a shared store
 (Redis) instead. For a single-process personal app it is the right size; it is
 not a substitute for an edge rate limiter in front of a public deployment.
+
+**And a second limit that matters more once this is deployed.** Every key here
+is derived from `request.client.host`, the peer address. Behind a proxy that is
+the proxy, not the caller -- so on a platform like Cloud Run these limiters
+collapse towards a single shared budget rather than one per person. That is not
+useless (an unbounded loop still stops) but it is a different thing from what
+runs locally, and the registration ceiling below is chosen with it in mind. The
+fix is to read a *trusted* forwarded-for header, which is a decision about the
+specific proxy and is deliberately not made here; see `client_of` in
+`api/routes/auth.py`.
 """
 
 import threading
@@ -49,7 +59,7 @@ class SlidingWindowLimiter:
             # The window clears when its oldest attempt falls out of it.
             return max(1, int(hits[0] + self._window - time.monotonic()) + 1)
 
-    def record_failure(self, key: str) -> None:
+    def record_attempt(self, key: str) -> None:
         with self._lock:
             now = time.monotonic()
             hits = self._prune(key, now)
@@ -86,6 +96,29 @@ per_account = SlidingWindowLimiter()
 #: which the per-account limiter would never see. Looser, since a shared NAT or
 #: a household can legitimately hold several accounts.
 per_client = SlidingWindowLimiter(max_attempts=30)
+
+#: Registration allowed per client inside its window. Deliberately generous.
+#: Two things push it up: a shared network (a campus, a house) is one key, and
+#: behind a proxy *everyone* is one key -- see the module docstring. A ceiling
+#: tuned for one person per address would lock out the group this app is for.
+#: It is still a hard bound where there was none, and the invitation list is the
+#: control that actually decides who gets an account.
+REGISTRATION_MAX_ATTEMPTS = 20
+#: An hour, not the fifteen minutes login uses. Signing up is a once-ever
+#: action, so a slow window costs a real person nothing and costs a script the
+#: whole day.
+REGISTRATION_WINDOW_SECONDS = 60 * 60
+
+#: Unlike the two above, this counts *every* attempt rather than only the
+#: failures. Login is guarding a secret, so a success proves the caller is
+#: entitled and its history is cleared. Registration has no secret to guard: the
+#: thing being spent is a database row and a ~200ms password hash, and a
+#: successful signup spends both. Counting only the failures would bound
+#: enumeration while leaving the flood -- the larger problem -- unbounded.
+per_client_registration = SlidingWindowLimiter(
+    max_attempts=REGISTRATION_MAX_ATTEMPTS,
+    window_seconds=REGISTRATION_WINDOW_SECONDS,
+)
 
 
 def account_key(email: str, client: str) -> str:

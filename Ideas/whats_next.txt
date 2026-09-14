@@ -510,3 +510,38 @@ Collaboration, by invite
   insert. Easy to audit.
 - Decide once: assigning a task means the other person owns it; sharing means you both
   track it. They are different rows.
+
+Deployment
+- The full audit and the staged plan now live in Ideas/deployment.md. Read that
+  rather than duplicating it here.
+- Settled: free hosting only, ~20 people by invitation, no machine to maintain.
+  Shape is Google Cloud Run + Supabase Postgres + Cloudflare Pages. SQLite does
+  NOT survive this: nothing free has a persistent disk, so the Postgres port is
+  mandatory. Self-hosting on a cheap mini PC is deferred, not rejected -- it is
+  the only option that keeps SQLite.
+- Per-decision reasoning, alternatives and falsifiers live in
+  Ideas/plan-a-decisions.md. The database was Neon until review; D2.0 records
+  why it became Supabase.
+- Phase 0 is DONE: both images build and the full stack works end to end,
+  verified against a copy. It found B8 -- local builds are linux/arm64 and Cloud
+  Run needs amd64.
+- Part 1 is DONE. Steps 1-15 have landed and the step 15 green light passed:
+  710 tests on SQLite, 708 + 2 skipped on Postgres 16, tsc and vite build clean,
+  and a full `docker compose up --build` with /health 200, /docs 404, the invite
+  gate refusing a stranger and the register limit refusing attempt 21.
+  Everything that was blocking the deploy is now fixed: ALLOWED_ORIGINS is
+  configurable, the docs endpoints are off by default, /register is throttled and
+  invitation-gated at both doors, /health exists, and there is one .env.
+- Next is step 16 -- create the Supabase project. Nothing has touched the
+  internet yet; Part 2 is still entirely local.
+- Two known gaps carried deliberately into the deploy, both written up:
+  * step 12a / D5.5 -- every rate limiter keys on the peer address, which behind
+    Cloud Run is Google's front end, so the limits degrade towards one shared
+    budget. Fixing it means trusting a forwarded-for header, which is worse if
+    done carelessly. Revisit after step 32.
+  * step 29a -- the security headers cannot be verified locally, because the
+    local stack serves through nginx and nginx does not read _headers. The CSP
+    gets its first real test on the deployed site.
+- ALLOWED_SIGNUP_EMAILS defaults to UNSET, which means open. That is deliberate
+  so a fresh clone can create its first account, and the server logs a warning
+  while it is unset -- but it must be set before step 27.

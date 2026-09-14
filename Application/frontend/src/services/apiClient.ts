@@ -1,4 +1,5 @@
 import { ValidationError } from "../features/grades/types"; // adjust path to wherever these live
+import { DEFAULT_API_BASE_URL } from "./apiBase";
 
 function stripTrailingSlashes(value: string) {
   let end = value.length;
@@ -9,7 +10,7 @@ function stripTrailingSlashes(value: string) {
 }
 
 const API_BASE_URL = stripTrailingSlashes(
-  (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api").trim()
+  (import.meta.env.VITE_API_BASE_URL ?? DEFAULT_API_BASE_URL).trim()
 );
 
 interface RequestOptions extends RequestInit {

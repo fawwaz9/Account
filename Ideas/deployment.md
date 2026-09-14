@@ -6,7 +6,7 @@ Every step from where this is now to running on the web, in order.
 Pages (the frontend), free, for about twenty invited people.
 
 **Why that target,** and every alternative rejected along the way, is in
-`Ideas/plan-a-decisions.md` — 26 decisions with their reasoning and what would
+`Ideas/plan-a-decisions.md` — 31 decisions with their reasoning and what would
 change my mind. This file is the *doing*; that one is the *why*. Where a step
 below is contestable it names the decision, so `D2.3` means go and argue there.
 
@@ -16,12 +16,13 @@ below is contestable it names the decision, so `D2.3` means go and argue there.
 
 | | |
 |---|---|
-| Backend tests | **702 on SQLite; 700 + 2 skipped on Postgres 16** |
+| Backend tests | **710 on SQLite; 708 + 2 skipped on Postgres 16** |
 | Frontend | `tsc --noEmit` and `vite build` clean |
 | Docker | **Phase 0 done — both images build, full stack verified end to end** |
 | Database | SQLite locally; **must become Postgres** to deploy (nothing free has a persistent disk) |
 | Open PRs | **none — all seven merged** |
-| Deployed anywhere | No |
+| Part 1 (local code changes) | **Done — steps 1–15, green light passed** |
+| Deployed anywhere | No — next is step 16 |
 
 Phase 0 was run against a `VACUUM INTO` copy on ports 8200/5273. It confirmed the
 images build, the stack works, auth works end to end, data survives
@@ -200,14 +201,51 @@ alternative in **D5.1**.
 **Verify:** an address on the list can register, one off it gets a clear refusal,
 and the same is true through Google.
 
-### 12. Rate-limit `/register`
+### 12. Rate-limit `/register` — **DONE** (`PENDING_SHA`)
 
 **Do:** apply the existing `SlidingWindowLimiter` to the register route.
 
 **Why:** only `/login` is limited today. The mechanism already exists. Audit
 finding **S4**.
 
-### 13. Add a React error boundary
+**What it actually spends, which is the reason the limit differs from login's.**
+Login guards a secret, so it counts *failures* and clears a key on success.
+Registration has no secret: an accepted call costs a database row and a ~200ms
+password hash, and a refused one still answers whether an address is taken or
+invited. Counting only failures would bound the enumeration and leave the flood
+— the larger problem — unbounded. So every attempt counts, success included.
+**D5.4.**
+
+**20 an hour, not 5.** Every key is `request.client.host`, and a shared network
+is one key. See step 12a: behind a proxy *everybody* is one key, so a ceiling
+tuned for one person is a ceiling for the whole invited group signing up on the
+same evening.
+
+**Verify:** done live against the container — 20 attempts answered normally, the
+21st refused with `Retry-After: 3592`, a sign-in during the block still reaching
+the password check rather than a 429, and the audit log reading
+`19 rejected / 1 success / 1 throttled`.
+
+### 12a. Read the caller's real address — **NOT DONE, and it changes what step 12 means**
+
+**The problem:** every limiter in this app keys on `request.client.host`, the
+peer address. On Cloud Run the peer is Google's front end, not the person. So in
+production these limiters collapse from one budget per caller towards **one
+budget shared by everyone** — including `/login`, which has behaved this way
+since it was written and has simply never been deployed behind a proxy before.
+
+**Why it is not fixed here:** the fix is to read `X-Forwarded-For`, and an
+unvalidated forwarded-for header is attacker-controlled — trusting it hands
+anyone an unlimited supply of fresh keys, which is strictly worse than the
+shared budget. Doing it correctly means knowing exactly how many hops the
+platform appends and trusting only that many, which is a decision about Cloud
+Run specifically and is worth making with the deployed thing in front of you.
+
+**What to do in the meantime:** nothing breaks. An unbounded loop still stops,
+which is the property step 12 was added for. Revisit after step 32, and see
+**D5.5**.
+
+### 13. Add a React error boundary — **DONE** (`PENDING_SHA`)
 
 **Do:** wrap the router in one, showing something a person can act on.
 
@@ -215,7 +253,22 @@ finding **S4**.
 you read the console; a friend just sees a broken app and stops using it. Audit
 finding **S3**.
 
-### 14. Write the security headers for Pages
+**Placed outside `AuthProvider`, not just around the routes:** a boundary inside
+the provider cannot catch the provider itself throwing, and "it failed while
+working out whether you are signed in" is exactly the case that would otherwise
+be a white screen.
+
+**What it does not catch,** stated so nobody assumes more than it does: errors in
+event handlers, in `setTimeout`, and in rejected promises never interrupt a
+render, so React does not route them here. A failed fetch is still handled by the
+error state each page already keeps.
+
+**Verify:** `getDerivedStateFromError` turns a thrown error into fallback state,
+children pass through untouched when there is none, and the fallback renders the
+message, the component stack, both actions and `role="alert"` — checked by
+rendering the component, not by reading it.
+
+### 14. Write the security headers for Pages — **DONE** (`PENDING_SHA`)
 
 **Do:** a `_headers` file in the frontend build output with HSTS, CSP,
 `X-Content-Type-Options`, `Referrer-Policy` and `X-Frame-Options`.
@@ -224,12 +277,36 @@ finding **S3**.
 gone — Pages serves the bundle. The finding survived; its fix moved. **D4.2**,
 audit finding **S1**.
 
-### 15. Green light
+**Generated at build time, not checked in.** Every directive is fixed except
+`connect-src`, which has to name the API's origin — and that origin differs
+between local, preview and production. A checked-in file could only be right for
+one of them, and when it is wrong the browser refuses the request before it is
+sent, so the API's logs stay empty while the app looks down. That is the same
+shape as the CORS bug Phase 0 found. `securityHeaders.ts` derives it from the
+same `VITE_API_BASE_URL` the bundle is built with, so the two cannot drift.
+**D4.3.**
+
+**One deliberate concession:** `style-src` allows `'unsafe-inline'`, because
+about thirty components set a `style={{...}}` attribute (progress-bar widths,
+mostly) and CSP counts a style attribute as inline style. `script-src` stays
+strict, and that is the directive that stops XSS.
+
+**Verify:** confirmed inside the built image that the `connect-src` origin and
+the URL inlined in the bundle are the same string. **Still to check on the real
+deploy — see step 29a.**
+
+### 15. Green light — **DONE** (`PENDING_SHA`)
 
 **Do:** run the whole suite, `npx tsc --noEmit`, `npm run build`, and one
 `docker compose up --build` to confirm nothing here broke the image.
 
 **Stop here if anything is red.** Everything after this point is harder to debug.
+
+**Result:** 710 passed on SQLite, 708 passed + 2 skipped on Postgres 16,
+`tsc --noEmit` clean, `vite build` clean, and the full compose stack up with
+`/health` 200, `/docs` 404, the invite gate refusing a stranger and the register
+limit refusing the 21st attempt. The real `data/app.db` was checksummed before
+and after and is byte-identical: the run was pointed at a scratch directory.
 
 ---
 
@@ -392,6 +469,29 @@ rebuild, not a restart. Phase 0 confirmed this behaves as expected.
 **Verify:** the deployed bundle contains your Cloud Run URL:
 `curl -s <pages-url>/assets/index-*.js | grep -o 'https://[^"]*run.app/api'`
 
+### 29a. Open the console and read the CSP violations
+
+**Do:** load the Pages URL with devtools open, sign in with Google, and watch the
+console for `Refused to …` lines.
+
+**Why this is its own step:** the security headers written in step 14 are the one
+piece of this that **cannot be verified locally**. The local docker stack serves
+through nginx, which does not read `_headers` at all, so nothing before this
+point has ever had the policy applied to it. A CSP that is slightly too strict
+does not warn — it silently refuses a request and the feature just does not work.
+
+**The two most likely:**
+
+- **Google Sign-In.** The policy uses the prefixes Google documents
+  (`.../gsi/client`, `.../gsi/`, `.../gsi/style`). If the button does not render
+  or the popup does nothing, widen those three to `https://accounts.google.com`
+  and try again.
+- **`connect-src`.** If every API call fails while `/health` answers when curled
+  directly, the origin baked into `_headers` does not match the one in the
+  bundle. Both come from `VITE_API_BASE_URL`, so the fix is at step 29, not here.
+
+**Verify:** sign in, load each of the six pages, and finish with an empty console.
+
 ### 30. Point `ALLOWED_ORIGINS` at the Pages URL
 
 **Do:** set it to the exact origin — no wildcard, no trailing slash — and
@@ -502,14 +602,14 @@ Add the remaining addresses. You are live.
 | B6 | No health endpoint | **Done** — step 6 |
 | B7 | Two `.env` files with duplicate secrets | **Done** — step 10 |
 | B8 | Images build arm64; Cloud Run needs amd64 | 24 |
-| S1 | No security headers | 14 |
+| S1 | No security headers | **Done** — step 14; confirm on the live site at 29a |
 | S2 | No backup discipline | 33, 34 |
-| S3 | No React error boundary | 13 |
-| S4 | `/register` unthrottled | 12 |
+| S3 | No React error boundary | **Done** — step 13 |
+| S4 | `/register` unthrottled | **Done** — step 12; **step 12a** says what it means behind a proxy |
 | S5 | No pagination on 27 list endpoints | **Deferred** — fine at this size, revisit if data grows |
 | S6 | Migrations additive-only, unversioned | **Deferred** — see D1.3; step 8 strengthens the case for Alembic |
 | S7 | README's "Still open" table is stale | **Deferred** — four of eight rows were fixed by merged PRs |
-| S8 | Throttle state is per-process | **Accepted** — D3.6, bounded by `max-instances` 3 |
+| S8 | Throttle state is per-process | **Accepted** — D3.6, bounded by `max-instances` 3. See also **12a**: the key itself is wrong behind a proxy |
 | S9 | Local venv stale vs `requirements.txt` | **Done** — step 4; a clean venv from the file alone is 42 packages and 669 green |
 | S10 | Pydantic v3 deprecation | **Deferred** — `app/Tasks/schemas/task.py:77` |
 | S11 | Hard user deletion live | **Done** — step 1 |

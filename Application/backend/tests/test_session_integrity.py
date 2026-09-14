@@ -148,7 +148,7 @@ def test_the_limiter_allows_up_to_its_ceiling_then_refuses():
 
     for _ in range(3):
         assert limiter.retry_after("k") is None
-        limiter.record_failure("k")
+        limiter.record_attempt("k")
 
     retry = limiter.retry_after("k")
     assert retry is not None and retry > 0
@@ -157,8 +157,8 @@ def test_the_limiter_allows_up_to_its_ceiling_then_refuses():
 def test_a_success_clears_the_history():
     """One forgotten password then the right one must not leave you locked out."""
     limiter = SlidingWindowLimiter(max_attempts=2, window_seconds=60)
-    limiter.record_failure("k")
-    limiter.record_failure("k")
+    limiter.record_attempt("k")
+    limiter.record_attempt("k")
     assert limiter.retry_after("k") is not None
 
     limiter.reset("k")
@@ -167,7 +167,7 @@ def test_a_success_clears_the_history():
 
 def test_the_window_slides():
     limiter = SlidingWindowLimiter(max_attempts=1, window_seconds=1)
-    limiter.record_failure("k")
+    limiter.record_attempt("k")
     assert limiter.retry_after("k") is not None
 
     time.sleep(1.1)
@@ -176,7 +176,7 @@ def test_the_window_slides():
 
 def test_keys_do_not_share_a_budget():
     limiter = SlidingWindowLimiter(max_attempts=1, window_seconds=60)
-    limiter.record_failure("one")
+    limiter.record_attempt("one")
 
     assert limiter.retry_after("one") is not None
     assert limiter.retry_after("two") is None
@@ -197,6 +197,6 @@ def test_tracked_keys_are_capped():
     """An attacker rotating the address they guess must not grow this forever."""
     limiter = SlidingWindowLimiter(max_attempts=5, window_seconds=600)
     for index in range(5000):
-        limiter.record_failure(f"key-{index}")
+        limiter.record_attempt(f"key-{index}")
 
     assert len(limiter._hits) <= 4096

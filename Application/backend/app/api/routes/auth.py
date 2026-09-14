@@ -5,7 +5,12 @@ from app.Auth.dependencies import CurrentUser
 from app.Auth.schemas.credentials import LoginRequest, RegisterRequest, SetPasswordRequest
 from app.Auth.schemas.token import GoogleAuthRequest, TokenResponse
 from app.Auth.services.google_auth_service import GoogleUnavailable, verify_google_token
-from app.Auth.services.login_throttle import account_key, per_account, per_client
+from app.Auth.services.login_throttle import (
+    account_key,
+    per_account,
+    per_client,
+    per_client_registration,
+)
 from app.Auth.services.session_service import create_access_token
 from app.shared import audit
 from app.shared.errors import error_auth, responses
@@ -60,6 +65,24 @@ def login_with_google(payload: GoogleAuthRequest, request: Request, db: DBSessio
 def register_with_email(payload: RegisterRequest, request: Request, db: DBSession):
     """Create a local email + password account and sign the user straight in."""
     client = client_of(request)
+
+    # Checked before anything is read or written. An unbounded loop here is the
+    # expensive one: each accepted signup is a row plus a bcrypt hash, and each
+    # refused one still says whether an address is taken or invited, which is an
+    # enumeration oracle if you can ask it often enough.
+    retry_after = per_client_registration.retry_after(client)
+    if retry_after is not None:
+        audit.auth_event("register", outcome="throttled", email=payload.email, client=client)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many sign-up attempts. Try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    # Recorded before the work, not after, so an attempt that raises still
+    # counts. Recording on the way out would let every failing request run free.
+    per_client_registration.record_attempt(client)
+
     try:
         user = user_service.create_local_user(db, payload)
     except ValueError as exc:
@@ -94,8 +117,8 @@ def login_with_email(payload: LoginRequest, request: Request, db: DBSession):
 
     user = user_service.authenticate_local_user(db, payload.email, payload.password)
     if user is None:
-        per_account.record_failure(key)
-        per_client.record_failure(client)
+        per_account.record_attempt(key)
+        per_client.record_attempt(client)
         audit.auth_event("login", outcome="invalid_credentials", email=payload.email, client=client)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
