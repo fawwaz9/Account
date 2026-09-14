@@ -1,4 +1,4 @@
-"""The two endpoints that exist for the deployment rather than for a user.
+"""The parts of the app that exist for the deployment rather than for a user.
 
 `/health` is what a restart policy and an uptime monitor read, and the docs
 endpoints are what must not be readable by anyone who finds the hostname.
@@ -121,3 +121,115 @@ def test_the_usual_affirmatives_all_work(monkeypatch, value):
     main = app_with(monkeypatch, ENABLE_DOCS=value)
     with TestClient(main.app) as client:
         assert client.get("/docs").status_code == 200
+
+
+# ------------------------------------------------------- schema on startup --
+
+def startup_statements(monkeypatch, tmp_path, **env):
+    """How many statements a cold start issues against a prepared database."""
+    from sqlalchemy import event
+
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'gate.db'}")
+    main = app_with(monkeypatch, **env)
+
+    # Prepared first, so what is being counted is the *re-checking* rather than
+    # the one-time creation -- which is the whole point of the gate.
+    from app._database.schema import apply_schema
+    apply_schema()
+
+    from app._database.db import engine
+    seen = []
+
+    @event.listens_for(engine, "before_cursor_execute")
+    def _count(conn, cur, statement, params, context, many):
+        seen.append(statement)
+
+    try:
+        with TestClient(main.app):
+            pass
+    finally:
+        event.remove(engine, "before_cursor_execute", _count)
+    return seen
+
+
+def test_startup_rechecks_the_schema_by_default(monkeypatch, tmp_path):
+    """On unless told otherwise: a fresh clone must still build its own tables."""
+    statements = startup_statements(monkeypatch, tmp_path, RUN_SCHEMA_ON_STARTUP=None)
+
+    assert len(statements) > 200, "the schema check should be doing its (expensive) work"
+
+
+def test_the_gate_removes_the_startup_cost(monkeypatch, tmp_path):
+    """The measurement this exists for: 278 statements become none.
+
+    Against a local file that saving is invisible. Against a network database
+    on a service that scales to zero it is roughly half a second off every cold
+    start, re-establishing something that was already true.
+    """
+    statements = startup_statements(monkeypatch, tmp_path, RUN_SCHEMA_ON_STARTUP="0")
+
+    ddl = [s for s in statements if s.strip().upper().startswith(("CREATE", "ALTER", "PRAGMA TABLE"))]
+    assert ddl == [], f"no schema work should run, got {ddl[:3]}"
+    assert len(statements) < 10, f"expected only the purge, got {len(statements)} statements"
+
+
+def test_the_purge_still_runs_when_the_schema_check_does_not(monkeypatch, tmp_path):
+    """The two are gated separately, and this is why.
+
+    Turning off the purge as well would quietly break the thirty-day deletion
+    promise -- an account marked for deletion would simply stay forever. It is
+    one query when there is nothing to do, so it stays on regardless.
+    """
+    statements = startup_statements(monkeypatch, tmp_path, RUN_SCHEMA_ON_STARTUP="0")
+
+    assert any("users" in s.lower() for s in statements), (
+        "the expired-account purge should still have queried users"
+    )
+
+
+def test_applying_the_schema_is_idempotent(monkeypatch, tmp_path):
+    """It runs as a deploy step, and deploys get retried."""
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'twice.db'}")
+    app_with(monkeypatch)
+    from app._database.schema import apply_schema
+
+    apply_schema()
+    apply_schema()  # must not raise
+
+    from app._database.db import engine
+    from sqlalchemy import inspect
+    assert len(inspect(engine).get_table_names()) == 23
+
+
+# ---------------------------------------------------------- allowed origins --
+
+def preflight(monkeypatch, allowed, origin):
+    monkeypatch.setenv("RUN_SCHEMA_ON_STARTUP", "0")
+    main = app_with(monkeypatch, ALLOWED_ORIGINS=allowed)
+    return TestClient(main.app).options(
+        "/api/users/me",
+        headers={"Origin": origin, "Access-Control-Request-Method": "GET"},
+    ).status_code
+
+
+def test_the_configured_origin_is_allowed(monkeypatch):
+    assert preflight(monkeypatch, "https://account.pages.dev", "https://account.pages.dev") == 200
+
+
+def test_any_other_origin_is_refused(monkeypatch):
+    """What the deployment gets wrong first, and the hardest to diagnose.
+
+    Phase 0 reproduced it: the frontend was served on 5273 while this said 5173,
+    and every browser request was refused before reaching a route. It reads as
+    "the API is down", and appears nowhere in the API's own logs -- only in the
+    browser console.
+    """
+    assert preflight(monkeypatch, "http://localhost:5173", "https://account.pages.dev") == 400
+
+
+def test_several_origins_survive_the_space_people_type(monkeypatch):
+    """"a, b" is how a list is written, and the space made the second entry
+    " b" -- an origin no browser can ever send, so silently unreachable."""
+    both = "http://localhost:5173, https://account.pages.dev"
+    assert preflight(monkeypatch, both, "http://localhost:5173") == 200
+    assert preflight(monkeypatch, both, "https://account.pages.dev") == 200

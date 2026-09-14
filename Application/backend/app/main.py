@@ -11,7 +11,7 @@ from app.api.routes import (
 )
 from app._database.db import Base, SessionLocal, engine
 from app._database import models
-from app._database.migrations import ensure_indexes, ensure_schema
+from app._database.schema import apply_schema
 from app.Users.services.user_service import purge_expired_users
 
 # The audit log needs somewhere to go. uvicorn configures its own loggers but not
@@ -23,24 +23,53 @@ logging.basicConfig(
 )
 
 
+def _truthy(name: str, default: str = "") -> bool:
+    return os.getenv(name, default).strip().lower() in {"1", "true", "yes", "on"}
+
+
+#: Whether startup brings the schema up to date. **On unless told otherwise**,
+#: which is the opposite default to ENABLE_DOCS below, and deliberately so --
+#: the two have opposite failure modes. Forgetting to disable the docs exposes
+#: the whole API; forgetting to disable this costs a slower first request.
+#: Forgetting to *enable* it, on a fresh clone, leaves an app with no tables.
+#:
+#: So it stays on for every existing workflow -- a clone, dev.run.sh, compose --
+#: and a deployment turns it off, having run `python -m app.schema` once as part
+#: of deploying. Schema management is a deploy step; it was only ever here
+#: because there was nowhere else to put it.
+SCHEMA_ON_STARTUP = _truthy("RUN_SCHEMA_ON_STARTUP", "1")
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    """Bring the schema up to date, once, when the server actually starts.
+    """Prepare the process, once, when the server actually starts.
 
-    Deliberately not at module import. These three issue DDL, and `import
-    app.main` happens in places that are emphatically not a server start: a
-    test collector, a reload worker, an IDE indexer, `--help`. Any of those
-    would write to whatever `DATABASE_URL` happened to point at.
+    Deliberately not at module import. This issues DDL, and `import app.main`
+    happens in places that are emphatically not a server start: a test
+    collector, a reload worker, an IDE indexer, `--help`. Any of those would
+    write to whatever `DATABASE_URL` happened to point at.
+
+    The two halves below are gated differently on purpose.
+
+    **The schema work is expensive and rarely needed.** Measured, the three
+    calls issue 278 statements -- 247 of them confirming all 49 indexes still
+    exist. Against a local file that is free. Against a network database on a
+    service that scales to zero, it is roughly half a second added to every
+    cold start, paid by whoever arrives first after a quiet spell, to
+    re-establish something that was already true four minutes ago.
+
+    **The purge is cheap and must not stop.** It is what makes the thirty-day
+    deletion promise real, and gating it off would quietly break that -- an
+    account marked for deletion would simply stay forever. It costs one query
+    when there is nothing to do, and startup remains the right trigger for the
+    same reason due payments are written on read: idempotent work, done when
+    something is already happening. A machine left off for a month catches up
+    the moment it starts, which is correct -- the deadline passed whether or
+    not the server was running.
     """
-    Base.metadata.create_all(bind=engine)
-    ensure_schema()
-    ensure_indexes()
+    if SCHEMA_ON_STARTUP:
+        apply_schema()
 
-    # Accounts whose grace period has run out. No scheduler in this app, so it
-    # runs here for the same reason due payments are written on read: idempotent
-    # work, done when something is already happening. A machine left off for a
-    # month catches up the moment it starts, which is the correct outcome --
-    # the deadline passed whether or not the server was running.
     with SessionLocal() as session:
         purged = purge_expired_users(session)
     if purged:
@@ -55,7 +84,7 @@ async def lifespan(_app: FastAPI):
 #: anyone who looked. Defaulting to off means a forgotten variable hides them
 #: rather than exposing them -- the failure that costs nothing, instead of the
 #: one nobody notices.
-DOCS_ENABLED = os.getenv("ENABLE_DOCS", "").strip().lower() in {"1", "true", "yes", "on"}
+DOCS_ENABLED = _truthy("ENABLE_DOCS")
 
 app = FastAPI(
     lifespan=lifespan,

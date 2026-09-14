@@ -5,10 +5,21 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
     environment:
-      DATABASE_URL: sqlite:////app/data/app.db
+      DATABASE_URL: ${DATABASE_URL:-sqlite:////app/data/app.db}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       JWT_SECRET: ${JWT_SECRET}
-      ALLOWED_ORIGINS: http://localhost:5173
+      # From the environment, not hardcoded. This was fixed at
+      # http://localhost:5173, so it could not be changed for a different port
+      # or a real hostname without editing this file -- and when it is wrong,
+      # every browser request is refused by CORS while the API's own logs stay
+      # silent. It reads as "the API is down".
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173}
+      # Off in any real deployment. See .env.example.
+      ENABLE_DOCS: ${ENABLE_DOCS:-}
+      # On here, because compose is also how someone runs this locally for the
+      # first time and the database starts empty. A deployment sets it to 0 and
+      # runs `python -m app._database.schema` as a deploy step instead.
+      RUN_SCHEMA_ON_STARTUP: ${RUN_SCHEMA_ON_STARTUP:-1}
     volumes:
       - ./backend/data:/app/data   # bind mount, not a named volume
     restart: unless-stopped
@@ -17,7 +28,11 @@ services:
     build:
       context: ./frontend
       args:
-        VITE_API_BASE_URL: http://localhost:8000/api
+        # Inlined into the bundle at build time, not read at runtime -- so
+        # changing it needs a rebuild, not a restart. It must name the address a
+        # browser will use, which is not necessarily the one the container
+        # answers on.
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000/api}
         VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
     ports:
       - "5173:80"
