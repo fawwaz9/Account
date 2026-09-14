@@ -551,8 +551,27 @@ Deployment
   never has to be remembered.
 - SQLite is still the local default and data/app.db is still the working copy.
   Nothing points local development at Supabase, deliberately.
-- Next is step 22: create the Google Cloud project. That is the first thing that
-  costs anything to get wrong.
+- THE API IS LIVE: https://account-api-210502804146.us-west1.run.app
+  /health returns {"status":"ok","database":"ok"}, which proves Cloud Run in
+  us-west1 reaches Supabase in us-west2 through the pooler using a password read
+  from Secret Manager as a service account with no other permissions.
+- Steps 22-28 are done. Next is step 29: deploy the frontend to Cloudflare Pages
+  with VITE_API_BASE_URL=https://account-api-210502804146.us-west1.run.app/api,
+  then step 30 corrects ALLOWED_ORIGINS, which is still a placeholder.
+- Two things to know about the Cloud Run config:
+  * --port=8000 is mandatory. The Dockerfile hardcodes uvicorn --port 8000 while
+    Cloud Run expects the container to listen on $PORT, default 8080. Without it
+    the service deploys and never passes its startup probe. A follow-up is to
+    make the image honour $PORT.
+  * --allow-unauthenticated turns off Google IAM on the endpoint, which it must
+    be -- a browser cannot present an IAM token. The app's own JWT auth and the
+    invite gate are untouched, and both were confirmed against the live URL.
+- The service runs as account-api@, which has NO project-level roles and only
+  secretAccessor on jwt-secret and database-url. The default compute service
+  account has roles/editor, which is what a compromised container would have
+  held. D3.7.
+- ALLOWED_SIGNUP_EMAILS is currently just the owner's address. Friends get added
+  at step 37, after step 32 tests the deployment from mobile data.
 - It goes in as SUPABASE_DATABASE_URL, NOT DATABASE_URL. Nothing reads it
   automatically; it is somewhere to keep the string. DATABASE_URL is what the
   app reads, so setting that locally would point dev at the empty cloud database

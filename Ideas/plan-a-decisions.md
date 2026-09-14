@@ -548,6 +548,37 @@ an outage path for a service whose absence would block all sign-ins.
 audit log, or raising `max-instances` much above three. Both make the multiplier
 matter.
 
+### D3.7 · A service account of its own, with two grants and nothing else
+
+**Decision.** Run the Cloud Run service as a dedicated `account-api` service
+account holding `secretmanager.secretAccessor` on exactly two secrets, rather
+than as the Compute Engine default.
+
+**Why.** Checked rather than assumed: on this project the default compute
+service account holds **`roles/editor`**. That is what a compromised container
+would be running as — able to read every secret in the project, delete the
+Artifact Registry repository, and create resources that cost money. D3.5 put
+`JWT_SECRET` and the database URL behind Secret Manager specifically so they
+were not casually readable; running as Editor hands them straight back, and adds
+the rest of the project on top.
+
+The replacement has **no project-level roles at all**. If the container is
+compromised, the attacker gets the two values the application already has in its
+own memory, and nothing further.
+
+**Alternative: use the default and move on.** One fewer thing to create, and it
+is what most tutorials do — which is exactly why the default deserves checking
+rather than inheriting. Three commands is not a meaningful cost.
+
+**Alternative: grant `secretAccessor` at the project level.** Simpler to write
+and grows silently: every secret added later is readable by the service without
+anyone deciding that. Per-secret bindings mean adding a secret is a deliberate
+act.
+
+**What would change my mind.** Nothing for the access level. If the service
+later needs to write to Cloud Storage or publish to Pub/Sub, those get their own
+narrow bindings on the same account — not a broader role.
+
 ---
 
 ## Phase 4 — The frontend

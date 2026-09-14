@@ -6,7 +6,7 @@ Every step from where this is now to running on the web, in order.
 Pages (the frontend), free, for about twenty invited people.
 
 **Why that target,** and every alternative rejected along the way, is in
-`Ideas/plan-a-decisions.md` — 33 decisions with their reasoning and what would
+`Ideas/plan-a-decisions.md` — 34 decisions with their reasoning and what would
 change my mind. This file is the *doing*; that one is the *why*. Where a step
 below is contestable it names the decision, so `D2.3` means go and argue there.
 
@@ -23,8 +23,8 @@ below is contestable it names the decision, so `D2.3` means go and argue there.
 | Open PRs | **none — all seven merged** |
 | Part 1 (local code changes) | **Done — steps 1–15, green light passed** |
 | Part 2 (the Postgres port) | **Done — steps 16–21. The data is in Supabase** |
-| Part 3 (deploy) | Project, registry and image done — **next is step 25**, Secret Manager |
-| Deployed anywhere | Not yet — the image is pushed and waiting |
+| Part 3 (deploy) | **The API is live** — steps 22–28 done. Next is step 29, the frontend |
+| API URL | `https://account-api-210502804146.us-west1.run.app` |
 
 Phase 0 was run against a `VACUUM INTO` copy on ports 8200/5273. It confirmed the
 images build, the stack works, auth works end to end, data survives
@@ -737,14 +737,73 @@ nothing right now.
 that matter most — one reads all the data, the other forges any session.
 Non-secret config stays a plain variable. **D3.5**.
 
-### 26. Run the schema creation once
+### 26. Run the schema creation once — **DONE**
 
 **Do:** run `python -m app._database.schema` against Supabase once, with
 `DATABASE_URL` pointing at it. It builds the 23 tables and 49 indexes and is
 idempotent, so a retried deploy is harmless. The deployed service then runs with
 `RUN_SCHEMA_ON_STARTUP=0`.
 
-### 27. Deploy to Cloud Run
+### 25a. Give it an identity of its own — **DONE**
+
+**Do:** a dedicated service account, with access to the two secrets and nothing
+else.
+
+```sh
+gcloud iam service-accounts create account-api \
+  --display-name="Account API (Cloud Run)"
+
+for secret in jwt-secret database-url; do
+  gcloud secrets add-iam-policy-binding $secret \
+    --member="serviceAccount:account-api@account-504419.iam.gserviceaccount.com" \
+    --role="roles/secretmanager.secretAccessor"
+done
+```
+
+**Why this is not optional, checked rather than assumed.** Cloud Run defaults to
+the Compute Engine service account, and on this project that account holds
+**`roles/editor`** — verified with `get-iam-policy`. That is the identity a
+compromised container would be running as: able to read every secret in the
+project, delete the registry, and create resources that cost money. Step 25 put
+the two most dangerous values behind Secret Manager precisely so they were not
+casually readable; running as Editor hands them back.
+
+`account-api` has **no project-level roles at all** and two secret-scoped
+grants. **D3.7.**
+
+### 27. Deploy to Cloud Run — **DONE**
+
+```sh
+gcloud run deploy account-api \
+  --image=us-west1-docker.pkg.dev/account-504419/account/backend:26e249f \
+  --region=us-west1 --port=8000 \
+  --service-account=account-api@account-504419.iam.gserviceaccount.com \
+  --min-instances=0 --max-instances=3 --concurrency=40 \
+  --cpu=1 --memory=512Mi --allow-unauthenticated \
+  --set-secrets="JWT_SECRET=jwt-secret:latest,DATABASE_URL=database-url:latest" \
+  --set-env-vars="GOOGLE_CLIENT_ID=...,ALLOWED_ORIGINS=https://placeholder.invalid,RUN_SCHEMA_ON_STARTUP=0,ALLOWED_SIGNUP_EMAILS=..."
+```
+
+**Service URL: `https://account-api-210502804146.us-west1.run.app`** — this is
+what step 29's `VITE_API_BASE_URL` needs, with `/api` on the end.
+
+**`--port=8000` is mandatory and not in the table below.** Cloud Run's contract
+is that the container listens on whatever `$PORT` says, defaulting to **8080**.
+This Dockerfile ends `CMD ["uvicorn", ..., "--port", "8000"]` — hardcoded. Without
+`--port=8000` the service deploys, never passes its startup probe, and reports
+that the container failed to listen. The cleaner fix is an image that honours
+`$PORT`; that needs a rebuild and a push, so it is a follow-up rather than a
+blocker.
+
+**`--allow-unauthenticated` is correct here, despite how it reads.** It turns off
+*Google IAM* on the endpoint, which has to be off — a browser cannot present a
+Google IAM token, so with it on nobody could reach the API at all. The app's own
+auth is untouched: every route still requires a JWT, and **step 11's invite gate
+still decides who may create an account**. Confirmed against the live URL:
+`stranger@example.com` is refused with 400.
+
+**Pinned to the SHA, not `latest`.** `26e249f` is what rolls back to at step 36;
+`latest` gives you nothing to roll back *to*.
 
 Settings that are not the defaults, and why:
 
@@ -761,12 +820,31 @@ Settings that are not the defaults, and why:
 | `ENABLE_DOCS` | unset | off is the default, but set nothing rather than something wrong |
 | `ALLOWED_SIGNUP_EMAILS` | **the invited addresses** | unset means anyone who finds the hostname can register; startup warns while it is (**step 11**) |
 
-### 28. Confirm the API is alive
+### 28. Confirm the API is alive — **DONE**
 
 **Do:** `curl https://<cloud-run-url>/health`.
 
 **Verify:** 200 with `{"status": "ok"}`. If it is 503 the container is running but
 cannot reach Supabase — which is exactly what step 6 was for.
+
+**Result — `{"status":"ok","database":"ok"}`.** The `database: ok` half is the
+one that matters: it means Cloud Run in `us-west1` reached Supabase in
+`us-west2` through the transaction pooler, using a password it read from Secret
+Manager as a service account with no other permissions. Every piece of Part 3 is
+exercised by that one response.
+
+| | |
+|---|---|
+| First request | 666 ms, including DNS and TLS |
+| Warm | ~171 ms, most of it the round trip from here |
+| `/docs`, `/redoc`, `/openapi.json` | 404 — step 7 holding in production |
+| `stranger@example.com` on `/register` | 400, invitation only — step 11 holding |
+| Preflight from a wrong origin | 400 — which is step 30 still to do |
+
+**Not yet measured: a real cold start.** These figures are from an instance that
+was already warm. **D3.2** claims 200 ms–2 s after scaling to zero, and that
+number only becomes real after ~15 minutes idle. Step 38 is where it gets
+checked honestly.
 
 ### 29. Deploy the frontend to Cloudflare Pages
 
