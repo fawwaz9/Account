@@ -8,7 +8,7 @@ dies, and nothing is actually removed until the grace period has run out.
 import uuid
 from datetime import date, timedelta
 
-from app._database.models import AccountModel, CourseModel, UserModel
+from app._database.models import AccountModel, CourseModel, UserModel, utc_now
 from app.Users.schemas.user import DELETION_GRACE_DAYS, User
 from app.Users.services.user_service import (
     delete_user,
@@ -20,8 +20,20 @@ from app.Users.services.user_service import (
 from conftest import make_account, make_course, make_user
 
 
+def today_utc() -> date:
+    """The date the *service* is working in, which is UTC.
+
+    `deleted_at` is stamped with `utc_now()`, so every deadline derived from it
+    is a UTC date. Comparing those against a local `date.today()` agrees only
+    while the two happen to fall on the same day -- so these tests passed in the
+    morning and failed in the evening for anyone behind UTC. The reference has
+    to come from the same clock the code uses.
+    """
+    return utc_now().date()
+
+
 def past_the_deadline(days_over: int = 1) -> date:
-    return date.today() + timedelta(days=DELETION_GRACE_DAYS + days_over)
+    return today_utc() + timedelta(days=DELETION_GRACE_DAYS + days_over)
 
 
 # ------------------------------------------------------ deletion is a request --
@@ -41,7 +53,7 @@ def test_deleting_records_when_it_was_asked_for(db, user):
     deleted = delete_user(db, user.id)
 
     assert deleted.deleted_at is not None
-    assert deletes_on(deleted) == date.today() + timedelta(days=DELETION_GRACE_DAYS)
+    assert deletes_on(deleted) == today_utc() + timedelta(days=DELETION_GRACE_DAYS)
 
 
 def test_deleting_ends_every_session(db, user):
@@ -112,7 +124,7 @@ def test_the_day_before_the_deadline_is_still_safe(db, user):
     """The boundary, in the direction that loses data if it is wrong."""
     delete_user(db, user.id)
 
-    purged = purge_expired_users(db, on_day=date.today() + timedelta(days=DELETION_GRACE_DAYS - 1))
+    purged = purge_expired_users(db, on_day=today_utc() + timedelta(days=DELETION_GRACE_DAYS - 1))
 
     assert purged == 0
     assert db.query(UserModel).count() == 1
@@ -164,7 +176,7 @@ def test_the_api_reports_the_deadline(db, user):
     sent = User.model_validate(user, from_attributes=True)
 
     assert sent.deleted_at is not None
-    assert sent.deletes_on == date.today() + timedelta(days=DELETION_GRACE_DAYS)
+    assert sent.deletes_on == today_utc() + timedelta(days=DELETION_GRACE_DAYS)
 
 
 def test_a_live_account_reports_no_deadline(db, user):
