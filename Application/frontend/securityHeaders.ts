@@ -106,8 +106,12 @@ export function buildHeaders(apiBaseUrl: string): string {
     `Content-Security-Policy: ${buildCsp(apiOrigin ?? "")}`,
   ];
 
+  // The comment deliberately avoids writing any directive name. A file like
+  // this gets grepped, and a comment containing "connect-src" matches before
+  // the real directive does -- which turns a check of the policy into a check
+  // of the note about the policy, and it passes either way.
   return `# Generated at build time by securityHeaders.ts -- do not edit by hand.
-# connect-src below is derived from VITE_API_BASE_URL, which was:
+# The API origin below comes from VITE_API_BASE_URL, which was:
 #   ${apiBaseUrl}
 /*
 ${lines.map((line) => `  ${line}`).join("\n")}
