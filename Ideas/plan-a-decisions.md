@@ -323,6 +323,50 @@ one decision in the document with no viable alternative.
 **And then restore one.** Into a scratch Supabase project — the free plan allows
 two — opened with the real app. An unrestored backup is a belief.
 
+### D2.6 · Disable prepared statements, and rewrite the URL the dashboard gives you
+
+**Decision.** For psycopg connections, pass `prepare_threshold=None`. For a bare
+`postgresql://` URL, rewrite the driver to `postgresql+psycopg` rather than
+letting SQLAlchemy pick.
+
+**Why the first.** psycopg starts using server-side prepared statements
+automatically after the **fifth** execution of a query. Supavisor in transaction
+mode — the pooler D2.3 chose — hands each transaction whichever backend
+connection happens to be free, so the connection that issued the PREPARE is
+usually not the one asked to EXECUTE it. The error is `prepared statement ...
+does not exist`. What makes it worth a decision rather than a line of config is
+*when* it appears: never on the first four runs of a query, so it passes every
+smoke test, every manual click-through and quite possibly the first day of real
+use. The cost of turning it off is re-planning each query, which at this size is
+immaterial.
+
+**Why the second.** Supabase gives you `postgresql://...` with no driver named,
+and SQLAlchemy resolves that to psycopg2 — which D1.2 deliberately did not
+install. Pasted verbatim, the connection string produces `ModuleNotFoundError:
+No module named 'psycopg2'`, an error that says nothing about the actual problem
+at the exact moment of first connecting to a real database.
+
+**Alternative: document it and let the person edit the string.** The honest
+version, and what most projects do. Rejected because the edit is invisible — the
+string looks complete, and nothing about it suggests it needs changing. A
+correction you have to remember is a correction you will forget at 1am.
+
+**Alternative: rewrite any `postgresql+*` driver to psycopg.** Rejected. An
+explicit `postgresql+psycopg2://` is someone stating a preference rather than
+omitting one, and silently overriding it is worse than failing where they can
+see why. Only the bare form is touched.
+
+**One trap inside the fix.** `str(URL)` masks the password as literal asterisks.
+Rendering the rewritten URL the obvious way produces a string that parses
+perfectly and cannot authenticate — which reads as "wrong password" and sends you
+to reset a password that was correct all along. It needs
+`render_as_string(hide_password=False)`, and there is a test named for it.
+
+**What would change my mind.** Moving to the session pooler or a direct
+connection, where prepared statements are safe and worth keeping. The setting is
+unnecessary there rather than harmful, so it would be a small optimisation, not a
+bug.
+
 ---
 
 ## Phase 3 — Cloud Run

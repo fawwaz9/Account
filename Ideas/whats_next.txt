@@ -532,8 +532,17 @@ Deployment
   Everything that was blocking the deploy is now fixed: ALLOWED_ORIGINS is
   configurable, the docs endpoints are off by default, /register is throttled and
   invitation-gated at both doors, /health exists, and there is one .env.
-- Next is step 16 -- create the Supabase project. Nothing has touched the
-  internet yet; Part 2 is still entirely local.
+- Part 2 is under way. Step 16 is done (Supabase project created) and step 18
+  configured the engine for a pooled remote connection. Step 17 -- pasting the
+  transaction-pooler string into Application/.env as DATABASE_URL -- is the
+  outstanding one, and step 19 runs the suite against Supabase itself.
+- Two traps in the connection string are handled in code rather than left to be
+  remembered: a bare postgresql:// URL is rewritten to postgresql+psycopg
+  (SQLAlchemy would otherwise look for psycopg2, which is not installed), and
+  prepared statements are disabled because Supavisor's transaction mode breaks
+  them on the fifth execution of a query. Both are D2.6.
+- WRITE DOWN THE SUPABASE REGION. Step 27 puts Cloud Run in the matching one,
+  and the console does not surface it anywhere obvious afterwards.
 - Two known gaps carried deliberately into the deploy, both written up:
   * step 12a / D5.5 -- every rate limiter keys on the peer address, which behind
     Cloud Run is Google's front end, so the limits degrade towards one shared

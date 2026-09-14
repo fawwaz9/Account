@@ -6,7 +6,7 @@ Every step from where this is now to running on the web, in order.
 Pages (the frontend), free, for about twenty invited people.
 
 **Why that target,** and every alternative rejected along the way, is in
-`Ideas/plan-a-decisions.md` — 31 decisions with their reasoning and what would
+`Ideas/plan-a-decisions.md` — 32 decisions with their reasoning and what would
 change my mind. This file is the *doing*; that one is the *why*. Where a step
 below is contestable it names the decision, so `D2.3` means go and argue there.
 
@@ -16,12 +16,13 @@ below is contestable it names the decision, so `D2.3` means go and argue there.
 
 | | |
 |---|---|
-| Backend tests | **710 on SQLite; 708 + 2 skipped on Postgres 16** |
+| Backend tests | **719 on SQLite; 717 + 2 skipped on Postgres 16** |
 | Frontend | `tsc --noEmit` and `vite build` clean |
 | Docker | **Phase 0 done — both images build, full stack verified end to end** |
 | Database | SQLite locally; **must become Postgres** to deploy (nothing free has a persistent disk) |
 | Open PRs | **none — all seven merged** |
 | Part 1 (local code changes) | **Done — steps 1–15, green light passed** |
+| Part 2 (the Postgres port) | Supabase project created; engine configured. **Next: step 17**, then 19 |
 | Deployed anywhere | No — next is step 16 |
 
 Phase 0 was run against a `VACUUM INTO` copy on ports 8200/5273. It confirmed the
@@ -312,10 +313,14 @@ and after and is byte-identical: the run was pointed at a scratch directory.
 
 ## Part 2 — The Postgres port, still local
 
-### 16. Create the Supabase project
+### 16. Create the Supabase project — **DONE**
 
 **Do:** new project, free plan. **Choose the region nearest your users and write
 it down** — Cloud Run goes in the matching one at step 27.
+
+> **Write the region here before step 22:** `________________`. It is the one
+> piece of step 16 that step 27 depends on, and the console does not put it
+> anywhere you will look again.
 
 **Why region matters:** every request makes several round trips, and the
 dashboard makes five queries. A careless pairing can cost half a second on a page
@@ -325,12 +330,30 @@ the performance work already got down to five queries. **D2.1**.
 
 **Do:** copy the pooled connection string (Supavisor), not the direct one.
 
-**Why:** Cloud Run runs many independent instances, each with its own pool.
-Without a pooler, three instances at five connections each is fifteen connections
-for a handful of concurrent queries — and at the limit, requests are *refused*
-rather than merely slow. **D2.3**.
+**Where, because this step used to assume you knew:** the **Connect** button at
+the top of the project page. Older dashboards put it at Settings → Database →
+Connection string. It offers three, and they are told apart by host and port:
 
-### 18. Configure the engine for a connection that can go away
+| | Shape | |
+|---|---|---|
+| Direct connection | `db.<ref>.supabase.co:5432` | **No** — IPv6 only, Cloud Run cannot reach it |
+| Session pooler | `...pooler.supabase.com:5432` | No |
+| **Transaction pooler** | `...pooler.supabase.com:`**`6543`** | **This one** |
+
+The tell is `pooler.supabase.com` in the host and `6543` on the end.
+`[YOUR-PASSWORD]` is a placeholder for the database password set when the
+project was created; if it is lost, Settings → Database → Reset database
+password.
+
+**Put it in `Application/.env` as `DATABASE_URL`.** That file is gitignored, and
+step 10 made it the only one the app reads.
+
+**Why pooled:** Cloud Run runs many independent instances, each with its own
+pool. Without a pooler, three instances at five connections each is fifteen
+connections for a handful of concurrent queries — and at the limit, requests are
+*refused* rather than merely slow. **D2.3**.
+
+### 18. Configure the engine for a connection that can go away — **DONE** (`PENDING_SHA`)
 
 **Do:** `pool_pre_ping=True`, `pool_size` around 2–5, a modest `max_overflow`.
 
@@ -338,6 +361,35 @@ rather than merely slow. **D2.3**.
 are torn down constantly, and Supabase pauses after seven idle days. Pre-ping
 costs one trivial round trip per checkout and removes a whole class of
 intermittent error. **D2.4**.
+
+**Two things the string from step 17 would have broken, neither of which this
+step originally mentioned.**
+
+1. **It says `postgresql://`, with no driver.** SQLAlchemy resolves that to
+   **psycopg2**, which is not installed and never will be — D1.2 chose psycopg 3.
+   Pasted verbatim it gives `ModuleNotFoundError: No module named 'psycopg2'` at
+   import, which says nothing about the real problem. `normalize_database_url`
+   now rewrites the bare form to `postgresql+psycopg://`. An explicit
+   `postgresql+psycopg2://` is left alone, because that spelling is a preference
+   rather than an omission.
+2. **Transaction-mode pooling and prepared statements do not mix.** psycopg
+   starts using server-side prepared statements after the **fifth** execution of
+   a query. Supavisor in transaction mode hands each transaction whichever
+   backend connection is free, so the connection that PREPAREd is usually not the
+   one asked to EXECUTE — `prepared statement ... does not exist`. It survives
+   every smoke test and appears under real use. `prepare_threshold=None` for
+   psycopg turns it off. **D2.6.**
+
+**Also set:** `pool_timeout` 10s rather than SQLAlchemy's 30, so a starved
+request fails visibly instead of looking like a hang; `pool_recycle` 1800, so
+nothing in the path gets to close a connection out from under us first. All of it
+is empty for SQLite — the in-memory test database gets a `SingletonThreadPool`,
+which has no concept of overflow and would reject the argument.
+
+**Verify:** the whole suite run against a Postgres 16 container through a
+**bare** `postgresql://` URL — the exact shape the dashboard hands you — where
+before this step the same URL failed on `ModuleNotFoundError`. 717 passed,
+2 skipped.
 
 ### 19. Run the 669 tests against Postgres
 
@@ -358,6 +410,8 @@ handling. Each is a latent bug SQLite was hiding.
 > **683 passed and 2 skipped on the first attempt**, against 685 on SQLite. The
 > two skips are tests about SQLite itself rather than about the app. No
 > application code needed changing — only three pieces of test scaffolding.
+> Repeated after step 18 with the real pooling settings and a bare
+> `postgresql://` URL: **717 passed, 2 skipped**, against 719 on SQLite.
 >
 > That is a much better result than this step assumed, and it means the port is
 > a known quantity rather than a risk. What remains is to repeat it against

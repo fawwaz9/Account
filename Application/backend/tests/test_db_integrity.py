@@ -12,7 +12,13 @@ from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
 
 from app._database.migrations import BACKFILLS, ensure_indexes
-from app._database.db import IS_SQLITE, connect_args_for, engine
+from app._database.db import (
+    IS_SQLITE,
+    connect_args_for,
+    engine,
+    engine_kwargs_for,
+    normalize_database_url,
+)
 from tests.conftest import sqlite_only
 from app._database.models import (
     AccountModel,
@@ -286,12 +292,117 @@ def test_postgres_gets_no_sqlite_arguments():
 
     psycopg rejects unknown connection options outright, so passing it made any
     non-SQLite DATABASE_URL fail on its first connection -- while compose
-    advertised the variable as configurable. Asserting the dict is empty rather
-    than merely lacking that one key, because no SQLite-specific argument
-    belongs on any other driver.
+    advertised the variable as configurable.
     """
-    assert connect_args_for("postgresql+psycopg://user:pw@host:5432/app") == {}
-    assert connect_args_for("postgresql://user:pw@host/app") == {}
+    for url in ("postgresql+psycopg://user:pw@host:5432/app", "postgresql://user:pw@host/app"):
+        assert "check_same_thread" not in connect_args_for(url)
+
+
+# ------------------------------------------ configured for a remote database --
+
+def test_psycopg_is_told_not_to_prepare_statements():
+    """What Supabase's transaction pooler requires.
+
+    It hands each transaction whichever backend connection is free, so the
+    connection that PREPAREd a statement is usually not the one asked to EXECUTE
+    it. psycopg starts preparing automatically at the fifth execution of a
+    query, which is why this failure survives every smoke test and only appears
+    under real use.
+    """
+    assert connect_args_for("postgresql+psycopg://user:pw@host:6543/app") == {
+        "prepare_threshold": None
+    }
+
+
+def test_a_url_pasted_from_the_dashboard_gets_the_same_treatment():
+    """Supabase hands you `postgresql://`, with no driver named.
+
+    Without normalising first, the parse reports the driver as psycopg2, the
+    psycopg branch is skipped, and the engine is built without the setting --
+    silently, and only wrong on the fifth execution.
+    """
+    assert connect_args_for("postgresql://user:pw@host:6543/app") == {
+        "prepare_threshold": None
+    }
+
+
+def test_an_explicit_psycopg2_url_is_left_alone():
+    """Naming the driver is stating a preference, not omitting one.
+
+    `prepare_threshold` is a psycopg 3 argument; psycopg2 would reject it. The
+    driver is not installed either way, but quietly overriding what someone
+    wrote is worse than letting it fail where they can see why.
+    """
+    assert connect_args_for("postgresql+psycopg2://user:pw@host/app") == {}
+    assert normalize_database_url("postgresql+psycopg2://user:pw@host/app") == (
+        "postgresql+psycopg2://user:pw@host/app"
+    )
+
+
+def test_the_bare_postgres_url_is_pointed_at_the_driver_that_is_installed():
+    assert normalize_database_url("postgresql://user:pw@host:6543/postgres") == (
+        "postgresql+psycopg://user:pw@host:6543/postgres"
+    )
+
+
+def test_normalising_keeps_the_password():
+    """`str(URL)` masks it as literal asterisks.
+
+    Rendering the default way produces a URL that parses perfectly and cannot
+    authenticate -- the kind of failure that reads as "wrong password" and sends
+    you to reset a password that was correct all along.
+    """
+    normalized = normalize_database_url("postgresql://postgres.abc:s3cr3t-pw@host:6543/postgres")
+    assert "s3cr3t-pw" in normalized
+    assert "*" not in normalized
+
+
+def test_sqlite_urls_are_untouched():
+    for url in ("sqlite://", "sqlite:///./app.db", "sqlite+pysqlite:///./app.db"):
+        assert normalize_database_url(url) == url
+
+
+def test_sqlite_gets_no_pooling_settings():
+    """There is nothing to pre-ping in a local file.
+
+    And the in-memory database the suite runs on gets a SingletonThreadPool,
+    which has no concept of overflow and rejects the argument outright -- so
+    this is load-bearing for the test suite, not only tidiness.
+    """
+    assert engine_kwargs_for("sqlite://") == {}
+    assert engine_kwargs_for("sqlite:///./app.db") == {}
+
+
+def test_a_remote_database_gets_pre_ping_and_a_small_pool():
+    """The connection that was good when it was pooled may not be when used.
+
+    Poolers drop connections at their own discretion, Cloud Run tears instances
+    down constantly, and a Supabase project pauses after seven idle days.
+    Without pre-ping the first request after any of those is a 500 for whoever
+    arrives first.
+    """
+    kwargs = engine_kwargs_for("postgresql+psycopg://user:pw@host:6543/app")
+
+    assert kwargs["pool_pre_ping"] is True
+    # Small on purpose: max-instances 3 x (pool_size + max_overflow) is the
+    # whole deployment's connection ceiling, and it has to stay well inside what
+    # the free pooler allows.
+    assert kwargs["pool_size"] + kwargs["max_overflow"] <= 8
+    # Shorter than SQLAlchemy's 30s default, so a starved request fails visibly
+    # instead of looking like a hang.
+    assert kwargs["pool_timeout"] < 30
+
+
+def test_the_engine_was_built_with_what_these_functions_say():
+    """Guards the functions and the engine drifting apart.
+
+    Both are correct in isolation and the engine could still have been
+    constructed without them, which is the failure this catches.
+    """
+    if IS_SQLITE:
+        assert engine.pool._pre_ping is False
+    else:
+        assert engine.pool._pre_ping is True
 
 
 def test_the_running_engine_matches_its_url():

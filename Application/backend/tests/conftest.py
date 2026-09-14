@@ -55,7 +55,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 # choosing where the fixtures run.
 os.environ["DATABASE_URL"] = f"sqlite:///{Path(tempfile.gettempdir()) / 'account-suite-app.db'}"
 
-from app._database.db import apply_sqlite_pragmas, connect_args_for  # noqa: E402
+from app._database.db import (  # noqa: E402
+    apply_sqlite_pragmas,
+    connect_args_for,
+    engine_kwargs_for,
+    normalize_database_url,
+)
 from app._database.models import (  # noqa: E402
     AccountModel,
     Base,
@@ -69,12 +74,18 @@ from app._database.models import (  # noqa: E402
 #: Unset means SQLite in memory, which is the default for a reason: it needs no
 #: server, no cleanup and no network, so the suite stays a two-second feedback
 #: loop. Point it at Postgres to run the same tests against the real thing.
-TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL", "sqlite://")
+#: Normalised the same way the app normalises its own URL, so a connection
+#: string pasted straight from the Supabase dashboard works here too -- and so
+#: the suite exercises the same driver the deployment will use.
+TEST_DATABASE_URL = normalize_database_url(os.getenv("TEST_DATABASE_URL", "sqlite://"))
 TESTING_SQLITE = make_url(TEST_DATABASE_URL).get_backend_name() == "sqlite"
 
 
 def _make_engine(url: str):
-    kwargs = {"connect_args": connect_args_for(url)}
+    # The app's own pooling settings, so a Postgres run here is configured the
+    # way the deployment is rather than on SQLAlchemy's defaults. Empty for
+    # SQLite, which is what lets StaticPool below be set without a conflict.
+    kwargs = {"connect_args": connect_args_for(url), **engine_kwargs_for(url)}
     if make_url(url).get_backend_name() == "sqlite":
         # One shared connection, or ":memory:" gives each connection its own
         # empty database and create_all appears to have done nothing.
