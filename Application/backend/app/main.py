@@ -12,6 +12,7 @@ from app.api.routes import (
 from app._database.db import Base, SessionLocal, engine
 from app._database import models
 from app._database.schema import apply_schema
+from app.Auth.services.signup_policy import warn_if_open
 from app.Users.services.user_service import purge_expired_users
 
 # The audit log needs somewhere to go. uvicorn configures its own loggers but not
@@ -69,6 +70,11 @@ async def lifespan(_app: FastAPI):
     """
     if SCHEMA_ON_STARTUP:
         apply_schema()
+
+    # Said once, loudly, at boot rather than left to be discovered: with no
+    # allowlist configured, anybody who finds the hostname can create an
+    # account. Unset is the default so a fresh clone still works.
+    warn_if_open()
 
     with SessionLocal() as session:
         purged = purge_expired_users(session)

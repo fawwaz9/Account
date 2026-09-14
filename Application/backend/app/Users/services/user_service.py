@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app._database.models import UserModel, utc_now
 from app.Auth.schemas.credentials import RegisterRequest
+from app.Auth.services.signup_policy import may_sign_up
 from app.Auth.services.password_service import (
     burn_one_verification,
     hash_password,
@@ -55,6 +56,9 @@ def get_user_by_email(db: Session, email: str):
 
 def create_local_user(db: Session, data: RegisterRequest):
     """Register an email + password account."""
+    if not may_sign_up(data.email):
+        raise ValueError(error_auth["not_invited"])
+
     existing = get_user_by_email(db, data.email)
     if existing is not None:
         # Never attach a password to someone else's account from an
@@ -124,6 +128,12 @@ def get_or_create_user_by_google_id(db: Session, user_data: UserCreate):
     email_owner = get_user_by_email(db, user_data.email)
     if email_owner is not None:
         return link_google_to_account(db, email_owner, user_data.google_id)
+
+    # Only this branch creates. The two above found an account that already
+    # exists, and those keep working regardless of the list -- the gate decides
+    # who may *join*, not who may sign in.
+    if not may_sign_up(user_data.email):
+        raise ValueError(error_auth["not_invited"])
 
     return create_user(db, user_data)
 

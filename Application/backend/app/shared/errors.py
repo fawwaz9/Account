@@ -27,6 +27,14 @@ error_auth = {
         "This email is already registered with Google. Sign in with Google, "
         "then add a password from your account settings."
     ),
+    # Says what is true without saying who is on the list. "Not invited" would
+    # be the honest short version and is also a probe: it tells an attacker
+    # which addresses the owner knows. This declines without confirming or
+    # denying anything about any particular address.
+    "not_invited": (
+        "This app is invitation only. Ask the person who runs it to add your "
+        "email address."
+    ),
     "wrong_current_password": "Current password is incorrect",
     "current_password_required": "Current password is required to change an existing password",
 }

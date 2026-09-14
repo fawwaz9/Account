@@ -14,6 +14,9 @@ services:
       # every browser request is refused by CORS while the API's own logs stay
       # silent. It reads as "the API is down".
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173}
+      # The invited addresses. Empty means anyone who can reach this can
+      # register -- see .env.example.
+      ALLOWED_SIGNUP_EMAILS: ${ALLOWED_SIGNUP_EMAILS:-}
       # Off in any real deployment. See .env.example.
       ENABLE_DOCS: ${ENABLE_DOCS:-}
       # On here, because compose is also how someone runs this locally for the

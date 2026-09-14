@@ -75,12 +75,19 @@ env_has() {
 }
 
 check_backend_env() {
-    local f="$BACKEND/.env"
-    [ -f "$f" ] || die "Missing backend/.env — it needs GOOGLE_CLIENT_ID and JWT_SECRET. See the README."
+    # One .env for the whole project, beside docker-compose.yml. There used to
+    # be a second copy in backend/ holding the same secrets, with nothing
+    # keeping the two in step; app/config.py now resolves this one by path, so
+    # it is found from any working directory.
+    local f="$APP_DIR/.env"
+    if [ -f "$BACKEND/.env" ]; then
+        warn "backend/.env is no longer read — the project uses $APP_DIR/.env. Delete the stale copy to avoid confusion."
+    fi
+    [ -f "$f" ] || die "Missing Application/.env — it needs GOOGLE_CLIENT_ID and JWT_SECRET. See the README."
     # app/config.py builds Settings() at import time, so a missing key crashes
     # uvicorn on startup with a Pydantic error rather than anything readable.
-    env_has "$f" GOOGLE_CLIENT_ID || die "backend/.env is missing GOOGLE_CLIENT_ID."
-    env_has "$f" JWT_SECRET       || die "backend/.env is missing JWT_SECRET."
+    env_has "$f" GOOGLE_CLIENT_ID || die "Application/.env is missing GOOGLE_CLIENT_ID."
+    env_has "$f" JWT_SECRET       || die "Application/.env is missing JWT_SECRET."
 }
 
 # Checks what the frontend needs, and pins the one value that must agree with
