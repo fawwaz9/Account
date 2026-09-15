@@ -52,6 +52,28 @@ def test_health_reports_ok_when_the_database_answers(monkeypatch):
     assert response.json() == {"status": "ok", "database": "ok"}
 
 
+def test_health_answers_HEAD_as_well_as_GET(monkeypatch):
+    """What monitors actually send.
+
+    UptimeRobot defaults to HEAD, and FastAPI's `@app.get` registers GET only --
+    unlike a plain Starlette route, which adds HEAD for you. The symptom was a
+    405 against a completely healthy service, which reads as a misconfigured
+    monitor rather than a missing method.
+    """
+    main = app_with(monkeypatch, ENABLE_DOCS=None)
+    with TestClient(main.app) as client:
+        assert client.head("/health").status_code == 200
+        assert client.get("/health").status_code == 200
+
+
+def test_health_still_refuses_methods_that_change_things(monkeypatch):
+    """GET and HEAD, and nothing else. A health check is a read."""
+    main = app_with(monkeypatch, ENABLE_DOCS=None)
+    with TestClient(main.app) as client:
+        for method in ("post", "put", "delete", "patch"):
+            assert getattr(client, method)("/health").status_code == 405, method
+
+
 def test_health_reports_503_when_the_database_cannot_be_reached(monkeypatch):
     """The whole reason it runs a query rather than returning a constant.
 

@@ -102,9 +102,17 @@ app = FastAPI(
 )
 
 
-@app.get("/health", include_in_schema=False)
+@app.api_route("/health", methods=["GET", "HEAD"], include_in_schema=False)
 def health(response: Response):
     """Is this process able to do its job, rather than merely running?
+
+    **HEAD as well as GET, because that is what monitors actually send.**
+    UptimeRobot defaults to HEAD to save bandwidth, and FastAPI's `@app.get`
+    registers GET alone -- plain Starlette routes add HEAD for you, FastAPI's
+    do not. The result was a monitor reporting a perfectly healthy service as
+    down, with a 405 that looks like a configuration error at the monitor's end.
+    A health endpoint that only answers the method you happened to test with is
+    not a health endpoint.
 
     Answers with the database, not just with itself. A check that only proves
     uvicorn is listening reports healthy while every real request fails on a
