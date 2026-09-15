@@ -1021,13 +1021,52 @@ the consequence of any mistake is "you lose everything" rather than "you lose a
 day". **D2.5** — and D2.0's choice of Supabase over Neon is only a good decision
 if this step actually happens.
 
-### 34. Restore one
+### 34. Restore one — **DONE, and it caught a real failure**
 
 **Do:** restore last night's dump into a second Supabase project — the free plan
 allows two — and open the real app against it.
 
+```sh
+cd Application/backend
+gh run download --repo fawwaz9/Account --name account-db-YYYY-MM-DD --dir /tmp
+set -a; source ../.env; set +a          # sets the production guard
+./scripts/restore_backup.sh /tmp/account-YYYY-MM-DD.sql.gz "<second project, port 5432>"
+```
+
 **An unrestored backup is a belief, not a backup.** This is the step everyone
-skips and the only one that proves the others.
+skips and the only one that proves the others — and here it earned its place on
+the first attempt.
+
+**The backup did not restore.** `psql` aborted on line 26 with
+`ERROR: schema "public" already exists`, and under `--single-transaction` that
+rolls back everything. The dump is perfectly good: `pg_dump` emits
+`CREATE SCHEMA public` and a fresh Supabase project already has one. Nothing
+about step 33 hinted at it — the artifact is the right size, the right table
+count, the right row count. **It would have been discovered in an emergency.**
+
+**The fix is `DROP SCHEMA IF EXISTS public CASCADE` and nothing else.** Dropping
+*and recreating* fails identically, because then the dump's own `CREATE SCHEMA`
+collides with the one you just made. Let the dump create it.
+
+**Verified three ways:**
+
+1. The restored database matches **the dump** exactly, table for table — 589
+   rows across 17 tables, every value fingerprinted.
+2. Against **live** it differs by one transaction, and that is correct: the row
+   was written after the backup was taken at 02:32. A backup is a snapshot, and
+   this is what proves it was a real one rather than a live query.
+3. The **real application** was started against the restored database and every
+   endpoint answered 200 for all three users — dashboard, budget summary, tasks,
+   events, jobs.
+
+**`scripts/restore_backup.sh` now holds the procedure**, because the discovery
+only helps if it survives. It refuses to run against the production project
+(comparing Supabase project references, not whole strings), refuses to run at
+all if `SUPABASE_DATABASE_URL` is unset so the guard cannot be checked, warns if
+given the transaction pooler instead of the session pooler, runs the Postgres 17
+client so a v16 client cannot refuse the 17.6 server, and verifies row counts
+against the dump before reporting success. Guard exits verified: 3 for a
+production target, 3 for an unusable guard, 2 for a missing dump.
 
 ### 35. Put a monitor on `/health`
 
