@@ -60,9 +60,10 @@ def route(parsed: Parsed) -> OmniboxKind:
 def match_named(title: str, names: dict[str, object]) -> tuple[object | None, str]:
     """Find a known name inside the leftover text and take it out.
 
-    Longest name first, so "Money Lent" is not matched as "Money". Returns what
-    was found and the title with that phrase removed, because a name that has
-    been understood should not also be left in the description.
+    Longest name first, so "Emergency Savings" is not matched as "Savings" and
+    left looking like a deposit into the wrong pot. Returns what was found and
+    the title with that phrase removed, because a name that has been understood
+    should not also be left in the description.
     """
     lowered = title.lower()
     for name in sorted(names, key=len, reverse=True):

@@ -29,16 +29,21 @@ PROTECTED_KINDS: frozenset[AccountKind] = frozenset(
 )
 
 
-#: Seeded for a new account holder. The first four come from the project notes
-#: and carry the income split; School and Money Lent start at 0% so adding them
-#: does not quietly take a cut from the others.
+#: Seeded for a new account holder, and deliberately kept to a starting point
+#: rather than a complete set. The first four come from the project notes and
+#: carry the income split; School starts at 0% so adding it does not quietly
+#: take a cut from the others.
+#:
+#: Anything more specific belongs to the person, not to this list -- accounts
+#: are fully creatable in the app, so a pot for money lent out, a joint account
+#: or a pot held for someone else is theirs to add with the name and kind they
+#: want. A seeded account nobody asked for is clutter they have to delete.
 DEFAULT_ACCOUNTS: list[tuple[str, AccountKind, float]] = [
     ("Spending", AccountKind.SPENDING, 50.0),
     ("Savings", AccountKind.SAVINGS, 20.0),
     ("Investments", AccountKind.INVESTMENT, 20.0),
     ("Emergency Savings", AccountKind.EMERGENCY, 10.0),
     ("School", AccountKind.OTHER, 0.0),
-    ("Money Lent", AccountKind.OTHER, 0.0),
 ]
 
 

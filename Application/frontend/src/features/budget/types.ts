@@ -25,10 +25,11 @@ export interface Account {
   archived: boolean;
   position: number;
   /**
-   * Whether this balance reaches the net worth figure. Only an "other" account
-   * may turn it off -- the case it exists for is Money Lent, which is money
-   * someone else is holding. A debt account needs no flag: its balance is
-   * already negative, so it subtracts itself.
+   * Whether this balance reaches the net worth figure. Any account may turn it
+   * off -- the case it exists for is money someone else is holding, whether
+   * that is lent out, joint, or kept on their behalf, and only the owner knows
+   * which pot that is. A debt account needs no flag: its balance is already
+   * negative, so it subtracts itself.
    */
   counts_toward_net_worth: boolean;
   /** Derived from the account's transactions, not stored */

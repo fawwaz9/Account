@@ -21,7 +21,7 @@ From `Ideas/core.txt` — the app is meant to become a single place that holds:
 
 - A **heavily modifiable calendar** with recurring events and "ends by" rules, showing classes, tasks/reminders, money spent per day, and recurring payments/transfers all on the same surface.
 - A **grade calculator and class schedule**, with predictions and analytics.
-- A **budget system split into four accounts** — Investments, Emergency Savings, Spending, Savings — where income is distributed across them and movements between them are tracked separately.
+- A **budget system built on accounts you create** — Spending, Savings, Investments, Emergency Savings and School are seeded as a starting point, and any account you add beyond them takes a name, a kind and a share of income like the rest. Income is distributed across them and movements between them are tracked separately.
 - **Tasks with checkboxes and progress bars** for long-running goals (saving money, gym consistency, study hours).
 
 Target feature tree, as first sketched:

@@ -211,3 +211,41 @@ def test_the_flag_agrees_with_what_the_service_actually_refuses(db, user, roles)
         if account.role_locked:
             with pytest.raises(ValueError):
                 delete_account(db, user.id, account.id)
+
+
+# ------------------------------------------------------------ what is seeded --
+
+def test_a_new_holder_is_seeded_the_starting_pots_and_nothing_more(db, user):
+    """Seeding is a starting point, not a guess at what someone wants.
+
+    A "Money Lent" pot was seeded alongside these for a while and was removed.
+    Accounts are fully creatable now, so a pot only some students want is
+    clutter the rest have to notice and delete -- and naming it in the seed
+    quietly claims that lending is a fixed shape the app understands, when it
+    is one account among many, with whatever name and kind its owner picks.
+
+    Asserted by name and in order so that re-adding a default is a decision
+    someone makes on purpose rather than something that drifts back in.
+    """
+    names = [account.name for account in get_accounts(db, user.id)]
+
+    assert names == [
+        "Spending",
+        "Savings",
+        "Investments",
+        "Emergency Savings",
+        "School",
+    ]
+
+
+def test_seeding_only_runs_for_a_holder_with_no_accounts(db, user):
+    """Which is why removing a default takes nothing away from anyone who has
+    one already: their accounts, balances and history are untouched, and the
+    pot is theirs to delete or keep."""
+    make_account(db, user.id, "Money Lent", kind="other")
+    make_account(db, user.id, "Chequing", kind="spending")
+
+    names = [account.name for account in get_accounts(db, user.id)]
+
+    assert names == ["Chequing", "Money Lent"]
+    assert "Spending" not in names, "seeding must not top up an existing set"

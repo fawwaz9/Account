@@ -22,7 +22,11 @@ from app.Finances.schemas.account import (
 
 
 def seed_default_accounts(db: Session, user_id: uuid.UUID) -> list[AccountModel]:
-    """Give a new account holder the four pots from the project notes.
+    """Give a new account holder the starting pots from the project notes.
+
+    A starting point, not a complete set: anything more particular than these
+    is theirs to create, so the list stays short rather than guessing at pots
+    they would only have to delete.
 
     Done lazily on first read rather than at signup, so accounts that already
     existed before this module get them too.

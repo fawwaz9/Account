@@ -213,8 +213,8 @@ export default function EditAccountModal({
           <label htmlFor="account-counts">
             Count toward net worth
             <span className="small-text muted">
-              {" "}— turn off for money that is not really yours, like Money Lent
-              or a pot you hold for someone else
+              {" "}— turn off for money that is not really yours, like money you
+              have lent out or a pot you hold for someone else
             </span>
           </label>
         </div>
