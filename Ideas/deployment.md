@@ -248,6 +248,14 @@ Run specifically and is worth making with the deployed thing in front of you.
 which is the property step 12 was added for. Revisit after step 32, and see
 **D5.5**.
 
+> **Confirmed in production, no longer a prediction.** Cloud Run's request logs
+> show **99 of 99** requests arriving from `169.254.169.126` — one address for
+> every caller. So `per_client`, `per_account` and `per_client_registration` are
+> all keyed on a single value: the register limit is 20 an hour **across
+> everyone**, and `/login`'s per-client limit is effectively global. That is
+> survivable at twenty invited users and is the first thing to fix if the list
+> ever opens up.
+
 ### 13. Add a React error boundary — **DONE** (`5aae710`)
 
 **Do:** wrap the router in one, showing something a person can act on.

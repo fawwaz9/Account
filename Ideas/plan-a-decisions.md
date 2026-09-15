@@ -761,6 +761,12 @@ is a nuisance, not an outage.
 since it was written. It has simply never run behind a proxy before, and
 deploying is what makes the assumption load-bearing.
 
+**Measured after deploying.** Cloud Run's logs show 99 of 99 requests arriving
+from `169.254.169.126`. The degradation is not partial or probabilistic: it is
+one key for everybody, exactly as predicted. The limits still bound a runaway
+loop, which is what they were added for, and they no longer distinguish between
+people at all.
+
 **What would change my mind.** The first time someone is throttled who should not
 have been — or opening this to anyone beyond the invited list, at which point the
 shared budget stops being tolerable.
