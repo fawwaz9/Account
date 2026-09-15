@@ -23,7 +23,8 @@ below is contestable it names the decision, so `D2.3` means go and argue there.
 | Open PRs | **none — all seven merged** |
 | Part 1 (local code changes) | **Done — steps 1–15, green light passed** |
 | Part 2 (the Postgres port) | **Done — steps 16–21. The data is in Supabase** |
-| Part 3 (deploy) | **The API is live** — steps 22–28 done. Next is step 29, the frontend |
+| Part 3 (deploy) | **Both halves are live** — steps 22–30 done. Next is step 31, Google OAuth |
+| Frontend URL | `https://account-2a7.pages.dev` |
 | API URL | `https://account-api-210502804146.us-west1.run.app` |
 
 Phase 0 was run against a `VACUUM INTO` copy on ports 8200/5273. It confirmed the
@@ -857,6 +858,62 @@ rebuild, not a restart. Phase 0 confirmed this behaves as expected.
 
 **Verify:** the deployed bundle contains your Cloud Run URL:
 `curl -s <pages-url>/assets/index-*.js | grep -o 'https://[^"]*run.app/api'`
+
+### 29. Deploy the frontend to Cloudflare Pages — **DONE**
+
+**Live at `https://account-2a7.pages.dev`**, built by Pages from the GitHub repo
+on push. Settings used:
+
+| | |
+|---|---|
+| Root directory | `Application/frontend` |
+| Build command | `npm run build` |
+| Output directory | `dist` |
+| `VITE_API_BASE_URL` | `https://account-api-210502804146.us-west1.run.app/api` |
+| `VITE_GOOGLE_CLIENT_ID` | the same client id the backend has |
+| `NODE_VERSION` | **22** |
+
+**`NODE_VERSION` is not optional.** Vite 7.3.6 requires
+`^20.19.0 || >=22.12.0`, and a too-old Node fails with an error that never
+mentions the version. Now also declared in `package.json` under `engines`, so
+any other CI hits it loudly rather than mysteriously.
+
+**Verified against the deployed site:** the bundle is byte-identical to the local
+build (467,735 bytes, same content hash), it contains the Cloud Run URL and no
+`localhost`, and **all six security headers from step 14 are live** — which is
+the first time that file has ever been exercised, since nginx locally does not
+read it.
+
+**A caution learned by getting it wrong.** `*.pages.dev` is a shared namespace:
+while looking for this deployment, `account-frontend.pages.dev` and
+`account-app.pages.dev` both answered 200 and belonged to strangers. A 200 on a
+guessed hostname proves nothing — check the bundle for your own API URL.
+
+### 30. Point `ALLOWED_ORIGINS` at the Pages URL — **DONE**
+
+```sh
+gcloud run services update account-api --region=us-west1 \
+  --update-env-vars=ALLOWED_ORIGINS=https://account-2a7.pages.dev
+```
+
+**Never a wildcard.** `https://*.pages.dev` would let any of those strangers'
+sites call this API with a signed-in user's token.
+
+**Verified from five origins:**
+
+| Origin | | |
+|---|---|---|
+| `https://account-2a7.pages.dev` | **200** | the real frontend |
+| `https://placeholder.invalid` | 400 | the old value, now refused |
+| `https://account-frontend.pages.dev` | 400 | a stranger's Pages site |
+| `http://localhost:5173` | 400 | local dev, correctly refused in production |
+| `https://abc123.account-2a7.pages.dev` | 400 | a Pages preview URL — different origin by design |
+
+`access-control-allow-origin` comes back as exactly the one hostname.
+
+**Note for later:** every Pages preview deployment is its own origin and will
+fail CORS. That is correct behaviour and confusing the first time — a preview
+link looks broken when it is only unlisted.
 
 ### 29a. Open the console and read the CSP violations
 
