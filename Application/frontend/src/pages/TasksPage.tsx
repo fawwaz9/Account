@@ -7,6 +7,7 @@ import RepeatingModal from "../features/tasks/components/RepeatingModal";
 import ExamStrip from "../features/tasks/components/ExamStrip";
 import CompletionTimingBlock from "../features/tasks/components/CompletionTiming";
 import SnoozeModal from "../features/tasks/components/SnoozeModal";
+import EditTaskModal from "../features/tasks/components/EditTaskModal";
 import ReminderBanner from "../features/tasks/components/ReminderBanner";
 import ReminderModal from "../features/tasks/components/ReminderModal";
 import { useTasks } from "../features/tasks/hooks/useTasks";
@@ -58,6 +59,7 @@ export default function TasksPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [timing, setTiming] = useState<CompletionTiming | null>(null);
   const [snoozing, setSnoozing] = useState<Task | null>(null);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [remindersOpen, setRemindersOpen] = useState(false);
   const { due: dueReminders, dismiss: dismissDue, refresh: refreshReminders } =
     useReminders();
@@ -204,6 +206,7 @@ export default function TasksPage() {
               title="Overdue"
               tasks={groups.overdue}
               onToggle={handleToggle}
+              onEdit={setEditingTask}
               onDelete={handleDelete}
               onPriority={handlePriority}
               onSnooze={setSnoozing}
@@ -218,6 +221,7 @@ export default function TasksPage() {
               title="No date"
               tasks={groups.undated}
               onToggle={handleToggle}
+              onEdit={setEditingTask}
               onDelete={handleDelete}
               onPriority={handlePriority}
               onSnooze={setSnoozing}
@@ -233,6 +237,7 @@ export default function TasksPage() {
                 title="Done"
                 tasks={groups.done}
                 onToggle={handleToggle}
+                onEdit={setEditingTask}
                 onDelete={handleDelete}
                 onPriority={handlePriority}
                 onSnooze={setSnoozing}
@@ -269,6 +274,7 @@ export default function TasksPage() {
               title={`Due in the next ${ASSIGNMENT_HORIZON} days`}
               tasks={groups.soon}
               onToggle={handleToggle}
+              onEdit={setEditingTask}
               onDelete={handleDelete}
               onPriority={handlePriority}
               onSnooze={setSnoozing}
@@ -297,6 +303,16 @@ export default function TasksPage() {
       <SnoozeModal
         task={snoozing}
         onClose={() => setSnoozing(null)}
+        onSaved={reload}
+      />
+
+      {/* One editor for four lists. The calendar opens this same component,
+          deliberately: two dialogs for one record is how the two end up
+          offering different fields. */}
+      <EditTaskModal
+        task={editingTask}
+        courses={courses}
+        onClose={() => setEditingTask(null)}
         onSaved={reload}
       />
 

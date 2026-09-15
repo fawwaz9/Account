@@ -12,7 +12,7 @@ interface CalenderViewProps {
   readonly days: CalendarDay[];
   readonly loading: boolean;
   readonly onSelectOccurrence: (occurrence: EventOccurrence) => void;
-  readonly onToggleTask: (task: Task) => void;
+  readonly onSelectTask: (task: Task) => void;
   readonly onAddOnDay: (date: string) => void;
 }
 
@@ -29,7 +29,7 @@ export default function CalenderView({
   days,
   loading,
   onSelectOccurrence,
-  onToggleTask,
+  onSelectTask,
   onAddOnDay,
 }: CalenderViewProps) {
   const now = today();
@@ -81,7 +81,7 @@ export default function CalenderView({
                   />
                 ))}
                 {day.tasks.map((task) => (
-                  <TaskChip key={task.id} task={task} onToggle={onToggleTask} />
+                  <TaskChip key={task.id} task={task} onSelect={onSelectTask} />
                 ))}
               </div>
             </div>

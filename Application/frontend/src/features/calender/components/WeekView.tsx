@@ -13,7 +13,7 @@ interface WeekViewProps {
   readonly days: CalendarDay[];
   readonly loading: boolean;
   readonly onSelectOccurrence: (occurrence: EventOccurrence) => void;
-  readonly onToggleTask: (task: Task) => void;
+  readonly onSelectTask: (task: Task) => void;
   readonly onAddOnDay: (date: string) => void;
 }
 
@@ -39,7 +39,7 @@ export default function WeekView({
   days,
   loading,
   onSelectOccurrence,
-  onToggleTask,
+  onSelectTask,
   onAddOnDay,
 }: WeekViewProps) {
   const now = today();
@@ -99,7 +99,7 @@ export default function WeekView({
             {day.tasks
               .filter((task) => !hasSpecificTime(task))
               .map((task) => (
-                <TaskChip key={task.id} task={task} onToggle={onToggleTask} />
+                <TaskChip key={task.id} task={task} onSelect={onSelectTask} />
               ))}
           </div>
         ))}
@@ -172,13 +172,13 @@ export default function WeekView({
                       left: `${item.column * width}%`,
                       width: `calc(${width}% - 2px)`,
                     }}
-                    onClick={() => onToggleTask(item.task)}
+                    onClick={() => onSelectTask(item.task)}
                     title={[
                       item.task.title,
                       clockTime(item.task.due_time),
                       item.task.course_code,
                     ].filter(Boolean).join(" · ")}
-                    aria-label={`${item.task.done ? "Reopen" : "Complete"} ${item.task.title}, due ${clockTime(item.task.due_time)}`}
+                    aria-label={`Edit ${item.task.title}, due ${clockTime(item.task.due_time)}`}
                   >
                     <span className="weekDueMark" aria-hidden="true">
                       {item.task.done ? "✓" : "○"}

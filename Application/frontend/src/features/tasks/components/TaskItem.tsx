@@ -23,6 +23,7 @@ const PRIORITY_STEPS = Array.from(
 interface TaskItemProps {
   readonly task: Task;
   readonly onToggle: (task: Task) => void;
+  readonly onEdit: (task: Task) => void;
   readonly onDelete: (task: Task) => void;
   readonly onPriority: (task: Task, priority: number) => void;
   readonly onSnooze: (task: Task) => void;
@@ -40,6 +41,7 @@ interface TaskItemProps {
 export default function TaskItem({
   task,
   onToggle,
+  onEdit,
   onDelete,
   onPriority,
   onSnooze,
@@ -130,6 +132,19 @@ export default function TaskItem({
 
         {task.notes && <p className="taskNotes">{task.notes}</p>}
       </div>
+
+      {/* Offered on a finished task as well as an outstanding one: a title
+          typed wrongly is still wrong after it is ticked off, and this is the
+          only way to fix one. */}
+      <button
+        type="button"
+        className="taskEdit"
+        onClick={() => onEdit(task)}
+        disabled={busy}
+        aria-label={`Edit ${task.title}`}
+      >
+        Edit
+      </button>
 
       {!task.done && (
         <button

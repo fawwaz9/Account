@@ -81,8 +81,8 @@ by default and cannot be reused.
 ## Repeating tasks, and the edit bug
 
 A rule writes occurrences for a rolling window — 14 days back, 60 ahead —
-idempotent on `(recurring_id, due_date)`, so it is safe to call on every load and
-there is no scheduler anywhere.
+idempotent on `(recurring_id, occurrence_date)`, so it is safe to call on every
+load and there is no scheduler anywhere.
 
 The bug that shipped with it: `materialise` only ever *adds* dates that are
 missing, so editing a rule never reached the sixty days of occurrences already
@@ -100,8 +100,30 @@ passes `since=today` so the 14-day look-back — right on a first run — cannot
 back-fill last Thursday as an overdue task that was never assigned.
 
 One accepted loss: nothing marks an occurrence the student hand-edited, so a
-tweak to a future one is overwritten. That beats every edit appearing to do
-nothing.
+tweak to a future one is overwritten when the **rule** is next edited. That beats
+every edit appearing to do nothing, and editing the repeat is a reasonable way to
+say "change them all".
+
+### Where an occurrence sits, and which occurrence it is
+
+Two columns, because per-occurrence editing made them two facts. `due_date` is
+where it currently sits and the student may move it; **`occurrence_date` is the
+date the rule produced, and is its identity.**
+
+They were one column until a task became editable, and the collision is worth
+recording because both halves of it were silent:
+
+- `written_dates` answers *"which occurrences exist"*. Reading `due_date`, moving
+  Monday's chore to Wednesday made Monday look unwritten, so the next page load
+  put **a second copy back on Monday**. One edit, two chores.
+- the stale sweep in `update_rule` asks *"does the rule still call for this"* and
+  deleted outstanding occurrences whose date was not in the pattern — which after
+  a move is exactly the ones that had been edited, and nothing else.
+
+So identity has to be something the student cannot edit. `materialise` stamps it
+once at creation and nothing writes it again; a `BACKFILLS` entry set it from
+`due_date` for every occurrence written before the column existed, which is
+correct precisely because there was no way to move one until now.
 
 ## Snooze, and why the due date does not move
 
@@ -168,6 +190,33 @@ and it would never surface again.
 A line of text into a task, through the shared tokenizer: course code, date word,
 duration, amount, score. The omnibox is the same parser with a second front end —
 the tokenizer's second consumer, which is what justified extracting it.
+
+## Editing a task
+
+Every row carries an **Edit** button, and it opens the same dialog a task on the
+calendar opens. For a long time a task could be ticked, snoozed, re-prioritised
+and deleted — and a title typed wrongly could only be deleted and retyped.
+`PATCH /tasks/{id}` and `updateTask` both already existed; there was simply no
+dialog calling them.
+
+Completing lives **inside** that dialog as a button rather than beside Save,
+because it is the one control there that changes something without being a save.
+It does not save the fields first: ticking a task off is one decision and editing
+it is another, and a Complete button that quietly also wrote a half-finished edit
+would be doing two.
+
+Two owners take fields back:
+
+- **from a grade** — the title and the deadline are disabled with the reason
+  shown, because `sync_task` rewrites them on every grade save. Offering that
+  edit would be offering one that silently reverts. Notes, estimate, tags and
+  priority stay, which is exactly the set `sync_task` leaves alone.
+- **from a repeat** — everything is editable and the change lands on that one
+  day, with a line saying that editing the repeat itself will write over it.
+
+`withDueDate` and `parseTags` moved out of `TaskForm` into `taskFields.ts` when
+the dialog appeared. Two forms holding the same two rules is how one of them ends
+up rejecting a save the other allows.
 
 ## The page
 

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { DEFAULT_PRIORITY, MAX_PRIORITY, MIN_PRIORITY, PRIORITY_LABELS, TaskCreate } from "../types";
-import { END_OF_DAY } from "../dueTime";
+import { numberOrNull, parseTags, withDueDate } from "../taskFields";
 
 /** 1..5, for the select. */
 const PRIORITY_STEPS = Array.from(
@@ -47,11 +47,7 @@ export default function TaskForm({ courses, onSubmit, busy }: TaskFormProps) {
 
   /** The two move together: a time of day with no date is rejected on save. */
   function setDueDate(value: string | null) {
-    setForm((current) => ({
-      ...current,
-      due_date: value,
-      due_time: value === null ? null : current.due_time ?? END_OF_DAY,
-    }));
+    setForm((current) => withDueDate(current, value));
   }
 
   async function handleSubmit(event: React.FormEvent) {
@@ -60,7 +56,7 @@ export default function TaskForm({ courses, onSubmit, busy }: TaskFormProps) {
     await onSubmit({
       ...form,
       title: form.title.trim(),
-      tags: tagText.split(",").map((tag) => tag.trim()).filter(Boolean),
+      tags: parseTags(tagText),
     });
 
     setForm(blankTask());
@@ -126,11 +122,9 @@ export default function TaskForm({ courses, onSubmit, busy }: TaskFormProps) {
         min={1}
         max={2400}
         className="taskInput taskInputNarrow"
-        // Number("") is 0, which would record "takes no time" rather than
-        // "no estimate given".
         value={form.estimated_minutes ?? ""}
         onChange={(event) =>
-          update("estimated_minutes", event.target.value === "" ? null : Number(event.target.value))
+          update("estimated_minutes", numberOrNull(event.target.value))
         }
         placeholder="mins"
         aria-label="Estimated minutes"

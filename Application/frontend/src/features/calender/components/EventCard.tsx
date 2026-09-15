@@ -35,21 +35,24 @@ export function EventChip({ occurrence, onSelect }: EventCardProps) {
 
 interface TaskChipProps {
   readonly task: Task;
-  readonly onToggle: (task: Task) => void;
+  readonly onSelect: (task: Task) => void;
 }
 
 /**
  * A due task, in the day it is due.
  *
- * Checkable from here: a deadline you can see is one you want to tick off
- * without first navigating to another page.
+ * Opens the task editor -- the same one the task page opens, so a task has one
+ * editor rather than two that can drift apart. This chip used to tick the task
+ * off instead, which meant the calendar could do exactly one thing to a task
+ * and a click meant to look at one finished it. Completing moved into the
+ * editor, where it is a button that says what it does.
  *
  * Shows the time when it has one. The month grid has no time axis to place it
  * on, so the alternative is a due time that is stored, entered and then never
  * shown anywhere -- which is how it went unnoticed that the calendar ignored it
  * entirely. The week view puts the same task on the clock instead.
  */
-export function TaskChip({ task, onToggle }: TaskChipProps) {
+export function TaskChip({ task, onSelect }: TaskChipProps) {
   // Not the end-of-day sentinel: "11:59pm" on nearly every chip is noise, and
   // says nothing the day it sits in has not already said.
   const due = hasSpecificTime(task) ? clockTime(task.due_time) : "";
@@ -58,13 +61,13 @@ export function TaskChip({ task, onToggle }: TaskChipProps) {
     <button
       type="button"
       className={`calChip calChip-task${task.done ? " calChipDone" : ""}`}
-      onClick={() => onToggle(task)}
+      onClick={() => onSelect(task)}
       title={[task.title, due, task.course_code].filter(Boolean).join(" · ")}
-      aria-label={
-        `${task.done ? "Reopen" : "Complete"} ${task.title}` +
-        (due ? `, due ${due}` : "")
-      }
+      aria-label={`Edit ${task.title}` + (due ? `, due ${due}` : "")}
     >
+      {/* State, not a control: the chip opens the editor, and completing is a
+          button in there. A label saying "Complete" on something that opens a
+          form is worse than no label. */}
       <span className="calChipMark" aria-hidden="true">{task.done ? "✓" : "○"}</span>
       {due && <span className="calChipWhen">{due}</span>}
       <span className="calChipTitle">{task.title}</span>
@@ -77,6 +80,7 @@ interface EventDetailProps {
   readonly onEdit: () => void;
   readonly onSkip: () => void;
   readonly onDelete: () => void;
+  readonly onClose: () => void;
   readonly busy: boolean;
 }
 
@@ -86,6 +90,7 @@ export default function EventCard({
   onEdit,
   onSkip,
   onDelete,
+  onClose,
   busy,
 }: EventDetailProps) {
   const times = occurrence.start_time
@@ -103,30 +108,50 @@ export default function EventCard({
 
       {/* A block the gradebook owns is edited there, not here: deleting it on the
           calendar would only bring it back the next time the grade was saved. */}
-      {occurrence.grade_id ? (
+      {occurrence.grade_id && (
         <p className="calDetailMeta">
           From a grade with a due date. Change the date, or switch it back to a
           task, on the course page.
         </p>
-      ) : (
-        <div className="calDetailActions">
-          <button type="button" className="calButton" onClick={onEdit} disabled={busy}>
-            Edit series
-          </button>
-
-          {/* Only a repeat can lose one date; a one-off has nothing left
-              afterwards, so there the honest verb is delete. */}
-          {occurrence.repeats && (
-            <button type="button" className="calButton" onClick={onSkip} disabled={busy}>
-              Cancel this one
-            </button>
-          )}
-
-          <button type="button" className="calButton calButtonDanger" onClick={onDelete} disabled={busy}>
-            {occurrence.repeats ? "Delete series" : "Delete"}
-          </button>
-        </div>
       )}
+
+      {/* Close is here in both branches, and first.
+
+          The dialog shell has no × and does not close on a backdrop click, so
+          every other dialog in the app relies on its form's own Cancel. This
+          one is read-only, and the grade branch used to render the sentence
+          above and nothing else -- a popup with literally nothing to click,
+          dismissable only by a keystroke nothing mentioned. The other branch
+          was worse in its way: the nearest thing to a dismiss was "Cancel this
+          one", which cancels the lecture.
+
+          First in the row for that reason: the eye looks here for a way out,
+          and what it finds should not be destructive. */}
+      <div className="calDetailActions">
+        <button type="button" className="calButton" onClick={onClose}>
+          Close
+        </button>
+
+        {!occurrence.grade_id && (
+          <>
+            <button type="button" className="calButton" onClick={onEdit} disabled={busy}>
+              Edit series
+            </button>
+
+            {/* Only a repeat can lose one date; a one-off has nothing left
+                afterwards, so there the honest verb is delete. */}
+            {occurrence.repeats && (
+              <button type="button" className="calButton" onClick={onSkip} disabled={busy}>
+                Cancel this one
+              </button>
+            )}
+
+            <button type="button" className="calButton calButtonDanger" onClick={onDelete} disabled={busy}>
+              {occurrence.repeats ? "Delete series" : "Delete"}
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 }

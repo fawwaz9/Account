@@ -15,8 +15,13 @@ deliberately not the same.
   have sitting there: seeing Monday's reading on Sunday, and ticking it early, is
   the point.
 
-Materialising is idempotent on (recurring_id, due_date), so it is safe to call on
-every task and calendar load, and there is no scheduler anywhere.
+Materialising is idempotent on (recurring_id, occurrence_date), so it is safe to
+call on every task and calendar load, and there is no scheduler anywhere.
+
+`occurrence_date` rather than `due_date` because the student can now edit a
+single occurrence, including moving it. Where an occurrence *sits* is theirs;
+which occurrence it *is* belongs to the rule, and the two need separate columns
+or moving one produces a duplicate on the day it left.
 """
 
 import uuid
@@ -77,18 +82,24 @@ def skipped_of(rule: RecurringTaskModel) -> list[date]:
 
 
 def written_dates(db: Session, recurring_id: uuid.UUID) -> set[date]:
-    """Occurrences already written, by their due date.
+    """Occurrences already written, by the date the rule produced them for.
 
-    (recurring_id, due_date) is the dedup key: one repeating task cannot produce
-    two occurrences for the same day, however often the materialiser runs.
+    (recurring_id, occurrence_date) is the dedup key: one repeating task cannot
+    produce two occurrences for the same day, however often the materialiser
+    runs.
+
+    **Not `due_date`**, which is where the occurrence currently sits. A student
+    who moves Monday's chore to Wednesday has not made Monday unwritten, and
+    reading `due_date` here would have the rule put a second copy back on the
+    Monday it thinks it still owes.
     """
     rows = (
-        db.query(TaskModel.due_date)
+        db.query(TaskModel.occurrence_date)
         .filter(TaskModel.recurring_id == recurring_id)
         .distinct()
         .all()
     )
-    return {row.due_date for row in rows}
+    return {row.occurrence_date for row in rows}
 
 
 def attach_rule(db: Session, rule: RecurringTaskModel, codes: dict[uuid.UUID, str] | None = None):
@@ -254,18 +265,24 @@ def resync_occurrences(db: Session, rule: RecurringTaskModel) -> None:
     # Dropped first, so the update below does not bother with rows on their way
     # out. Bounded by the same window the rule writes into, so an occurrence
     # beyond it is left alone rather than deleted for being unrecognised.
+    #
+    # On `occurrence_date` throughout, for the same reason `written_dates` is:
+    # the question is "does the rule still call for this occurrence", and an
+    # occurrence the student has dragged to another day is still the one the
+    # rule made. Matching on due_date deleted exactly the ones that had been
+    # moved -- the edits, and nothing else.
     stale = (
         db.query(TaskModel)
         .filter(
             TaskModel.recurring_id == rule.id,
             TaskModel.done.is_(False),
-            TaskModel.due_date >= horizon,
-            TaskModel.due_date <= window_end,
+            TaskModel.occurrence_date >= horizon,
+            TaskModel.occurrence_date <= window_end,
         )
         .all()
     )
     for task in stale:
-        if task.due_date not in wanted:
+        if task.occurrence_date not in wanted:
             db.delete(task)
 
     outstanding = (
@@ -384,6 +401,9 @@ def materialise(
             title=rule.title,
             notes=rule.notes,
             due_date=on_date,
+            # Where it sits, and separately what it is. They start equal and
+            # only `due_date` ever moves.
+            occurrence_date=on_date,
             due_time=rule.due_time,
             estimated_minutes=rule.estimated_minutes,
             tags=list(rule.tags or []),

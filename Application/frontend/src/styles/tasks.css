@@ -829,3 +829,71 @@
   gap: 10px;
   padding: 4px 0;
 }
+
+/* ===== Editing a task =====
+   The row's edit control borrows .taskSnooze's shape rather than inventing a
+   third button size: they sit next to each other, and two controls a pixel
+   apart in height is the kind of thing you only notice as "untidy". */
+
+.taskEdit {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin-top: 1px;
+  padding: 4px 9px;
+  border: 1px solid #1f2a44;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: 0.15s ease;
+}
+
+.taskEdit:hover:not(:disabled) {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.taskEdit:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Two fields that belong together -- a date and its time, a priority and an
+   estimate -- on one line, stacking on a narrow screen rather than squeezing
+   a date picker into half a phone. */
+.taskEditRow {
+  display: flex;
+  gap: 12px;
+}
+
+.taskEditRow > .calField {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 520px) {
+  .taskEditRow {
+    flex-direction: column;
+  }
+}
+
+/* Complete on one side, Cancel and Save on the other. Ticking a task off is
+   not a save, and putting it in the same cluster invites the click you did
+   not mean. */
+.taskEditActions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.taskEditActions .calFormActions {
+  margin-top: 0;
+}

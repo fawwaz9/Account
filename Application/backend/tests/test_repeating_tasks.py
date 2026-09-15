@@ -265,3 +265,63 @@ def test_another_users_repeating_tasks_are_not_visible(db, user):
     create_rule(db, stranger.id, weekly(title="Not yours"))
 
     assert list_rules(db, user.id) == []
+
+
+# ----------------------------------------- an occurrence you have moved --
+
+def test_moving_one_occurrence_does_not_produce_a_second_one(db, user):
+    """The bug that per-occurrence editing would otherwise introduce.
+
+    `written_dates` answers "which occurrences exist". If it answered by due
+    date, moving Monday's chore to Wednesday would make Monday look unwritten
+    and the next page load would put a fresh copy back on it -- one edit, two
+    chores. Identity has to be a date the student cannot move.
+    """
+    rule = create_rule(db, user.id, weekly())
+    before = occurrences_of(db, rule.id)
+    moved = next(task for task in before if task.due_date >= TODAY)
+    original = moved.occurrence_date
+
+    update_task(db, user.id, moved.id,
+                TaskUpdate(due_date=original + timedelta(days=2)))
+    run_due(db, user.id)
+
+    after = occurrences_of(db, rule.id)
+    assert len(after) == len(before), "the move must not add a row"
+    assert [task.occurrence_date for task in after] == \
+        [task.occurrence_date for task in before], "and must not change identity"
+
+
+def test_a_moved_occurrence_survives_an_edit_to_the_rule(db, user):
+    """The mirror fault: the stale sweep asks whether the rule still calls for
+    an occurrence, and an occurrence dragged to another day is still the one the
+    rule made. Matching on due_date deleted exactly the ones that had been
+    moved -- the edits, and nothing else."""
+    rule = create_rule(db, user.id, weekly())
+    moved = next(t for t in occurrences_of(db, rule.id) if t.due_date >= TODAY)
+    update_task(db, user.id, moved.id,
+                TaskUpdate(due_date=moved.occurrence_date + timedelta(days=2)))
+
+    update_rule(db, user.id, rule.id, RecurringTaskUpdate(notes="Chapter 4"))
+
+    assert db.query(TaskModel).filter(TaskModel.id == moved.id).first() is not None
+
+
+def test_editing_one_occurrence_leaves_its_siblings_alone(db, user):
+    """What "edit just that task" has to mean: one row, not the series."""
+    rule = create_rule(db, user.id, weekly())
+    first, *rest = occurrences_of(db, rule.id)
+
+    update_task(db, user.id, first.id, TaskUpdate(title="Readings, chapter 4"))
+
+    assert [task.title for task in rest] == ["Readings"] * len(rest)
+    assert db.get(RecurringTaskModel, rule.id).title == "Readings"
+
+
+def test_every_occurrence_is_written_with_its_identity(db, user):
+    """Null would make the dedup set empty and rewrite the whole window."""
+    rule = create_rule(db, user.id, weekly())
+
+    for task in occurrences_of(db, rule.id):
+        assert task.occurrence_date == task.due_date, "equal until one is moved"
+        assert task.occurrence_date is not None

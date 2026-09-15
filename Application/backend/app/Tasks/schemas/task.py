@@ -110,6 +110,11 @@ class Task(TaskBase):
     #: that grade's score lands, and the client hides the delete control so the
     #: two cannot drift apart.
     grade_id: UUID | None = None
+    #: Set when a repeating task produced this occurrence. Sent so the editor
+    #: can say that a change lands on this one day and that editing the repeat
+    #: itself will write over it -- a distinction the student cannot otherwise
+    #: see, since an occurrence is an ordinary task row in every other respect.
+    recurring_id: UUID | None = None
     #: Denormalised, so a list of tasks can be labelled by course without the
     #: client holding every course to look them up.
     course_code: str | None = None

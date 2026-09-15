@@ -14,8 +14,8 @@ import {
   skipOccurrence,
 } from "../features/calender/api";
 import { CalendarEvent, EventOccurrence } from "../features/calender/types";
-import { setTaskDone } from "../features/tasks/api";
 import { Task } from "../features/tasks/types";
+import EditTaskModal from "../features/tasks/components/EditTaskModal";
 import { fetchCourses } from "../features/grades/api";
 import { Course } from "../features/grades/types";
 import { useAuth } from "../app/auth/AuthContext";
@@ -29,6 +29,7 @@ export default function CalendarPage() {
 
   const [courses, setCourses] = useState<Course[]>([]);
   const [selected, setSelected] = useState<EventOccurrence | null>(null);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [editing, setEditing] = useState<CalendarEvent | null>(null);
   const [composing, setComposing] = useState(false);
   const [composeDate, setComposeDate] = useState(today());
@@ -57,20 +58,10 @@ export default function CalendarPage() {
     setComposing(true);
   }
 
-  async function handleToggleTask(task: Task) {
-    if (!user) return;
-
-    setBusy(true);
-    setActionError(null);
-    try {
-      await setTaskDone(user.id, task.id, !task.done);
-      await reload();
-      setInsightNonce((value) => value + 1);
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Could not update the task");
-    } finally {
-      setBusy(false);
-    }
+  /** A task changed in the editor moves hours around, so the insights refetch. */
+  async function handleTaskSaved() {
+    await reload();
+    setInsightNonce((value) => value + 1);
   }
 
   /** Edit the whole series: the form is the event, not the occurrence. */
@@ -209,7 +200,7 @@ export default function CalendarPage() {
           days={days}
           loading={loading}
           onSelectOccurrence={setSelected}
-          onToggleTask={handleToggleTask}
+          onSelectTask={setEditingTask}
           onAddOnDay={openNewEvent}
         />
       ) : (
@@ -218,7 +209,7 @@ export default function CalendarPage() {
             days={days}
             loading={loading}
             onSelectOccurrence={setSelected}
-            onToggleTask={handleToggleTask}
+            onSelectTask={setEditingTask}
             onAddOnDay={openNewEvent}
           />
 
@@ -252,10 +243,22 @@ export default function CalendarPage() {
             onEdit={handleEditSeries}
             onSkip={handleSkip}
             onDelete={handleDelete}
+            onClose={() => setSelected(null)}
             busy={busy}
           />
         </Modal>
       )}
+
+      {/* The task page's editor, not a second one. A task opened from the
+          calendar and the same task opened from its list are the same record,
+          and two dialogs for one record is how the two end up offering
+          different fields. */}
+      <EditTaskModal
+        task={editingTask}
+        courses={courses}
+        onClose={() => setEditingTask(null)}
+        onSaved={handleTaskSaved}
+      />
 
       <EventModal
         open={composing}

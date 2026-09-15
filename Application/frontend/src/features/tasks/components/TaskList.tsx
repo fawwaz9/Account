@@ -6,6 +6,7 @@ interface TaskListProps {
   readonly title: string;
   readonly tasks: Task[];
   readonly onToggle: (task: Task) => void;
+  readonly onEdit: (task: Task) => void;
   readonly onDelete: (task: Task) => void;
   readonly onPriority: (task: Task, priority: number) => void;
   readonly onSnooze: (task: Task) => void;
@@ -24,6 +25,7 @@ export default function TaskList({
   title,
   tasks,
   onToggle,
+  onEdit,
   onDelete,
   onPriority,
   onSnooze,
@@ -53,6 +55,7 @@ export default function TaskList({
               key={task.id}
               task={task}
               onToggle={onToggle}
+              onEdit={onEdit}
               onDelete={onDelete}
               onPriority={onPriority}
               onSnooze={onSnooze}

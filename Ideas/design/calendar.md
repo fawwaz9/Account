@@ -51,7 +51,7 @@ Three behaviours worth knowing:
 | Class times | never | nothing hangs off an individual lecture |
 | Shifts | never | same |
 | Recurring payments | only once it has happened | a balance is the sum of its rows, and a future payment in that sum is money wrongly gone |
-| Repeating tasks | a rolling window ahead | each occurrence is ticked off separately, and a virtual one has nowhere to keep that |
+| Repeating tasks | a rolling window ahead | each occurrence is ticked off separately and may be edited on its own, and a virtual one has nowhere to keep either |
 
 A thing expanded on read has **no row per occurrence**. Anything recording
 something about one date must key on `(event_id, on_date)` — the identity
@@ -113,6 +113,20 @@ single `list_occurrences` call.
   `list_occurrences`. A task due at a specific time is placed on the clock; one
   due at end of day stays in the all-day band, since that is what a bare due date
   means.
+- **A task chip opens the task editor** — the task page's, not a second one.
+  It used to tick the task off instead, which meant the calendar could do exactly
+  one thing to a task and a click meant to *look* at one finished it. Completing
+  moved inside the editor, where it is a button that says what it does. The cost
+  is one-click ticking from the calendar, which was deliberate and is now two
+  clicks; the ✓/○ glyph stays as state, with `aria-hidden` since it is no longer
+  the control.
+- **The event popup carries its own Close.** `Modal` has no × and does not close
+  on a backdrop click, so every dialog relies on its form's Cancel — and this one
+  is read-only. Its grade branch rendered an explanatory sentence and *no buttons
+  at all*: a dialog dismissable only by a keystroke nothing mentioned. The other
+  branch was worse in its way, since the nearest thing to a dismiss was "Cancel
+  this one", which cancels the lecture. Close is first in the row, away from
+  Delete.
 
 ## The term timeline
 

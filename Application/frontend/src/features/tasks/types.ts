@@ -29,6 +29,13 @@ export interface Task {
    */
   grade_id: string | null;
   /**
+   * Set when a repeating task produced this occurrence. Only the editor uses
+   * it, to say that a change lands on this one day and that editing the repeat
+   * itself will write over it -- an occurrence is an ordinary task row in every
+   * other respect, so nothing else would show the difference.
+   */
+  recurring_id: string | null;
+  /**
    * How far behind the course this task belongs to is, or null when there is
    * nothing to flag. Computed by the API: the client would otherwise need every
    * course, every target and the current-term rule just to colour one row.
