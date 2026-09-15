@@ -1,0 +1,91 @@
+# Nightly backup of the Supabase database.
+#
+# Supabase's free plan takes NO automated backups and point-in-time recovery is
+# a paid feature, so without this the consequence of any mistake is "everything"
+# rather than "a day". That is the whole reason this file exists -- see D2.5 in
+# Ideas/plan-a-decisions.md, and steps 33 and 34 of Ideas/deployment.md.
+#
+# Runs on GitHub's infrastructure rather than a laptop, because a backup that
+# only happens when a particular machine is awake is not a schedule.
+
+name: Backup database
+
+on:
+  schedule:
+    # 09:00 UTC daily = 02:00 Pacific. Deliberately not midnight: GitHub's
+    # scheduled runners are heavily contended on the hour and on the hour of
+    # midnight especially, and a delayed run is a missed run if the next one
+    # starts first.
+    - cron: "0 9 * * *"
+  workflow_dispatch:        # so a backup can be taken before anything risky
+
+permissions:
+  contents: read
+
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Dump the public schema
+        env:
+          # The SESSION pooler (port 5432), not the transaction pooler the app
+          # uses (6543). pg_dump takes a snapshot and relies on staying on one
+          # backend connection for the whole dump; transaction pooling is free
+          # to move it between statements, which risks a dump that succeeds and
+          # is internally inconsistent -- the worst kind of backup, because it
+          # restores cleanly and is wrong.
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL_SESSION }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DATABASE_URL}" ]; then
+            echo "SUPABASE_DB_URL_SESSION is not set on this repository" >&2
+            exit 1
+          fi
+          STAMP=$(date -u +%Y-%m-%d)
+          # pg_dump must be at least the server's version, and the server is
+          # 17.x. The runner image ships 16, which refuses outright -- so the
+          # dump runs in the matching Postgres image instead of apt-installing
+          # a newer client.
+          docker run --rm -e PGCONNECT_TIMEOUT=30 postgres:17-alpine \
+            pg_dump --schema=public --no-owner --no-privileges \
+                    --format=plain "${DATABASE_URL}" \
+            > "account-${STAMP}.sql"
+
+          # --schema=public matters: without it the dump also carries Supabase's
+          # own auth, storage and realtime schemas, which are managed by the
+          # platform and cannot be restored into a fresh project.
+          gzip -9 "account-${STAMP}.sql"
+          echo "STAMP=${STAMP}" >> "$GITHUB_ENV"
+
+      - name: Check it is not an empty success
+        run: |
+          set -euo pipefail
+          FILE="account-${STAMP}.sql.gz"
+          SIZE=$(stat -c%s "$FILE")
+          echo "size: ${SIZE} bytes"
+          # A dump that connected, found nothing and exited 0 is the failure
+          # this guards: it would be archived nightly, look fine in the run log,
+          # and be discovered empty on the day it is needed.
+          if [ "$SIZE" -lt 2000 ]; then
+            echo "dump is implausibly small -- refusing to archive it" >&2
+            exit 1
+          fi
+          TABLES=$(gzip -dc "$FILE" | grep -c '^CREATE TABLE' || true)
+          ROWS=$(gzip -dc "$FILE" | awk '/^COPY public\./{f=1;next} /^\\\.$/{f=0;next} f' | wc -l)
+          echo "tables: ${TABLES}   rows: ${ROWS}"
+          if [ "$TABLES" -lt 20 ]; then
+            echo "expected at least 20 tables, found ${TABLES}" >&2
+            exit 1
+          fi
+          if [ "$ROWS" -lt 1 ]; then
+            echo "no data rows in the dump" >&2
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: account-db-${{ env.STAMP }}
+          path: account-${{ env.STAMP }}.sql.gz
+          retention-days: 90
+          if-no-files-found: error
