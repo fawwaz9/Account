@@ -14,8 +14,8 @@ deployment on **2026-09-14**, including that traffic is on `LATEST`.
 | Database | Supabase project `kujxxairehpwhxhnkbct`, region `us-west-2`, Postgres 17.6 |
 | Backups | GitHub Actions artifacts, `Backup database` workflow, 90-day retention |
 | Secrets | Google Secret Manager: `jwt-secret`, `database-url` |
-| Current image | `…/backend:f6f7c32` — revision `account-api-00004-5t8`, serving 100% |
-| Previous image | `…/backend:26e249f` — the one to roll back to |
+| Current image | `…/backend:18205eb` — revision `account-api-00005-v87`, serving 100% |
+| Previous image | `…/backend:f6f7c32` — revision `account-api-00004-5t8` |
 | GCP project | `account-504419`, registry `us-west1-docker.pkg.dev/account-504419/account` |
 | Repo | `fawwaz9/Account` — a push to `main` rebuilds the **frontend** only |
 
@@ -78,9 +78,25 @@ reference, a concurrency setting.
 > ```
 > `LATEST (currently …)` is healthy. A bare revision name means you are pinned.
 
-**It now fixes bad code too.** Two image tags exist: `f6f7c32` (current) and
-`26e249f` (previous). Keep it that way — do not delete the older tag, and do not
-rely on `latest`, which by definition points at whatever just broke.
+**It now fixes bad code too.** Three image tags exist: `18205eb` (current),
+`f6f7c32` and `26e249f`. Keep at least two — do not delete the older tags, and do
+not rely on `latest`, which by definition points at whatever just broke.
+
+> ### Rolling the API back alone now breaks the frontend
+>
+> As of `18205eb` this is no longer a safe standalone move. The frontend calls
+> `GET /{user_id}/net-worth`, which exists only from that image onward, and it
+> is fetched inside the same `Promise.all` as the accounts and the summary — so
+> one 404 fails the whole batch and **the budget page and dashboard both go
+> blank**, not just the net worth panel.
+>
+> If you roll the API back past `18205eb`, roll the frontend back too:
+> Pages dashboard → the project → *Deployments* → the matching deployment →
+> **Rollback**. Do the frontend first, so there is never a window where a new
+> page is talking to an old API.
+>
+> The database column `accounts.counts_toward_net_worth` can stay either way.
+> Older code ignores it, so there is nothing to undo there.
 
 ```sh
 # once a second tag exists:
