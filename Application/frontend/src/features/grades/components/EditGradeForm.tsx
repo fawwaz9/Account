@@ -9,6 +9,10 @@ interface EditGradeFormState {
   max_score: number;
   /** null for an assignment with no deadline */
   due_date: string | null;
+  /** The time of day, where there is a particular one. Null is not midnight. */
+  due_time: string | null;
+  /** How long a calendar block runs. Null for a task or an all-day block. */
+  duration_minutes: number | null;
   /** What the date means: work to tick off, or a block on the calendar. */
   schedule_as: GradeSchedule;
   /** Kept on the course but out of every average, e.g. a dropped quiz. */
@@ -114,9 +118,16 @@ export default function EditGradeForm({
 
       <ScheduleChoice
         dueDate={form.due_date}
+        dueTime={form.due_time}
+        durationMinutes={form.duration_minutes}
         scheduleAs={form.schedule_as}
         onChange={(next) => {
+          // All four together: the control clears what depends on what, and
+          // applying them one at a time would put a half-cleared pair through
+          // the validator on the way.
           updateField("due_date", next.due_date);
+          updateField("due_time", next.due_time);
+          updateField("duration_minutes", next.duration_minutes);
           updateField("schedule_as", next.schedule_as);
         }}
         category={category}

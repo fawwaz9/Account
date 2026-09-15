@@ -161,6 +161,43 @@ Verified against the real gradebook: Midterm and Final both come back moderate
 current course -- a real, plausible pattern, not a false positive from the
 detector.
 
+## A date, a time, and how long it runs
+
+A grade's date can carry a **time** (`grades.due_time`), and a calendar-bound one
+a **length** (`grades.duration_minutes`). The time reaches a task as its due time
+and a block as its start; the length becomes the block's end.
+
+**A length, not an end time**, and that is the whole reason this shape was
+chosen. "The midterm is two hours" is what a student actually knows, and an end
+*derived* from a start cannot contradict it — where a second stored column can,
+and would need a rule saying so. `end <= start` is unrepresentable rather than
+validated.
+
+Each field only refines the one above it, so each clearing cascades: no date
+means no time, and no time means no length. The cascade keys on **what the
+request said**, not on the merged state — a blanket "no time, so no length" would
+swallow *"set a length on an all-day grade"* into a silent no-op instead of
+refusing it.
+
+### The one case the sync cannot see
+
+`sync_event` gets the grade's final state, where **"never had a time"** and
+**"just lost one"** are identical — and they call for opposite things. Never
+having one leaves a start the student typed on the calendar alone, because the
+gradebook saying nothing is not the gradebook saying all-day. Taking one away
+means the block should go back to all-day.
+
+So `update_grade` reads `due_time` *before* the merge and calls
+`forget_block_times` only when a time that existed was removed. Both directions
+have a test named for them.
+
+Where the grade has a time and no length, `move_start` moves the start and
+**carries the existing end with it**: an exam marked 09:00–11:00 on the calendar
+and re-timed to 14:00 on the grade would otherwise end three hours before it
+began — a pair the API refuses, leaving a row nothing could edit afterwards. An
+end that would run past midnight is dropped rather than wrapped, since an event
+has one date.
+
 ## Still open
 
 A term retrospective once a term closes; the syllabus parser, deliberately

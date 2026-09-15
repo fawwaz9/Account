@@ -10,6 +10,7 @@ features have to agree:
 from datetime import date, time
 
 import pytest
+from pydantic import ValidationError
 
 from app._database.models import EventModel, TaskModel
 from app.Calendar.schemas.event import (
@@ -455,11 +456,12 @@ def test_an_estimate_you_set_survives_the_grade_being_edited(db, user):
 
 # ------------------------------------- a date means one of two things ---
 
-def scheduled_grade(db, user, schedule, category="Assignment", due=date(2026, 9, 25), score=None):
+def scheduled_grade(db, user, schedule, category="Assignment", due=date(2026, 9, 25),
+                    score=None, at=None):
     course = make_course(db, user.id, "CPSC 221")
     grade = add_grade(db, user.id, course.id, GradeCreate(
         name="Assignment 1", category=category, max_score=100,
-        score=score, due_date=due, schedule_as=schedule,
+        score=score, due_date=due, due_time=at, schedule_as=schedule,
     ))
     return course, grade
 
@@ -608,3 +610,257 @@ def test_a_grade_never_produces_both(db, user):
     for schedule in (GradeSchedule.EVENT, GradeSchedule.TASK, GradeSchedule.EVENT):
         update_grade(db, user.id, course.id, grade.id, GradeUpdate(schedule_as=schedule))
         assert db.query(TaskModel).count() + db.query(EventModel).count() == 1
+
+
+# ------------------------------------------- and a date may carry a time ---
+
+def test_a_grades_time_becomes_its_tasks_due_time(db, user):
+    """The thing that was missing: a lab due at noon, said once."""
+    scheduled_grade(db, user, GradeSchedule.TASK, at=time(12, 0))
+
+    [task] = list_tasks(db, user.id)
+    assert (task.due_date, task.due_time) == (date(2026, 9, 25), time(12, 0))
+
+
+def test_a_grades_time_becomes_its_blocks_start(db, user):
+    scheduled_grade(db, user, GradeSchedule.EVENT, category="Midterm", at=time(14, 0))
+
+    [event] = db.query(EventModel).all()
+    assert event.start_time == time(14, 0)
+    # Nothing invented for the other end: the gradebook has no idea how long
+    # the exam runs, and an hour guessed here would look like a fact.
+    assert event.end_time is None
+
+
+def test_no_time_leaves_a_task_due_by_the_end_of_the_day(db, user):
+    """What every dated grade did before the field existed, unchanged."""
+    scheduled_grade(db, user, GradeSchedule.TASK)
+
+    [task] = list_tasks(db, user.id)
+    assert task.due_time is None
+
+
+def test_no_time_leaves_an_all_day_block(db, user):
+    scheduled_grade(db, user, GradeSchedule.EVENT)
+
+    [event] = db.query(EventModel).all()
+    assert (event.start_time, event.end_time) == (None, None)
+
+
+def test_clearing_the_time_on_the_grade_clears_it_on_the_task(db, user):
+    """A stale 12:00 left on the task is the two records disagreeing, which is
+    the whole failure this module exists to prevent."""
+    course, grade = scheduled_grade(db, user, GradeSchedule.TASK, at=time(12, 0))
+
+    update_grade(db, user.id, course.id, grade.id, GradeUpdate(due_time=None))
+
+    [task] = list_tasks(db, user.id)
+    assert task.due_time is None
+
+
+def test_clearing_the_date_clears_the_time_with_it(db, user):
+    """Otherwise "this has no deadline any more" leaves a time of day behind,
+    and the next edit is refused for a pair the student never set."""
+    course, grade = scheduled_grade(db, user, GradeSchedule.TASK, at=time(12, 0))
+
+    update_grade(db, user.id, course.id, grade.id, GradeUpdate(due_date=None))
+
+    assert grade.due_time is None
+    assert list_tasks(db, user.id) == [], "and the task goes with the date"
+    # Still editable afterwards, which is the point of clearing rather than
+    # refusing: an orphan time would make every later edit fail.
+    update_grade(db, user.id, course.id, grade.id, GradeUpdate(name="Renamed"))
+
+
+def test_a_time_with_no_date_is_refused(db, user):
+    with pytest.raises(ValidationError):
+        GradeCreate(name="Lab 1", category="Lab", max_score=100,
+                    due_date=None, due_time=time(12, 0))
+
+
+def test_a_time_cannot_be_added_to_an_undated_grade(db, user):
+    """The same rule on the update path, where the pair is only checkable once
+    both halves have been applied."""
+    course, grade = scheduled_grade(db, user, GradeSchedule.TASK, due=None)
+
+    with pytest.raises(ValueError):
+        update_grade(db, user.id, course.id, grade.id, GradeUpdate(due_time=time(12, 0)))
+
+
+def test_a_time_typed_on_the_calendar_survives_a_grade_with_no_time(db, user):
+    """An exam whose time the student knew before grades could carry one. The
+    gradebook saying nothing is not the gradebook saying all-day."""
+    course, grade = scheduled_grade(db, user, GradeSchedule.EVENT, category="Midterm")
+    [event] = db.query(EventModel).all()
+    update_event(db, user.id, event.id, EventUpdate(
+        start_time=time(18, 0), end_time=time(20, 0),
+    ))
+
+    update_grade(db, user.id, course.id, grade.id, GradeUpdate(score=88))
+
+    [event] = db.query(EventModel).all()
+    assert (event.start_time, event.end_time) == (time(18, 0), time(20, 0))
+
+
+def test_moving_the_start_from_the_grade_takes_the_end_with_it(db, user):
+    """Setting the start alone would end the exam three hours before it began --
+    a pair the API refuses, so the row would be one nothing could edit after."""
+    course, grade = scheduled_grade(db, user, GradeSchedule.EVENT, category="Midterm")
+    [event] = db.query(EventModel).all()
+    update_event(db, user.id, event.id, EventUpdate(
+        start_time=time(9, 0), end_time=time(11, 0),
+    ))
+
+    update_grade(db, user.id, course.id, grade.id, GradeUpdate(due_time=time(14, 0)))
+
+    [event] = db.query(EventModel).all()
+    assert (event.start_time, event.end_time) == (time(14, 0), time(16, 0)), \
+        "the student said two hours, not that it ends at eleven"
+
+
+def test_an_end_pushed_past_midnight_is_dropped_rather_than_wrapped(db, user):
+    """An event has one date, so 23:00 plus two hours has nowhere to go. Open
+    ended is honest; ending at 01:00 on the start date is not."""
+    course, grade = scheduled_grade(db, user, GradeSchedule.EVENT, category="Midterm")
+    [event] = db.query(EventModel).all()
+    update_event(db, user.id, event.id, EventUpdate(
+        start_time=time(9, 0), end_time=time(11, 0),
+    ))
+
+    update_grade(db, user.id, course.id, grade.id, GradeUpdate(due_time=time(23, 0)))
+
+    [event] = db.query(EventModel).all()
+    assert (event.start_time, event.end_time) == (time(23, 0), None)
+
+
+def test_switching_a_timed_grade_between_the_two_carries_the_time_across(db, user):
+    """The time belongs to the grade, so it survives changing what the date
+    means -- otherwise switching to a block and back would quietly lose it."""
+    course, grade = scheduled_grade(db, user, GradeSchedule.TASK, at=time(12, 0))
+
+    update_grade(db, user.id, course.id, grade.id,
+                 GradeUpdate(schedule_as=GradeSchedule.EVENT))
+    [event] = db.query(EventModel).all()
+    assert event.start_time == time(12, 0)
+
+    update_grade(db, user.id, course.id, grade.id,
+                 GradeUpdate(schedule_as=GradeSchedule.TASK))
+    [task] = list_tasks(db, user.id)
+    assert task.due_time == time(12, 0)
+
+
+# --------------------------------------------- and a block may have a length --
+
+def timed_event_grade(db, user, at=time(14, 0), minutes=None):
+    course = make_course(db, user.id, "CPSC 221")
+    grade = add_grade(db, user.id, course.id, GradeCreate(
+        name="Midterm 1", category="Midterm", max_score=100,
+        due_date=date(2026, 10, 15), due_time=at, duration_minutes=minutes,
+        schedule_as=GradeSchedule.EVENT,
+    ))
+    return course, grade
+
+
+def test_a_length_gives_the_block_an_end(db, user):
+    """Two hours from 14:00 is 16:00. Derived rather than stored, so the end
+    cannot contradict the start the way two typed times can."""
+    timed_event_grade(db, user, minutes=120)
+
+    [event] = db.query(EventModel).all()
+    assert (event.start_time, event.end_time) == (time(14, 0), time(16, 0))
+
+
+def test_a_length_needs_a_start_time(db, user):
+    """An all-day block has no length -- there is nothing to run from."""
+    with pytest.raises(ValidationError):
+        GradeCreate(name="Midterm 1", category="Midterm", max_score=100,
+                    due_date=date(2026, 10, 15), due_time=None, duration_minutes=120)
+
+
+def test_a_length_cannot_be_added_to_an_all_day_grade(db, user):
+    """The same rule on the update path, checkable only after the merge."""
+    course, grade = scheduled_grade(db, user, GradeSchedule.EVENT)
+
+    with pytest.raises(ValueError):
+        update_grade(db, user.id, course.id, grade.id,
+                     GradeUpdate(duration_minutes=120))
+
+
+def test_clearing_the_time_clears_the_length_with_it(db, user):
+    """Each clearing cascades to what depends on it, so going back to an all-day
+    block does not strand two hours that the next edit would be refused for."""
+    course, grade = timed_event_grade(db, user, minutes=120)
+
+    update_grade(db, user.id, course.id, grade.id, GradeUpdate(due_time=None))
+
+    assert grade.duration_minutes is None
+    [event] = db.query(EventModel).all()
+    assert event.end_time is None
+    # Still editable, which is the point of clearing rather than refusing.
+    update_grade(db, user.id, course.id, grade.id, GradeUpdate(name="Midterm"))
+
+
+def test_the_length_wins_over_one_set_on_the_calendar(db, user):
+    """Once the grade says how long, the grade is the record -- the same rule
+    the title and the date already follow."""
+    course, grade = timed_event_grade(db, user, at=time(9, 0))
+    [event] = db.query(EventModel).all()
+    update_event(db, user.id, event.id, EventUpdate(
+        start_time=time(9, 0), end_time=time(10, 0),
+    ))
+
+    update_grade(db, user.id, course.id, grade.id, GradeUpdate(duration_minutes=180))
+
+    [event] = db.query(EventModel).all()
+    assert (event.start_time, event.end_time) == (time(9, 0), time(12, 0))
+
+
+def test_a_length_running_past_midnight_leaves_the_block_open_ended(db, user):
+    """An event has one date, so 23:00 plus two hours has nowhere to land."""
+    timed_event_grade(db, user, at=time(23, 0), minutes=120)
+
+    [event] = db.query(EventModel).all()
+    assert (event.start_time, event.end_time) == (time(23, 0), None)
+
+
+def test_a_task_grade_ignores_a_length(db, user):
+    """A task is a moment, not a block. The field is offered only on the
+    calendar answer, and nothing downstream reads it for a task -- an estimate
+    is a different fact and `sync_task` deliberately leaves it alone."""
+    course = make_course(db, user.id, "CPSC 210")
+    add_grade(db, user.id, course.id, GradeCreate(
+        name="Lab 1", category="Lab", max_score=100,
+        due_date=date(2026, 9, 25), due_time=time(12, 0), duration_minutes=60,
+        schedule_as=GradeSchedule.TASK,
+    ))
+
+    [task] = list_tasks(db, user.id)
+    assert task.due_time == time(12, 0)
+    assert task.estimated_minutes is None
+
+
+def test_removing_a_grades_time_puts_the_block_back_to_all_day(db, user):
+    """The case sync_event cannot see on its own: after the merge, "never had a
+    time" and "just lost one" look identical, and they mean opposite things."""
+    course, grade = timed_event_grade(db, user, minutes=120)
+
+    update_grade(db, user.id, course.id, grade.id, GradeUpdate(due_time=None))
+
+    [event] = db.query(EventModel).all()
+    assert (event.start_time, event.end_time) == (None, None)
+
+
+def test_a_calendar_time_survives_clearing_a_time_the_grade_never_had(db, user):
+    """The other side of the same guard. Sending due_time=None on a grade that
+    had none is a no-op, and must not reach over and wipe a start the student
+    typed on the calendar themselves."""
+    course, grade = scheduled_grade(db, user, GradeSchedule.EVENT, category="Midterm")
+    [event] = db.query(EventModel).all()
+    update_event(db, user.id, event.id, EventUpdate(
+        start_time=time(18, 0), end_time=time(20, 0),
+    ))
+
+    update_grade(db, user.id, course.id, grade.id, GradeUpdate(due_time=None))
+
+    [event] = db.query(EventModel).all()
+    assert (event.start_time, event.end_time) == (time(18, 0), time(20, 0))

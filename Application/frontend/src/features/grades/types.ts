@@ -130,6 +130,10 @@ export interface Grade {
   weight: number;
   /** When the work is due, as opposed to when it was marked. */
   due_date: string | null;
+  /** The time of day, where there is a particular one. Null is not midnight. */
+  due_time: string | null;
+  /** How long a calendar-bound grade runs. Null for a task or an all-day block. */
+  duration_minutes: number | null;
   /** What that date means. Ignored when there is no date. */
   schedule_as: GradeSchedule;
   /** Kept on the course but left out of every average, e.g. a dropped quiz. */
@@ -204,6 +208,8 @@ export interface GradeCreate{
   max_score: number;
   category: GradeCategory;
   due_date: string | null;
+  due_time: string | null;
+  duration_minutes: number | null;
   schedule_as: GradeSchedule;
 }
 
@@ -213,6 +219,8 @@ export interface GradeUpdate{
   max_score: number | null;
   category: GradeCategory | null;
   due_date: string | null;
+  due_time: string | null;
+  duration_minutes: number | null;
   schedule_as: GradeSchedule | null;
   /** Kept on the course but left out of every average. */
   excluded: boolean | null;

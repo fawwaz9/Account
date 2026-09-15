@@ -76,6 +76,8 @@ export default function BulkGradesModal({
       // there is no deadline, and with no date the choice below decides nothing.
       // Both are set per grade afterwards.
       due_date: null,
+      due_time: null,
+      duration_minutes: null,
       schedule_as: GradeSchedule.TASK,
     }));
 

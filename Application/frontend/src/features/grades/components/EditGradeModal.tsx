@@ -22,6 +22,10 @@ function buildFormFromGrade(grade: Grade | null) {
     score: grade?.score ?? null,
     max_score: grade?.max_score ?? 0,
     due_date: grade?.due_date ?? null,
+    // The API sends HH:MM:SS and <input type="time"> wants HH:MM, showing
+    // nothing at all when handed anything longer.
+    due_time: grade?.due_time ? grade.due_time.slice(0, 5) : null,
+    duration_minutes: grade?.duration_minutes ?? null,
     schedule_as: grade?.schedule_as ?? GradeSchedule.TASK,
     excluded: grade?.excluded ?? false,
   };
@@ -65,6 +69,8 @@ export default function EditGradeModal({
         max_score: form.max_score,
         // Clearing this removes whatever the date raised; setting it moves it.
         due_date: form.due_date,
+        due_time: form.due_time,
+        duration_minutes: form.duration_minutes,
         // Switching removes the other kind, so a grade never produces both.
         schedule_as: form.schedule_as,
         excluded: form.excluded,

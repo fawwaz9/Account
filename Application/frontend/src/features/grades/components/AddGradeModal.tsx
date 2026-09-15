@@ -24,6 +24,10 @@ function buildDefaultForm(category: GradeCategory | null): GradeCreate {
     category: category ?? GradeCategory.OTHER,
     // No deadline by default; the choice below only matters once there is one.
     due_date: null,
+    // And no time of day even once there is a date: a guessed 09:00 reads on
+    // the calendar as a fact rather than as a blank left unfilled.
+    due_time: null,
+    duration_minutes: null,
     // A midterm or a final is something you sit rather than tick off, so those
     // start on the calendar side and everything else starts as work to do.
     schedule_as:

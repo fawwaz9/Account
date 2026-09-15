@@ -977,3 +977,18 @@
   background: #c9453c;
   color: #fff;
 }
+
+/* The date, its time and a block's length on one line, indented under the
+   option they belong to. They wrap rather than shrink: a date picker squeezed
+   into a third of a phone screen is unusable, and these are three separate
+   answers rather than one field split in three. */
+.scheduleWhen {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-left: 26px;
+}
+
+.scheduleWhen .scheduleDate {
+  margin-left: 0;
+}

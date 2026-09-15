@@ -5,7 +5,10 @@ from app._database.models import CourseModel, CourseCategoryWeightModel, GradeMo
 from app.Grades.schemas.grade import GradeCreate, GradeUpdate, Grade as GradeSchema
 from app.Grades.utils.enums import GradeCategory, GradeSchedule, is_additive
 from app.Grades.utils.terms import course_result_grade
-from app.Grades.services.grade_schedule import sync_schedule_for_grade
+from app.Grades.services.grade_schedule import (
+    forget_block_times,
+    sync_schedule_for_grade,
+)
 
 
 MAX_COURSE_PERCENT = 100.0
@@ -102,6 +105,8 @@ def add_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_data:
         max_score=grade_data.max_score,
         weight=weights.get(category_value, 0.0),
         due_date=grade_data.due_date,
+        due_time=grade_data.due_time,
+        duration_minutes=grade_data.duration_minutes,
         schedule_as=grade_data.schedule_as.value,
         excluded=grade_data.excluded,
     )
@@ -148,6 +153,8 @@ def add_grades_bulk(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade
                 max_score=grade_data.max_score,
                 weight=weights.get(category_value, 0.0),
                 due_date=grade_data.due_date,
+                due_time=grade_data.due_time,
+                duration_minutes=grade_data.duration_minutes,
                 schedule_as=grade_data.schedule_as.value,
                 excluded=grade_data.excluded,
             )
@@ -197,6 +204,11 @@ def update_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id
         # A partial update that does not mention it must not null the column.
         update_data.pop("schedule_as", None)
 
+    # Read before the merge overwrites it. "The grade had a time and the
+    # student took it away" and "the grade never had one" look identical
+    # afterwards, and they call for opposite things on the calendar.
+    had_time = grade.due_time is not None
+
     for key, value in update_data.items():
         setattr(grade, key, value)
 
@@ -208,6 +220,35 @@ def update_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id
     # the pair is only checkable after both have been applied.
     if score_exceeds_limit(grade.score, grade.max_score):
         raise ValueError(f"Score cannot exceed {MAX_SCORE_MULTIPLE:g}x the max score")
+
+    # Each clearing cascades to what depends on it. A time of day only refines a
+    # deadline and a length only refines a time, so "this has no due date any
+    # more" must not leave 14:00 and two hours behind for the next edit to trip
+    # over.
+    #
+    # Keyed on what the request actually *said*, not on the merged state: a
+    # blanket "no time, so no length" would swallow the mistake below instead of
+    # reporting it, turning a request to set a length on an all-day grade into a
+    # silent no-op.
+    dropping_date = "due_date" in update_data and update_data["due_date"] is None
+    dropping_time = "due_time" in update_data and update_data["due_time"] is None
+
+    if dropping_date:
+        grade.due_time = None
+    if dropping_date or dropping_time:
+        grade.duration_minutes = None
+        if had_time:
+            # The gradebook had a time and the student took it away, which is
+            # not the same as never having had one. Leaving the block at 14:00
+            # would leave a start nothing stands behind.
+            forget_block_times(db, grade)
+
+    # Sending either one without what it hangs off is still a mistake rather
+    # than an instruction, and is refused the way a task refuses an orphan time.
+    if grade.due_time is not None and grade.due_date is None:
+        raise ValueError("A time of day needs a date to go with it")
+    if grade.duration_minutes is not None and grade.due_time is None:
+        raise ValueError("A length needs a start time to run from")
 
     course.average = calculate_current_average(course)
     # Covers all four of the ways an edit moves the task: a renamed grade, a

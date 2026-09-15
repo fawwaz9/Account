@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, time
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator
 
@@ -18,6 +18,23 @@ class GradeBase(BaseModel):
     category: GradeCategory = Field(..., description="The category of the grade (e.g., Assignment, Lab, Quiz, etc.)")
     # When the work is due, as opposed to when it was marked.
     due_date: date | None = Field(default=None, description="When the work is due, if it has a deadline")
+    # The time of day, where it is known. Null is not "midnight" -- it means no
+    # particular time, which the task side reads as the end of the day and the
+    # calendar side as an all-day block.
+    due_time: time | None = Field(
+        default=None,
+        description="The time of day it is due or happens, if there is a particular one",
+    )
+    # A length rather than an end time. "The midterm is two hours" is what a
+    # student knows, and an end derived from a start cannot contradict it --
+    # where a second stored column can, and would need a rule saying so.
+    #
+    # Floor of 5 because anything less is a slipped digit; ceiling of a full day
+    # because a block cannot outrun the date it sits on.
+    duration_minutes: int | None = Field(
+        default=None, ge=5, le=1440,
+        description="How long a calendar-bound grade runs, in minutes",
+    )
     # What that date means. An assignment is work to tick off; a midterm is
     # something to sit, which is a calendar block and not a chore. Ignored
     # without a date.
@@ -42,6 +59,17 @@ class GradeBase(BaseModel):
         if self.score is not None and self.score > self.max_score * MAX_SCORE_MULTIPLE:
             raise ValueError(f"Score cannot exceed {MAX_SCORE_MULTIPLE:g}x the max score")
 
+        # The same wording tasks use, because it is the same mistake: a time on
+        # its own says when but not when *what*, and nothing downstream could
+        # place it.
+        if self.due_time is not None and self.due_date is None:
+            raise ValueError("A time of day needs a date to go with it")
+
+        # An all-day block has no length, so a duration with nothing to start
+        # from could not be drawn and could not be corrected either.
+        if self.duration_minutes is not None and self.due_time is None:
+            raise ValueError("A length needs a start time to run from")
+
         return self
  
 class GradeCreate(GradeBase):
@@ -53,6 +81,8 @@ class GradeUpdate(BaseModel):
     max_score: float | None = Field(default=None, gt=0)
     category: GradeCategory | None = Field(default=None)
     due_date: date | None = Field(default=None)
+    due_time: time | None = Field(default=None)
+    duration_minutes: int | None = Field(default=None, ge=5, le=1440)
     schedule_as: GradeSchedule | None = Field(default=None)
     excluded: bool | None = Field(default=None)
 

@@ -14,6 +14,12 @@ different things:
   midterm or a final where the category says so, with nothing to tick off. A
   sat exam is history, not an unfinished chore, so a score changes nothing here.
 
+A date may also carry a time of day. It reaches a task as its due time and a
+calendar block as its start; with no time the task is due by the end of the day
+and the block is all-day, which is what every dated grade did before the field
+existed. A calendar-bound grade may carry a length as well, which becomes the
+block's end -- a length rather than an end time, so the two cannot disagree.
+
 Switching between the two removes whatever the other had made, so a grade never
 has both and the calendar never shows the same deadline twice.
 
@@ -23,6 +29,7 @@ leave a task or an event behind.
 """
 
 import uuid
+from datetime import time
 
 from sqlalchemy.orm import Session
 
@@ -94,6 +101,12 @@ def sync_task(db: Session, course: CourseModel, grade: GradeModel) -> TaskModel:
 
     task.title = grade.name
     task.due_date = grade.due_date
+    # The time follows the date because they are one fact, not two. A task's
+    # due time *is* the grade's due time -- there is nothing else living in
+    # that field -- so leaving a stale 14:00 behind after the grade dropped it
+    # would be the two records disagreeing, which is what this module exists to
+    # prevent.
+    task.due_time = grade.due_time
     task.course_id = course.id
     # Everything else the student set on the task -- an estimate, notes, tags,
     # the priority -- is theirs and is left alone.
@@ -109,6 +122,65 @@ def sync_task(db: Session, course: CourseModel, grade: GradeModel) -> TaskModel:
     return task
 
 
+def forget_block_times(db: Session, grade: GradeModel) -> None:
+    """Put this grade's block back to all-day.
+
+    Called only when the student *removes* a time the grade had, which is the
+    one case `sync_event` cannot recognise on its own -- it sees the grade's
+    final state, where "never had a time" and "just lost one" are the same
+    thing, and those two call for opposite treatment. Never having one leaves a
+    time typed on the calendar alone; taking one away means it should go.
+    """
+    event = event_for_grade(db, grade.id)
+    if event is None:
+        return
+
+    event.start_time = None
+    event.end_time = None
+    db.flush()
+
+
+def move_start(event: EventModel, start: time, minutes: int | None = None) -> None:
+    """Move a block to a new start time, and say how long it runs.
+
+    With `minutes`, the end is derived: the grade carries a length, and a length
+    plus a start cannot contradict each other the way two stored times can.
+
+    Without one, the block keeps whatever length it already had. Setting the
+    start on its own is the trap that makes this a function rather than an
+    assignment: an exam the student marked 09:00-11:00 on the calendar, re-timed
+    to 14:00 on the grade, would end three hours before it began. The API
+    refuses that pair outright, so the row would be one nothing could edit
+    afterwards. Keeping the length is also what the student meant -- they said
+    the exam runs two hours, not that it ends at 11.
+
+    An end that would run past midnight is dropped rather than wrapped: an event
+    has one date, so 23:00 + 2h has nowhere to go, and an open-ended block is
+    honest where a block ending at 01:00 on its own start date is not.
+    """
+    was = event.start_time
+    event.start_time = start
+
+    if minutes is None:
+        if event.end_time is None or was is None:
+            return
+        minutes = _minutes(event.end_time) - _minutes(was)
+
+    ends_at = _minutes(start) + minutes
+    event.end_time = None if ends_at >= MINUTES_IN_DAY else _at(ends_at)
+
+
+MINUTES_IN_DAY = 24 * 60
+
+
+def _minutes(at: time) -> int:
+    return at.hour * 60 + at.minute
+
+
+def _at(minutes: int) -> time:
+    return time(hour=minutes // 60, minute=minutes % 60)
+
+
 def sync_event(db: Session, course: CourseModel, grade: GradeModel) -> EventModel:
     event = event_for_grade(db, grade.id)
     if event is None:
@@ -117,10 +189,11 @@ def sync_event(db: Session, course: CourseModel, grade: GradeModel) -> EventMode
             user_id=course.user_id,
             course_id=course.id,
             grade_id=grade.id,
-            # All-day to begin with. An exam usually has a time and a room, but
-            # the gradebook does not know them, and inventing a nine o'clock
-            # start would be worse than saying nothing.
-            start_time=None,
+            # All-day unless the grade carries a time. An exam usually has a
+            # time and a room; the gradebook now knows the first of those when
+            # the student entered it, and inventing a nine o'clock start when
+            # they did not would still be worse than saying nothing.
+            start_time=grade.due_time,
             end_time=None,
             skipped_dates=[],
         )
@@ -130,9 +203,19 @@ def sync_event(db: Session, course: CourseModel, grade: GradeModel) -> EventMode
     event.starts_on = grade.due_date
     event.course_id = course.id
     event.kind = event_kind_for(grade)
-    # Times, room and notes are left alone for the same reason a task's estimate
-    # is: once the student has filled them in on the calendar, they are theirs,
-    # and re-saving the grade must not wipe them.
+    # Room and notes are left alone for the same reason a task's estimate is:
+    # once the student has filled them in on the calendar, they are theirs, and
+    # re-saving the grade must not wipe them.
+    #
+    # The times are the half-and-half case, and that is why this is not the
+    # plain assignment the task side gets. A block has a start *and* an end and
+    # the gradebook only ever knows the start, so a grade with a time moves the
+    # start and a grade without one changes nothing -- clearing a start while
+    # leaving an end behind would make the block incoherent, and a time typed
+    # on the calendar before grades could carry one is still the only record of
+    # when that exam is.
+    if grade.due_time is not None:
+        move_start(event, grade.due_time, grade.duration_minutes)
 
     # Deliberately no done state. A sat exam is history rather than an
     # unfinished chore, which is the whole reason this is not a task.

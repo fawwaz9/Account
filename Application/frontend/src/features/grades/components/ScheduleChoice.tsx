@@ -1,14 +1,28 @@
 import { useState } from "react";
 import { GradeCategory, GradeSchedule } from "../types";
-import { today } from "../../../shared/utils/dateUtils";
+import { duration, today } from "../../../shared/utils/dateUtils";
 
 /** What a date on a grade is for, including having no date at all. */
 type Mode = "none" | GradeSchedule;
 
+/** Shared by the three fields below, so they cannot drift apart visually. */
+const FIELD =
+  "--input rounded-lg border border-slate-700 bg-transparent px-3 py-2 text-white";
+
+/** Everything this control owns, changed as one. */
+export interface Scheduling {
+  due_date: string | null;
+  due_time: string | null;
+  duration_minutes: number | null;
+  schedule_as: GradeSchedule;
+}
+
 interface ScheduleChoiceProps {
   readonly dueDate: string | null;
+  readonly dueTime: string | null;
+  readonly durationMinutes: number | null;
   readonly scheduleAs: GradeSchedule;
-  readonly onChange: (next: { due_date: string | null; schedule_as: GradeSchedule }) => void;
+  readonly onChange: (next: Scheduling) => void;
   /** Only used to word the calendar option for a midterm or a final. */
   readonly category: GradeCategory | null;
   /** Distinguishes the ids from the other form's when both are on the page. */
@@ -52,6 +66,8 @@ function optionsFor(category: GradeCategory | null) {
  */
 export default function ScheduleChoice({
   dueDate,
+  dueTime,
+  durationMinutes,
   scheduleAs,
   onChange,
   category,
@@ -64,13 +80,32 @@ export default function ScheduleChoice({
   // control and not part of the grade.
   const [lastDate, setLastDate] = useState(dueDate ?? today());
 
+  /** Each clearing takes what depends on it, the way the API does. */
+  function emit(next: Partial<Scheduling>) {
+    const merged: Scheduling = {
+      due_date: dueDate,
+      due_time: dueTime,
+      duration_minutes: durationMinutes,
+      schedule_as: scheduleAs,
+      ...next,
+    };
+
+    if (merged.due_date === null) merged.due_time = null;
+    if (merged.due_time === null) merged.duration_minutes = null;
+    // A task is a moment, not a block. Switching a midterm back to work-to-do
+    // must not leave two hours on it that nothing reads and nothing shows.
+    if (merged.schedule_as !== GradeSchedule.EVENT) merged.duration_minutes = null;
+
+    onChange(merged);
+  }
+
   function pick(next: Mode) {
     if (next === "none") {
-      onChange({ due_date: null, schedule_as: scheduleAs });
+      emit({ due_date: null });
       return;
     }
 
-    onChange({ due_date: dueDate ?? lastDate, schedule_as: next });
+    emit({ due_date: dueDate ?? lastDate, schedule_as: next });
   }
 
   function setDate(value: string) {
@@ -78,7 +113,7 @@ export default function ScheduleChoice({
     if (date) setLastDate(date);
     // Keeping the current kind: changing when it is due is not a decision about
     // what kind of thing it is.
-    onChange({ due_date: date, schedule_as: scheduleAs });
+    emit({ due_date: date });
   }
 
   return (
@@ -106,19 +141,69 @@ export default function ScheduleChoice({
       {/* Only once a date means something. With "No date" chosen there is
           nothing for it to hold. */}
       {mode !== "none" && (
-        <label className="scheduleDate">
-          <span className="scheduleOptionHint">
-            {mode === GradeSchedule.TASK ? "Due on" : "Happens on"}
-          </span>
-          <input
-            id={`${idPrefix}-date`}
-            type="date"
-            value={dueDate ?? ""}
-            onChange={(event) => setDate(event.target.value)}
-            className="--input rounded-lg border border-slate-700 bg-transparent px-3 py-2 text-white"
-            required
-          />
-        </label>
+        <div className="scheduleWhen">
+          <label className="scheduleDate">
+            <span className="scheduleOptionHint">
+              {mode === GradeSchedule.TASK ? "Due on" : "Happens on"}
+            </span>
+            <input
+              id={`${idPrefix}-date`}
+              type="date"
+              value={dueDate ?? ""}
+              onChange={(event) => setDate(event.target.value)}
+              className={FIELD}
+              required
+            />
+          </label>
+
+          {/* Optional, and blank on purpose. Nothing is pre-filled because a
+              guessed 09:00 reads on the calendar as a fact. Blank means no
+              particular time: the end of the day for a task, an all-day block
+              for a midterm. */}
+          <label className="scheduleDate">
+            <span className="scheduleOptionHint">
+              {mode === GradeSchedule.TASK ? "Due at" : "Starts at"}
+            </span>
+            <input
+              id={`${idPrefix}-time`}
+              type="time"
+              value={dueTime ?? ""}
+              onChange={(event) => emit({ due_time: event.target.value || null })}
+              className={FIELD}
+            />
+          </label>
+
+          {/* A length rather than an end time: "the midterm is two hours" is
+              what you know, and an end worked out from a start cannot end
+              before it. Only on the calendar side, and only once there is a
+              start for it to run from -- a task is a moment and an all-day
+              block has no length. */}
+          {mode === GradeSchedule.EVENT && dueTime && (
+            <label className="scheduleDate">
+              <span className="scheduleOptionHint">
+                For {duration(durationMinutes) || "how long?"}
+              </span>
+              <input
+                id={`${idPrefix}-duration`}
+                type="number"
+                min={5}
+                max={1440}
+                step={5}
+                value={durationMinutes ?? ""}
+                // Number("") is 0, which would claim the exam takes no time.
+                onChange={(event) =>
+                  emit({
+                    duration_minutes:
+                      event.target.value === "" ? null : Number(event.target.value),
+                  })
+                }
+                placeholder="mins"
+                aria-label="How many minutes it runs"
+                className={FIELD}
+              />
+            </label>
+          )}
+        </div>
       )}
     </fieldset>
   );

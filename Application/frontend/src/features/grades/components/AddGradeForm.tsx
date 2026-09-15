@@ -84,9 +84,16 @@ export default function AddGradeForm({
           the date is only one of the three answers. */}
       <ScheduleChoice
         dueDate={form.due_date}
+        dueTime={form.due_time}
+        durationMinutes={form.duration_minutes}
         scheduleAs={form.schedule_as}
         onChange={(next) => {
+          // All four together: the control clears what depends on what, and
+          // applying them one at a time would put a half-cleared pair through
+          // the validator on the way.
           updateField("due_date", next.due_date);
+          updateField("due_time", next.due_time);
+          updateField("duration_minutes", next.duration_minutes);
           updateField("schedule_as", next.schedule_as);
         }}
         category={form.category}
