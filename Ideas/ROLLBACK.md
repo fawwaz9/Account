@@ -13,8 +13,8 @@ first, reasoning second. Every figure here was checked on 2026-09-15.
 | Database | Supabase project `kujxxairehpwhxhnkbct`, region `us-west-2`, Postgres 17.6 |
 | Backups | GitHub Actions artifacts, `Backup database` workflow, 90-day retention |
 | Secrets | Google Secret Manager: `jwt-secret`, `database-url` |
-| Known-good image | `us-west1-docker.pkg.dev/account-504419/account/backend:26e249f` |
-| Known-good revision | `account-api-00003-ddz` |
+| Current image | `…/backend:f6f7c32` — revision `account-api-00004-5t8` |
+| Previous image | `…/backend:26e249f` — the one to roll back to |
 
 ## First: what kind of broken?
 
@@ -43,11 +43,33 @@ gcloud run services update-traffic account-api --region=us-west1 \
 **This fixes a bad *configuration*.** An environment variable, a secret
 reference, a concurrency setting.
 
-**It does not fix bad code, today.** All three revisions run the same image
-(`sha256:3a44873f…`), so there is no earlier image to return to. **The first
-time you deploy new code, the tag you are replacing becomes your only way
-back** — do not delete it, and do not rely on `latest`, which by definition
-points at the thing that just broke.
+> ### After rolling back, put traffic back on LATEST
+>
+> ```sh
+> gcloud run services update-traffic account-api --region=us-west1 --to-latest
+> ```
+>
+> **`--to-revisions` pins the service to that exact revision permanently.** It
+> does not mean "serve this one now"; it means "stop following new deploys".
+> Every subsequent `gcloud run deploy` then builds, pushes, creates a revision,
+> reports **`has been deployed and is serving 100 percent of traffic`** — and
+> changes nothing, because the traffic policy still names the old revision.
+>
+> This is not hypothetical: it happened here while *testing* the rollback
+> command against the revision already serving, on the assumption that was a
+> no-op. It is not a no-op. The next deploy silently did nothing, and the only
+> symptom was that the fix it contained was still missing.
+>
+> **Check which revision is actually serving after any deploy:**
+> ```sh
+> gcloud run services describe account-api --region=us-west1 \
+>   --format="value(status.traffic[].revisionName, status.traffic[].percent)"
+> ```
+> `LATEST (currently …)` is healthy. A bare revision name means you are pinned.
+
+**It now fixes bad code too.** Two image tags exist: `f6f7c32` (current) and
+`26e249f` (previous). Keep it that way — do not delete the older tag, and do not
+rely on `latest`, which by definition points at whatever just broke.
 
 ```sh
 # once a second tag exists:
