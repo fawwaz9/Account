@@ -23,7 +23,8 @@ below is contestable it names the decision, so `D2.3` means go and argue there.
 | Open PRs | **none — all seven merged** |
 | Part 1 (local code changes) | **Done — steps 1–15, green light passed** |
 | Part 2 (the Postgres port) | **Done — steps 16–21. The data is in Supabase** |
-| Part 3 (deploy) | **Both halves are live** — steps 22–30 done. Next is step 31, Google OAuth |
+| Part 3 (deploy) | **Done** — steps 22–32, tested from mobile data |
+| Part 4 (before others join) | **Done** — backups taken and restored, monitored, rollback written |
 | Frontend URL | `https://account-2a7.pages.dev` |
 | API URL | `https://account-api-210502804146.us-west1.run.app` |
 
@@ -1076,9 +1077,49 @@ client so a v16 client cannot refuse the 17.6 server, and verifies row counts
 against the dump before reporting success. Guard exits verified: 3 for a
 production target, 3 for an unusable guard, 2 for a missing dump.
 
-### 35. Put a monitor on `/health`
+### 35. Put a monitor on `/health` — **DONE**
 
 **Do:** a free external monitor — UptimeRobot, Better Stack — every five minutes.
+
+**Two monitors, and no more:**
+
+| | |
+|---|---|
+| `https://account-2a7.pages.dev/` | Pages is serving the bundle |
+| `https://account-api-…/health` | the whole system — it queries Supabase |
+
+**Refuse the suggested extras.** UptimeRobot offers to monitor common paths
+(`/login`, `/cart`, `/pricing`, `/wp-admin`, `/blog`, …) and eight were accepted
+here. **Every one of them returned an identical 200** — same 466 bytes, same
+`<title>App</title>` — including a nonsense path invented to test it. That is
+Cloudflare Pages' SPA fallback working correctly for a React Router app: any
+unmatched path gets `index.html`.
+
+So those monitors check one static file, nine times. **They would all report UP
+with the API dead, Supabase deleted and every user locked out.** The harm is not
+the wasted quota, it is that "9 of 10 monitors UP" reads like broad coverage
+when it is one file.
+
+**`/health` is the only endpoint that proves anything**, because it queries the
+database — so it catches a paused project, rotated credentials, or an exhausted
+pool, none of which a static page can see.
+
+**It caught something within minutes of being enabled:**
+
+```
+20:20:23  DOWN  405 Method Not Allowed
+20:25:28  UP    200 OK
+```
+
+`@app.get` registers GET alone — a plain Starlette route adds HEAD for you,
+FastAPI's does not — and UptimeRobot sends **HEAD** by default. A healthy
+service was being reported as down. `/health` now answers GET and HEAD, and
+still refuses anything that writes.
+
+**Poll as often as you like.** That caution only ever applied to Neon, where
+polling kept the compute awake and drained the budget. Supabase has no compute
+budget, and the polling doubles as insurance against the seven-day idle pause.
+**D6.2**.
 
 **Why five minutes is fine now:** it would not have been on Neon, where polling
 kept the database awake and burned the compute budget. Supabase is always on with
