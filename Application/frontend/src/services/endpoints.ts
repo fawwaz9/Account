@@ -88,6 +88,7 @@ export const endpoints = {
       `finances/${userId}/sinking-funds/${fundId}/contribute`,
     contribution: (userId: string, fundId: string, contributionId: string) =>
       `finances/${userId}/sinking-funds/${fundId}/contributions/${contributionId}`,
+    netWorth: (userId: string) => `finances/${userId}/net-worth`,
     accounts: (userId: string) => `finances/${userId}/accounts`,
     account: (userId: string, accountId: string) => `finances/${userId}/accounts/${accountId}`,
     accountActivity: (userId: string, accountId: string) =>

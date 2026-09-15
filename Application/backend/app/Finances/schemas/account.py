@@ -13,6 +13,20 @@ class AccountKind(str, Enum):
     INVESTMENT = "investment"
     EMERGENCY = "emergency"
     OTHER = "other"
+    #: Money owed rather than held -- a credit card, a student loan. Its balance
+    #: is the ordinary signed sum of its rows, so it reads negative: buying with
+    #: the card is an expense on the account, and paying it down is an ordinary
+    #: transfer that moves it toward zero. Nothing has to special-case the sign,
+    #: and a total that adds every balance subtracts debt for free.
+    DEBT = "debt"
+
+
+#: Kinds the app depends on having at least one of. Losing the last spending
+#: account takes safe-to-spend's only source away; losing the last savings
+#: account leaves nowhere for the income split to land.
+PROTECTED_KINDS: frozenset[AccountKind] = frozenset(
+    {AccountKind.SPENDING, AccountKind.SAVINGS}
+)
 
 
 #: Seeded for a new account holder. The first four come from the project notes
@@ -34,6 +48,10 @@ class AccountBase(BaseModel):
     income_share: float = Field(default=0.0, ge=0, le=100, description="Default share of income, percent")
     archived: bool = Field(default=False)
     position: int = Field(default=0, ge=0)
+    counts_toward_net_worth: bool = Field(
+        default=True,
+        description="Whether this balance reaches net worth. Any account may turn it off.",
+    )
 
     @model_validator(mode="after")
     def validate_account(self):
@@ -52,6 +70,7 @@ class AccountUpdate(BaseModel):
     income_share: float | None = Field(default=None, ge=0, le=100)
     archived: bool | None = None
     position: int | None = Field(default=None, ge=0)
+    counts_toward_net_worth: bool | None = None
 
 
 class Account(AccountBase):
@@ -59,9 +78,30 @@ class Account(AccountBase):
     #: Sum of the account's transactions. Derived rather than stored: a balance
     #: that disagrees with its own ledger is worse than one that costs a query.
     balance: float = 0.0
+    #: The last non-archived account of a kind the app depends on, so deleting,
+    #: archiving or re-kinding it is refused. Attached by the service so the
+    #: rule has one home; the client greys out the controls rather than
+    #: deciding for itself which accounts are load-bearing.
+    role_locked: bool = False
 
     class Config:
         from_attributes = True
+
+
+class NetWorth(BaseModel):
+    """What you have, and what you owe, as two figures rather than one total.
+
+    `net_worth` is a plain sum of the balances that count, which is why debt
+    needs no special case: a debt account's balance is already negative.
+    `debt_total` reports the same money as a positive magnitude, because "Debt
+    -1,000" reads as a double negative on screen.
+
+    Accounts toggled out of the total are silently absent from both -- money
+    someone else is holding is neither an asset nor a debt.
+    """
+
+    net_worth: float = 0.0
+    debt_total: float = 0.0
 
 
 # ------------------------------------------------------------------ activity --

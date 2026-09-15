@@ -170,6 +170,10 @@ def test_purging_a_user_leaves_nothing_behind(db, user):
 # ----------------------------------------------------- deleting an account --
 
 def test_an_account_with_a_standing_instruction_is_refused(db, user):
+    # A second spending account, so this reaches the refusal it is about:
+    # the last account of a protected role is now refused earlier, for a
+    # different reason.
+    make_account(db, user.id, "Everyday")
     account = make_account(db, user.id, "Chequing")
     db.add(RecurringTransactionModel(
         id=uuid.uuid4(), user_id=user.id, account_id=account.id, kind="expense",
@@ -197,6 +201,9 @@ def test_an_account_a_sinking_fund_uses_is_refused(db, user):
 
 def test_deleting_an_account_takes_its_budget_targets(db, user):
     """A target is a planning number for one account, not history to keep."""
+    # A second spending account, so the delete is not refused for the unrelated
+    # reason that it would leave the student with no spending account at all.
+    make_account(db, user.id, "Everyday")
     account = make_account(db, user.id, "Chequing")
     db.add(BudgetTargetModel(
         id=uuid.uuid4(), user_id=user.id, account_id=account.id,
@@ -207,7 +214,9 @@ def test_deleting_an_account_takes_its_budget_targets(db, user):
     delete_account(db, user.id, account.id)
 
     assert db.query(BudgetTargetModel).count() == 0
-    assert db.query(AccountModel).count() == 0
+    # The account under test specifically, not the table -- "Everyday" is meant
+    # to survive, and asserting an empty table would pass for the wrong reason.
+    assert db.query(AccountModel).filter(AccountModel.id == account.id).count() == 0
 
 
 # ------------------------------------------------------------------ indexes --

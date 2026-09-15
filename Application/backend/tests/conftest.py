@@ -223,10 +223,17 @@ def make_user(db, email: str) -> UserModel:
     return row
 
 
-def make_account(db, user_id: uuid.UUID, name: str, share: float = 0.0) -> AccountModel:
+def make_account(
+    db,
+    user_id: uuid.UUID,
+    name: str,
+    share: float = 0.0,
+    kind: str = "spending",
+    archived: bool = False,
+) -> AccountModel:
     row = AccountModel(
-        id=uuid.uuid4(), user_id=user_id, name=name, kind="spending",
-        income_share=share, archived=False, position=0,
+        id=uuid.uuid4(), user_id=user_id, name=name, kind=kind,
+        income_share=share, archived=archived, position=0,
     )
     db.add(row)
     db.commit()

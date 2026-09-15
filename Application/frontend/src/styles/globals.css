@@ -22,6 +22,9 @@
 
   --error: #d40707;
   --delete: #f87171;
+  /* Money owed, and being over-committed: the same red, because they are the
+     same kind of news. safeBlockOver has used this value since it was written. */
+  --debt: #e0685f;
 
   --shadow: rgba(0,0,0,0.4);
 

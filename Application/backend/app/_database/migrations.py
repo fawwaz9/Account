@@ -36,6 +36,16 @@ ADDED_COLUMNS: dict[str, dict[str, str]] = {
         "transfer_credit": "BOOLEAN NOT NULL DEFAULT 0",
         "archived": "BOOLEAN NOT NULL DEFAULT 0",
     },
+    "accounts": {
+        # NOT "DEFAULT 0"/"DEFAULT 1" like the older booleans above. Postgres
+        # refuses an integer default on a boolean column -- "column is of type
+        # boolean but default expression is of type integer" -- and this is the
+        # first entry here that will ever run as an ALTER against Postgres:
+        # every older one predates Supabase, whose tables create_all built from
+        # the models with nothing left for ensure_schema to add. The `true`
+        # literal is accepted by both SQLite and Postgres.
+        "counts_toward_net_worth": "BOOLEAN NOT NULL DEFAULT true",
+    },
     "grades": {
         "due_date": "DATE",
         "schedule_as": "VARCHAR NOT NULL DEFAULT 'task'",

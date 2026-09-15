@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  fetchNetWorth,
   fetchSafeToSpend,
   fetchAccounts,
   fetchBudgetSummary,
@@ -17,6 +18,7 @@ import {
   SpendCategory,
   Transaction,
   UpcomingCharge,
+  NetWorth,
 } from "../types";
 import { currentMonth, daysAgo, daysAhead, localToday } from "../dates";
 import { useAuth } from "../../../app/auth/AuthContext";
@@ -36,6 +38,7 @@ export function useBudget() {
   const [recurring, setRecurring] = useState<RecurringTransaction[]>([]);
   const [upcoming, setUpcoming] = useState<UpcomingCharge[]>([]);
   const [safe, setSafe] = useState<SafeToSpend | null>(null);
+  const [worth, setWorth] = useState<NetWorth | null>(null);
   const [month, setMonth] = useState(currentMonth());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -79,6 +82,7 @@ export function useBudget() {
         nextRecurring,
         nextUpcoming,
         nextSafe,
+        nextWorth,
       ] = await Promise.all([
         fetchAccounts(userId),
         // Only what is genuinely recent; the whole history lives on each
@@ -94,6 +98,8 @@ export function useBudget() {
         // Read after runRecurring above, so a payment written on this load
         // already counts as committed rather than as cash still in hand.
         fetchSafeToSpend(userId),
+        // All-time, so it does not move with the month picker above it.
+        fetchNetWorth(userId),
       ]);
       if (ticket !== latestRequest.current) return;
       setAccounts(nextAccounts);
@@ -103,6 +109,7 @@ export function useBudget() {
       setRecurring(nextRecurring);
       setUpcoming(nextUpcoming);
       setSafe(nextSafe);
+      setWorth(nextWorth);
     } catch (err) {
       if (ticket !== latestRequest.current) return;
       setError(err instanceof Error ? err.message : "Could not load your budget");
@@ -119,6 +126,7 @@ export function useBudget() {
 
   return {
     safe,
+    worth,
     accounts,
     transactions,
     categories,

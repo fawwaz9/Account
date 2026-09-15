@@ -31,9 +31,40 @@ what money went *on* (category) is separate from which pot it came *from*
 
 ## Data model
 
-`accounts` — name, `kind` (styling and defaults, not behaviour), `income_share`,
-`archived`, `position`. User-defined, because one student's "Savings" is
-another's "Tuition fund".
+`accounts` — name, `kind`, `income_share`, `archived`, `position`. User-defined,
+because one student's "Savings" is another's "Tuition fund".
+
+`kind` is mostly styling and sensible defaults, with **two** exceptions now:
+safe-to-spend counts `spending` accounts only, and `debt` marks money owed. The
+column's own comment warns against loading a third meaning onto it — the next
+per-account rule wants its own column.
+
+**A `debt` account is not a special case, and that is the design.** Its balance
+is the ordinary signed sum of its rows, so it reads negative: buying with the
+card is an expense on the account, and paying it down is an ordinary transfer
+that moves it toward zero. Nothing anywhere has to know the sign is backwards,
+and any total that adds every balance subtracts debt for free. Storing "amount
+owed" as a positive figure instead would have meant teaching the balance chart,
+the running balance and the money-in/money-out split that this one kind is
+different.
+
+### Two roles the app cannot do without
+
+The last non-archived **spending** account and the last **savings** account
+refuse to be deleted, archived, **or have their kind changed away**. The third
+is the one that would have been missed: re-kinding the only spending account to
+"other" empties the role exactly as deleting it would.
+
+Archiving counts as removal because `safe_service` filters on `archived` *and*
+`kind` — archiving the last spending account makes safe-to-spend report `$0.00`
+with nothing on screen to say why, which is a wrong answer that looks exactly
+like a right one.
+
+Protection reads the **kind, not the name**, so renaming "Spending" to
+"Chequing" keeps it and a student holding three spending accounts may delete any
+two. The rule lives in `would_orphan_role`, and `get_accounts` attaches a
+`role_locked` flag from the same helper so the client greys the controls out
+rather than keeping a second copy of the rule that is free to disagree.
 
 `transactions` — `kind` (income / expense / transfer), amount, `occurred_on`,
 `account_id`, and four nullable links that each mean exactly one thing:
@@ -53,6 +84,93 @@ copies. Stores the *rate*, not the total, so two instalments mean entering half
 the rate twice. `credits_counted` is stored rather than recomputed because it is
 what the bill was for: recomputing it later would rewrite history when a course
 is added or dropped.
+
+## Net worth, and why debt needs no arithmetic
+
+The page used to show `Total:` — a plain client-side sum of every balance. It
+counted a credit card as though it were savings and Money Lent as though it were
+in your pocket, and the **dashboard computed the same sum a second time**, so
+there were two copies of a rule free to disagree.
+
+```
+net_worth  = sum(balance for a in accounts if a.counts_toward_net_worth)
+debt_total = abs(sum(balance for a in accounts if a.kind == "debt"))
+```
+
+**`net_worth` is a plain sum, and that is the whole point.** A debt account's
+balance is already negative, so it subtracts itself. Subtracting `debt_total`
+as well is the one mistake this design invites, and it reports someone 500 in
+the black as 500 in the red — there is a test named for it.
+
+`debt_total` reports the same money as a positive magnitude, because "Debt
+−1,000" reads as a double negative on screen. It is a component of the figure
+above it, not a second answer, so it is rendered smaller.
+
+An account toggled out of the total appears on **neither** line. Money owed *to*
+you and money owed *by* you are opposites, and a single "outside net worth"
+figure would add them together.
+
+Archived accounts are excluded, matching `get_accounts`, so the headline and the
+list below it always move together.
+
+**Any account may be taken out of the total.** This was first built so that only
+an `other` account could, on the reasoning that Money Lent was the real case and
+that hiding a savings account would let the headline be quietly falsified. That
+was reversed deliberately: it trades a rule the student has to be told about for
+a judgement they are better placed to make, and a joint account or a pot held for
+somebody else is just as real a case as Money Lent.
+
+The default is still to count, so nothing is hidden unless it is chosen.
+
+**It is independent of `kind`, and must stay that way.** Excluding a spending
+account from net worth does not change what safe-to-spend counts — *what am I
+worth* and *what can I spend before payday* are different questions, and one
+setting quietly moving two figures is the kind of coupling that makes a number
+untrustworthy. There is a test asserting exactly that.
+
+> **The migration is the interesting part.** Every older boolean in
+> `ADDED_COLUMNS` is written `BOOLEAN NOT NULL DEFAULT 0`, which **Postgres
+> rejects** — *"column is of type boolean but default expression is of type
+> integer"*. `counts_toward_net_worth` is the first entry there that will ever
+> run as an `ALTER` against Postgres, because every older one predates Supabase,
+> whose tables `create_all` built from the models with nothing left to add. It
+> uses `DEFAULT true`, which both dialects accept. Verified on a real
+> `postgres:17-alpine` with rows present, and on a copy of `data/app.db` with
+> the column dropped first.
+
+## Editing the split and the categories
+
+Both had complete server-side CRUD from the day they were written, and no UI.
+Three of the four category endpoints had **never been called by anything**, and
+`updateCategory` did not exist in the client at all.
+
+**The income split is edited as a whole**, not one account at a time. The
+per-account field in Edit account still works and writes the same column, but
+these are *ratios*: a share of 50 means 55.6% of income when the shares total
+90, and a single field cannot say so. The modal shows every account with what
+its share actually comes to.
+
+Saving is one PATCH per changed account. A partial failure is survivable here
+and only here — because income divides by ratio, whatever lands is still a
+valid split, just not the intended one. What is **not** survivable is every
+share at zero, which leaves a deposit nowhere to go; `record_deposit` has always
+refused that, and the modal refuses to save it rather than walking you into it.
+
+> **Making rename reachable exposed a bug that had never been reachable.**
+> `create_category` checks for a clash with `ilike`; `update_category` checked
+> nothing. Two faults sat behind that, and one comparison closes both: the
+> unique index `uq_spend_categories_user_name` is **case-sensitive**, so
+> renaming to "groceries" beside "Groceries" slipped past it and produced two
+> categories nobody could tell apart — while an exact-case collision *did* hit
+> the index and escaped as an `IntegrityError`, reaching the client as a 500.
+> That is the same shape as the concurrent-registration fault in the audit's
+> low tier, one module along.
+
+**"Where it went" always renders now.** It used to be conditional on there being
+spend, which hid both of these controls in exactly the month you are most likely
+to want them, and made the page silently switch between one and two columns.
+The section takes its two actions as optional props: the account detail page
+reuses it for a single account, where page-level controls would be out of place.
 
 ## The tuition shape, and why everything reuses it
 
@@ -204,3 +322,6 @@ detector.
 ## Still open
 
 Reimbursement state, and who and when on Money Lent.
+
+Account ordering is stored (`position`) and has no editor, so the grid order is
+whatever creation produced. Worth a drag handle only if the list gets long.

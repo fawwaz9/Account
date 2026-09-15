@@ -44,10 +44,23 @@
 
 .sectorsHeader h2 { margin: 0; font-size: 1.3rem; }
 
-.sectorsTotal {
-  font-size: 1.25rem;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
+.sectorsHeaderEnd {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+/* An action that belongs in a sentence rather than on a button: used in the
+   empty state, where "Add an account first" needs somewhere to go. */
+.linkButton {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--gold);
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 .sectorGrid {
@@ -88,6 +101,7 @@
 .sectorKind--investment { background: #77c9a0; }
 .sectorKind--emergency { background: var(--delete); }
 .sectorKind--other { background: var(--muted); }
+.sectorKind--debt { background: var(--debt); }
 
 .sectorName { font-size: 0.85rem; color: var(--muted); }
 
@@ -99,6 +113,113 @@
 }
 
 .sectorShare { margin-top: 2px; }
+
+/* A debt account reads red -- it is the one card where a bigger number is
+   worse. The kind is still written out in .sectorKindLabel beside the name, so
+   the colour is reinforcement and never the only thing carrying the meaning:
+   the same rule the accessibility pass applied when account kind was a
+   coloured stripe and nothing else. */
+.sectorCard--debt .sectorBalance,
+.sectorCard--debt .sectorKindLabel {
+  color: var(--debt);
+}
+
+/* ----- Income split and category editors ----- */
+
+/* Side by side under "Where it went", which is the list they change. */
+.categoryActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.categoryActions button { flex: 1 1 auto; }
+
+.splitList {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.splitRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 90px;
+  align-items: center;
+  gap: 10px 12px;
+}
+
+.splitName {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.splitInput {
+  width: 100%;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Spans both columns so the derived percentage sits under the pair it
+   describes rather than squeezing the name. */
+.splitPortion {
+  grid-column: 1 / -1;
+  text-align: right;
+  margin-top: -4px;
+}
+
+.categoryEditList {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.categoryEditRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.categoryEditRow .loginInput {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+/* Fixed-height controls need their own box model: the base .container button
+   rule sets padding 7px 14px, which puts a glyph low and to the right. */
+.categoryEditAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  box-sizing: border-box;
+  font-size: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.categoryEditDanger { color: var(--delete); }
+
+.categoryAddRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.categoryAddRow .loginInput { flex: 1 1 160px; min-width: 0; }
 
 /* ----- Ledger ----- */
 
@@ -763,6 +884,85 @@
    The only thing on the budget page that answers a question rather than
    recording one, so it leads and it is one figure. Everything below it is the
    working. */
+
+/* Safe-to-spend and net worth answer the two questions worth asking about
+   money -- what can I spend now, and where do I stand overall -- so they sit
+   beside each other rather than one burying the other. Collapses at the same
+   900px the rest of this page uses. */
+.budgetTopRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+  margin: 0 0 22px;
+}
+
+@media (max-width: 900px) {
+  .budgetTopRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The block itself no longer owns the gap -- the row does, or the two panels
+   sit at different heights with a stray margin under one of them. */
+.budgetTopRow > .safeBlock,
+.budgetTopRow > .netWorthBlock {
+  margin: 0;
+  height: 100%;
+}
+
+.netWorthBlock {
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Being underwater overall is not a failure state to hide, it is the single
+   most useful thing this figure can say -- the same treatment safeBlockOver
+   gives being over-committed. */
+.netWorthBlockUnder {
+  border-color: var(--debt);
+  background: rgba(224, 104, 95, 0.12);
+}
+
+.netWorthHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.netWorthHeadline {
+  font-size: 2rem;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+
+.netWorthBlockUnder .netWorthHeadline { color: var(--debt); }
+
+/* Smaller than the headline on purpose: it is a component of the figure above,
+   not a second answer competing with it. */
+.netWorthDebt {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 10px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.netWorthDebtAmount {
+  color: var(--debt);
+  font-variant-numeric: tabular-nums;
+}
 
 .safeBlock {
   margin: 0 0 22px;

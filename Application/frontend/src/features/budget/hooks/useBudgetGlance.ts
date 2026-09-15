@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { fetchAccounts, fetchBudgetSummary } from "../api";
-import { Account, BudgetSummary } from "../types";
+import { fetchAccounts, fetchBudgetSummary, fetchNetWorth } from "../api";
+import { Account, BudgetSummary, NetWorth } from "../types";
 import { currentMonth } from "../dates";
 import { useAuth } from "../../../app/auth/AuthContext";
 
@@ -17,17 +17,23 @@ export function useBudgetGlance() {
   const userId = user?.id;
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [summary, setSummary] = useState<BudgetSummary | null>(null);
+  const [worth, setWorth] = useState<NetWorth | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!userId) return;
 
     let cancelled = false;
-    Promise.all([fetchAccounts(userId), fetchBudgetSummary(userId, currentMonth())])
-      .then(([nextAccounts, nextSummary]) => {
+    Promise.all([
+      fetchAccounts(userId),
+      fetchBudgetSummary(userId, currentMonth()),
+      fetchNetWorth(userId),
+    ])
+      .then(([nextAccounts, nextSummary, nextWorth]) => {
         if (cancelled) return;
         setAccounts(nextAccounts);
         setSummary(nextSummary);
+        setWorth(nextWorth);
       })
       .catch((err) => {
         if (!cancelled) {
@@ -40,7 +46,11 @@ export function useBudgetGlance() {
     };
   }, [userId]);
 
-  const totalBalance = accounts.reduce((sum, account) => sum + account.balance, 0);
+  // Was a client-side sum of every balance, which counted a credit card as
+  // savings and money someone else was holding as money in your pocket. The
+  // server owns the rule now, so this figure and the budget page's agree by
+  // construction rather than by both being written the same way twice.
+  const totalBalance = worth?.net_worth ?? 0;
 
-  return { accounts, summary, totalBalance, error };
+  return { accounts, summary, totalBalance, netWorth: worth, error };
 }

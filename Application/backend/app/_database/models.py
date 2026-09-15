@@ -216,6 +216,18 @@ class AccountModel(Base):
     #: Archived accounts keep their history but stop being offered.
     archived = Column(Boolean, nullable=False, default=False)
     position = Column(Integer, nullable=False, default=0)
+    #: Whether this balance reaches the net worth figure. Defaults to counting,
+    #: and any account may turn it off -- the student owns the data and knows
+    #: why a pot should not count. Money Lent is the obvious case, being money
+    #: someone else is holding, but a joint account or one held for somebody
+    #: else are just as real and no rule here could anticipate them.
+    #:
+    #: Independent of `kind`, deliberately. Excluding a spending account from
+    #: net worth does not stop safe-to-spend counting it: "what am I worth" and
+    #: "what can I spend now" are different questions.
+    counts_toward_net_worth = Column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
 
     user = relationship("UserModel", back_populates="accounts")
     transactions = relationship(

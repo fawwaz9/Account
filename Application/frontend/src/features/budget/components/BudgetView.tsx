@@ -1,5 +1,6 @@
 import { useState } from "react";
 import SafeToSpend from "./SafeToSpend";
+import NetWorth from "./NetWorth";
 import SinkingFunds from "./SinkingFunds";
 import Subscriptions from "./Subscriptions";
 import SinkingFundModal from "./SinkingFundModal";
@@ -8,6 +9,8 @@ import Transactions from "./Transactions";
 import AddMoneyModal from "./AddMoneyModal";
 import PlannedSpend from "./PlannedSpend";
 import WhereItWent from "./WhereItWent";
+import IncomeSplitModal from "./IncomeSplitModal";
+import CategoriesModal from "./CategoriesModal";
 import EditTransactionModal from "./EditTransactionModal";
 import EditAccountModal from "./EditAccountModal";
 import Recurring from "./Recurring";
@@ -28,7 +31,7 @@ export default function BudgetView() {
   const { user } = useAuth();
   const {
     accounts, transactions, categories, summary, recurring, upcoming,
-    safe, month, setMonth, loading, error, reload,
+    safe, worth, month, setMonth, loading, error, reload,
   } = useBudget();
   // Reused rather than refetched: the course picker needs the same list the
   // Grades page already loads.
@@ -52,6 +55,9 @@ export default function BudgetView() {
   }
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
+  const [addingAccount, setAddingAccount] = useState(false);
+  const [splitOpen, setSplitOpen] = useState(false);
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
   const [fundOpen, setFundOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<RecurringTransaction | null>(null);
   const [addingRule, setAddingRule] = useState(false);
@@ -111,17 +117,34 @@ export default function BudgetView() {
       {loading && <p className="muted">Loading your accounts...</p>}
       {error && <p className="muted" role="alert">{error}</p>}
       {!loading && !error && accounts.length === 0 && (
-        <p className="muted">{NO_ACCOUNTS_YET}</p>
+        <p className="muted">
+          {NO_ACCOUNTS_YET}{" "}
+          <button
+            type="button"
+            className="linkButton"
+            onClick={() => setAddingAccount(true)}
+          >
+            Add one
+          </button>
+        </p>
       )}
 
       {!loading && !error && (
         <>
-          {/* First, because it is the only thing on this page that answers a
-              question rather than recording one. Everything below is the
-              working; this is the conclusion. */}
-          <SafeToSpend safe={safe} />
+          {/* First, because these are the only things on this page that answer
+              a question rather than recording one. Everything below is the
+              working; this is the conclusion -- what you can spend now, and
+              where you stand overall. */}
+          <div className="budgetTopRow">
+            <SafeToSpend safe={safe} />
+            <NetWorth figure={worth} />
+          </div>
 
-          <Sectors accounts={accounts} onEdit={setEditingAccount} />
+          <Sectors
+            accounts={accounts}
+            onEdit={setEditingAccount}
+            onAdd={() => setAddingAccount(true)}
+          />
 
           {/* Under the accounts, above the month: what is reserved is a claim on
               the balances just shown, and it changes the safe figure at the top. */}
@@ -135,7 +158,7 @@ export default function BudgetView() {
               tuition and textbooks, so the term is the frame you want first. */}
           <TermBudget nonce={termNonce} />
 
-          <div className={spendByCategory.length > 0 ? "budgetGrid" : ""}>
+          <div className="budgetGrid">
             <div className="budgetColumn">
               <PlannedSpend
                 summary={summary}
@@ -162,7 +185,11 @@ export default function BudgetView() {
               </section>
             </div>
 
-            {spendByCategory.length > 0 && <WhereItWent entries={spendByCategory} />}
+            <WhereItWent
+              entries={spendByCategory}
+              onEditSplit={() => setSplitOpen(true)}
+              onEditCategories={() => setCategoriesOpen(true)}
+            />
           </div>
 
           {/* Above Recurring: a finding here is what turns into one of the rules
@@ -211,6 +238,30 @@ export default function BudgetView() {
         onClose={() => setEditingAccount(null)}
         onSaved={reloadAll}
       />
+
+      <IncomeSplitModal
+        open={splitOpen}
+        accounts={accounts}
+        onClose={() => setSplitOpen(false)}
+        onSaved={reloadAll}
+      />
+
+      <CategoriesModal
+        open={categoriesOpen}
+        categories={categories}
+        onClose={() => setCategoriesOpen(false)}
+        onSaved={reloadAll}
+      />
+
+      {addingAccount && (
+        <EditAccountModal
+          account={null}
+          creating
+          accounts={accounts}
+          onClose={() => setAddingAccount(false)}
+          onSaved={reloadAll}
+        />
+      )}
 
       <EditTransactionModal
         transaction={editing}

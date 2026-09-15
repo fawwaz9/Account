@@ -7,7 +7,14 @@ export type AccountKind =
   | "savings"
   | "investment"
   | "emergency"
-  | "other";
+  | "other"
+  /**
+   * Money owed rather than held. Its balance is the ordinary signed sum of its
+   * rows, so it reads negative -- buying with the card is an expense on the
+   * account, paying it down is a transfer toward zero. Nothing special-cases
+   * the sign, which is why a total that adds every balance subtracts debt.
+   */
+  | "debt";
 
 export interface Account {
   id: string;
@@ -17,8 +24,31 @@ export interface Account {
   income_share: number;
   archived: boolean;
   position: number;
+  /**
+   * Whether this balance reaches the net worth figure. Only an "other" account
+   * may turn it off -- the case it exists for is Money Lent, which is money
+   * someone else is holding. A debt account needs no flag: its balance is
+   * already negative, so it subtracts itself.
+   */
+  counts_toward_net_worth: boolean;
   /** Derived from the account's transactions, not stored */
   balance: number;
+  /**
+   * The last non-archived account of a kind the app depends on. The server
+   * refuses to delete, archive or re-kind it; this is the same rule, sent
+   * along so the controls can say so before you click them.
+   */
+  role_locked: boolean;
+}
+
+export interface NetWorth {
+  /**
+   * The sum of the balances that count. Debt needs no arithmetic of its own:
+   * a debt account's balance is already negative, so it subtracts itself.
+   */
+  net_worth: number;
+  /** The same money as a positive figure -- "Debt -1,000" reads as a double negative. */
+  debt_total: number;
 }
 
 export interface AccountCreate {
@@ -27,6 +57,7 @@ export interface AccountCreate {
   income_share: number;
   archived: boolean;
   position: number;
+  counts_toward_net_worth?: boolean;
 }
 
 export type TransactionKind = "income" | "expense" | "transfer";

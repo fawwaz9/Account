@@ -11,6 +11,7 @@ from app.Finances.schemas.account import (
     AccountActivity,
     AccountCreate,
     AccountUpdate,
+    NetWorth,
 )
 from app.Finances.schemas.safe import SafeToSpend
 from app.Finances.schemas.subscription import SubscriptionCandidate, SubscriptionConfirm
@@ -58,6 +59,7 @@ from app.Finances.services.account_service import (
     delete_account,
     get_account,
     get_accounts,
+    net_worth,
     update_account,
 )
 from app.Finances.services.tuition_service import (
@@ -302,6 +304,21 @@ def add_account(user_id: VerifiedUserId, account: AccountCreate, db: DBSession):
         raise HTTPException(status_code=404, detail=error_user["not_found"])
 
     return created
+
+
+@router.get("/{user_id}/net-worth", response_model=NetWorth, responses=responses["user_404"])
+def read_net_worth(user_id: VerifiedUserId, db: DBSession):
+    """What counts, less what is owed -- and the debt on its own line.
+
+    Its own endpoint rather than two floats on the month's budget summary: this
+    figure is all-time, and one that appeared to respond to the month picker
+    would invite exactly the wrong question about it.
+    """
+    figure = net_worth(db, user_id)
+    if figure is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+
+    return figure
 
 
 @router.get("/{user_id}/accounts/{account_id}", response_model=Account, responses=ACCOUNT_404)

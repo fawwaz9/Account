@@ -5,6 +5,7 @@ import { formatMoney } from "../money";
 interface SectorsProps {
   readonly accounts: readonly Account[];
   readonly onEdit: (account: Account) => void;
+  readonly onAdd: () => void;
 }
 
 /** The pots money sits in, with what each currently holds. */
@@ -14,24 +15,30 @@ const KIND_LABELS: Record<string, string> = {
   investment: "Investment",
   emergency: "Emergency",
   other: "Other",
+  debt: "Debt",
 };
 
-export default function Sectors({ accounts, onEdit }: SectorsProps) {
-  const total = accounts.reduce((sum, account) => sum + account.balance, 0);
-  const shareTotal = accounts.reduce((sum, account) => sum + account.income_share, 0);
-
+export default function Sectors({ accounts, onEdit, onAdd }: SectorsProps) {
   return (
     <section className="sectors">
       <div className="sectorsHeader">
         <h2>Accounts</h2>
-        <span className="sectorsTotal">
-          Total: {formatMoney(total)}
-        </span>
+        {/* No total here any more. Net worth, above, is the figure -- and it
+            counts different things, so two totals on one page would sooner or
+            later disagree in front of you. */}
+        <div className="sectorsHeaderEnd">
+          <button type="button" className="buttons addCourseButton" onClick={onAdd}>
+            Add account
+          </button>
+        </div>
       </div>
 
       <div className="sectorGrid">
         {accounts.map((account) => (
-          <div className="sectorCard" key={account.id}>
+          <div
+            className={`sectorCard${account.kind === "debt" ? " sectorCard--debt" : ""}`}
+            key={account.id}
+          >
             {/* The stripe is decoration. The kind is also written out, because
                 conveying it by colour alone leaves it unreadable to anyone who
                 cannot tell these five apart -- the same reason the Jobs page

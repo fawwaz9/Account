@@ -10,6 +10,7 @@ import {
   Account,
   AccountActivity,
   AccountCreate,
+  NetWorth,
   BudgetSummary,
   DepositCreate,
   DepositPreview,
@@ -29,6 +30,15 @@ import {
   TuitionUpdate,
   UpcomingCharge,
 } from "./types";
+
+/**
+ * What counts, less what is owed. Computed on the server because two screens
+ * show it -- this page and the dashboard -- and a rule about which accounts
+ * count is exactly the kind that drifts when it is written twice.
+ */
+export async function fetchNetWorth(userId: string): Promise<NetWorth> {
+  return get<NetWorth>(endpoints.finances.netWorth(userId));
+}
 
 export async function fetchAccounts(userId: string): Promise<Account[]> {
   return get<Account[]>(endpoints.finances.accounts(userId));
@@ -130,6 +140,19 @@ export async function createCategory(userId: string, name: string) {
     archived: false,
     position: 0,
   });
+}
+
+/**
+ * Rename or archive a category. The PATCH route has existed since categories
+ * were built; this function is what was missing, which is why nothing could
+ * edit one.
+ */
+export async function updateCategory(
+  userId: string,
+  categoryId: string,
+  payload: { name?: string; archived?: boolean; position?: number }
+) {
+  return patch<SpendCategory>(endpoints.finances.category(userId, categoryId), payload);
 }
 
 /** Removes the label only; the expenses it was on become uncategorised. */

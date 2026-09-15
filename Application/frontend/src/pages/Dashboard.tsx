@@ -72,7 +72,9 @@ export default function Dashboard() {
           <div className="summaryStats">
             <div className="statBlock">
               <span className="statValue">{formatMoney(totalBalance)}</span>
-              <span className="statLabel">Across accounts</span>
+              {/* "Across accounts" while this was a plain sum, which was the
+                  wrong name for it even then -- it counted debt as savings. */}
+              <span className="statLabel">Net worth</span>
             </div>
             <div className="statBlock">
               <span className="statValue">{formatMoney(budget.total_actual)}</span>

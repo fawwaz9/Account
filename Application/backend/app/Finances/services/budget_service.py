@@ -109,7 +109,33 @@ def update_category(db: Session, user_id: uuid.UUID, category_id: uuid.UUID, dat
     if category is None:
         return None
 
-    for key, value in data.model_dump(exclude_unset=True).items():
+    update_data = data.model_dump(exclude_unset=True)
+
+    # `create_category` has always checked this and rename never did, because
+    # until categories became editable there was no way to reach it. Two faults
+    # sit behind it, and the case-insensitive comparison is what closes both:
+    #
+    #   * `uq_spend_categories_user_name` is case-SENSITIVE, so renaming
+    #     "Transport" to "groceries" beside an existing "Groceries" passes the
+    #     index and leaves two categories the student cannot tell apart;
+    #   * an exact-case collision does hit the index, and the IntegrityError
+    #     escapes the route's ValueError handler as a 500 -- the same shape as
+    #     the concurrent-registration bug in the audit's low tier.
+    new_name = update_data.get("name")
+    if new_name is not None:
+        clash = (
+            db.query(SpendCategoryModel)
+            .filter(
+                SpendCategoryModel.user_id == user_id,
+                SpendCategoryModel.id != category_id,
+                SpendCategoryModel.name.ilike(new_name),
+            )
+            .first()
+        )
+        if clash:
+            raise ValueError("A category with that name already exists")
+
+    for key, value in update_data.items():
         setattr(category, key, value)
 
     db.commit()
