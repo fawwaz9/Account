@@ -1168,11 +1168,29 @@ is the worst time to work it out. Keep it next to this file.
 
 ### 37. Add yourself and two friends — **DONE**
 
-`ALLOWED_SIGNUP_EMAILS` holds three addresses. The second person has signed in
-and their accounts seeded, which is the first time any of this ran for someone
-who did not build it.
+`ALLOWED_SIGNUP_EMAILS` holds **four** addresses as of revision
+`account-api-00006-rtl` — the original three plus `david.ibie23@gmail.com`. The
+second person has signed in and their accounts seeded, which is the first time
+any of this ran for someone who did not build it.
 
 **Do:** put three addresses in `ALLOWED_SIGNUP_EMAILS`. Not twenty.
+
+**Adding one later** is `--update-env-vars`, which replaces that variable whole
+rather than appending to it — so read the current value first and pass every
+address back, or the people already invited quietly stop being able to create an
+account. Existing accounts keep working either way: the list gates creation, not
+sign-in.
+
+```sh
+gcloud run services describe account-api --region=us-west1 \
+  --format="value(spec.template.spec.containers[0].env)" | tr ';' '\n' | grep ALLOWED_SIGNUP
+gcloud run services update account-api --region=us-west1 \
+  --update-env-vars='^##^ALLOWED_SIGNUP_EMAILS=<every address, including the new one>'
+```
+
+Then confirm `spec.traffic[].latestRevision` is still `True` — a pinned service
+takes the new revision and serves the old one, so the invite appears to have
+been ignored.
 
 ### 38. Watch for a week — **running, started 2026-09-14**
 

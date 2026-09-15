@@ -1,4 +1,33 @@
 Shipped so far (do not re-propose)
+        Editing a task at all. Every row has an Edit button and a task on the
+          calendar opens the same dialog, which also carries the Complete
+          button. Before this a task could be ticked, snoozed, re-prioritised
+          and deleted -- and a title typed wrongly could only be deleted and
+          retyped. PATCH /tasks/{id} and updateTask both already existed; there
+          was no dialog calling them.
+        A calendar task chip opens that editor instead of ticking the task off.
+          The calendar could previously do exactly one thing to a task, so a
+          click meant to look at one finished it. One-click ticking from the
+          calendar is the cost; it is two clicks through the editor now.
+        Editing ONE occurrence of a repeat, which needed a new column to be
+          safe. Occurrences were identified by their due date, so moving
+          Monday's chore to Wednesday made Monday look unwritten and the next
+          page load put a second copy back on it -- and the stale sweep deleted
+          the moved one. tasks.occurrence_date is the date the rule produced and
+          nothing but the rule writes it; due_date is where it currently sits.
+          Editing the RULE still rewrites outstanding occurrences, which is what
+          a repeat is for, and the dialog says so.
+        A time on a grade's date, and a length for one on the calendar. A lab
+          due at noon and a 14:00 midterm running two hours are each entered
+          once in the gradebook. A length rather than an end time: "two hours"
+          is what you know, and an end derived from a start cannot end before
+          it. Both are optional and blank by default -- a guessed 09:00 reads
+          on the calendar as a fact.
+        A Close button on the event popup. It had none: Modal has no x and does
+          not close on a backdrop click, and the grade branch rendered an
+          explanatory sentence and no buttons at all. The nearest thing to a
+          dismiss on the other branch was "Cancel this one", which cancels the
+          lecture.
         An income split editor and a category manager, side by side under Where
           it went. The split shows every account at once with what each share
           comes to as a percentage of income -- these are ratios, so a single
@@ -15,7 +44,7 @@ Shipped so far (do not re-propose)
           server, because the dashboard shows the same figure and a rule about
           which accounts count is the kind that drifts when written twice.
         counts_toward_net_worth, available on every account kind and on by
-          default. Money Lent, a joint account or anything held for someone
+          default. Money lent out, a joint account or anything held for someone
           else can be taken out of the total. Deliberately independent of
           safe-to-spend: excluding a spending account from net worth does not
           change what you can spend, because those are different questions.
@@ -184,27 +213,97 @@ Shipped so far (do not re-propose)
           courses, so one hard class cannot trigger it alone.
 
 
-What is left, by module. Tasks and Calendar no longer appear: everything that
-was under them has shipped.
+What is left, by module.
+
+Settings:
+        Make the whole password section side to side with the account section.
+        There should be academic, calender and financial settings. 
+        They should only show up when they are selected one at a time. Default is academic. The other options are beside it.
+        Gold underline under the setting that is currently being shown.
+        Add under here suggestions for what to be in each.
 
 Calendar:
-        A line at the exact time of the day it currently is. 
+        A line at the exact time of the day it currently is.
+          Confirmed missing -- nothing in the calendar draws one today.
+          Cheap: WeekView.tsx already lays the grid out from DAY_START with a
+          fixed HOUR_HEIGHT (weekLayout.ts), so the line is one absolutely
+          positioned div at (nowHour - DAY_START) * HOUR_HEIGHT, inside the
+          column for today only. The only real decisions are whether it ticks
+          (a minute interval) or is placed once on render, and that it must not
+          draw on a week that is not the current one.
         Color customization of different category types of events.
-
-Tasks:
-        Add time when creating tasks.
+          There are EIGHT kinds, not the five your data happens to use:
+          lecture, lab, discussion, midterm, final, deadline, personal, shift.
+          Colour is a CSS class per kind today -- EventCard.tsx:24 builds
+          `calChip-${kind}` and calendar.css carries a rule for each.
+          So customising means storing a colour per kind. UserPreferences is
+          the natural home: a JSON column parsed through a Pydantic model,
+          where new keys are additive and need no migration.
+          ONE THING TO DECIDE FIRST: EventKind's own docstring says these are a
+          fixed enum rather than a user table precisely BECAUSE each kind has
+          behaviour attached -- a midterm is themed and sorts differently, and
+          shifts are excluded from blackouts. Recolouring them is fine; letting
+          users ADD kinds is the thing that conflicts with that reasoning.
 
 Grades: 
         Think of other functionalities that can merge over to the other.
+          UNCLEAR -- "the other" what? This reads as a note to yourself that has
+          lost its referent. If it means more Grades x Budget style joins, the
+          ones that exist are listed in design/README.md under "Where the
+          modules meet", and the unbuilt ones worth having are probably
+          Grades x Jobs (does term workload track hours worked) and
+          Jobs x Calendar beyond shifts. Rewrite it or delete it.
         Cheapest path to a target: which remaining item moves the average most per hour spent.
         Term retrospective when a term closes: what moved, what slipped, what you predicted vs got.
         Syllabus paste: drop the text in, get categories, weights and due dates proposed for review.
         Make syllabus parser the main when adding courses but add a button to do it manually.
         When editing courses the manual is the default but syllabus parser will be available under the manual grid.
+        How are term dates currently calculated.
+          ANSWER: they are not stored anywhere. term_span() in
+          Finances/services/tuition_service.py:389 takes min(start_date) and
+          max(end_date) across the courses in the term. A course with no dates
+          contributes nothing rather than defaulting to today, which would
+          quietly shrink the span. Only Grades knows when a term runs, and it
+          knows it per course rather than centrally.
+          WHY THAT MATTERS HERE: 6 of your 27 courses carry dates, and all six
+          are this term. So the term span works right now and is blank for every
+          past term -- which is why the term retrospective and Term Budget have
+          nothing to measure historically. Fixed dates would fix that.
+        Chanage it to
+          Fall - Sep 1 to dec 31
+          Winter - Jan 1 to Apr 30
+          Spring - May 1 to June 31        <-- June has 30 days
+          Summer - July 1 to August 31
+          NOTE: your current Fall courses run Sep 9 to Dec 7, so a fixed
+          Sep 1 - Dec 31 span is WIDER than the real one. Term Budget measures
+          spending over the span, so widening it pulls in a few weeks of summer
+          and winter-break spending that no course was running for. Worth
+          deciding whether the fixed dates replace the per-course ones or only
+          fill in when a course has none -- the second keeps both behaviours.
+          Also: your courses only ever use Fall, Winter and Summer. Spring is
+          new to your DATA but not to the CODE -- see point 3 below.
 
-Budget:
-        Money Lent gets who and when, plus a nudge when it has been out too long.
-        Reimbursement state on a transaction: owed, claimed, received.
+        Is it worth it or safe to make not just the dates but the semesters editable due to how integral they are to the structure of the app.
+          Safe, but not free, and there are three things to know first.
+          1. The DB column is a plain String (models.py:116), so the database
+             accepts anything. The GATE is Pydantic: there are TWO Semester
+             enums -- Grades/utils/enums.py and Users/schemas/academic_status.py
+             -- and both list Fall/Winter/Spring/Summer. They agree today.
+             Editable semesters means either keeping both in step or collapsing
+             them to one, and two enums for one concept is already a smell.
+          2. SEMESTER_ORDER is the part that actually breaks. Declaration order
+             is not chronological, so terms sort through an explicit map
+             (Fall 0, Winter 1, Spring 2, Summer 3), read by Grades/utils/
+             terms.py and course_service.py:190. A custom semester with no entry
+             falls through to .get(..., 0) and silently sorts as if it were
+             Fall -- wrong order, no error. Any editable scheme needs an order
+             per term, not just a name.
+          3. Spring is ALREADY in both enums -- it is only absent from your
+             data. So adding Spring to the term-date table needs no code change
+             at all.
+          Renaming is the risky operation, not adding: courses store the string,
+          so a rename orphans every course carrying the old one unless it
+          updates them in the same transaction.
 
 Jobs:   
         A fortnightly shift. ShiftMeeting is the same shape as ClassMeeting,
@@ -217,6 +316,8 @@ Jobs:
           other income, which claims it is in the bank when it is in a pocket.
           A cash account with its own share is the workaround; whether that is
           good enough is worth finding out before building anything.
+        Confirmed shifts leave the shifts section after 20 days They are still in db and calendar. 
+          Also unconfirmed shifts should be placed at the top of the list sorted by the closest dates.
 
 Grades x Budget (nothing else does this):
         A dollar figure next to a dropped course, since the deadline to drop with a refund is a date on the calendar.
@@ -226,6 +327,26 @@ Quality of Life:
         Weekly digest on the dashboard: what is due, what moved, what you spent.
         Keyboard shortcuts for the four things you do twenty times a day.
         Offline-capable, because campus wifi. Only read-only offline should be implemented.
+        Remove all the dashboard buttons for the modules the sidebar is enough in my opinion.
+          Confirmed: Dashboard.tsx lines 149-169, five buttons that only call
+          navigate() -- /grades, /calendar, /tasks, /budget, /settings. They
+          duplicate the sidebar exactly. Deleting them is deletion only, no
+          replacement needed. Check the .action-widget CSS has no other user
+          before removing it too.
+        Add icons for each module in the sidebar.
+          Confirmed missing: Sidebar.tsx renders labels only, zero svg. The nav
+          is a plain array of {to, label} at lines 11-17, so this is one icon
+          field on that array plus the svg. Seven entries: Dashboard, Grades,
+          Calendar, Tasks, Jobs, Budget, Settings.
+          Inline the svg rather than adding an icon library -- the CSP on the
+          deployed site only admits scripts from cdnjs, and a whole icon
+          package for seven glyphs is a lot of bundle for the value.
+          Keep the text labels. Icon-only navigation is the accessibility
+          regression this codebase has already fixed twice, most recently when
+          account kind was a coloured stripe and nothing else.
+        Replace the title with Account instead of App.
+          Confirmed: index.html line 6 still reads <title>App</title>. One-word
+          change, and it is what the browser tab and a bookmark show.
 
 Wild:
         Grade-to-effort log: record hours against each grade, then find out whether effort actually correlates with your marks.
@@ -237,19 +358,19 @@ Wild:
 
 Implementation Plan
 
-Everything that was listed under Tasks and Calendar has shipped, and Jobs is
-complete in all three stages. The recurrence engine now has four consumers, the
-tokenizer two. How each module actually works, and why, is written down in
-Ideas/design/ -- start there rather than here when picking something up.
+Jobs is complete in all three stages, the recurrence engine now has four
+consumers and the tokenizer two, and the app is deployed. How each module
+actually works, and why, is written down in Ideas/design/ -- start there rather
+than here when picking something up.
 
-What is left is genuinely the longer-horizon work: derivations that need a term
-to have closed, the parser that everything else had to settle before, and the
-things that need new storage or a second person.
+What was left after that was the longer-horizon work: derivations that need a
+term to have closed, the parser everything else had to settle before, and the
+things that need new storage or a second person. The Settings, Calendar, Tasks
+and Quality of Life items above came later and are mostly small, so they are
+not covered by that description -- read the per-module list as the live one and
+this section as the reasoning behind the ordering.
 
 Next, and cheapest
-- Category blind spots across courses. Derived from what is stored, no new
-  tables, and the one Grades answer nothing else gives: you may be losing marks
-  in labs everywhere rather than in one class.
 - The rate limiters key on the wrong address (step 12a / D5.5). Not a feature,
   but it is the one thing that has to be fixed before the invite list opens:
   behind Cloud Run every caller looks like Google's front end, so all the limits
@@ -278,7 +399,16 @@ Cheap wins, read-only
 - Read-only offline: cache the shell, stale-while-revalidate the GETs.
 
 Needs new storage, so later
-- Reimbursement state, and who/when on Money Lent.
+- Reimbursement state, and who/when for money lent out. No seeded pot to hang
+  it on any more -- the "Money Lent" default was removed, so this attaches to
+  whichever account the student actually keeps it in.
+  NOTE: the "Budget:" heading that carried these two was removed from the
+  per-module list above, but the items themselves are still open and are still
+  listed in Ideas/design/finances.md under "Still open". So they are tracked in
+  two places and visible in neither of the obvious ones. Either put a Budget
+  heading back with these two under it, or drop them from the design note too --
+  right now the module list reads as though Budget has nothing left, which is
+  not true.
 - Grade-to-effort log. Worth noting it now has a precedent: shift_records keys
   on (event_id, on_date) to record what happened on one date of a repeating
   thing, and hours against a grade is the same shape.
@@ -307,15 +437,10 @@ Worth knowing before picking anything up
   false pass.
 - gh is installed and authenticated, so a PR opens from the terminal. The push
   credential lives in the macOS keychain.
-- 635 backend tests, and the suite is worth running with
-- 562 backend tests (unchanged -- this one is frontend-only), and the suite is worth running with
-- 575 backend tests, and the suite is worth running with
-- 580 backend tests, and the suite is worth running with
-  -W error::sqlalchemy.exc.SAWarning: that is how a duplicate cascade delete
-  surfaced. The frontend still has no test runner. Three pieces of layout maths
-  -- the week view's overlap, placeTasks, and the term timeline -- were each
-  checked with a one-off esbuild harness, which runs only when someone remembers
-  to write one. Vitest would slot in beside Vite cheaply.
+- 791 backend tests. Run the suite with -W error::sqlalchemy.exc.SAWarning:
+  that is how a duplicate cascade delete surfaced. Update this number in place
+  rather than adding a line -- four stale counts had stacked up here, none of
+  them current, and only the last one still joined onto this sentence.
 - Mutation-test every guard: revert it and confirm the named test fails. Doing
   that caught three tests this year that asserted something already true by
   construction and would never have failed.
@@ -328,10 +453,17 @@ Worth knowing before picking anything up
 - Scores, weights and target grades are floats everywhere. A number input for any
   of them needs step="any" -- without it the browser defaults to step="1" and
   rejects half marks, which is how that went unnoticed for so long.
-- accounts.kind drives behaviour in exactly one place: safe-to-spend counts only
-  "spending" accounts. It is documented as styling everywhere else, so that one
-  exception is written on the column itself. If per-account control is wanted,
-  add counts_as_spendable rather than loading more meaning onto kind.
+- accounts.kind drives behaviour in exactly TWO places now: safe-to-spend counts
+  only "spending" accounts, and "debt" marks money owed for the net worth figure.
+  It is styling everywhere else. That note used to say "exactly one place" and
+  advised adding an explicit column rather than loading a third meaning onto
+  kind -- which is what counts_toward_net_worth is. Keep following it: the next
+  per-account rule wants its own column too.
+- counts_toward_net_worth is available on every kind and defaults to on, and is
+  deliberately independent of safe-to-spend. Excluding a spending account from
+  net worth does not change what you can spend: what you are worth and what you
+  can spend before payday are different questions, and one setting quietly
+  moving two figures is how a number stops being trusted. There is a test.
 - A sinking fund's monthly figure is derived on every read, never stored:
   (target - saved) / months left. A stored schedule goes stale the moment a
   month is missed or the target moves, and the recovery from either is the same
