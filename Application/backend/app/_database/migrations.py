@@ -48,6 +48,8 @@ ADDED_COLUMNS: dict[str, dict[str, str]] = {
     },
     "grades": {
         "due_date": "DATE",
+        "due_time": "TIME",
+        "duration_minutes": "INTEGER",
         "schedule_as": "VARCHAR NOT NULL DEFAULT 'task'",
         "excluded": "BOOLEAN NOT NULL DEFAULT 0",
     },
@@ -59,6 +61,7 @@ ADDED_COLUMNS: dict[str, dict[str, str]] = {
         "recurring_id": "CHAR(32)",
         "priority": "INTEGER NOT NULL DEFAULT 3",
         "snoozed_until": "DATE",
+        "occurrence_date": "DATE",
     },
     "recurring_tasks": {
         "priority": "INTEGER NOT NULL DEFAULT 3",
@@ -82,6 +85,14 @@ BACKFILLS: dict[tuple[str, str], str] = {
     # at signup, before this column existed.
     ("users", "email_verified"): (
         "UPDATE users SET email_verified = 1 WHERE google_id IS NOT NULL"
+    ),
+    # Every occurrence written before this column existed was created on its due
+    # date and has not been moved, because until now there was no way to move
+    # one. Without this they would all read NULL, the materialiser would see an
+    # empty set of written dates, and the next task-page load would write the
+    # whole rolling window a second time.
+    ("tasks", "occurrence_date"): (
+        "UPDATE tasks SET occurrence_date = due_date WHERE recurring_id IS NOT NULL"
     ),
 }
 

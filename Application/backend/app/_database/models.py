@@ -180,6 +180,18 @@ class GradeModel(Base):
     weight = Column(Float, default=0.0)
     #: When the work is due, as opposed to when it was marked.
     due_date = Column(Date, nullable=True)
+    #: The time of day that date means, where the student knows it -- a lab due
+    #: at noon, an exam at 14:00. Null means no particular time: the end of the
+    #: day for a task, an all-day block for an event. Meaningless without
+    #: `due_date`, and the schema and the service both refuse the pair.
+    due_time = Column(Time, nullable=True)
+    #: How long it runs, in minutes, for a grade that draws a calendar block.
+    #: A length rather than an end time, because "the midterm is two hours" is
+    #: what a student actually knows -- and because an end derived from a start
+    #: cannot contradict it, where a second stored column can.
+    #:
+    #: Meaningless without `due_time`: an all-day block has no length.
+    duration_minutes = Column(Integer, nullable=True)
     #: What that date means: "task" for work to tick off, "event" for something
     #: to attend. Only consulted when there is a date. Defaults to task, which
     #: is what every dated grade did before the choice existed.
@@ -218,9 +230,9 @@ class AccountModel(Base):
     position = Column(Integer, nullable=False, default=0)
     #: Whether this balance reaches the net worth figure. Defaults to counting,
     #: and any account may turn it off -- the student owns the data and knows
-    #: why a pot should not count. Money Lent is the obvious case, being money
-    #: someone else is holding, but a joint account or one held for somebody
-    #: else are just as real and no rule here could anticipate them.
+    #: why a pot should not count. Money lent out is the obvious case, being
+    #: money someone else is holding, but a joint account or one held for
+    #: somebody else are just as real and no rule here could anticipate them.
     #:
     #: Independent of `kind`, deliberately. Excluding a spending account from
     #: net worth does not stop safe-to-spend counting it: "what am I worth" and
@@ -385,9 +397,20 @@ class TaskModel(Base):
     #: Set when this task was raised automatically from a dated grade. It closes
     #: itself when that grade's score lands.
     grade_id = Column(Uuid, ForeignKey("grades.id"), nullable=True)
-    #: Set when a repeating task generated this occurrence. With `due_date` it is
-    #: what stops the same occurrence being written twice.
+    #: Set when a repeating task generated this occurrence. With
+    #: `occurrence_date` it is what stops the same occurrence being written
+    #: twice.
     recurring_id = Column(Uuid, ForeignKey("recurring_tasks.id"), nullable=True)
+    #: The date the rule produced, which is this occurrence's *identity* -- as
+    #: opposed to `due_date`, which is where it currently sits and which the
+    #: student may move. Null on anything that did not come from a repeat.
+    #:
+    #: The two used to be the same column, and that is exactly why this exists.
+    #: Moving Monday's chore to Wednesday made the rule stop recognising Monday
+    #: as written, so the next materialise put a second copy back on Monday and
+    #: the stale sweep deleted the one that had been moved. Identity has to be
+    #: something the student cannot edit.
+    occurrence_date = Column(Date, nullable=True)
     title = Column(String, nullable=False)
     notes = Column(String, nullable=True)
     due_date = Column(Date, nullable=True)
