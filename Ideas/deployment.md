@@ -1,6 +1,11 @@
 # Deployment
 
-Every step from where this is now to running on the web, in order.
+**This is done. The app is live and a second person is using it.** What follows
+is the record of how it got there, kept because the commands, the traps and the
+things that went wrong are what you need when you change any of it.
+
+To get out of trouble right now, read [ROLLBACK.md](ROLLBACK.md) instead — it is
+written to be read while something is down.
 
 **The target:** Google Cloud Run (the API) + Supabase (Postgres) + Cloudflare
 Pages (the frontend), free, for about twenty invited people.
@@ -14,19 +19,37 @@ below is contestable it names the decision, so `D2.3` means go and argue there.
 
 ## Where this stands
 
+**Steps 1 to 37 are done.** Only 38 (watch it for a week) and 39 (invite the
+rest) remain, and both are time passing rather than work.
+
 | | |
 |---|---|
-| Backend tests | **732 on SQLite** |
+| Backend tests | **740 on SQLite**, 730 + 2 skipped against Supabase itself |
 | Frontend | `tsc --noEmit` and `vite build` clean |
-| Docker | **Phase 0 done — both images build, full stack verified end to end** |
-| Database | SQLite locally; **must become Postgres** to deploy (nothing free has a persistent disk) |
-| Open PRs | **none — all seven merged** |
-| Part 1 (local code changes) | **Done — steps 1–15, green light passed** |
-| Part 2 (the Postgres port) | **Done — steps 16–21. The data is in Supabase** |
-| Part 3 (deploy) | **Done** — steps 22–32, tested from mobile data |
-| Part 4 (before others join) | **Done** — backups taken and restored, monitored, rollback written |
-| Frontend URL | `https://account-2a7.pages.dev` |
+| Frontend URL | `https://account-2a7.pages.dev` — Cloudflare Pages, builds from `main` |
 | API URL | `https://account-api-210502804146.us-west1.run.app` |
+| Serving | revision `account-api-00004-5t8`, image `backend:f6f7c32`, traffic on **LATEST** |
+| Database | Supabase `kujxxairehpwhxhnkbct`, `us-west-2`, Postgres 17.6, 23 tables |
+| Backups | nightly GitHub Action, 09:00 UTC, 90-day artifacts — **restored once, for real** |
+| Monitoring | UptimeRobot on `/health` and on the frontend |
+| Part 1 (local code changes) | **Done** — steps 1–15, green light passed |
+| Part 2 (the Postgres port) | **Done** — steps 16–21, 588 rows moved and verified by value |
+| Part 3 (deploy) | **Done** — steps 22–32, tested from mobile data |
+| Part 4 (before others join) | **Done** — steps 33–36 |
+| Part 5 (people) | **Step 37 done**, three addresses. 38 and 39 outstanding |
+
+**Still carried, deliberately, and each written up below:**
+
+- **Step 12a / D5.5** — every rate limiter keys on the peer address, which behind
+  Cloud Run is Google's front end. Confirmed in production: 99 of 99 requests
+  arrived from `169.254.169.126`. The limits are therefore one shared budget.
+  Tolerable at three users; fix it before the invite list opens.
+- **The Dockerfile does not honour `$PORT`**, which is why `--port=8000` is
+  mandatory on every deploy.
+- **One copy of each backup**, in GitHub artifacts only, expiring at 90 days.
+- **A second Supabase project exists** (`ommqbgaasrusrlizzyzm`) holding a full
+  copy of everyone's data from the step 34 restore test. Its password has been
+  rotated. Delete it or treat it as production.
 
 Phase 0 was run against a `VACUUM INTO` copy on ports 8200/5273. It confirmed the
 images build, the stack works, auth works end to end, data survives
@@ -230,7 +253,7 @@ same evening.
 the password check rather than a 429, and the audit log reading
 `19 rejected / 1 success / 1 throttled`.
 
-### 12a. Read the caller's real address — **NOT DONE, and it changes what step 12 means**
+### 12a. Read the caller's real address — **CONFIRMED IN PRODUCTION, still not fixed**
 
 **The problem:** every limiter in this app keys on `request.client.host`, the
 peer address. On Cloud Run the peer is Google's front end, not the person. So in
@@ -446,7 +469,7 @@ which has no concept of overflow and would reject the argument.
 before this step the same URL failed on `ModuleNotFoundError`. 717 passed,
 2 skipped.
 
-### 19. Run the 669 tests against Postgres — **DONE**
+### 19. Run the suite against Postgres — **DONE**
 
 **Do:** point `TEST_DATABASE_URL` at the Supabase string and run the suite.
 
@@ -587,7 +610,9 @@ A migration that "looks fine" is how you discover a missing table in March.
 
 ## Part 3 — Deploy
 
-### 22. Create the Google Cloud project
+### 22. Create the Google Cloud project — **DONE**
+
+Project **`account-504419`**, with Cloud Run and Artifact Registry enabled.
 
 **Do:** new project, attach a billing account, enable the Cloud Run and Artifact
 Registry APIs.
@@ -595,7 +620,7 @@ Registry APIs.
 **Note:** the card is required even for the always-free tier. It verifies
 identity and is not charged inside the free limits.
 
-### 22a. Install the `gcloud` CLI
+### 22a. Install the `gcloud` CLI — **DONE**
 
 **Do:** `brew install --cask google-cloud-sdk`, then `gcloud init` and
 `gcloud auth login`.
@@ -605,7 +630,10 @@ needs `gcloud auth configure-docker` to let Docker push to Artifact Registry at
 all, and step 27 is `gcloud run deploy`. The console can create the repository
 but cannot push to it.
 
-### 23. Create an Artifact Registry repository
+### 23. Create an Artifact Registry repository — **DONE**
+
+Repository **`account`**, Docker format, in **`us-west1`**. Images are pushed as
+`us-west1-docker.pkg.dev/account-504419/account/backend:<sha>`.
 
 In the **same region** you chose at step 16 — for `aws-0-us-west-2` that is
 **`us-west1`**. Both are Oregon; they are about 100 miles apart.
@@ -662,7 +690,7 @@ gcloud artifacts repositories create account \
 
 **Verify:** `gcloud artifacts repositories list --location=us-west1` shows it.
 
-### 24. Build for `linux/amd64` and push — **DONE** (`26e249f` pushed)
+### 24. Build for `linux/amd64` and push — **DONE** (`26e249f`, then `f6f7c32`)
 
 ```sh
 cd Application/backend
@@ -734,7 +762,11 @@ else. Confirm what the registry holds, since that is what Cloud Run pulls.
 emulated container against 203 ms natively. That is Rosetta, not Cloud Run —
 real amd64 hardware will be nearer the native figure.
 
-### 25. Put the secrets in Secret Manager
+### 25. Put the secrets in Secret Manager — **DONE**
+
+Two secrets, `jwt-secret` and `database-url`, both referenced by the service
+rather than copied into its environment. `JWT_SECRET` was rotated to a fresh
+64-byte value, so the August one in the working tree is no longer live anywhere.
 
 **Do:** `JWT_SECRET` and the Supabase connection string as secrets.
 
@@ -746,13 +778,6 @@ nothing right now.
 `gcloud run services describe` and in deploy logs. These two values are the ones
 that matter most — one reads all the data, the other forges any session.
 Non-secret config stays a plain variable. **D3.5**.
-
-### 26. Run the schema creation once — **DONE**
-
-**Do:** run `python -m app._database.schema` against Supabase once, with
-`DATABASE_URL` pointing at it. It builds the 23 tables and 49 indexes and is
-idempotent, so a retried deploy is harmless. The deployed service then runs with
-`RUN_SCHEMA_ON_STARTUP=0`.
 
 ### 25a. Give it an identity of its own — **DONE**
 
@@ -780,6 +805,13 @@ casually readable; running as Editor hands them back.
 
 `account-api` has **no project-level roles at all** and two secret-scoped
 grants. **D3.7.**
+
+### 26. Run the schema creation once — **DONE**
+
+**Do:** run `python -m app._database.schema` against Supabase once, with
+`DATABASE_URL` pointing at it. It builds the 23 tables and 49 indexes and is
+idempotent, so a retried deploy is harmless. The deployed service then runs with
+`RUN_SCHEMA_ON_STARTUP=0`.
 
 ### 27. Deploy to Cloud Run — **DONE**
 
@@ -856,18 +888,6 @@ was already warm. **D3.2** claims 200 ms–2 s after scaling to zero, and that
 number only becomes real after ~15 minutes idle. Step 38 is where it gets
 checked honestly.
 
-### 29. Deploy the frontend to Cloudflare Pages
-
-**Do:** connect the repo or upload the build. Set the build-time variables:
-`VITE_API_BASE_URL` to your Cloud Run URL plus `/api`, and
-`VITE_GOOGLE_CLIENT_ID`.
-
-**These are inlined at build time, not read at runtime.** Changing either needs a
-rebuild, not a restart. Phase 0 confirmed this behaves as expected.
-
-**Verify:** the deployed bundle contains your Cloud Run URL:
-`curl -s <pages-url>/assets/index-*.js | grep -o 'https://[^"]*run.app/api'`
-
 ### 29. Deploy the frontend to Cloudflare Pages — **DONE**
 
 **Live at `https://account-2a7.pages.dev`**, built by Pages from the GitHub repo
@@ -898,6 +918,43 @@ while looking for this deployment, `account-frontend.pages.dev` and
 `account-app.pages.dev` both answered 200 and belonged to strangers. A 200 on a
 guessed hostname proves nothing — check the bundle for your own API URL.
 
+### 29a. Open the console and read the CSP violations — **DONE**
+
+**Neither predicted failure happened.** The policy written at step 14 was correct
+first time: Google Sign-In renders and completes against the documented `/gsi/`
+prefixes, and `connect-src` matched because both it and the bundle are generated
+from the same `VITE_API_BASE_URL`. All six headers are live and were re-confirmed
+on 2026-09-14:
+
+```sh
+curl -sI https://account-2a7.pages.dev | grep -i strict-transport
+# strict-transport-security: max-age=31536000; includeSubDomains
+```
+
+That is the first and only test this file has ever had — nginx locally does not
+read `_headers`, so nothing before this point exercised it.
+
+**Do:** load the Pages URL with devtools open, sign in with Google, and watch the
+console for `Refused to …` lines.
+
+**Why this is its own step:** the security headers written in step 14 are the one
+piece of this that **cannot be verified locally**. The local docker stack serves
+through nginx, which does not read `_headers` at all, so nothing before this
+point has ever had the policy applied to it. A CSP that is slightly too strict
+does not warn — it silently refuses a request and the feature just does not work.
+
+**The two most likely:**
+
+- **Google Sign-In.** The policy uses the prefixes Google documents
+  (`.../gsi/client`, `.../gsi/`, `.../gsi/style`). If the button does not render
+  or the popup does nothing, widen those three to `https://accounts.google.com`
+  and try again.
+- **`connect-src`.** If every API call fails while `/health` answers when curled
+  directly, the origin baked into `_headers` does not match the one in the
+  bundle. Both come from `VITE_API_BASE_URL`, so the fix is at step 29, not here.
+
+**Verify:** sign in, load each of the six pages, and finish with an empty console.
+
 ### 30. Point `ALLOWED_ORIGINS` at the Pages URL — **DONE**
 
 ```sh
@@ -923,41 +980,6 @@ sites call this API with a signed-in user's token.
 **Note for later:** every Pages preview deployment is its own origin and will
 fail CORS. That is correct behaviour and confusing the first time — a preview
 link looks broken when it is only unlisted.
-
-### 29a. Open the console and read the CSP violations
-
-**Do:** load the Pages URL with devtools open, sign in with Google, and watch the
-console for `Refused to …` lines.
-
-**Why this is its own step:** the security headers written in step 14 are the one
-piece of this that **cannot be verified locally**. The local docker stack serves
-through nginx, which does not read `_headers` at all, so nothing before this
-point has ever had the policy applied to it. A CSP that is slightly too strict
-does not warn — it silently refuses a request and the feature just does not work.
-
-**The two most likely:**
-
-- **Google Sign-In.** The policy uses the prefixes Google documents
-  (`.../gsi/client`, `.../gsi/`, `.../gsi/style`). If the button does not render
-  or the popup does nothing, widen those three to `https://accounts.google.com`
-  and try again.
-- **`connect-src`.** If every API call fails while `/health` answers when curled
-  directly, the origin baked into `_headers` does not match the one in the
-  bundle. Both come from `VITE_API_BASE_URL`, so the fix is at step 29, not here.
-
-**Verify:** sign in, load each of the six pages, and finish with an empty console.
-
-### 30. Point `ALLOWED_ORIGINS` at the Pages URL
-
-**Do:** set it to the exact origin — no wildcard, no trailing slash — and
-redeploy Cloud Run.
-
-**Expect to get this wrong once.** It is the single most likely hour-loser in
-this document, and Phase 0 already reproduced the exact failure locally.
-
-**A trap:** Pages gives you a permanent URL *and* a per-deploy preview URL.
-Previews are different origins and will fail CORS. That is correct behaviour, not
-a bug, but it is confusing the first time.
 
 ### 31. Add the Pages origin to Google OAuth — **DONE**
 
@@ -1126,7 +1148,13 @@ kept the database awake and burned the compute budget. Supabase is always on wit
 no compute budget, so poll freely. Side benefit: regular polling counts as
 activity, so the seven-day pause will never trigger. **D6.2**.
 
-### 36. Write down how to roll it back
+### 36. Write down how to roll it back — **DONE** (`Ideas/ROLLBACK.md`)
+
+**It found a real fault while being tested.** Running the rollback command
+against the revision already serving looked like a no-op and was not:
+`--to-revisions` **pins** the service, and the next `gcloud run deploy` then
+reported success and changed nothing. Fixed with `--to-latest`, and the service
+now reports `latestRevision: true`. ROLLBACK.md leads with that warning.
 
 **Do:** one short note — the previous image tag, the command to redeploy it, and
 where the backups are.
@@ -1138,19 +1166,47 @@ is the worst time to work it out. Keep it next to this file.
 
 ## Part 5 — Let people in
 
-### 37. Add yourself and two friends
+### 37. Add yourself and two friends — **DONE**
+
+`ALLOWED_SIGNUP_EMAILS` holds three addresses. The second person has signed in
+and their accounts seeded, which is the first time any of this ran for someone
+who did not build it.
 
 **Do:** put three addresses in `ALLOWED_SIGNUP_EMAILS`. Not twenty.
 
-### 38. Watch for a week
+### 38. Watch for a week — **running, started 2026-09-14**
 
-**Three numbers:**
+**Three numbers, and the commands that give them:**
 
-- **Cloud Run request count** against 2M/month
-- **Supabase database size** against 500 MB
-- **Cold-start latency** as your friends actually experience it
+```sh
+# requests, against 2M/month free
+gcloud run services describe account-api --region=us-west1 \
+  --format="value(status.traffic[].revisionName)"
+gcloud logging read \
+  'resource.type=cloud_run_revision AND resource.labels.service_name=account-api' \
+  --freshness=7d --format="value(timestamp)" | wc -l
 
-And read the audit log — `auth.*` lines at WARNING are failed sign-ins.
+# failed sign-ins: auth.* at WARNING
+gcloud run services logs read account-api --region=us-west1 --limit=200 | grep -i 'auth\.'
+```
+
+Database size is on the Supabase dashboard. **500 MB is the cap and 588 rows is
+the current load**, so size is not the number to worry about — it would take
+years of this to matter. Requests are the same story at three users. The one
+number that is genuinely unknown is the third:
+
+- **Cold-start latency has still never been measured.** D3.2 claims 200 ms–2 s
+  and that figure is an estimate, not an observation. Every timing so far was
+  taken against a warm container. To measure it honestly: leave it 15 minutes
+  untouched, then `curl -w '%{time_total}\n' -o /dev/null -s <url>/health`.
+  UptimeRobot polling every 5 minutes may be keeping it warm, which would make
+  the number unobtainable while monitoring is on — and is worth knowing either
+  way, because it means your friends rarely pay for a cold start.
+
+**What the first days already showed:** the second person signed in, their six
+accounts seeded on first read, and they have entered nothing since. The seeding
+path ran for someone who did not build the app, which is the only part of this
+that had never been exercised by anyone but its author.
 
 **Why three people first:** everything in this plan is reasoning, not
 measurement. A week of real use tells you which parts were wrong while the blast
@@ -1158,7 +1214,20 @@ radius is three people who will forgive you.
 
 ### 39. Invite the rest
 
-Add the remaining addresses. You are live.
+Add the remaining addresses to `ALLOWED_SIGNUP_EMAILS`:
+
+```sh
+gcloud run services update account-api --region=us-west1 \
+  --update-env-vars=^##^ALLOWED_SIGNUP_EMAILS=a@x.com,b@y.com,c@z.com
+```
+
+**The `^##^` is not decoration.** `--update-env-vars` splits on commas, so a
+value that contains commas needs a different delimiter declared up front or
+gcloud reads each address as a separate variable.
+
+**Before you do:** fix step 12a / D5.5 first. Twenty people behind one shared
+rate-limit budget is a different proposition from three — one person hitting the
+login limit would lock out the other nineteen.
 
 ---
 

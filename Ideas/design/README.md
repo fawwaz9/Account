@@ -12,6 +12,9 @@ to study.
 - [../jobs-plan.md](../jobs-plan.md) — the worked example, with its build log
 - [../whats_next.txt](../whats_next.txt) — what is shipped, what is next, and the
   accumulated notes
+- [../session-handoff.md](../session-handoff.md) — where the project is right now
+- [../deployment.md](../deployment.md) — how it got on the web, and
+  [../ROLLBACK.md](../ROLLBACK.md) for when it breaks
 
 ---
 
@@ -27,7 +30,7 @@ Application/
       api/routes/           thin. Parse, call one service, map errors to status
       _database/            models, engine, migrations
       shared/               tokenizer, audit, error bodies
-    tests/                  449 test functions, 465 cases
+    tests/                  715 test functions, 740 cases
   frontend/
     src/features/<area>/    api.ts, types.ts, components/, hooks/
     src/pages/              one per route, composing features
@@ -36,8 +39,13 @@ Application/
     src/styles/             one stylesheet per area
 ```
 
-Nineteen tables. FastAPI + SQLAlchemy + Pydantic v2 + SQLite; React 19 + Vite 7 +
+Twenty-three tables. FastAPI + SQLAlchemy 2.0 + Pydantic v2; React 19 + Vite 7 +
 Tailwind v4 + react-router-dom.
+
+**Two databases, one schema.** SQLite is the local default and the working copy
+lives at `data/app.db`. Production is Postgres 17 on Supabase, reached through a
+transaction-mode pooler. The same models drive both; the two places that differ
+are handled in `_database/db.py` and explained in `../plan-a-decisions.md` D2.6.
 
 ## The rules that hold it together
 
@@ -115,8 +123,20 @@ confirming it fails.
 ## Conventions worth knowing before writing code
 
 **Migrations are additive and idempotent.** `ADDED_COLUMNS` in
-`_database/migrations.py`, run on every startup. New tables come from
-`create_all`. Back up `data/app.db` first.
+`_database/migrations.py`. New tables come from `create_all`. Back up
+`data/app.db` first.
+
+> **They no longer run on startup in production.** The deployed service sets
+> `RUN_SCHEMA_ON_STARTUP=0`, so **a new table or column does not reach Supabase
+> by deploying.** Run it yourself, once, as part of the deploy:
+>
+> ```sh
+> DATABASE_URL="$SUPABASE_DATABASE_URL" python -m app._database.schema
+> ```
+>
+> It is idempotent, so a repeat is harmless. Locally the default is still on and
+> nothing changes. This is the single easiest way to ship a change that works on
+> your machine and 500s in production.
 
 **Route order is load-bearing.** FastAPI matches in declaration order, so every
 literal path goes above its `/{param}` catch-all. `/courses/resolve` below

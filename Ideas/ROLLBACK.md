@@ -1,7 +1,8 @@
 # If it is broken
 
 Written to be read while something is down and you are stressed. Commands
-first, reasoning second. Every figure here was checked on 2026-09-15.
+first, reasoning second. Every figure here was re-checked against the live
+deployment on **2026-09-14**, including that traffic is on `LATEST`.
 
 ## What is where
 
@@ -13,8 +14,16 @@ first, reasoning second. Every figure here was checked on 2026-09-15.
 | Database | Supabase project `kujxxairehpwhxhnkbct`, region `us-west-2`, Postgres 17.6 |
 | Backups | GitHub Actions artifacts, `Backup database` workflow, 90-day retention |
 | Secrets | Google Secret Manager: `jwt-secret`, `database-url` |
-| Current image | `…/backend:f6f7c32` — revision `account-api-00004-5t8` |
+| Current image | `…/backend:f6f7c32` — revision `account-api-00004-5t8`, serving 100% |
 | Previous image | `…/backend:26e249f` — the one to roll back to |
+| GCP project | `account-504419`, registry `us-west1-docker.pkg.dev/account-504419/account` |
+| Repo | `fawwaz9/Account` — a push to `main` rebuilds the **frontend** only |
+
+> **There is a second Supabase project, `ommqbgaasrusrlizzyzm`.** It was created
+> for the step 34 restore test and holds **a full copy of every user's financial
+> data and password hashes**. Its password has been rotated. It is not production
+> and nothing points at it — but do not confuse the two when restoring, and
+> delete it when the restore drill is no longer needed.
 
 ## First: what kind of broken?
 
@@ -22,8 +31,10 @@ first, reasoning second. Every figure here was checked on 2026-09-15.
 curl -s https://account-api-210502804146.us-west1.run.app/health
 ```
 
-- `{"status":"ok","database":"ok"}` — the API is fine. The problem is the
-  frontend, CORS, or Google sign-in. Skip to **Frontend**.
+- `{"status":"ok","database":"ok"}` — the API is up and can reach the database.
+  If **everything** is broken, it is the frontend, CORS or Google sign-in — skip
+  to **Frontend**. If **one page** is broken and the rest work, it is a schema
+  change that never reached Supabase — see **One endpoint 500s after a deploy**.
 - `{"status":"unhealthy","database":"unreachable"}` — the container runs but
   cannot reach Supabase. Check Supabase is not paused, then the `database-url`
   secret.
@@ -97,6 +108,28 @@ Real logs:
 ```sh
 gcloud run services logs read account-api --region=us-west1 --limit=50
 ```
+
+## One endpoint 500s after a deploy, and the rest are fine
+
+Almost certainly a **missing column or table**. The deployed service runs with
+`RUN_SCHEMA_ON_STARTUP=0`, so **schema changes do not reach Supabase by
+deploying** — the new code expects a column the database does not have.
+
+```sh
+cd Application/backend
+set -a; source ../.env; set +a
+DATABASE_URL="$SUPABASE_DATABASE_URL" .venv/bin/python -m app._database.schema
+```
+
+Idempotent, so running it when that was not the problem costs nothing. Confirm
+in the logs first:
+
+```sh
+gcloud run services logs read account-api --region=us-west1 --limit=50 | grep -i 'column\|relation'
+```
+
+`UndefinedColumn` or `relation ... does not exist` is this. Rolling the image
+back also fixes it, and is the faster move if you are unsure.
 
 ## Frontend
 

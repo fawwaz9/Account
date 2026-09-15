@@ -1,5 +1,11 @@
 # Jobs: what you work, what it earns, and what actually arrives
 
+> **This is a finished build log, kept as the worked example — not live work.**
+> All three stages shipped. The standing design note is
+> [design/jobs.md](design/jobs.md); read that to understand the module. Read this
+> to see what a plan looks like next to what actually got built, including the
+> three places the plan was wrong.
+
 ## Context
 
 A new module beside Grades, Finances, Calendar and Tasks, for students working

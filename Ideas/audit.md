@@ -1,9 +1,13 @@
 # Application audit
 
 Written 2026-09-10 against the working tree at `ca2884f` plus the uncommitted
-account-activity work. Everything here was reproduced — by probing the running
-API, querying the live database, building the frontend and reading the shipped
-artefact, or reading the code path end to end. Where a claim rests on reading
+account-activity work, and kept current as findings close -- most recently by the
+deployment pass of 2026-09-14. **The tiers below are a record, not a to-do list.**
+Read the status passes for what is actually open; there is one item.
+
+Everything here was reproduced — by probing the running API, querying the live
+database, building the frontend and reading the shipped artefact, or reading the
+code path end to end. Where a claim rests on reading
 alone rather than a reproduction, it says so.
 
 `Ideas/fix.txt` (an earlier review, 3 Aug) has been folded in. Its findings were
@@ -16,9 +20,9 @@ no vitest, no conftest. That is the single fact that best explains the shape of 
 list: every defect below is one a test would have pinned down, and several are re-runs
 of bugs the project has already fixed once elsewhere.
 
-There is now a `backend/tests/` suite -- 31 tests over the money-integrity,
-account-takeover, session-revocation and throttling paths. Still nothing on the
-frontend, and nothing resembling broad coverage.
+There is now a `backend/tests/` suite -- **740 cases in 45 files**, grown from the
+31 that were written alongside the critical fixes. Still nothing on the frontend,
+which is the one part of this finding that has not moved.
 
 ---
 
@@ -51,12 +55,11 @@ reasons are worth keeping:
   `login_throttle.py`: in-process state, so it resets on restart and does not span
   workers.
 
-**Still open: the medium tier (#22-#42) and low tier (#43-#56), minus #47.** Verified
-still open at the end of the pass: no indexes on any FK or filter column (#24), none of
-the four unique constraints (#25), ~21 zero-byte files (#56). The highest-value ones
-left are #24/#25 (which also close the seeding races at #26), #28+#40 together
-(incomplete cascades *and* no soft delete), and #29 (SQLite without WAL or a busy
-timeout).
+**This paragraph is kept as it read at the time, and is no longer true.** It said:
+*"Still open: the medium tier (#22-#42) and low tier (#43-#56), minus #47,"* naming
+#24/#25, #28+#40 and #29 as the highest-value remaining. All of those have since
+closed in the passes below. **See the deployment pass at the end for what is
+actually still open — it is one item.**
 
 ## Status as of the dead-code pass
 
@@ -256,6 +259,61 @@ One correction to #17 found while fixing it: this document calls the unconfirmed
 account delete "permanent", but the server refuses to delete an account that still
 holds transactions and says to archive instead. The exposure was empty accounts only.
 It now has a two-stage confirm regardless.
+
+
+## Status as of the deployment pass
+
+**Closes #42, and confirms #30 and #48 were closed earlier without being recorded
+here.** Written 2026-09-14, after the app went live on Cloud Run + Supabase +
+Cloudflare Pages.
+
+- **#42 — no HTTPS enforcement — is closed, by the deployment not using nginx.**
+  The finding called this *"not urgent while this runs on your own machine; a
+  blocker before it runs anywhere else"*, and it now runs somewhere else. In
+  production the browser talks to Cloudflare Pages and Pages talks to Cloud Run,
+  and neither serves plaintext. Verified:
+
+  ```
+  curl -sI https://account-2a7.pages.dev
+    strict-transport-security: max-age=31536000; includeSubDomains
+  curl -sI http://account-api-...run.app/health
+    HTTP/1.1 302 Found -> https://...
+  ```
+
+  `frontend/nginx.conf` still listens on 80 with no redirect, and that is now
+  correct rather than a defect: it serves the local docker stack only, where the
+  origin is `localhost` and there is no certificate to redirect to. **The finding
+  moved from "open" to "does not apply" without a line of code changing**, which
+  is worth noticing — it was a deployment finding filed against application code.
+
+- **#30 — the transfer-partner lookup with no `user_id` filter — is closed.**
+  Every `group_id` lookup in `transaction_service` now carries `user_id`
+  alongside it. One deliberate exception remains: the sinking-contribution
+  cleanup matches on `group_id` alone, which is safe because `group_id` is a
+  `Uuid` and cross-user collision is not a real event.
+
+- **#48 — nothing invalidates a JWT — is closed**, as a consequence of #21. The
+  session-epoch counter on `users` is compared on every authenticated request,
+  and `set_password` bumps it, so changing a password really does end every
+  other session. Deleting an account bumps it too.
+
+**Still open, and it is one item plus a sweep:**
+
+- **#35 — no request caching.** Dashboard → Budget → Dashboard still issues
+  redundant round trips, and every `reload()` refetches all four endpoints when
+  one row changed. This mattered less on localhost than it does now: the same
+  page from a phone on mobile data pays real latency for each of them.
+- **Inputs labelled by placeholder only**, from the accessibility tail — a sweep
+  across a dozen forms, not a single fix.
+
+**What the deployment added that this audit never covered**, all of it in
+`Ideas/deployment.md` rather than here: an invite gate on registration, a
+registration throttle, the docs endpoints off by default, a configurable
+`ALLOWED_ORIGINS`, six security headers, a React error boundary, a service
+account with two grants and no project roles, nightly backups that have been
+restored once for real, and uptime monitoring. Two known weaknesses were carried
+in deliberately and are written up there: the rate limiters key on Google's front
+end rather than the caller (D5.5), and backups exist in one place only.
 
 ---
 

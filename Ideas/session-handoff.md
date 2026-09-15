@@ -1,161 +1,127 @@
 # Session handoff
 
-Written at the end of a long session so the next one can pick up without
-re-deriving anything. Everything below was verified against the running code,
-not recalled.
+Where the project actually is, for a session picking it up cold. Everything here
+was checked against the running code, the live deployment or the production
+database on **2026-09-14** — not recalled.
+
+**Read this for state. Read [design/](design/) for how and why.** The design
+notes carry the reasoning behind every decision that had a real alternative,
+which is what stops the next session reversing one for looking inconvenient.
 
 ---
 
-## Where things stand
+## The short version
 
-- **Branch:** `grades-branch`. `origin/grades-branch` is at `078e179`;
-  **5 commits are unpushed** (`8a01741` through `16d54ff`, the whole Budget module).
-- **22 commits** were made this session, starting from `af72c36`.
-- `origin/main` sits at `3d0ac95` — a squashed copy of the auth commit. The branch
-  has never been merged back.
-- **Run it:** `Application/dev.run.sh` (also `backend`, `frontend`, `docker`,
-  `install`). It creates the venv, installs both dependency sets, checks the `.env`
-  keys and ports, and starts both services. Ctrl+C stops everything.
-- Backend port defaults to **8001** (you changed it). `frontend/.env` carries a
-  matching `VITE_API_BASE_URL`. Vite inlines that at startup, so **restart Vite
-  after changing it**.
+The app is **built and live**. Five modules ship — Grades, Finances, Calendar,
+Tasks and Jobs — on 23 tables and 740 backend tests. It has been deployed to
+Cloud Run + Supabase + Cloudflare Pages, and a second person is using it.
 
----
-
-## What exists now
-
-### Auth — complete
-Google OAuth *and* email/password, both issuing the same JWT, so everything
-downstream is provider-agnostic. Accounts link: signing in with Google on an
-address that already has a password joins them rather than erroring.
-`POST /api/auth/password` lets a Google-only account add a password while signed in.
-
-### Grades — complete
-Courses, weighted categories, grades, term awareness (past/current/future), letter
-grades and GPA, target grades, an Attention panel, a hand-drawn SVG grade trend,
-bulk grade entry, credits tracking, and a course search typeahead.
-
-### Budget — complete
-User-defined accounts with derived balances, a signed-amount transaction ledger,
-double-entry transfers, spending categories, monthly per-account targets with
-planned-vs-actual, income distribution by share, and editable ledger rows.
-
-### Not built
-**Calendar, Tasks, Notes, Goals, Study Analytics.** Calendar routes still return a
-hardcoded sample dict. Tasks too. Recurrence was deliberately deferred to Calendar
-so one engine serves both it and Budget's recurring payments.
-
----
-
-## Decisions that shouldn't be re-litigated
-
-These were argued through and settled. Reversing one needs a reason, not a fresh guess.
-
-| Decision | Why |
+| | |
 |---|---|
-| **CGPA exists, on a switchable scale** | Reverses the old README line that UBC has no GPA. Defaults to UBC 4.33, opt-out in Settings. |
-| **Accounts and spend categories are rows, not enums** | The fixed `GradeCategory` enum is exactly what forced a real gradebook's ~40 categories into 8 during import. |
-| **Balances derived, never stored** | For money, a balance disagreeing with its own ledger is worse than one that costs a query. |
-| **Course `average` stored and authoritative** | Opposite of the above, deliberately: it is maintained on every write, and recomputing on read made the list and the detail page disagree. |
-| **Cumulative average and CGPA count finished courses only** | A running average is unfinished work, not a result. That is what the semester average is for. |
-| **Category weights may exceed 100** | Real courses are marked out of 101% and 104.71%. Weight past 100 is bonus: it adds marks without enlarging the denominator, and the course still caps at 100. |
-| **Grades may exceed their category max** | Bonus marks are real. Capped at 2× to still catch a slipped digit. |
-| **`below_target` fires only for current courses** | A finished course under target is history, not something to act on. |
-| **Transfers are two linked rows** | Sharing a `group_id`; deleting either removes both, editing moves both. |
-| **Budget "actual" counts expenses and transfers out** | Reverses the earlier expenses-only rule, on your call. Money that has left a pot has left it, however it left; the 14,000 target on the account that distributes income is only meaningful if the distributions count against it. Only the *outgoing* leg counts -- the matching leg lands on the receiving account, where it is money arriving. Income still never offsets a target. |
-| **Recurring deferred to Calendar** | One recurrence engine, written once. |
+| Branch | `main`, clean, level with `origin/main` |
+| Frontend | https://account-2a7.pages.dev — Cloudflare Pages, builds from `main` on push |
+| API | https://account-api-210502804146.us-west1.run.app |
+| Database | Supabase `kujxxairehpwhxhnkbct`, `us-west-2`, Postgres 17.6 |
+| Tests | 740, all green |
+| Local dev | `Application/dev.run.sh` — backend on **8001**, SQLite at `data/app.db` |
+
+**Local development still uses SQLite and still points at `data/app.db`.**
+Nothing local reads Supabase, deliberately. The cloud string lives in `.env` as
+`SUPABASE_DATABASE_URL`, *not* `DATABASE_URL` — setting the latter would point
+dev at the cloud and the app would come up looking wiped with nothing on screen
+to say why.
 
 ---
 
-## Conventions this codebase follows
+## What exists
 
-- **Compute server-side, render client-side.** Any figure the UI shows comes from the
-  API. Recomputing a formula in React is what produced the worst bug of the session —
-  a course page printing `18.00/40` beside an average of `36.00/40`.
-- **Attach computed values in the service layer.** `models.py` is imported *by*
-  `grade_service`, so a `CourseModel` property calling back into it is a circular
-  import. See `attach_course_summary` / `attach_category_averages`.
-- **Migrations are additive and idempotent**, in `_database/migrations.py`.
-  `create_all` only creates missing *tables*; it never alters an existing one.
-  New tables need nothing; new columns on existing tables need an `ADDED_COLUMNS` entry.
-- **Status codes:** 422 when a Pydantic validator fires during request parsing,
-  400 when a service-layer validator does, 404 missing, 403 cross-user.
-- **Native `<button>` for anything clickable** (SonarQube S6848). Where a row both
-  selects and deletes, the delete control sits *outside* the row button so one click
-  never means two things.
-- **Real CSS, not Tailwind** — see the open item below.
-- **Back up `data/app.db` before any migration.** Several `app.db.backup-*` files
-  exist; they are gitignored.
+**Grades** — courses, weighted categories, term awareness, letter grades and
+CGPA, targets, bonus categories, dropped marks, best/worst projection, credits,
+course search.
 
----
+**Finances** — accounts with derived balances, a signed-amount ledger,
+double-entry transfers, categories, monthly targets, income distribution by
+share, tuition with per-course cost attribution, safe-to-spend, sinking funds,
+subscription detection.
 
-## Gotchas found the hard way
+**Calendar** — the recurrence engine and its four consumers, week and month
+views, blackout periods, free blocks, week load, the crunch radar.
 
-Each of these cost real debugging time. Worth knowing before repeating them.
+**Tasks** — due dates and times, priority, repeats, snooze, reminders,
+completion timing, at-risk-first ordering, quick capture and the omnibox.
 
-1. **`StaleDataError` on delete.** Mutating a mapped attribute for display marks the
-   row dirty; deleting it in the same session then flushes an UPDATE for a row that is
-   gone. Build a detached snapshot instead. (Hit twice — the grades module solved it
-   earlier with `model_validate` before commit.)
-2. **`create_all` does not alter tables.** A new column silently never reaches an
-   existing database.
-3. **Preferences were never persisted.** `UserPreferences` was declared and returned
-   by `/me`, but `users` had no column, so `setattr` wrote to a non-mapped attribute
-   and it vanished on commit. Now a JSON column that merges on partial patch.
-4. **Two databases.** `DATABASE_URL` defaulted to `sqlite:///./app.db`, resolved
-   against uvicorn's working directory, so local runs and Docker used different files.
-   Now an absolute path anchored to the backend directory.
-5. **Cumulative at zero flooring a chart.** A term with running averages but no final
-   grades reported a cumulative of 0. It is nullable now; the line starts where the
-   data does.
-6. **A total check cannot catch a swap.** `Final 1%` + `Other 40%` sums to exactly 100
-   and passes clean. That is why the weight check also compares the final against the
-   largest other category.
-7. **`git add -A` swept your in-flight edits into commits twice.** Stage explicit paths.
+**Jobs** — shifts on the calendar, paycheques with deductions, earned-vs-paid,
+effective hourly rate, tips split cash from on-cheque.
+
+**Not built:** Notes, Goals and Study Analytics, from the original `core.txt`
+sketch. None has been designed; none is blocking anything.
 
 ---
 
-## Your real data
+## What is actually left
 
-`oganlafawwaz@gmail.com` (Google + password linked), currently **Year 3, Fall**.
+Three things, in order of how soon they matter:
 
-- **26 courses**, 126 grades, 208 category-weight rows — a full gradebook imported
-  from your spreadsheet, reproducing every stated figure exactly.
-- **Cumulative average 88.38, CGPA 4.05.** These match your sheet. If they move
-  unexpectedly, something is wrong.
-- **6 accounts** (Spending, Savings, Investments, Emergency, School, Money Lent),
-  11 transactions, 7 budget targets, 10 categories.
-- The import script lives in the scratchpad, deliberately outside the repo since it
-  contains personal grades.
+1. **Step 12a / D5.5 — the rate limiters key on the wrong address.** Behind
+   Cloud Run, `request.client.host` is Google's front end: production logs show
+   99 of 99 requests from `169.254.169.126`. Every limit is therefore one shared
+   budget. Harmless at three users; **must be fixed before the invite list
+   opens**, or one person hitting the login limit locks out everyone.
+2. **Audit #35 — no request caching.** Redundant round trips on every
+   navigation, and every `reload()` refetches all four endpoints when one row
+   changed. This cost nothing on localhost and costs real latency from a phone.
+3. **Everything in `whats_next.txt`** under *What is left, by module*.
 
-**Known data gap:** `MATH 100` is a past course with no final grade — it shows in the
-Attention panel and is correctly excluded from the cumulative. Your sheet's
-"Final Grade" column looks like a *projection* rather than an awarded grade;
-`DATA 101` reads 86 there against a computed 82.53. That column now drives the
-cumulative directly, so it is worth confirming.
+Deployment leftovers, none urgent, all written up in `deployment.md`:
+the Dockerfile ignores `$PORT` (hence `--port=8000` on every deploy); backups
+exist in one place only, expiring at 90 days; and a **second Supabase project
+(`ommqbgaasrusrlizzyzm`) holds a full copy of everyone's data** from the restore
+test — its password is rotated, but it should be deleted or treated as
+production.
 
 ---
 
-## Open items
+## The production data, as of 2026-09-14
 
-**Decisions waiting on you**
+Useful as a tripwire: if these move in a way nothing explains, something is wrong.
 
-- **Tailwind is imported but unwired.** No `vite.config.ts`, so ~31 KB of theme
-  variables ship and no utility classes are generated. Registering the plugin also
-  enables Preflight, which would reset margins and headings across CSS written for
-  browser defaults. Either wire it and accept a restyle, or delete the import and the
-  two dependencies. Pending for four sessions.
-- **Docker is the last unchecked item in `to_do.txt`.** The files exist and
-  `dev.run.sh docker` is wired, but it has never been run end to end.
-- **Income share hint reports rather than enforces.** Shares needn't total 100 —
-  income divides by ratio. Say if you want it enforced.
+| | rows |
+|---|---|
+| users | 4 — three active, one soft-deleted |
+| courses | 27 |
+| grades | 126 |
+| course_category_weights | 223 |
+| accounts | 16 |
+| transactions | 97 |
+| spend_categories | 57 |
+| events / tasks / jobs | 20 / 11 / 3 |
 
-**Next feature: Calendar.** Per `core.txt` it is the centre of the whole app —
-classes, tasks, daily spend and recurring payments all surfacing on it.
-`design.txt` already sketches `events` with `recurrence_rule` and `ends_by`.
-Recurrence is the hard part; decide early whether to store an RRULE or something
-simpler.
+The owner holds essentially all of it: 27 courses, 6 accounts, 94 transactions,
+3 jobs, 11 tasks. The second person has signed in and their six accounts seeded
+on first read; they have entered nothing yet. The soft-deleted account
+(`fawz09@student.ubc.ca`, a legacy local-auth row carried over from SQLite)
+purges on **2026-10-15**, on the first cold start after that date.
 
-**Cheap win still open:** `shared/components/{Button,Card,Input,Modal}.tsx` and
-`shared/utils/*` are all still empty, so every modal is hand-rolled.
-`app/layout/` is now filled (sidebar shell exists).
+**Cumulative average 88.38, CGPA 4.05** — these matched the source spreadsheet
+at import. If they move unexpectedly, that is the signal.
+
+**`MATH 100` is a past course with no final grade**, so it shows in the Attention
+panel and is correctly excluded from the cumulative. That is a data gap, not a
+bug.
+
+---
+
+## Before you touch anything
+
+- **Branch off `main`, and off `main` only.** Stacking on unmerged work caused
+  phantom conflicts twice, and once cost an afternoon to a "the fix is not there"
+  report that turned out to be a branch without the fix in it.
+- **Never run a script against the real `data/app.db`.** Copy it to the
+  scratchpad and point the engine at the copy. And never compute a delete filter
+  — one `getattr`-based one wiped 218 rows across 27 courses, silently, while the
+  script printed success.
+- **Stage explicit paths.** `git add -A` swept in-flight edits into commits twice.
+- **A push to `main` deploys the frontend.** Cloudflare Pages builds from it.
+  The API does not deploy itself — that is a manual `gcloud run deploy`.
+- The rest of the conventions and the hard-won gotchas are in
+  [design/README.md](design/README.md), which is where they belong now.

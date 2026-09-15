@@ -24,6 +24,9 @@ dist/
 *.db.backup*
 *.sqlite
 *.sqlite3
+# Ids of the seeded testing rows, so they can be removed precisely. Local-only
+# state about a local-only database -- meaningless in anyone else's clone.
+Application/backend/data/testing-data-manifest.json
 
 # ---- OS / editor cruft ----
 .DS_Store

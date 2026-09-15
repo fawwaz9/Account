@@ -24,7 +24,7 @@ From `Ideas/core.txt` — the app is meant to become a single place that holds:
 - A **budget system split into four accounts** — Investments, Emergency Savings, Spending, Savings — where income is distributed across them and movements between them are tracked separately.
 - **Tasks with checkboxes and progress bars** for long-running goals (saving money, gym consistency, study hours).
 
-Target feature tree (`Ideas/features.txt`):
+Target feature tree, as first sketched:
 
 ```
 Dashboard
@@ -641,25 +641,36 @@ attacked is not much use — so the log deserves the same care as the database.
 origin  https://github.com/fawwaz9/Account.git
 ```
 
-- **`main`** — the integration branch; PRs merge here.
-- **`grades-branch`** — the active working branch, currently ahead of local `main`.
+- **`main`** — the integration branch, and now the only one that matters. Work
+  merged back and development happens here.
+- Branch off `main`, and off `main` only. Stacking on unmerged work caused
+  phantom conflicts twice, and once cost an afternoon to a "the fix is not there"
+  report that turned out to be a branch without the fix in it.
 
-`origin/grades-branch` is **live**, with local commits ahead of it that have not been
-pushed. An earlier version of this section said the remote branch had been deleted and
-suggested `git remote prune origin`; that was wrong and the advice has been removed.
-The branch has never been merged back into `main`.
+**A push to `main` deploys the frontend**, because Cloudflare Pages builds from
+it. The API does not deploy itself — that is a manual `gcloud run deploy`. See
+`Ideas/deployment.md`.
 
 ### Where the planning lives
-`Ideas/to_do.txt` and `Ideas/fix.txt` have been folded into the files below and deleted:
+**[`Ideas/README.md`](Ideas/README.md) indexes all of it.** `Ideas/to_do.txt`,
+`Ideas/fix.txt` and `Ideas/features.txt` have been folded into the files below
+and deleted:
 
 | File | Holds |
 |---|---|
-| `Ideas/audit.md` | Every known defect, tiered by severity, with what was verified how |
+| `Ideas/design/` | **Start here.** One note per module plus an overview: how each works and why |
+| `Ideas/session-handoff.md` | Where the project is right now — branch, live URLs, data, what is left |
 | `Ideas/whats_next.txt` | The feature backlog per module, and the order to build it in |
-| `Ideas/session-handoff.md` | Current state, settled decisions, and gotchas found the hard way |
-| `Ideas/core.txt`, `features.txt` | The original goal and the target module tree |
+| `Ideas/audit.md` | Every known defect, tiered by severity, with what was verified how |
+| `Ideas/deployment.md` | The 39-step deploy runbook, all of it done bar the last two |
+| `Ideas/plan-a-decisions.md` | Why each deployment choice was made, and what would change its mind |
+| `Ideas/ROLLBACK.md` | What to do when it is broken. Commands first |
+| `Ideas/jobs-plan.md` | The worked example: a module planned, built and logged |
+| `Ideas/core.txt` | The original goal, in the author's own words |
 
-Docker remains the one thing written but never run end to end.
+Docker has since been run end to end — that was Phase 0 of the deployment, and
+it found a real defect nothing else would have (local builds are `linux/arm64`;
+Cloud Run needs `amd64`).
 
 ---
 

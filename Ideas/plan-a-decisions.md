@@ -8,11 +8,21 @@ follow. Where I say "what would change my mind", that is a genuine falsifier —
 it turns out to be true, the decision should flip.
 
 Written against `main` at `a93e54e`, when 619 tests were green. Kept current as
-steps land: 710 green on SQLite, 708 + 2 skipped on Postgres 16 as of step 15.
+steps land: **740 green on SQLite, 730 + 2 skipped against Supabase itself.**
 
-**Phase 0 has been run.** Both images built first try and the full stack works
-end to end. It also found one thing this document did not predict — see D3.0,
-which was added afterwards and changes how confident D3.1 should be.
+**All of this has now been run.** The app is live — steps 1 to 37 of
+`deployment.md` are done and a second person is using it. The decisions below
+therefore divide into three kinds, and it is worth knowing which you are reading:
+
+- **Confirmed by doing it.** Most of them.
+- **Changed by doing it.** D2.0 (Neon → Supabase, reversed after review), D2.2
+  (no longer applies), D3.0 (added afterwards; Phase 0 found it and nothing else
+  would have).
+- **Still unfalsified, because the measurement was never taken.** D3.2's
+  cold-start figure is the significant one — see the note there.
+
+Where a decision has been tested by reality, it now says so under **What
+happened**.
 
 ---
 
@@ -469,6 +479,18 @@ contradicts "free".
 of one warm instance against the annoyance — it is not much money, and "free" was
 a requirement, not a religion.
 
+> **What happened: nothing, and that is the problem with this one.** The
+> 200 ms–2 s figure above is still an estimate. **Every latency measured so far
+> was against a warm container**, so the number this decision rests on has never
+> been observed. No one has complained either — but at three users, two of whom
+> are the author, that is not evidence.
+>
+> There is now also a confound: UptimeRobot polls `/health` every five minutes,
+> which may be keeping the instance warm permanently. If so the cold start is
+> both unmeasurable and irrelevant, which would be a good outcome arrived at by
+> accident. Measuring it honestly means pausing the monitor, waiting 15 minutes,
+> and timing one request — see step 38.
+
 ### D3.3 · Set `max-instances` low — **the default of 100 is a trap**
 
 **Decision.** Cap it at something like 3.
@@ -811,6 +833,22 @@ operational problem downstream. That happens more often than it seems to when yo
 will never trigger either. Convenient — but do not let a monitor become the
 reason the app looks alive.
 
+> **What happened, and it is a lesson about monitoring rather than about hosting.**
+> Ten monitors were created and **eight of them cannot fail.** Cloudflare Pages
+> serves the SPA fallback for every unmatched path, so `/grades`, `/budget` and an
+> invented path that has never existed all return an identical 466-byte 200. A
+> monitor on any of those is testing that Cloudflare is up, which it is, and will
+> stay green through any outage this app is capable of having.
+>
+> Two are real: **`/health`**, because it touches the database and can therefore
+> answer `unhealthy`, and the frontend root. Delete the rest — a dashboard of ten
+> green checks that cannot go red is worse than two, because it reads as coverage.
+>
+> `/health` also needed a code change to be monitorable at all: UptimeRobot sends
+> **HEAD**, and `@app.get` registers GET only, so it answered 405 on every poll.
+> Plain Starlette routes add HEAD automatically; FastAPI's do not. Fixed with
+> `@app.api_route(..., methods=["GET", "HEAD"])`.
+
 ---
 
 ## Phase 7 — Rollout
@@ -828,3 +866,18 @@ radius is three people who will forgive you.
 database size against the 500 MB ceiling, and the cold-start latency your users
 actually experience. Those decide whether Plan A holds, or whether Option D
 arrives sooner than expected.
+
+> **What happened.** Three addresses went into `ALLOWED_SIGNUP_EMAILS` and one
+> other person signed in. Two of the three numbers turned out not to be worth
+> watching at this size: 588 rows against a 500 MB ceiling, and a request count
+> that rounds to nothing against 2M/month. The third was never measured (D3.2).
+>
+> **What the week did buy was the thing not on the list.** The second person's
+> sign-in ran the account-seeding path for someone who had not built the app —
+> the only part of this that had never been exercised by anyone but its author.
+> It worked. That is a better test than any of the three numbers, and it is an
+> argument for keeping D7.1 rather than going straight to twenty next time.
+>
+> It also surfaced the one thing that genuinely blocks step 39: the rate
+> limiters key on Google's front end rather than the caller (D5.5), so twenty
+> people would share one login budget.
