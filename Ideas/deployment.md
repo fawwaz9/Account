@@ -950,7 +950,7 @@ this document, and Phase 0 already reproduced the exact failure locally.
 Previews are different origins and will fail CORS. That is correct behaviour, not
 a bug, but it is confusing the first time.
 
-### 31. Add the Pages origin to Google OAuth
+### 31. Add the Pages origin to Google OAuth — **DONE**
 
 **Do:** in the Google Cloud console, add the Pages URL to the client ID's
 authorised JavaScript origins.
@@ -959,7 +959,7 @@ authorised JavaScript origins.
 message that never mentions origins. Second most likely hour-loser, and it fails
 the same way as step 30. **D5.3**.
 
-### 32. Test it properly
+### 32. Test it properly — **DONE, and it works**
 
 **Do:** open the Pages URL on your phone **with wifi off, on mobile data.** Sign
 in, load the dashboard, add a grade, reload.
@@ -967,15 +967,53 @@ in, load the dashboard, add a grade, reload.
 **Why mobile data:** testing from your own network proves nothing about whether
 the thing is actually reachable from the internet.
 
+**It left a trace, which is the proof.** The database held 95 transactions at
+migration time and holds 96 now — the row added during this test. It travelled
+from a phone on mobile data, through Cloudflare Pages, to Cloud Run, to Supabase,
+and the backup taken minutes later contains all 96. Nothing in that path is
+theoretical any more.
+
 ---
 
 ## Part 4 — Before anyone else touches it
 
 Do not skip this part to get friends in a day earlier.
 
-### 33. Set up backups
+### 33. Set up backups — **DONE** (`.github/workflows/backup.yml`)
 
 **Do:** a scheduled nightly `pg_dump` to storage you control, off Supabase.
+
+Runs on GitHub Actions at 09:00 UTC daily, plus `workflow_dispatch` for taking
+one before anything risky. Artifacts retained 90 days. **Proven by running it:**
+23 tables, 589 rows, a 22 KB gzipped artifact, downloaded and checked.
+
+**Three details that each needed testing rather than assuming:**
+
+1. **The SESSION pooler (5432), not the transaction pooler (6543) the app
+   uses.** `pg_dump` takes a snapshot and depends on staying on one backend
+   connection for the whole dump; transaction pooling may move it between
+   statements, risking a dump that succeeds and is internally *inconsistent* —
+   the worst kind, because it restores cleanly and is wrong. Both modes were
+   tested and both produced byte-identical output, so this is a consistency
+   argument rather than an observed failure; the safer mode costs nothing.
+2. **`--schema=public`.** Without it the dump also carries Supabase's own
+   `auth`, `storage` and `realtime` schemas: **58** `CREATE TABLE` instead of 23,
+   none of it restorable into a fresh project because the platform manages it.
+3. **`pg_dump` runs inside `postgres:17-alpine`.** The server is 17.6 and
+   GitHub's runner image ships client 16, which refuses a newer server outright.
+
+**It refuses to archive a dump it does not believe:** under 2 KB, fewer than 20
+tables, or zero data rows fails the run. A dump that connected, found nothing and
+exited 0 would otherwise be archived nightly, look healthy in the logs, and be
+discovered empty on the one day it mattered.
+
+**Two things to decide later, flagged rather than silently chosen.** The dump is
+**not encrypted** — it holds every user's financial data and their bcrypt
+password hashes, in a private repository's artifact storage. Encrypting it means
+a passphrase whose loss makes every backup unreadable, which for this threat
+model is a worse failure than the one it prevents. And **90 days is not
+forever**: if you want a copy that outlives that, the dump needs a home you own,
+such as a Cloud Storage bucket.
 
 **This is not optional on Supabase free.** There are **no automated backups** on
 that plan and point-in-time recovery is a $100/month feature. Skipping this means
