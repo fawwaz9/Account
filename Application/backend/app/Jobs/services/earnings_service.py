@@ -17,13 +17,13 @@ from datetime import date, timedelta
 from sqlalchemy.orm import Session
 
 from app._database.models import (
-    CourseModel,
     JobModel,
     PaychequeDeductionModel,
     PaychequeModel,
     UserModel,
 )
 from app.Calendar.services.load_service import week_load, week_of
+from app.Grades.utils.terms import term_dates
 from app.Jobs.schemas.earnings import (
     EarningsSummary,
     EarningsWindow,
@@ -39,20 +39,6 @@ from app.Jobs.services.paycheque_service import money
 
 def today() -> date:
     return date.today()
-
-
-def term_span(courses) -> tuple[date | None, date | None]:
-    """The dates the current term runs, from the courses in it.
-
-    The same rule Finances uses for a term budget, restated rather than imported
-    across modules for one caller. Courses with no dates contribute nothing, so
-    a term nobody dated has no span at all rather than a span of one day.
-    """
-    starts = [c.start_date for c in courses if c.start_date]
-    ends = [c.end_date for c in courses if c.end_date]
-    if not starts or not ends:
-        return None, None
-    return min(starts), max(ends)
 
 
 def earned_from_shifts(job: JobModel, shifts) -> tuple[float, float]:
@@ -303,19 +289,21 @@ def earnings_summary(db: Session, user_id: uuid.UUID, on_day: date | None = None
     week_start = anchor - timedelta(days=6)
     month_start = anchor.replace(day=1)
 
+    # The term's own dates, through the one accessor Grades and Finances also
+    # read. This module used to restate the rule -- earliest start and latest
+    # end across the term's courses -- and its own docstring said so. Restating
+    # is what let the two drift: once Finances started measuring the term
+    # itself, Jobs went on measuring the teaching weeks, and "This term" landed
+    # on Sep 9 while the budget's term began Sep 1.
     term = None
-    if user.current_school_year and user.current_semester:
-        courses = (
-            db.query(CourseModel)
-            .filter(
-                CourseModel.user_id == user_id,
-                CourseModel.year == user.current_school_year,
-                CourseModel.semester == user.current_semester,
-            )
-            .all()
-        )
-        term_start, term_end = term_span(courses)
-        if term_start is not None:
+    span = term_dates(
+        user.current_semester, user.current_school_year, user.first_year_calendar_year
+    )
+    if span is not None:
+        term_start, term_end = span
+        # Clamped at today, because earnings cannot be reported for a stretch of
+        # term that has not happened yet.
+        if term_start <= anchor:
             term = window_earnings(
                 db, user_id, jobs, "This term", term_start, min(term_end, anchor), anchor
             )

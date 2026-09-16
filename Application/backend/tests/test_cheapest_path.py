@@ -217,3 +217,57 @@ def test_ranking_leaves_nothing_pending_in_the_session(db, user):
     assert not db.dirty, "computing a ranking left a pending write behind"
     db.expire_all()
     assert {g.id: g.score for g in db.query(GradeModel).all()} == before
+
+
+# ----------------------------------------------- what the audit turned up --
+
+def test_estimates_are_scoped_to_the_course(db, user):
+    """The filter originally named only "has a grade and has an estimate", so
+    every course page load read every such task in the table. Nothing came back
+    wrong -- a grade id matches one grade -- so it was a full scan whose result
+    happened to be right, invisible until the table is large.
+    """
+    from app.Grades.services.cheapest_path import estimates_by_grade
+
+    mine = course_with(db, user, {"Assignment": 100.0}, code="CPSC 221")
+    other = course_with(db, user, {"Assignment": 100.0}, code="CPSC 210")
+    here = grade(db, user, mine, "Assignment 1", "Assignment",
+                 due=datetime.date(2026, 10, 1))
+    there = grade(db, user, other, "Assignment 1", "Assignment",
+                  due=datetime.date(2026, 10, 1))
+    estimate(db, here, 60)
+    estimate(db, there, 120)
+
+    loaded = estimates_by_grade(db, mine.id)
+
+    assert loaded == {here.id: 60}, "another course's estimates came back too"
+
+
+def test_another_users_estimate_is_never_read(db, user):
+    from app.Grades.services.cheapest_path import estimates_by_grade
+    from conftest import make_user
+
+    intruder = make_user(db, "someone-else@example.com")
+    theirs = course_with(db, intruder, {"Assignment": 100.0}, code="ZZZZ 100")
+    theirgrade = grade(db, intruder, theirs, "Assignment 1", "Assignment",
+                       due=datetime.date(2026, 10, 1))
+    estimate(db, theirgrade, 300)
+
+    mine = course_with(db, user, {"Assignment": 100.0})
+    grade(db, user, mine, "Assignment 1", "Assignment")
+
+    assert estimates_by_grade(db, mine.id) == {}
+
+
+def test_the_panel_reports_the_stored_average(db, user):
+    """The stored column is authoritative -- every write path recomputes and
+    commits it, and the course header on the same page renders that value.
+    Recomputing here is how one screen ends up showing two averages for one
+    course, which is the fault get_course's docstring already records.
+    """
+    course = course_with(db, user, {"Assignment": 50.0, "Final": 50.0})
+    grade(db, user, course, "Assignment 1", "Assignment", score=72)
+    grade(db, user, course, "Final exam", "Final")
+
+    db.refresh(course)
+    assert cheapest_path(db, user.id, course.id).current == round(course.average, 2)

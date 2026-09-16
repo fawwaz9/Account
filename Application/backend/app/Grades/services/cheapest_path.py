@@ -27,7 +27,6 @@ from sqlalchemy.orm import Session
 from app._database.models import CourseModel, GradeModel, TaskModel
 from app.Grades.schemas.cheapest_path import CheapestPath, RemainingItem
 from app.Grades.services.grade_service import (
-    calculate_current_average,
     counts_toward_average,
     get_user_course,
     project_average,
@@ -50,15 +49,22 @@ def item_leverage(course: CourseModel, grade: GradeModel) -> float:
 
 
 def estimates_by_grade(db: Session, course_id: uuid.UUID) -> dict[uuid.UUID, int]:
-    """Minutes the student put on the task each dated grade raised.
+    """Minutes the student put on the task each of this course's grades raised.
 
     Their own number: `sync_task` seeds a task from a grade but never overwrites
     an estimate, precisely so re-saving a grade cannot revert one.
+
+    Scoped to the course, which it was not at first: the filter named only
+    "has a grade and has an estimate", so every course page load read every such
+    task in the table. Nothing came back wrong, because a grade id matches one
+    grade -- it was a full scan whose result happened to be right, which is the
+    kind of thing that stays invisible until the table is large.
     """
     rows = (
         db.query(TaskModel.grade_id, TaskModel.estimated_minutes)
+        .join(GradeModel, GradeModel.id == TaskModel.grade_id)
         .filter(
-            TaskModel.grade_id.isnot(None),
+            GradeModel.course_id == course_id,
             TaskModel.estimated_minutes.isnot(None),
         )
         .all()
@@ -129,7 +135,11 @@ def cheapest_path(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> Chea
     best = project_average(course, 1.0)
     return CheapestPath(
         target=target,
-        current=calculate_current_average(course),
+        # The stored column, not a fresh calculation. Every write path
+        # recomputes and commits it, and the course header on the same page
+        # renders that value -- recomputing here is how one screen ends up
+        # showing two different averages for one course.
+        current=round(course.average or 0.0, 2),
         best=best,
         # Says whether the target is still arithmetically available, so the
         # ranking is not read as a plan that gets you there when nothing can.

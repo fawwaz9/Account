@@ -312,3 +312,84 @@ def test_booked_minutes_still_means_everything(db, user, hourly):
     assert load.booked_minutes == 600
     assert load.work_minutes == 600
     assert load.class_minutes == 0
+
+
+# ------------------------------------------------- the term window --
+
+def in_term(db, user, anchor=ANCHOR):
+    """Put the student in Fall of school year 3, anchored so it is 2026."""
+    user.current_school_year = 3
+    user.current_semester = "Fall"
+    user.first_year_calendar_year = 2024
+    db.commit()
+
+
+def test_the_term_window_uses_the_terms_own_dates(db, user, hourly, accounts):
+    """Not the courses'. This module used to restate the span rule -- earliest
+    start, latest end across the term's courses -- and its own docstring said
+    so. Restating is what let the two drift: once Finances began measuring the
+    term itself, Jobs went on measuring the teaching weeks, and "This term"
+    started on September 9 while the budget's term started September 1.
+    """
+    in_term(db, user)
+    make_course(db, user.id, "CPSC 221", year=3, semester="Fall",
+                start_date=datetime.date(2026, 9, 9),
+                end_date=datetime.date(2026, 12, 7))
+
+    summary = earnings_summary(db, user.id, on_day=ANCHOR)
+
+    assert summary.term is not None
+    assert summary.term.starts_on == datetime.date(2026, 9, 1), "the term, not the teaching"
+    assert summary.term.ends_on == ANCHOR, "clamped at today"
+
+
+def test_jobs_and_finances_agree_about_when_the_term_runs(db, user):
+    """The regression test for the whole class of fault. Two modules each
+    answering "when does this term run" is fine; two modules each *deciding* it
+    is not, and that is what shipped."""
+    from app.Finances.services.tuition_service import term_span
+    from app.Grades.utils.terms import term_dates
+
+    in_term(db, user)
+    course = make_course(db, user.id, "CPSC 221", year=3, semester="Fall",
+                         start_date=datetime.date(2026, 9, 9),
+                         end_date=datetime.date(2026, 12, 7))
+
+    finances = term_span([course], user.first_year_calendar_year)
+    grades = term_dates("Fall", 3, user.first_year_calendar_year)
+    summary = earnings_summary(db, user.id, on_day=ANCHOR)
+
+    assert finances == grades
+    assert summary.term.starts_on == grades[0]
+
+
+def test_a_term_with_no_courses_still_has_earnings(db, user, hourly, accounts):
+    """It follows from the term having its own dates. Under the old rule a
+    student who had not dated any course got no term figure at all, and nothing
+    said why."""
+    in_term(db, user)
+
+    summary = earnings_summary(db, user.id, on_day=ANCHOR)
+
+    assert summary.term is not None
+    assert summary.term.starts_on == datetime.date(2026, 9, 1)
+
+
+def test_without_the_anchor_there_is_no_term_window(db, user, hourly, accounts):
+    """A school year is 1..10, so with nothing to resolve it against the honest
+    answer is no window rather than a guessed one."""
+    user.current_school_year = 3
+    user.current_semester = "Fall"
+    user.first_year_calendar_year = None
+    db.commit()
+
+    assert earnings_summary(db, user.id, on_day=ANCHOR).term is None
+
+
+def test_a_term_that_has_not_started_reports_nothing(db, user, hourly, accounts):
+    """Earnings cannot be reported for a stretch that has not happened."""
+    in_term(db, user)
+
+    before_term = earnings_summary(db, user.id, on_day=datetime.date(2026, 8, 15))
+
+    assert before_term.term is None

@@ -170,3 +170,36 @@ def test_nothing_dated_suggests_nothing(db, user):
     make_course(db, user.id, "NODATE 100", year=3, semester="Fall")
 
     assert suggest_first_year(db.query(CourseModel).all()) is None
+
+
+def test_the_year_suggestion_reaches_the_client_from_slash_me(db, user):
+    """Settings takes its user from /me, so the suggestion it offers has to be
+    attached on that route. It was attached only to academic-status at first,
+    which left the field null everywhere the control could actually read it --
+    the button could never appear.
+    """
+    from app.Users.schemas.user import User
+    from app.Users.services.user_service import attach_year_suggestion
+
+    # The fixture user defaults to the google provider with no google_id, which
+    # a validator unrelated to any of this refuses.
+    user.auth_provider = "local"
+    db.commit()
+    make_course(db, user.id, "CPSC 320", year=3, semester="Fall",
+                start_date=datetime.date(2026, 9, 9),
+                end_date=datetime.date(2026, 12, 7))
+
+    payload = User.model_validate(attach_year_suggestion(db, user))
+
+    assert payload.suggested_first_year == 2024
+
+
+def test_an_unattached_user_serialises_without_crashing(db, user):
+    """The field has no column behind it, so anything returning a bare row must
+    still serialise -- null, not a 500."""
+    from app.Users.schemas.user import User
+
+    user.auth_provider = "local"
+    db.commit()
+
+    assert User.model_validate(user).suggested_first_year is None

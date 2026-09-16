@@ -93,15 +93,19 @@ export default function TermBudget({ nonce }: TermBudgetProps) {
             </div>
           </div>
 
-          {/* Said plainly, because a span assembled from two of six courses is
-              not the term most people picture. */}
-          {term.undated_courses > 0 && (
-            <p className="termBudgetNote">
-              Measured from {term.dated_courses} of{" "}
-              {term.dated_courses + term.undated_courses} courses — the rest carry
-              no term dates.
-            </p>
-          )}
+          {/* Said plainly, because the span is the term rather than the weeks
+              you are actually taught in, and a textbook bought the week before
+              classes start is inside it.
+
+              This line used to read "measured from 2 of 6 courses — the rest
+              carry no term dates", which described the old rule: the span was
+              assembled from whichever courses happened to be dated. It is no
+              longer true of anything, and with most courses undated it would
+              have shown that claim permanently. */}
+          <p className="termBudgetNote">
+            Measured over the whole term, not the teaching weeks — so spending
+            in the days either side of classes is counted.
+          </p>
 
           {term.by_category.length > 0 && (
             <ul className="termBudgetCategories">

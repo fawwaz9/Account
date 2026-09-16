@@ -23,8 +23,12 @@ router = APIRouter()
 # response_model is load-bearing: without it FastAPI serializes the raw
 # SQLAlchemy row, which now includes password_hash.
 @router.get("/me", response_model=User)
-def get_me(current_user: CurrentUser):
-    return current_user
+def get_me(current_user: CurrentUser, db: DBSession):
+    # Attached here too, not only on the academic-status route. Settings takes
+    # its user from /me, so the year suggestion it offers is read from this
+    # payload -- without this the field is always null and the control that
+    # depends on it can never appear.
+    return attach_year_suggestion(db, current_user)
 
 
 @router.get("/{user_id}/academic-status", response_model=User, responses=responses["user_404"])
