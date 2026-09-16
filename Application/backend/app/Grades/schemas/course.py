@@ -7,6 +7,69 @@ from app.Grades.schemas.grade import Grade
 from app.Grades.utils.enums import GradeCategory, Semester
 from app.shared.errors import MAX_TOTAL_WEIGHT, weight_error
 
+#: Schemes a course link may use. An allowlist rather than a denylist, because
+#: the interesting ones are the ones nobody thought of.
+#:
+#: This is not theoretical tidiness: these are rendered as anchors on the course
+#: page, and a stored `javascript:` URL is script execution on your own page the
+#: next time you click your own link. `data:` is the same hole wearing a hat.
+#: Checked here rather than only in the client, since the API is reachable
+#: without it.
+ALLOWED_LINK_SCHEMES: frozenset[str] = frozenset({"http", "https"})
+
+#: Enough for a long Canvas deep link, short of somebody pasting a document into
+#: the field.
+MAX_LINK_URL = 500
+
+
+class CourseLink(BaseModel):
+    """One place a course lives: Canvas, Piazza, a syllabus."""
+
+    title: str = Field(..., min_length=1, max_length=40)
+    url: str = Field(..., min_length=1, max_length=MAX_LINK_URL)
+
+    @model_validator(mode="after")
+    def validate_link(self):
+        self.title = self.title.strip()
+        self.url = self.url.strip()
+
+        if not self.title:
+            raise ValueError("A link needs a name")
+        if not self.url:
+            raise ValueError("A link needs an address")
+
+        # A pasted bare domain is the likeliest mistake and the only unambiguous
+        # one, so it is fixed rather than refused. Anything carrying a scheme is
+        # taken at its word and checked -- "javascript:alert(1)" has a colon, so
+        # it lands in the check below rather than becoming
+        # "https://javascript:alert(1)".
+        if ":" not in self.url:
+            self.url = f"https://{self.url}"
+
+        scheme, _, rest = self.url.partition(":")
+        if not rest or scheme.lower() not in ALLOWED_LINK_SCHEMES:
+            raise ValueError("A link must start with http:// or https://")
+
+        return self
+
+
+def clean_links(links: list["CourseLink"] | None) -> list[dict]:
+    """The stored shape: plain dicts, so the JSON column holds no model objects.
+
+    Duplicate titles are allowed -- two Canvas links for a cross-listed course is
+    a real thing -- but an exact duplicate of both fields is a double-click.
+    """
+    seen: set[tuple[str, str]] = set()
+    cleaned: list[dict] = []
+    for link in links or []:
+        key = (link.title.lower(), link.url.lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        cleaned.append({"title": link.title, "url": link.url})
+    return cleaned
+
+
 def default_category_weights() -> dict[GradeCategory, float]:
     return dict.fromkeys(GradeCategory, 0.0)
 
@@ -47,6 +110,7 @@ class CourseBase(BaseModel):
     no_final: bool = Field(default=False, description="No final exam, so a missing final grade is not a problem to act on")
     transfer_credit: bool = Field(default=False, description="Credit granted without taking the course; contributes credits and no grade")
     archived: bool = Field(default=False, description="Still searchable and still in the average, but no longer counted toward credits completed")
+    links: list[CourseLink] = Field(default_factory=list, max_length=20, description="Where this course lives: Canvas, Piazza, a syllabus")
 
     @model_validator(mode="after")
     def validate_course_logic(self):
@@ -103,6 +167,9 @@ class CourseUpdate(BaseModel):
     no_final: bool | None = Field(default=None, description="No final exam, so a missing final grade is not a problem to act on")
     transfer_credit: bool | None = Field(default=None, description="Credit granted without taking the course; contributes credits and no grade")
     archived: bool | None = Field(default=None, description="Still searchable and still in the average, but no longer counted toward credits completed")
+    #: Sent whole, never patched entry by entry. The list is small and ordered,
+    #: and a per-entry API would need ids the JSON column does not carry.
+    links: list[CourseLink] | None = Field(default=None, max_length=20)
 
     @model_validator(mode="after")
     def validate_course_update(self):

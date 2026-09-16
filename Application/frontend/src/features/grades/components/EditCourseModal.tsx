@@ -30,6 +30,10 @@ function buildFormFromCourse(course: CourseDetail | null): CourseCreate {
     no_final: course?.no_final ?? false,
     transfer_credit: course?.transfer_credit ?? false,
     archived: course?.archived ?? false,
+    // Carried through rather than edited here: this form spreads its whole
+    // state into the PATCH, so anything it drops is a field it deletes. Links
+    // are edited in their own dialog on the course page.
+    links: course?.links ?? [],
   };
 }
 

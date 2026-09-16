@@ -27,6 +27,7 @@ const defaultForm: CourseCreate = {
   no_final: false,
   transfer_credit: false,
   archived: false,
+  links: [],
 };
 
 export default function AddCourseModal({
@@ -71,6 +72,8 @@ export default function AddCourseModal({
         no_final: form.no_final,
         transfer_credit: form.transfer_credit,
         archived: form.archived,
+        // Added from the course page once it exists, not on the way in.
+        links: [],
       };
       await createCourse(user.id, payload);
       setForm(defaultForm);

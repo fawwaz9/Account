@@ -7,6 +7,8 @@ import { bonusLast, carriesBonus, isAdditive } from "../../features/grades/bonus
 import { trimNumber } from "../../shared/utils/numberUtils";
 import GradeBand from "../../features/grades/components/GradeBand";
 import CourseCost from "../../features/grades/components/CourseCost";
+import CourseLinks from "../../features/grades/components/CourseLinks";
+import CourseLinksModal from "../../features/grades/components/CourseLinksModal";
 import AddGradeModal from "../../features/grades/components/AddGradeModal";
 import EditGradeModal from "../../features/grades/components/EditGradeModal";
 import EditCourseModal from "../../features/grades/components/EditCourseModal";
@@ -24,6 +26,7 @@ export default function CourseDetailPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [course, setCourse] = useState<CourseDetail | null>(null);
+  const [linksOpen, setLinksOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadNonce, setReloadNonce] = useState(0);
@@ -259,11 +262,28 @@ export default function CourseDetailPage() {
       {/* Cost on the left, the band on the right. Both hide themselves when
           they have nothing to say, so the row collapses rather than leaving a
           gap -- see .courseInsights:empty. */}
+      {/* Above the insights row, not inside CourseCost: that panel hides
+          itself when the course has cost nothing, which would take the links
+          with it on exactly the courses you have not spent anything on yet. */}
+      {course && (
+        <CourseLinks links={course.links ?? []} onEdit={() => setLinksOpen(true)} />
+      )}
+
       {user && courseId && (
         <div className="courseInsights">
           <CourseCost userId={user.id} courseId={courseId} nonce={reloadNonce} />
           <GradeBand userId={user.id} courseId={courseId} nonce={reloadNonce} />
         </div>
+      )}
+
+      {courseId && course && (
+        <CourseLinksModal
+          open={linksOpen}
+          courseId={courseId}
+          links={course.links ?? []}
+          onClose={() => setLinksOpen(false)}
+          onSaved={() => setReloadNonce((n) => n + 1)}
+        />
       )}
 
       <div className="categoriesGrid">

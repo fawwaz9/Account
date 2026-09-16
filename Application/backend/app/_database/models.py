@@ -139,6 +139,15 @@ class CourseModel(Base):
     #: Still searchable and still counted in the credit-weighted average, but no
     #: longer counted toward credits completed.
     archived = Column(Boolean, nullable=False, default=False)
+    #: Where this course lives: Canvas, Piazza, a syllabus PDF. A list of
+    #: {"title", "url"} objects, ordered as the student arranged them.
+    #:
+    #: JSON rather than a table because nothing needs to query across links or
+    #: reference one on its own -- and, like `tasks.tags`, it must be
+    #: **reassigned whole** on every change. SQLAlchemy does not track a
+    #: mutation made inside a JSON column, which is the bug that broke editing
+    #: any event with a cancelled date and `users.preferences` before that.
+    links = Column(JSON, nullable=False, default=list)
 
     user = relationship("UserModel", back_populates="courses")
     grades = relationship("GradeModel", back_populates="course", cascade=cascade)

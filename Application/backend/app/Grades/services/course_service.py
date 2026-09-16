@@ -1,7 +1,7 @@
 import uuid
 from sqlalchemy.orm import Session, selectinload
 from app._database.models import CourseModel, CourseCategoryWeightModel, GradeModel, UserModel
-from app.Grades.schemas.course import CourseCreate, CourseUpdate
+from app.Grades.schemas.course import CourseCreate, CourseUpdate, clean_links
 from app.Grades.services.grade_service import (
     calculate_gpa_points,
     calculate_grade_category_average,
@@ -133,6 +133,7 @@ def create_course(db: Session, user_id: uuid.UUID, course_data: CourseCreate):
         no_final=course_data.no_final,
         transfer_credit=course_data.transfer_credit,
         archived=course_data.archived,
+        links=clean_links(course_data.links),
     )
     db.add(course)
     db.flush()  # gets course.id available before commit if needed
@@ -202,9 +203,20 @@ def update_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, data: C
 
     update_data = data.model_dump(exclude_unset=True)
     category_weights = update_data.pop("category_weights", None)
+    # Taken off the dict and applied from the typed models below. model_dump
+    # would hand back plain dicts, which cannot be deduplicated by title and
+    # url without re-reading their keys.
+    update_data.pop("links", None)
 
     for key, value in update_data.items():
         setattr(course, key, value)
+
+    if data.links is not None:
+        # Assigned whole, and that is the point rather than a style choice.
+        # SQLAlchemy does not see a mutation made *inside* a JSON column, so
+        # appending to course.links would return a saved-looking response and
+        # persist nothing.
+        course.links = clean_links(data.links)
 
     if category_weights is not None:
         # Left pending above and committed here, in one transaction with the

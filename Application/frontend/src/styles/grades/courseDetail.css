@@ -668,3 +668,95 @@
 .courseInsights:empty {
   display: none;
 }
+
+/* ===== Course links =====
+   A row of quiet chips above the insights, and one muted underlined control.
+   Deliberately understated: these are a way out of the page rather than
+   anything to read on it, and a row of solid buttons at the top of a course
+   would compete with the average, which is what you came for. */
+
+.courseLinks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 16px;
+}
+
+.courseLink {
+  padding: 3px 10px;
+  border: 1px solid #1f2a44;
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 0.82rem;
+  text-decoration: none;
+  transition: 0.15s ease;
+}
+
+.courseLink:hover,
+.courseLink:focus-visible {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+/* Text, not a button: it sits among links and adding one is the same kind of
+   act as following one. padding and box-sizing explicit because the base
+   .container button rule would otherwise give it a button's box back. */
+.courseLinkAdd {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-family: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.courseLinkAdd:hover,
+.courseLinkAdd:focus-visible {
+  color: var(--gold);
+}
+
+/* One suggested name and its box per line, stacking on a narrow screen. The
+   name column is fixed so the three suggestions line their inputs up rather
+   than each starting wherever its own word ends. */
+.linkRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.linkRowName {
+  flex: 0 0 96px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.linkRowTitle {
+  flex: 0 0 96px;
+}
+
+.linkRow > .calInput:not(.linkRowTitle) {
+  flex: 1;
+  min-width: 0;
+}
+
+.linksForm {
+  gap: 10px;
+}
+
+@media (max-width: 520px) {
+  .linkRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .linkRowName,
+  .linkRowTitle {
+    flex: 1;
+  }
+}

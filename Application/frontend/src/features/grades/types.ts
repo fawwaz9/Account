@@ -1,4 +1,10 @@
 // Course
+/** One place a course lives: Canvas, Piazza, a syllabus. */
+export interface CourseLink {
+  title: string;
+  url: string;
+}
+
 export interface Course {
   id: string;
   code: string;
@@ -26,6 +32,11 @@ export interface Course {
   transfer_credit: boolean;
   /** Searchable and still in the average, but out of credits completed. */
   archived: boolean;
+  /**
+   * Where the course lives, in the order they were arranged. Sent and stored
+   * whole -- there is no per-link endpoint, because the list carries no ids.
+   */
+  links: CourseLink[];
   /** Letter for the course's result; "" when nothing is recorded yet. */
   letter_grade: string;
   /** Grade points on the configured scale */
@@ -63,6 +74,11 @@ export interface CourseCreate {
   transfer_credit: boolean;
   /** Searchable and still in the average, but out of credits completed. */
   archived: boolean;
+  /**
+   * Where the course lives, in the order they were arranged. Sent and stored
+   * whole -- there is no per-link endpoint, because the list carries no ids.
+   */
+  links: CourseLink[];
 }
 
 export interface CourseDetail {
@@ -90,6 +106,11 @@ export interface CourseDetail {
   transfer_credit: boolean;
   /** Searchable and still in the average, but out of credits completed. */
   archived: boolean;
+  /**
+   * Where the course lives, in the order they were arranged. Sent and stored
+   * whole -- there is no per-link endpoint, because the list carries no ids.
+   */
+  links: CourseLink[];
   // Point-weighted average per category, computed by the API. Render these
   // rather than recomputing -- the component used to do its own arithmetic and
   // disagreed with the course average on the same screen.
@@ -116,6 +137,7 @@ export interface CourseUpdate{
   no_final: boolean | null;
   transfer_credit: boolean | null;
   archived: boolean | null;
+  links: CourseLink[] | null;
 }
 
 

@@ -32,6 +32,10 @@ ADDED_COLUMNS: dict[str, dict[str, str]] = {
     },
     "courses": {
         "target_grade": "FLOAT",
+        # Defaulted at the column so existing rows read as an empty list rather
+        # than NULL -- every reader treats this as a list and a NULL would make
+        # each one guard for it.
+        "links": "JSON NOT NULL DEFAULT '[]'",
         "no_final": "BOOLEAN NOT NULL DEFAULT 0",
         "transfer_credit": "BOOLEAN NOT NULL DEFAULT 0",
         "archived": "BOOLEAN NOT NULL DEFAULT 0",
