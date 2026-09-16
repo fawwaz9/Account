@@ -198,6 +198,43 @@ began — a pair the API refuses, leaving a row nothing could edit afterwards. A
 end that would run past midnight is dropped rather than wrapped, since an event
 has one date.
 
+## Which item is worth doing next
+
+The average says where a course is; it does not say what to do about it.
+`cheapest_path` ranks what is left by **leverage** — the course average with an
+item at full marks minus the same average with it at zero, every other
+outstanding item held constant. That difference is the share of the final
+average the item controls, and it is the same whatever the others are assumed to
+do, because their contribution appears in both halves and cancels.
+
+It reuses `project_average` through a new pure `overrides` parameter rather than
+by setting `grade.score` and putting it back. That matters more than it looks:
+mutate-and-restore passes every value-based test, including one that re-reads
+every score from the database, because the value is back before anybody looks.
+What it cannot hide is `db.dirty` — setting a mapped attribute flags the row
+whether or not the value ends up where it started, so the GET carries a pending
+UPDATE that the next commit anywhere would flush. The test asserts on the
+session, and it took a mutation to work that out.
+
+### Ranked by points, not by rate
+
+Hours come from the task a dated grade raised. The obvious reading of "most per
+hour" was to rank the estimated items first, and running it over real courses
+killed it: a course with one estimated lab worth 4 points and an unestimated
+final worth 45 put **the lab at the top**. Carrying an estimate is not evidence
+of being worth doing.
+
+So one list, ordered by leverage, which is known for every item. The rate rides
+along where it exists, and where there are two or more estimates — a real
+comparison — the best rate is named on its own line. With one estimate there is
+nothing to compare against, and "best value" of a list of one is noise dressed
+as a finding.
+
+Bonus categories are excluded: they add on top of the average rather than
+composing it, so chasing one is how you spend a weekend moving a number that was
+never going to reach. Zero-leverage items are excluded too — offering work that
+changes nothing is worse than offering none.
+
 ## Still open
 
 A term retrospective once a term closes; the syllabus parser, deliberately

@@ -760,3 +760,94 @@
     flex: 1;
   }
 }
+
+/* ===== Worth doing next =====
+   A third panel in the insights row. The figures are the point, so they sit
+   right-aligned in their own column and line up down the list -- tabular-nums
+   because a ranking whose digits do not align is one you have to read twice. */
+
+.cheapestPath {
+  padding: 14px 16px;
+  border: 1px solid #1f2a44;
+  border-radius: 12px;
+  background: var(--panel-2);
+}
+
+.pathHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.pathLabel {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.pathTarget {
+  color: var(--text);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.pathList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.pathItem {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pathItemName {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  /* The name can outgrow its column; clipping a title is how you end up with
+     two items that read identically. */
+  overflow-wrap: anywhere;
+}
+
+.pathItemCategory {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.pathItemFigures {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.pathItemRate {
+  color: var(--gold);
+  font-size: 0.88rem;
+}
+
+.pathItemLeverage {
+  color: var(--text);
+  font-size: 0.82rem;
+}
+
+.pathItemEstimate {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.pathNote {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}

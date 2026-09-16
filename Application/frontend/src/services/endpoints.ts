@@ -14,6 +14,7 @@ export const endpoints = {
     resolveCourse: (userId: string) => `grades/${userId}/courses/resolve`,
     blindSpots: (userId: string) => `grades/${userId}/category-blind-spots`,
     gradeBand: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/grade-band`,
+    cheapestPath: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/cheapest-path`,
     courseGrades: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/grades`,
     bulkGrades: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/grades/bulk`,
     gradeDetail: (userId: string, courseId: string, gradeId: string) => `grades/${userId}/courses/${courseId}/grades/${gradeId}`,

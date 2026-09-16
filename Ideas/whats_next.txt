@@ -1,4 +1,33 @@
 Shipped so far (do not re-propose)
+        Course resource links. Canvas, Piazza, PrairieLearn and anything else,
+          as chips above the insights row with one muted underlined control.
+          Stored as JSON on the course and reassigned whole, because SQLAlchemy
+          does not see a mutation inside a JSON column. http/https only, checked
+          on the server: these render as anchors, and a stored javascript: URL
+          is script execution on your own page.
+        Fixed term dates, anchored to one setting. courses.year is the SCHOOL
+          year, 1 to 10, so "Fall starts Sep 1" had no calendar year to attach
+          to. Settings now takes the year first year began and every term
+          derives from it. Term Budget measures the term rather than assembling
+          a span from whichever courses happened to carry dates -- which is why
+          21 of 27 courses could not be measured before. The class timetable is
+          carved out and still uses each course's real dates, or it would invent
+          three lectures before term and three after.
+          NOTE: your term_label reads "2025-2026" while your year-3 Fall courses
+          run September 2026. The label is a year stale, so the anchor is
+          suggested from the dated courses instead -- it offers 2024, which is
+          right. Worth fixing the label too.
+        Cheapest path to a target. Ranks what is left in a course by how much of
+          the final average each item still controls, with a per-hour rate where
+          the task carries an estimate. Ranked by points rather than by rate:
+          running it over real courses showed a single estimated lab worth 4
+          points outranking an unestimated final worth 45, because having an
+          estimate was being read as evidence of being worth doing. The best
+          rate is named on its own line instead.
+          NOTE: only 1 of your 22 outstanding items has a time estimate, and no
+          course has its own target, so every target falls back to the account
+          default. The panel works without either; estimates just make it
+          sharper.
         The browser tab says Account rather than App.
         Editing a task at all. Every row has an Edit button and a task on the
           calendar opens the same dialog, which also carries the Complete
@@ -260,7 +289,6 @@ Grades:
           modules meet", and the unbuilt ones worth having are probably
           Grades x Jobs (does term workload track hours worked) and
           Jobs x Calendar beyond shifts. Rewrite it or delete it.
-        Cheapest path to a target: which remaining item moves the average most per hour spent.
         Term retrospective when a term closes: what moved, what slipped, what you predicted vs got.
         Syllabus paste: drop the text in, get categories, weights and due dates proposed for review.
         Make syllabus parser the main when adding courses but add a button to do it manually.

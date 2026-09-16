@@ -414,7 +414,9 @@ def calculate_gpa_points(average: float | None) -> float:
     return grade_scale_row(average or 0.0)[1]
 
 
-def category_average_assuming(course: CourseModel, category, unmarked: float) -> float | None:
+def category_average_assuming(
+    course: CourseModel, category, unmarked: float, overrides: dict | None = None
+) -> float | None:
     """A category's average if every unmarked item scored `unmarked` of its max.
 
     `unmarked` is a fraction: 1.0 for the optimistic case, 0.0 for the grim one.
@@ -439,14 +441,30 @@ def category_average_assuming(course: CourseModel, category, unmarked: float) ->
     if possible == 0:
         return None
 
-    earned = sum(
-        g.score if g.score is not None else unmarked * g.max_score
-        for g in items
-    )
+    earned = sum(assumed_score(g, unmarked, overrides) for g in items)
     return round(earned / possible * 100, 2)
 
 
-def project_average(course: CourseModel, unmarked: float) -> float:
+def assumed_score(grade, unmarked: float, overrides: dict | None) -> float:
+    """What one grade is worth under an assumption.
+
+    `overrides` names particular grades by id and wins over everything, which is
+    what lets a caller ask "and what if *this* one went full marks" without
+    touching the row. It has to be a parameter rather than a temporary write:
+    setting grade.score and restoring it would make a read that mutates a mapped
+    column, which is one stray commit from a GET that changes data -- the same
+    trap course_result_grade's docstring warns about.
+    """
+    if overrides is not None and grade.id in overrides:
+        return overrides[grade.id] * grade.max_score
+    if grade.score is not None:
+        return grade.score
+    return unmarked * grade.max_score
+
+
+def project_average(
+    course: CourseModel, unmarked: float, overrides: dict | None = None
+) -> float:
     """The course average if everything still outstanding went `unmarked` way.
 
     Same shape as calculate_current_average, and deliberately so: a projection
@@ -465,7 +483,7 @@ def project_average(course: CourseModel, unmarked: float) -> float:
     if total_weight > 0:
         weighted_sum = 0.0
         for category, weight in scoring:
-            average = category_average_assuming(course, category, unmarked)
+            average = category_average_assuming(course, category, unmarked, overrides)
             # A weighted category with nothing in it yet is unknown rather than
             # zero, so it takes the assumption whole: full marks at best, none at
             # worst. That is the honest width of not having entered anything.
@@ -479,7 +497,7 @@ def project_average(course: CourseModel, unmarked: float) -> float:
     for category, weight in weights.items():
         if not is_additive(category) or weight <= 0:
             continue
-        average = category_average_assuming(course, category, unmarked)
+        average = category_average_assuming(course, category, unmarked, overrides)
         if average is None:
             average = unmarked * 100.0
         bonus += average * weight / 100.0

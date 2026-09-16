@@ -195,6 +195,42 @@ export enum GradeCategory {
  * A running average cannot answer this: 78% with everything marked is a result,
  * 78% with the final still to come is anywhere between a fail and an A.
  */
+/** One unmarked item, and what doing it is worth. */
+export interface RemainingItem {
+  grade_id: string;
+  name: string;
+  category: GradeCategory;
+  max_score: number;
+  due_date: string | null;
+  /** Points of final course average this item still controls. */
+  leverage: number;
+  /** The student's own estimate, off the task this grade raised. */
+  estimated_minutes: number | null;
+  /**
+   * Leverage per hour, null when there is no estimate. Never defaulted: a
+   * missing estimate would sort as free or infinite and both are lies.
+   */
+  per_hour: number | null;
+}
+
+export interface CheapestPath {
+  target: number;
+  current: number;
+  /** The average if everything outstanding went perfectly. */
+  best: number;
+  /** Whether the target is still arithmetically available at all. */
+  reachable: boolean;
+  /** Ranked by leverage, the one figure known for every item. */
+  items: RemainingItem[];
+  /**
+   * The best rate among items carrying an estimate, named only when at least
+   * two do -- "best value" of a list of one compares nothing.
+   */
+  best_value_grade_id: string | null;
+  estimated_count: number;
+  unestimated_count: number;
+}
+
 export interface GradeBand {
   /** Every outstanding item at full marks. */
   best: number;

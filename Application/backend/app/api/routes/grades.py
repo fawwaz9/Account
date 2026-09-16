@@ -33,6 +33,8 @@ from app.Grades.services.grade_service import (
     update_grade,
 )
 from app.Grades.services.course_lookup import resolve_course
+from app.Grades.schemas.cheapest_path import CheapestPath
+from app.Grades.services.cheapest_path import cheapest_path
 from app.Grades.services.dash_services import DEFAULT_TARGET_GRADE, get_dashboard
 from app.Grades.services.blind_spot_service import category_blind_spots
 from app.shared import audit
@@ -230,6 +232,25 @@ def get_grade_band(
     """Best case, worst case and where the course sits between them."""
     try:
         return calculate_grade_band(db, user_id, course_id)
+    except ValueError as exc:
+        message = str(exc)
+        status_code = 404 if "not found" in message.lower() else 400
+        raise HTTPException(status_code=status_code, detail=message)
+
+
+@router.get(
+    "/{user_id}/courses/{course_id}/cheapest-path",
+    response_model=CheapestPath,
+    responses=responses["course_both"],
+)
+def get_cheapest_path(
+    user_id: VerifiedUserId,
+    course_id: UUID,
+    db: DBSession,
+):
+    """What is left in this course, ranked by what it is worth doing."""
+    try:
+        return cheapest_path(db, user_id, course_id)
     except ValueError as exc:
         message = str(exc)
         status_code = 404 if "not found" in message.lower() else 400

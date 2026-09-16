@@ -8,6 +8,7 @@ import { trimNumber } from "../../shared/utils/numberUtils";
 import GradeBand from "../../features/grades/components/GradeBand";
 import CourseCost from "../../features/grades/components/CourseCost";
 import CourseLinks from "../../features/grades/components/CourseLinks";
+import CheapestPath from "../../features/grades/components/CheapestPath";
 import CourseLinksModal from "../../features/grades/components/CourseLinksModal";
 import AddGradeModal from "../../features/grades/components/AddGradeModal";
 import EditGradeModal from "../../features/grades/components/EditGradeModal";
@@ -273,6 +274,10 @@ export default function CourseDetailPage() {
         <div className="courseInsights">
           <CourseCost userId={user.id} courseId={courseId} nonce={reloadNonce} />
           <GradeBand userId={user.id} courseId={courseId} nonce={reloadNonce} />
+          {/* Beside the band rather than under it: the band says where the
+              course can still finish, this says what to do about it, and they
+              are read together. The row already collapses whatever is silent. */}
+          <CheapestPath userId={user.id} courseId={courseId} nonce={reloadNonce} />
         </div>
       )}
 
