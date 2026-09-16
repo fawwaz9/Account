@@ -1,10 +1,17 @@
 Shipped so far (do not re-propose)
+        The browser tab says Account rather than App.
         Editing a task at all. Every row has an Edit button and a task on the
           calendar opens the same dialog, which also carries the Complete
           button. Before this a task could be ticked, snoozed, re-prioritised
           and deleted -- and a title typed wrongly could only be deleted and
           retyped. PATCH /tasks/{id} and updateTask both already existed; there
           was no dialog calling them.
+          The dialog is deliberately tighter than the other fifteen: it holds
+          eight fields where most hold three, so the compact spacing is scoped
+          to it rather than loosened from .calForm. The fields a grade owns are
+          drawn as muted text with no border or fill -- a disabled input still
+          looks like an input, which reads as broken rather than as belonging
+          to something else.
         A calendar task chip opens that editor instead of ticking the task off.
           The calendar could previously do exactly one thing to a task, so a
           click meant to look at one finished it. One-click ticking from the
@@ -344,9 +351,6 @@ Quality of Life:
           Keep the text labels. Icon-only navigation is the accessibility
           regression this codebase has already fixed twice, most recently when
           account kind was a coloured stripe and nothing else.
-        Replace the title with Account instead of App.
-          Confirmed: index.html line 6 still reads <title>App</title>. One-word
-          change, and it is what the browser tab and a bookmark show.
 
 Wild:
         Grade-to-effort log: record hours against each grade, then find out whether effort actually correlates with your marks.

@@ -139,19 +139,19 @@ export default function EditTaskModal({
 
   return (
     <Modal title={`Edit · ${task.title}`} onClose={onClose}>
-      <form className="calForm" onSubmit={handleSubmit}>
+      <form className="calForm taskEditForm" onSubmit={handleSubmit}>
         {/* Said before the fields rather than after a failed save. An
             occurrence is an ordinary row in every other respect, so nothing
             else on screen would tell you a repeat is maintaining it. */}
         {task.recurring_id && (
-          <p className="small-text muted">
+          <p className="taskEditNote">
             One of a repeat. Changes here apply to this day only — editing the
             repeat itself will write over them.
           </p>
         )}
 
         {fromGrade && (
-          <p className="small-text muted">
+          <p className="taskEditNote">
             Raised from a grade, so its name and deadline follow the gradebook
             and are changed on the course page. Everything else here is yours.
           </p>
@@ -169,21 +169,37 @@ export default function EditTaskModal({
           />
         </label>
 
-        <label className="calField">
-          <span className="calFieldLabel">Course</span>
-          <select
-            id="edit-task-course"
-            className="calInput"
-            value={form.course_id ?? ""}
-            onChange={(event) => update("course_id", event.target.value || null)}
-            disabled={fromGrade}
-          >
-            <option value="">No course</option>
-            {courses.map((course) => (
-              <option key={course.id} value={course.id}>{course.code}</option>
-            ))}
-          </select>
-        </label>
+        <div className="taskEditRow">
+          <label className="calField">
+            <span className="calFieldLabel">Course</span>
+            <select
+              id="edit-task-course"
+              className="calInput"
+              value={form.course_id ?? ""}
+              onChange={(event) => update("course_id", event.target.value || null)}
+              disabled={fromGrade}
+            >
+              <option value="">No course</option>
+              {courses.map((course) => (
+                <option key={course.id} value={course.id}>{course.code}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="calField">
+            <span className="calFieldLabel">Priority</span>
+            <select
+              id="edit-task-priority"
+              className="calInput"
+              value={form.priority}
+              onChange={(event) => update("priority", Number(event.target.value))}
+            >
+              {PRIORITY_STEPS.map((step) => (
+                <option key={step} value={step}>{step} · {PRIORITY_LABELS[step]}</option>
+              ))}
+            </select>
+          </label>
+        </div>
 
         <div className="taskEditRow">
           <label className="calField">
@@ -220,21 +236,7 @@ export default function EditTaskModal({
         </div>
 
         <div className="taskEditRow">
-          <label className="calField">
-            <span className="calFieldLabel">Priority</span>
-            <select
-              id="edit-task-priority"
-              className="calInput"
-              value={form.priority}
-              onChange={(event) => update("priority", Number(event.target.value))}
-            >
-              {PRIORITY_STEPS.map((step) => (
-                <option key={step} value={step}>{step} · {PRIORITY_LABELS[step]}</option>
-              ))}
-            </select>
-          </label>
-
-          <label className="calField">
+          <label className="calField taskEditField--narrow">
             <span className="calFieldLabel">Estimate</span>
             <input
               id="edit-task-estimate"
@@ -249,25 +251,25 @@ export default function EditTaskModal({
               placeholder="mins"
             />
           </label>
-        </div>
 
-        <label className="calField">
-          <span className="calFieldLabel">Tags</span>
-          <input
-            id="edit-task-tags"
-            className="calInput"
-            value={tags}
-            onChange={(event) => setTags(event.target.value)}
-            placeholder="tags, comma separated"
-          />
-        </label>
+          <label className="calField">
+            <span className="calFieldLabel">Tags</span>
+            <input
+              id="edit-task-tags"
+              className="calInput"
+              value={tags}
+              onChange={(event) => setTags(event.target.value)}
+              placeholder="tags, comma separated"
+            />
+          </label>
+        </div>
 
         <label className="calField">
           <span className="calFieldLabel">Notes</span>
           <textarea
             id="edit-task-notes"
             className="calInput"
-            rows={3}
+            rows={2}
             value={form.notes ?? ""}
             onChange={(event) => update("notes", event.target.value || null)}
           />

@@ -863,12 +863,41 @@
   cursor: default;
 }
 
-/* Two fields that belong together -- a date and its time, a priority and an
-   estimate -- on one line, stacking on a narrow screen rather than squeezing
+/* Compact, and scoped to this dialog rather than loosened from .calForm --
+   fifteen other dialogs use those rules and most of them hold three fields,
+   where the default air is right. This one holds eight, and at the shared
+   spacing it ran past the fold with the fields floating apart. */
+.taskEditForm {
+  gap: 8px;
+}
+
+.taskEditForm .calField {
+  gap: 2px;
+}
+
+.taskEditForm .calFieldLabel {
+  font-size: 0.74rem;
+}
+
+.taskEditForm .calInput {
+  padding: 5px 8px;
+  font-size: 0.88rem;
+}
+
+/* Said once, quietly, above the fields they explain -- not a banner. */
+.taskEditForm .taskEditNote {
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+/* Two fields that belong together -- a date and its time, a course and its
+   priority -- on one line, stacking on a narrow screen rather than squeezing
    a date picker into half a phone. */
 .taskEditRow {
   display: flex;
-  gap: 12px;
+  gap: 10px;
 }
 
 .taskEditRow > .calField {
@@ -876,10 +905,54 @@
   min-width: 0;
 }
 
+/* An estimate is three digits. Given an equal share of the row it sits in a
+   box wide enough for a sentence, which reads as a field you have failed to
+   fill in rather than one that is full. */
+.taskEditRow > .taskEditField--narrow {
+  flex: 0 0 84px;
+}
+
 @media (max-width: 520px) {
   .taskEditRow {
     flex-direction: column;
   }
+
+  .taskEditRow > .taskEditField--narrow {
+    flex: 1;
+  }
+}
+
+/* ===== What the gradebook owns =====
+   A disabled input still *looks* like an input: a box, a border, a fill, and
+   a cursor that refuses you. That reads as broken. These fields are not
+   broken, they belong to the grade -- so they stop looking like controls and
+   start looking like what they are, which is printed text with a label.
+
+   opacity is pinned to 1 deliberately: the browser's own dimming stacked on
+   top of a muted colour turns the value into something you cannot read, and
+   the point is that you can still see what it says. */
+.taskEditForm .calInput:disabled {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  padding-left: 0;
+  padding-right: 0;
+  opacity: 1;
+  cursor: default;
+  /* Strips the select's arrow, which is the last thing still claiming it can
+     be opened. */
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+/* Nothing to focus, so nothing should suggest it. */
+.taskEditForm .calInput:disabled:focus-visible {
+  outline: none;
+}
+
+/* The last thing on a date or time field still claiming to be a control. */
+.taskEditForm .calInput:disabled::-webkit-calendar-picker-indicator {
+  display: none;
 }
 
 /* Complete on one side, Cancel and Save on the other. Ticking a task off is
@@ -890,7 +963,7 @@
   justify-content: space-between;
   align-items: center;
   gap: 10px;
-  margin-top: 8px;
+  margin-top: 4px;
   flex-wrap: wrap;
 }
 
