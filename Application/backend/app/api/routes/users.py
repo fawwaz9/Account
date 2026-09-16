@@ -10,6 +10,7 @@ from app.Users.schemas.academic_status import AcademicStatusUpdate
 from app.Users.schemas.user import User, UserDetail, UserUpdate
 from app.shared import audit
 from app.Users.services.user_service import (
+    attach_year_suggestion,
     delete_user,
     get_user,
     restore_user,
@@ -32,7 +33,7 @@ def get_academic_status(user_id: VerifiedUserId, db: DBSession):
     if user is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
 
-    return user
+    return attach_year_suggestion(db, user)
 
 
 @router.patch("/{user_id}/academic-status", response_model=User, responses=responses["user_both"])

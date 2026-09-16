@@ -27,6 +27,11 @@ export default function SettingsPage() {
 
   const [schoolYear, setSchoolYear] = useState(String(user?.current_school_year ?? ""));
   const [semester, setSemester] = useState(user?.current_semester ?? "Fall");
+  const [firstYear, setFirstYear] = useState(
+    user?.first_year_calendar_year === null || user?.first_year_calendar_year === undefined
+      ? ""
+      : String(user.first_year_calendar_year)
+  );
   const [creditTarget, setCreditTarget] = useState(String(user?.preferences?.credit_target ?? 120));
   const [gpaEnabled, setGpaEnabled] = useState(user?.preferences?.gpa_scale_enabled ?? true);
   const [defaultTarget, setDefaultTarget] = useState(String(user?.preferences?.default_target_grade ?? 85));
@@ -43,6 +48,11 @@ export default function SettingsPage() {
     if (!user) return;
     setSchoolYear(user.current_school_year === null ? "" : String(user.current_school_year));
     setSemester(user.current_semester ?? "Fall");
+    setFirstYear(
+      user.first_year_calendar_year === null || user.first_year_calendar_year === undefined
+        ? ""
+        : String(user.first_year_calendar_year)
+    );
     setCreditTarget(String(user.preferences?.credit_target ?? 120));
     setGpaEnabled(user.preferences?.gpa_scale_enabled ?? true);
     setDefaultTarget(String(user.preferences?.default_target_grade ?? 85));
@@ -65,6 +75,9 @@ export default function SettingsPage() {
       await updateAcademicStatus(user.id, {
         school_year: Number(schoolYear),
         semester,
+        // Number("") is 0, which is a year the validator refuses and a lie
+        // besides -- blank means "not set", and terms then have no dates.
+        first_year_calendar_year: firstYear === "" ? null : Number(firstYear),
       });
       await updatePreferences(user.id, {
         credit_target: Number(creditTarget),
@@ -175,6 +188,39 @@ export default function SettingsPage() {
                   <option key={option} value={option}>{option}</option>
                 ))}
               </select>
+            </div>
+
+            <div className="loginField">
+              <label htmlFor="first-year">The year your first year began</label>
+              <input
+                id="first-year"
+                className="loginInput"
+                type="number"
+                min={1990}
+                max={2100}
+                value={firstYear}
+                onChange={(event) => setFirstYear(event.target.value)}
+                placeholder="e.g. 2023"
+              />
+              <span className="muted small-text">
+                A school year is 1, 2, 3 — not a calendar year — so this is what
+                gives each term real dates. Leave it blank and nothing that
+                measures a term can say when it ran.
+              </span>
+              {/* Worked out from courses that already carry dates, which is
+                  evidence rather than a label. Offered rather than applied:
+                  getting this wrong shifts every term in the app by a year,
+                  and it is the student who knows. */}
+              {user?.suggested_first_year != null &&
+                String(user.suggested_first_year) !== firstYear && (
+                  <button
+                    type="button"
+                    className="courseLinkAdd"
+                    onClick={() => setFirstYear(String(user.suggested_first_year))}
+                  >
+                    Your dated courses suggest {user.suggested_first_year} — use it
+                  </button>
+                )}
             </div>
 
             <div className="loginField">

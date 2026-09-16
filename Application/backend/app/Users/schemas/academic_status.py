@@ -20,6 +20,13 @@ class AcademicStatusBase(BaseModel):
         max_length=20,
         description="Optional display label, e.g. '2025-2026'",
     )
+    #: The calendar year school year 1's Fall began, which is what turns
+    #: "Fall of year 3" into real dates. Bounded to keep a typo out: a course
+    #: dated 202 or 20250 would sort before or after everything forever.
+    first_year_calendar_year: int | None = Field(
+        default=None, ge=1990, le=2100,
+        description="Calendar year in which first year began, e.g. 2023",
+    )
 
     @model_validator(mode="after")
     def validate_term_label(self):
@@ -36,6 +43,7 @@ class AcademicStatusUpdate(BaseModel):
     school_year: int | None = Field(default=None, ge=1, le=10)
     semester: Semester | None = None
     term_label: str | None = Field(default=None, max_length=20)
+    first_year_calendar_year: int | None = Field(default=None, ge=1990, le=2100)
 
     @model_validator(mode="after")
     def validate_update(self):

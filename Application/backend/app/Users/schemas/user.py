@@ -165,6 +165,14 @@ class User(UserBase):
     current_school_year: int | None = None
     current_semester: str | None = None
     term_label: str | None = None
+    #: The calendar year first year began, which is what gives every term real
+    #: dates. Null means terms have none and anything measuring one says so.
+    first_year_calendar_year: int | None = None
+    #: What the anchor looks like from the courses that carry dates, so Settings
+    #: can offer it rather than making the student work it out. Derived on read,
+    #: never stored -- and deliberately not taken from `term_label`, which is
+    #: free text nothing keeps current.
+    suggested_first_year: int | None = None
     preferences: UserPreferences = Field(default_factory=UserPreferences)
     created_at: datetime | None = None
 

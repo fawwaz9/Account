@@ -40,7 +40,7 @@ from app.Finances.services.transaction_service import (
     delete_transaction,
     owned_account,
 )
-from app.Grades.utils.terms import CURRENT, term_bucket
+from app.Grades.utils.terms import CURRENT, term_bucket, term_dates
 
 
 def current_term(db: Session, user_id: uuid.UUID) -> tuple[int | None, str | None]:
@@ -386,23 +386,36 @@ def delete_tuition(db: Session, user_id: uuid.UUID, payment_id: uuid.UUID):
     return True
 
 
-def term_span(courses) -> tuple[date | None, date | None]:
-    """The dates a term actually runs, taken from the courses in it.
+def term_span(courses, first_year: int | None) -> tuple[date | None, date | None]:
+    """The dates the term runs, from the term itself rather than its courses.
 
-    Grades is the only part of the app that knows when a term starts and stops,
-    and it knows it per course rather than centrally -- so the span is the
-    earliest start and the latest end across the term. A year-long course
-    stretches it, which is correct: that is genuinely how long you are paying
-    for those books.
+    This used to be the earliest start and latest end across the courses, which
+    meant a term could only be measured if the courses in it happened to carry
+    dates -- and 21 of 27 did not, so for most terms there was nothing to
+    measure and no way to say why.
 
-    Courses with no dates contribute nothing rather than defaulting to today,
-    which would quietly shrink the span to nothing.
+    Now a term has its own dates: Fall is September to December whether or not
+    anything in it was filled in. The cost is that the span is the *term*, not
+    the teaching weeks -- a Fall that really runs Sep 9 to Dec 7 is measured
+    Sep 1 to Dec 31, so a few weeks either side of the semester are counted.
+    That was the deliberate trade: a slightly wide span beats no span.
+
+    `first_year` is the anchor. Without it a school year has no calendar year
+    and there are no dates to give -- so this returns None and the caller says
+    so, rather than dating every term to whatever year 1 happens to be.
     """
-    starts = [c.start_date for c in courses if c.start_date]
-    ends = [c.end_date for c in courses if c.end_date]
-    if not starts or not ends:
+    terms = {
+        dates
+        for course in courses
+        if (dates := term_dates(course.semester, course.year, first_year)) is not None
+    }
+    if not terms:
         return None, None
-    return min(starts), max(ends)
+
+    # A term's courses should all resolve to the same span, but a student with
+    # courses from two terms in "current" would give several. Widest wins, which
+    # is the same answer the old per-course min/max gave.
+    return min(start for start, _ in terms), max(end for _, end in terms)
 
 
 def term_budget(db: Session, user_id: uuid.UUID, today: date | None = None) -> TermBudget:
@@ -413,8 +426,10 @@ def term_budget(db: Session, user_id: uuid.UUID, today: date | None = None) -> T
     """
     today = today or date.today()
     courses = billable_courses(db, user_id)
+    user = db.query(UserModel).filter(UserModel.id == user_id).first()
+    first_year = user.first_year_calendar_year if user else None
     dated = [c for c in courses if c.start_date and c.end_date]
-    starts_on, ends_on = term_span(courses)
+    starts_on, ends_on = term_span(courses, first_year)
 
     budget = TermBudget(
         term_name=term_name(db, user_id),
@@ -427,7 +442,7 @@ def term_budget(db: Session, user_id: uuid.UUID, today: date | None = None) -> T
     if starts_on is None or ends_on is None:
         budget.reason = (
             "No course in this term has start and end dates, so there is no term "
-            "to measure. Add them when editing a course."
+            "to measure. Set the year your first year began, in Settings."
             if courses else
             "No courses in your current term. Add them, or set your term in Settings."
         )

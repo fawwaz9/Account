@@ -69,6 +69,17 @@ class UserModel(Base):
     current_school_year = Column(Integer, nullable=True)
     current_semester = Column(String, nullable=True)
     term_label = Column(String, nullable=True)
+    #: The calendar year in which **school year 1's** Fall began. With it, every
+    #: term in the app has real dates: year N's Fall runs Sep-Dec of
+    #: (this + N - 1), and its Winter, Spring and Summer fall in the year after
+    #: that. Null means terms have no dates and the app says so rather than
+    #: guessing.
+    #:
+    #: Anchored on year 1 rather than on `current_school_year`, deliberately.
+    #: Storing "my current year began in 2025" beside a field the student
+    #: advances every September would silently re-date every course in the app
+    #: the moment they bumped it. Year 1 never moves.
+    first_year_calendar_year = Column(Integer, nullable=True)
 
     # Every table a user directly owns, so "delete my account" removes all of
     # it. Only `courses` and `accounts` were listed here once, which left

@@ -15,6 +15,19 @@ export interface CurrentUser {
   current_school_year: number | null;
   current_semester: string | null;
   term_label: string | null;
+  /**
+   * The calendar year first year began. A school year is 1..10, so this is
+   * what turns "Fall of year 3" into real dates. Null means terms have none,
+   * and anything measuring one says so rather than guessing.
+   */
+  first_year_calendar_year: number | null;
+  /**
+   * What the anchor looks like from the courses that already carry dates.
+   * Derived on read, never stored, and deliberately not taken from term_label
+   * -- that is free text nothing keeps current, and on a real account it reads
+   * a year behind the courses it describes.
+   */
+  suggested_first_year: number | null;
   preferences: {
     credit_target: number;
     gpa_scale_enabled: boolean;
@@ -35,6 +48,7 @@ export interface AcademicStatusUpdate {
   school_year?: number;
   semester?: string;
   term_label?: string | null;
+  first_year_calendar_year?: number | null;
 }
 
 /** Set the term the student is in; drives past/current/future everywhere. */

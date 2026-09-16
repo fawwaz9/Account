@@ -1,9 +1,12 @@
 """What a term cost, measured over the term rather than a calendar month.
 
 A month is the wrong unit for a student: tuition lands once and textbooks land
-in the first fortnight, neither of which is a monthly rhythm. Grades is the only
-part of the app that knows when a term runs, and it knows it per course, so the
-span is assembled from the courses themselves.
+in the first fortnight, neither of which is a monthly rhythm.
+
+The span used to be assembled from the courses -- earliest start, latest end --
+which meant a term could only be measured if the courses in it happened to
+carry dates. Most did not. Now the term has its own fixed dates, resolved to a
+calendar year through one anchor: the year first year began.
 """
 import datetime
 import uuid
@@ -14,13 +17,22 @@ from app.Finances.services.transaction_service import create_transaction
 from app.Finances.services.tuition_service import term_budget, term_span
 from conftest import make_account, make_category, make_course
 
+#: When the teaching actually runs, which is no longer what is measured.
 SEP = datetime.date(2026, 9, 9)
 DEC = datetime.date(2026, 12, 7)
 
+#: What Fall of school year 3 resolves to, given the anchor below.
+TERM_START = datetime.date(2026, 9, 1)
+TERM_END = datetime.date(2026, 12, 31)
 
-def set_term(db, user, year=3, semester="Fall"):
+#: First year began in 2024, so year 3's Fall is 2026.
+ANCHOR = 2024
+
+
+def set_term(db, user, year=3, semester="Fall", anchor=ANCHOR):
     user.current_school_year = year
     user.current_semester = semester
+    user.first_year_calendar_year = anchor
     db.commit()
 
 
@@ -41,38 +53,61 @@ def spend(db, user, account, amount, when, category=None, course=None):
 
 # ------------------------------------------------------------- the span --
 
-def test_the_span_is_the_widest_the_courses_reach(db, user):
-    """A year-long course stretches it, which is how long you really pay for."""
+def test_the_span_is_the_term_not_the_teaching_weeks(db, user):
+    """The deliberate trade. A Fall that really runs Sep 9 to Dec 7 is measured
+    Sep 1 to Dec 31, so a few weeks either side are counted -- which beats the
+    old behaviour of not being able to measure the term at all."""
     set_term(db, user)
     dated(db, user, "STAT 201", SEP, DEC)
+
+    budget = term_budget(db, user.id, today=datetime.date(2026, 10, 1))
+    assert (budget.starts_on, budget.ends_on) == (TERM_START, TERM_END)
+
+
+def test_a_course_with_no_dates_of_its_own_is_measured_all_the_same(db, user):
+    """The whole point. 21 of 27 real courses carry no dates, and under the old
+    rule none of their terms could be measured."""
+    set_term(db, user)
+    make_course(db, user.id, "NODATE 100", year=3, semester="Fall")
+
+    budget = term_budget(db, user.id, today=datetime.date(2026, 10, 1))
+    assert budget.can_measure is True
+    assert (budget.starts_on, budget.ends_on) == (TERM_START, TERM_END)
+
+
+def test_a_course_cannot_stretch_the_term_past_its_own_end(db, user):
+    """The old span took the latest end across the courses, so one year-long
+    course dragged the whole term with it. A term is now a term."""
+    set_term(db, user)
     dated(db, user, "CPSC 322", datetime.date(2026, 9, 10), datetime.date(2027, 4, 8))
 
-    assert term_span([]) == (None, None)
-
     budget = term_budget(db, user.id, today=datetime.date(2026, 10, 1))
-    assert budget.starts_on == SEP
-    assert budget.ends_on == datetime.date(2027, 4, 8)
+    assert budget.ends_on == TERM_END
 
 
-def test_undated_courses_do_not_shrink_the_span(db, user):
-    """They contribute nothing rather than defaulting to today."""
-    set_term(db, user)
+def test_with_no_anchor_there_are_no_dates_and_it_says_why(db, user):
+    """A school year is 1..10, not a calendar year, so without the anchor there
+    is genuinely nothing to resolve. Guessing would date a current course three
+    years into the past with nothing on screen to explain it."""
+    set_term(db, user, anchor=None)
     dated(db, user, "STAT 201", SEP, DEC)
-    make_course(db, user.id, "NODATE 100", year=3, semester="Fall")
 
-    budget = term_budget(db, user.id, today=datetime.date(2026, 10, 1))
-    assert (budget.starts_on, budget.ends_on) == (SEP, DEC)
-    assert budget.dated_courses == 1
-    assert budget.undated_courses == 1
-
-
-def test_a_term_with_no_dated_course_says_so(db, user):
-    set_term(db, user)
-    make_course(db, user.id, "NODATE 100", year=3, semester="Fall")
+    assert term_span([], None) == (None, None)
 
     budget = term_budget(db, user.id)
     assert budget.can_measure is False
-    assert "start and end dates" in budget.reason
+    assert "first year began" in budget.reason
+
+
+def test_winter_lands_in_the_calendar_year_after_its_fall(db, user):
+    """The offset that makes a school year read "2026-2027". Getting it wrong
+    puts Winter eight months before the Fall it follows."""
+    set_term(db, user, semester="Winter")
+    make_course(db, user.id, "CPSC 310", year=3, semester="Winter")
+
+    budget = term_budget(db, user.id, today=datetime.date(2027, 2, 1))
+    assert budget.starts_on == datetime.date(2027, 1, 1)
+    assert budget.ends_on == datetime.date(2027, 4, 30)
 
 
 def test_no_courses_at_all_says_something_different(db, user):
@@ -102,10 +137,10 @@ def test_the_boundary_days_are_inside_the_term(db, user):
     dated(db, user, "STAT 201", SEP, DEC)
     account = make_account(db, user.id, "Chequing")
 
-    spend(db, user, account, 10.0, SEP)
-    spend(db, user, account, 20.0, DEC)
+    spend(db, user, account, 10.0, TERM_START)
+    spend(db, user, account, 20.0, TERM_END)
 
-    assert term_budget(db, user.id, today=DEC).spent == 30.0
+    assert term_budget(db, user.id, today=TERM_END).spent == 30.0
 
 
 def test_transfers_are_not_spending(db, user):
@@ -162,10 +197,10 @@ def test_progress_through_the_term_is_clamped(db, user):
     dated(db, user, "STAT 201", SEP, DEC)
 
     before = term_budget(db, user.id, today=datetime.date(2026, 1, 1))
-    during = term_budget(db, user.id, today=SEP)
+    during = term_budget(db, user.id, today=TERM_START)
     after = term_budget(db, user.id, today=datetime.date(2030, 1, 1))
 
     assert before.days_elapsed == 0
     assert during.days_elapsed == 1
     assert after.days_elapsed == after.days_total
-    assert during.days_total == (DEC - SEP).days + 1
+    assert during.days_total == (TERM_END - TERM_START).days + 1

@@ -4,7 +4,8 @@ from uuid import UUID, uuid4
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app._database.models import UserModel, utc_now
+from app._database.models import CourseModel, UserModel, utc_now
+from app.Grades.utils.terms import suggest_first_year
 from app.Auth.schemas.credentials import RegisterRequest
 from app.Auth.services.signup_policy import may_sign_up
 from app.Auth.services.password_service import (
@@ -253,9 +254,24 @@ def update_academic_status(db: Session, user_id: UUID, data: AcademicStatusUpdat
         user.current_semester = semester.value if hasattr(semester, "value") else semester
     if "term_label" in update_data:
         user.term_label = update_data["term_label"]
+    if "first_year_calendar_year" in update_data:
+        user.first_year_calendar_year = update_data["first_year_calendar_year"]
 
     db.commit()
     db.refresh(user)
+    return attach_year_suggestion(db, user)
+
+
+def attach_year_suggestion(db: Session, user: UserModel) -> UserModel:
+    """Put the anchor Settings should offer onto the payload.
+
+    Read-only and derived, so it is attached rather than stored -- the same
+    shape `attach_course_code` and `attach_balances` use. A student who has
+    entered no dates anywhere gets None and types the year themselves.
+    """
+    user.suggested_first_year = suggest_first_year(
+        db.query(CourseModel).filter(CourseModel.user_id == user.id).all()
+    )
     return user
 
 

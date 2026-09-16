@@ -27,6 +27,7 @@ ADDED_COLUMNS: dict[str, dict[str, str]] = {
         "current_school_year": "INTEGER",
         "current_semester": "VARCHAR",
         "term_label": "VARCHAR",
+        "first_year_calendar_year": "INTEGER",
         "session_epoch": "INTEGER NOT NULL DEFAULT 0",
         "deleted_at": "DATETIME",
     },
