@@ -7,6 +7,10 @@ things that went wrong are what you need when you change any of it.
 To get out of trouble right now, read [ROLLBACK.md](ROLLBACK.md) instead — it is
 written to be read while something is down.
 
+**To ship a feature, read [shipping.md](shipping.md).** That is the loop you run
+every time: build, verify, deploy, record. This file is the one-off history of
+how the deployment was built, and it is long because it argues with itself.
+
 **The target:** Google Cloud Run (the API) + Supabase (Postgres) + Cloudflare
 Pages (the frontend), free, for about twenty invited people.
 

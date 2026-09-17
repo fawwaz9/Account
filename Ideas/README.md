@@ -15,6 +15,7 @@ record rather than live work, it says so in its own first lines.
 | Pick the project up cold | [session-handoff.md](session-handoff.md) |
 | Understand how a module works, and why | [design/](design/README.md) |
 | Know what to build next | [whats_next.txt](whats_next.txt) |
+| **Build a feature and put it live** | **[shipping.md](shipping.md)** |
 | Fix something that is broken **right now** | [ROLLBACK.md](ROLLBACK.md) |
 
 ## Everything, and what it is for
@@ -35,6 +36,10 @@ State only; the reasoning lives in `design/`.
 **[whats_next.txt](whats_next.txt)** — what has shipped (do not re-propose it),
 what is left per module, and the accumulated hard-won notes. The longest file
 here and the one that grows.
+
+**[shipping.md](shipping.md)** — the loop you run every time: build it, verify
+it, deploy it, write down what is live. Ordered the way the steps actually have
+to happen, and every rule in it names the day it was learned the hard way.
 
 **[ROLLBACK.md](ROLLBACK.md)** — written to be read while something is down and
 you are stressed. Commands first, reasoning second.

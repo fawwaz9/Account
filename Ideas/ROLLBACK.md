@@ -4,6 +4,10 @@ Written to be read while something is down and you are stressed. Commands
 first, reasoning second. Every figure here was re-checked against the live
 deployment on **2026-09-14**, including that traffic is on `LATEST`.
 
+> **Shipping a change rather than fixing one?** `shipping.md` is the loop —
+> build, verify, deploy, in the order the steps have to happen. This file is
+> for when something is already broken.
+
 ## What is where
 
 | | |
@@ -14,8 +18,8 @@ deployment on **2026-09-14**, including that traffic is on `LATEST`.
 | Database | Supabase project `kujxxairehpwhxhnkbct`, region `us-west-2`, Postgres 17.6 |
 | Backups | GitHub Actions artifacts, `Backup database` workflow, 90-day retention |
 | Secrets | Google Secret Manager: `jwt-secret`, `database-url` |
-| Current image | `…/backend:18e3376` — revision `account-api-00008-r8w`, serving 100% |
-| Previous image | `…/backend:7c1531a` — revision `account-api-00007-ljg` |
+| Current image | `…/backend:89a7c22` — revision `account-api-00009-j62`, serving 100% |
+| Previous image | `…/backend:18e3376` — revision `account-api-00008-r8w` |
 | GCP project | `account-504419`, registry `us-west1-docker.pkg.dev/account-504419/account` |
 | Repo | `fawwaz9/Account` — a push to `main` rebuilds the **frontend** only |
 
@@ -78,8 +82,8 @@ reference, a concurrency setting.
 > ```
 > `LATEST (currently …)` is healthy. A bare revision name means you are pinned.
 
-**It now fixes bad code too.** Five image tags exist: `18e3376` (current),
-`7c1531a`, `18205eb`, `f6f7c32` and `26e249f`. Keep at least two — do not delete
+**It now fixes bad code too.** Six image tags exist: `89a7c22` (current),
+`18e3376`, `7c1531a`, `18205eb`, `f6f7c32` and `26e249f`. Keep at least two — do not delete
 the older tags, and do not rely on `latest`, which by definition points at
 whatever just broke.
 
@@ -118,6 +122,13 @@ whatever just broke.
 >
 > `courses.links` and `users.first_year_calendar_year` can stay in either case.
 > Older code never selects them, and both have a usable default.
+>
+> **`89a7c22` is safe in both directions too.** It changed the shape of one
+> response: `best_value_grade_id` went away and `remaining_count` arrived. Each
+> side tolerates the other's absence — the old page reads the missing field as
+> undefined and renders one fewer line, and the new page's `remaining_count >
+> items.length` is false against undefined, so it renders one fewer line. No
+> database change at all.
 
 ```sh
 # once a second tag exists:
