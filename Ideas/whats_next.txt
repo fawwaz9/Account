@@ -1,4 +1,9 @@
 Shipped so far (do not re-propose)
+        LIVE as of 2026-09-17: image 18e3376, revision account-api-00008-r8w.
+          Schema applied to Supabase first (courses.links,
+          users.first_year_calendar_year), then the API, then main. Nobody has
+          an anchor set yet, so Term Budget and the Jobs term stay quiet until
+          Settings gets one -- that is the designed behaviour, not a fault.
         Course resource links. Canvas, Piazza, PrairieLearn and anything else,
           as chips above the insights row with one muted underlined control.
           Stored as JSON on the course and reassigned whole, because SQLAlchemy
@@ -750,6 +755,12 @@ Things that are easy to get wrong now that it is deployed
 - After any rollback, put traffic back on LATEST. --to-revisions pins the
   service permanently, and every later deploy then reports success and changes
   nothing. This has already happened once.
+- The Cloudflare build hash will NOT match a local `npm run build`. Pages builds
+  with its own VITE_API_URL, so the bundle differs and so does its filename --
+  index-BulhbB4X.js live against index-BaGzDsRs.js locally, from the same
+  commit. Waiting for the local hash to appear waits forever. Verify by
+  downloading the live bundle and grepping the FILE for a string only the new
+  code has ("cheapest-path", "Add resource link").
 - SUPABASE_DATABASE_URL in .env is where the cloud string lives. Do NOT set
   DATABASE_URL to it: that is what the app reads, so local dev would point at
   the cloud and the app would come up looking wiped with nothing to say why.
