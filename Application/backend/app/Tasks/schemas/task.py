@@ -107,8 +107,9 @@ class Task(TaskBase):
     archived: bool = False
     created_at: datetime | None = None
     #: Set when this task was raised from a dated grade. It closes itself when
-    #: that grade's score lands, and the client hides the delete control so the
-    #: two cannot drift apart.
+    #: that grade's score lands -- and only ever in that direction, since
+    #: finishing the work and having it marked are different facts. The client
+    #: hides the delete control so the two cannot drift apart.
     grade_id: UUID | None = None
     #: Set when a repeating task produced this occurrence. Sent so the editor
     #: can say that a change lands on this one day and that editing the repeat

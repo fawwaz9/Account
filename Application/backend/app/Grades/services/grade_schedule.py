@@ -9,7 +9,7 @@ Which one it produces is the student's choice, because a date means two
 different things:
 
 * **task** -- work to do. Raises a task, which checks itself off when the score
-  lands and reopens if the score is cleared.
+  lands. It never unchecks one: see `sync_task`.
 * **event** -- something to attend. Draws a block on the calendar, themed as a
   midterm or a final where the category says so, with nothing to tick off. A
   sat exam is history, not an unfinished chore, so a score changes nothing here.
@@ -111,12 +111,29 @@ def sync_task(db: Session, course: CourseModel, grade: GradeModel) -> TaskModel:
     # Everything else the student set on the task -- an estimate, notes, tags,
     # the priority -- is theirs and is left alone.
 
-    # A marked grade is finished work. Only move the flag when it disagrees, so
-    # re-saving an already-marked grade does not keep resetting `completed_at`
-    # to now and lose when it was actually done.
-    scored = grade.score is not None
-    if task.done != scored:
-        set_done(task, scored)
+    # A marked grade is finished work, so a score arriving checks the task off.
+    # Guarded on `not task.done` for two reasons: re-saving an already-marked
+    # grade would otherwise keep resetting `completed_at` to now and lose when
+    # the work was actually done, and -- the important one -- this direction is
+    # the only one there is.
+    #
+    # **Nothing here ever unchecks a task.** It used to derive the flag both
+    # ways, `if task.done != scored`, which meant any save of a grade with an
+    # empty score box tore up a completion the student had entered by hand:
+    # `set_done(task, False)` nulls `completed_at` and un-archives, so the task
+    # reappeared in the list and the record of when it was done was gone. Open
+    # the grade to fix a typo in its name, save, and a lab you ticked off three
+    # weeks ago is outstanding again.
+    #
+    # The root of it is that "I finished the lab" and "the lab has been marked"
+    # are different facts -- yours on Tuesday, the TA's three weeks later -- and
+    # deriving one from the other makes the gradebook the authority on both.
+    # Once a task is checked off it stays checked off; only the student reopens
+    # one, from the task editor. Clearing a score therefore leaves the task
+    # closed, which is the deliberate trade: clearing a score is a statement
+    # about the gradebook, not about whether the work happened.
+    if grade.score is not None and not task.done:
+        set_done(task, True)
 
     db.flush()
     return task

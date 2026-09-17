@@ -1,4 +1,13 @@
 Shipped so far (do not re-propose)
+        A ticked-off task stays ticked off. The gradebook used to derive a
+          task's done flag from its grade in BOTH directions, so any save of a
+          grade with an empty score box ran set_done(task, False) -- which nulls
+          completed_at and un-archives. Opening a grade to fix a typo in its
+          name put a lab you ticked off three weeks ago back in the list, with
+          no record of when it was done. A score still checks a task off;
+          nothing unchecks one now. Clearing a score leaves the task closed,
+          which reverses the old behaviour on purpose: clearing a score is about
+          the gradebook, not about whether you did the work.
         LIVE as of 2026-09-17: image 18e3376, revision account-api-00008-r8w.
           Schema applied to Supabase first (courses.links,
           users.first_year_calendar_year), then the API, then main. Nobody has
@@ -289,13 +298,6 @@ Calendar:
           users ADD kinds is the thing that conflicts with that reasoning.
 
 Grades: 
-        Think of other functionalities that can merge over to the other.
-          UNCLEAR -- "the other" what? This reads as a note to yourself that has
-          lost its referent. If it means more Grades x Budget style joins, the
-          ones that exist are listed in design/README.md under "Where the
-          modules meet", and the unbuilt ones worth having are probably
-          Grades x Jobs (does term workload track hours worked) and
-          Jobs x Calendar beyond shifts. Rewrite it or delete it.
         Term retrospective when a term closes: what moved, what slipped, what you predicted vs got.
         Syllabus paste: drop the text in, get categories, weights and due dates proposed for review.
         Make syllabus parser the main when adding courses but add a button to do it manually.
@@ -346,6 +348,9 @@ Grades:
           Renaming is the risky operation, not adding: courses store the string,
           so a rename orphans every course carrying the old one unless it
           updates them in the same transaction.
+          How about the ability to edit the names and dates of the semester but the order must stay intact.
+          Suggest ways to accomodate this system also suggest ways to accomodate classes that span multiple semesters.
+
 
 Jobs:   
         A fortnightly shift. ShiftMeeting is the same shape as ClassMeeting,
@@ -757,12 +762,6 @@ Things that are easy to get wrong now that it is deployed
 - After any rollback, put traffic back on LATEST. --to-revisions pins the
   service permanently, and every later deploy then reports success and changes
   nothing. This has already happened once.
-- The Cloudflare build hash will NOT match a local `npm run build`. Pages builds
-  with its own VITE_API_URL, so the bundle differs and so does its filename --
-  index-BulhbB4X.js live against index-BaGzDsRs.js locally, from the same
-  commit. Waiting for the local hash to appear waits forever. Verify by
-  downloading the live bundle and grepping the FILE for a string only the new
-  code has ("cheapest-path", "Add resource link").
 - SUPABASE_DATABASE_URL in .env is where the cloud string lives. Do NOT set
   DATABASE_URL to it: that is what the app reads, so local dev would point at
   the cloud and the app would come up looking wiped with nothing to say why.

@@ -205,6 +205,28 @@ It does not save the fields first: ticking a task off is one decision and editin
 it is another, and a Complete button that quietly also wrote a half-finished edit
 would be doing two.
 
+### The gradebook closes a task, and never reopens one
+
+A score arriving checks its task off. Nothing in `sync_task` ever unchecks one.
+
+It used to derive the flag both ways — `if task.done != scored` — and that made
+the gradebook the authority on whether the work had happened. It is not.
+**"I finished the lab" and "the lab has been marked" are different facts**, the
+first the student's on Tuesday and the second the TA's three weeks later, and
+deriving one from the other loses the first.
+
+The symptom was reported as "entering a grade reopens the task", and it was
+actually worse and narrower than that: entering a score was fine, but *any* save
+of a grade whose score box was empty ran `set_done(task, False)`, which nulls
+`completed_at` and un-archives. Open a grade to fix a typo in its name, save,
+and a lab ticked off three weeks ago is back in the list with no record of when
+it was done.
+
+**Clearing a score therefore leaves the task closed**, which reverses what this
+did before and is the deliberate trade: clearing a score is a statement about
+the gradebook — wrong row, wrong number — not about whether the work happened.
+Only the student reopens a task, from the task editor.
+
 Two owners take fields back:
 
 - **from a grade** — the title and the deadline are disabled with the reason

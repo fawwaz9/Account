@@ -25,7 +25,9 @@ export interface Task {
   created_at: string | null;
   /**
    * Set when the task was raised from a dated grade. It closes itself when the
-   * score lands, so the client does not offer to delete it separately.
+   * score lands, and never reopens -- ticking it off is the student's own
+   * record that the work happened. The client does not offer to delete it
+   * separately.
    */
   grade_id: string | null;
   /**

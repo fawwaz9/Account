@@ -379,12 +379,72 @@ def test_a_grade_entered_already_marked_raises_a_closed_task(db, user):
     assert len(list_tasks(db, user.id, include_done=True, include_archived=True)) == 1
 
 
-def test_clearing_the_score_reopens_the_task(db, user):
+# ------------------------------------------- the gradebook never unchecks --
+#
+# `sync_task` used to derive `done` from the score in both directions. That made
+# the gradebook the authority on whether the work had happened, and it is not:
+# "I finished the lab" is the student's fact on Tuesday, "the lab has been
+# marked" is the TA's three weeks later. The four tests below are the whole of
+# the new rule -- a score checks a task off, and nothing here ever unchecks one.
+
+def test_saving_a_grade_with_an_empty_score_leaves_a_ticked_task_alone(db, user):
+    """The reported bug, in the exact shape the edit modal produces.
+
+    The modal always sends `score`, so an empty box arrives as score=None. With
+    the old two-way rule that ran `set_done(task, False)`, which nulls
+    `completed_at` and un-archives -- so a lab ticked off three weeks ago came
+    back into the list with no record of when it had been done, because someone
+    opened the grade to fix a typo in its name.
+    """
+    course, grade = dated_grade(db, user)
+    [task] = list_tasks(db, user.id)
+    update_task(db, user.id, task.id, TaskUpdate(done=True))
+    done_at = db.get(TaskModel, task.id).completed_at
+
+    update_grade(db, user.id, course.id, grade.id,
+                 GradeUpdate(name="Assignment 1", score=None, max_score=100))
+
+    after = db.get(TaskModel, task.id)
+    assert after.done is True, "the gradebook unchecked a task the student checked"
+    assert after.completed_at == done_at, "and it lost when the work was done"
+    assert after.archived is True
+
+
+def test_clearing_the_score_leaves_the_task_closed(db, user):
+    """This used to reopen, and the reversal is deliberate.
+
+    Clearing a score is a statement about the gradebook -- wrong row, wrong
+    number -- not about whether the work happened. The work happened.
+    """
     course, grade = dated_grade(db, user, score=88.0)
 
     update_grade(db, user.id, course.id, grade.id, GradeUpdate(score=None))
 
+    assert list_tasks(db, user.id) == []
+    [task] = list_tasks(db, user.id, include_done=True, include_archived=True)
+    assert task.done is True
+
+
+def test_a_score_still_checks_an_open_task_off(db, user):
+    """The direction that survives. Deleting it is the obvious over-correction."""
+    course, grade = dated_grade(db, user)
     assert [task.title for task in list_tasks(db, user.id)] == ["Assignment 1"]
+
+    update_grade(db, user.id, course.id, grade.id, GradeUpdate(score=88.0))
+
+    assert list_tasks(db, user.id) == []
+
+
+def test_re_saving_a_marked_grade_does_not_move_when_it_was_done(db, user):
+    """The `not task.done` guard, which predates the rest of this and is why
+    `completed_at` is not reset to now on every grade write."""
+    course, grade = dated_grade(db, user, score=88.0)
+    [task] = list_tasks(db, user.id, include_done=True, include_archived=True)
+    first = db.get(TaskModel, task.id).completed_at
+
+    update_grade(db, user.id, course.id, grade.id, GradeUpdate(name="Assignment 1 (v2)"))
+
+    assert db.get(TaskModel, task.id).completed_at == first
 
 
 def test_renaming_a_grade_renames_its_task(db, user):
