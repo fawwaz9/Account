@@ -18,8 +18,8 @@ deployment on **2026-09-14**, including that traffic is on `LATEST`.
 | Database | Supabase project `kujxxairehpwhxhnkbct`, region `us-west-2`, Postgres 17.6 |
 | Backups | GitHub Actions artifacts, `Backup database` workflow, 90-day retention |
 | Secrets | Google Secret Manager: `jwt-secret`, `database-url` |
-| Current image | `…/backend:89a7c22` — revision `account-api-00009-j62`, serving 100% |
-| Previous image | `…/backend:18e3376` — revision `account-api-00008-r8w` |
+| Current image | `…/backend:e494729` — revision `account-api-00010-ktd`, serving 100% |
+| Previous image | `…/backend:89a7c22` — revision `account-api-00009-j62` |
 | GCP project | `account-504419`, registry `us-west1-docker.pkg.dev/account-504419/account` |
 | Repo | `fawwaz9/Account` — a push to `main` rebuilds the **frontend** only |
 
@@ -82,8 +82,8 @@ reference, a concurrency setting.
 > ```
 > `LATEST (currently …)` is healthy. A bare revision name means you are pinned.
 
-**It now fixes bad code too.** Six image tags exist: `89a7c22` (current),
-`18e3376`, `7c1531a`, `18205eb`, `f6f7c32` and `26e249f`. Keep at least two — do not delete
+**It now fixes bad code too.** Seven image tags exist: `e494729` (current),
+`89a7c22`, `18e3376`, `7c1531a`, `18205eb`, `f6f7c32` and `26e249f`. Keep at least two — do not delete
 the older tags, and do not rely on `latest`, which by definition points at
 whatever just broke.
 
@@ -129,6 +129,14 @@ whatever just broke.
 > undefined and renders one fewer line, and the new page's `remaining_count >
 > items.length` is false against undefined, so it renders one fewer line. No
 > database change at all.
+>
+> **`e494729` is API-only and rolls back cleanly, but think before you do.** It
+> is a behaviour change with no schema and no frontend change — the bundle is
+> byte-identical, so Pages has nothing to roll back. Going back to `89a7c22`
+> restores the bug where saving a grade with an empty score box unchecks a task
+> the student ticked off, and that bug **destroys data**: it nulls
+> `completed_at` and un-archives, and a row in that state cannot be told from
+> one never completed. Roll back for something else, not for this.
 
 ```sh
 # once a second tag exists:
