@@ -26,7 +26,7 @@ what money went *on* (category) is separate from which pot it came *from*
 | `is_money_in` / `is_money_out` | `services/activity_service.py` | direction, including a transfer's two signs |
 | `get_budget_summary` | `services/budget_service.py:186` | a month against its targets |
 | `run_due` / `upcoming` | `services/recurring_service.py` | standing instructions, written when due |
-| `term_span`, `term_budget` | `services/tuition_service.py` | a term measured over its own dates |
+| `term_span`, `term_budget` | `services/tuition_service.py` | a term measured over its fixed dates, from `Grades/utils/terms.py` |
 | `preview_tuition`, `record_tuition` | `services/tuition_service.py` | a term priced from a per-credit rate |
 
 ## Data model

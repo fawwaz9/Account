@@ -136,7 +136,10 @@ salary to an implied hourly rate would make a long week read as a pay cut.
 One service, one pass, in the shape of `load_service`:
 
 - **Week / month / term**, per job and total, hours beside money. Term dates from
-  the courses' own span.
+  `Grades/utils/terms.py`, the same accessor Term Budget uses. It once restated
+  that rule here instead of importing it, and the two disagreed: the term began
+  on the earliest course's start date while the budget's began on Sep 1, so
+  "this term" and "this past week" reported the same figure.
 - **Effective hourly rate** — net ÷ hours, beside the advertised rate. Measured
   over the periods cheques actually *covered*, not every hour worked: otherwise
   unpaid hours drag it down and a cheque still to come reads as a pay cut.
