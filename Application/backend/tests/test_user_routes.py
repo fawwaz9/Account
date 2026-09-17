@@ -92,9 +92,9 @@ def test_the_cheapest_path_route_serialises(db, user, client):
     body = response.json()
     assert [item["name"] for item in body["items"]] == ["Final exam"]
     assert body["items"][0]["leverage"] > 0
-    assert body["best_value_grade_id"] is None
     assert set(body) >= {"target", "current", "best", "reachable",
-                         "estimated_count", "unestimated_count"}
+                         "remaining_count", "estimated_count", "unestimated_count"}
+    assert "best_value_grade_id" not in body, "dropped when the rate became the ranking"
 
 
 def test_the_cheapest_path_route_404s_on_a_course_that_is_not_yours(db, user, client):

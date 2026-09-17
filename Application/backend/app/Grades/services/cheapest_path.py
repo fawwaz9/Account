@@ -12,13 +12,24 @@ difference is the share of the final average the item controls, and it comes out
 the same whatever the other items are assumed to do, because their contribution
 appears in both halves and cancels.
 
-The ranking is built the other way up from how it was first imagined. Hours come
-from the task a dated grade raised, and most grades have no estimate on them --
-one, in the account this was written against. So items are ranked by leverage
-first, which needs nothing the student has not already entered, and per-hour is
-a refinement applied where an estimate exists. Items without one are kept in
-their own group rather than mixed in, because a missing estimate sorts as either
-free or infinite and both are lies.
+**Ranked by rate, then by points, and cut to three.** Points per hour leads,
+because the question the panel answers is what to spend the next hour on, and
+points break ties beneath it. Hours come from the task a dated grade raised.
+
+An item with no estimate has no rate and is given none: zero would sort it last
+as if it paid nothing, infinity first as if it were free, and both are lies. So
+rated items rank above unrated, and the unrated fall back to points among
+themselves.
+
+That carries a consequence worth stating plainly, because it was a bug here
+once. A single estimated item ranks first on its course whatever it is worth,
+since nothing else has a rate to beat it -- a lab worth four points can sit
+above a final worth forty-five. With one estimate across twenty-three
+outstanding items that is the common case, not the corner, which is why the
+panel keeps asking for the missing ones. The ranking is worth exactly as much
+as the estimates feeding it.
+
+Three rows, because a ranked list of eight is one you read the top of anyway.
 """
 import uuid
 
@@ -39,6 +50,29 @@ from app.Grades.utils.terms import effective_target
 #: assumed grim, the full-marks half of the spread has the most room before it
 #: meets the ceiling and starts understating the item.
 BASELINE = 0.0
+
+#: How many rows the panel shows. The rest are ranked and then dropped, rather
+#: than never ranked: the cut has to come after the ordering or "top three"
+#: means "first three found".
+TOP_N = 3
+
+
+def rank_key(item: RemainingItem) -> tuple[int, float, float, str]:
+    """Rate first, then points. Unrated items sort below every rated one.
+
+    Separated out because it is the whole product decision, and burying it in a
+    lambda inside a hundred-line function is how it gets changed by accident.
+
+    The first element is deliberately belt-and-braces, and a mutation proved it:
+    removing it changes no behaviour and fails no test today, because an item
+    only reaches here with leverage above zero and a positive number of minutes,
+    so every rated item already has a rate above zero and the `or 0.0` alone
+    puts the unrated last. It stays because that is an invariant held by a
+    filter fifty lines away -- admit one zero-leverage item and the fallback
+    silently starts ranking unrated work among the rated instead of beneath it.
+    """
+    rated = item.per_hour is not None
+    return (0 if rated else 1, -(item.per_hour or 0.0), -item.leverage, item.name)
 
 
 def item_leverage(course: CourseModel, grade: GradeModel) -> float:
@@ -111,26 +145,13 @@ def cheapest_path(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> Chea
             per_hour=round(leverage / (minutes / 60), 2) if minutes else None,
         ))
 
-    # One list, ranked by leverage.
-    #
-    # Ranking the estimated ones first was the obvious reading of "most per hour
-    # spent", and running it over real courses showed why it is wrong: a course
-    # with one estimated lab worth 4 points and an unestimated final worth 45
-    # put the lab at the top. Having an estimate is not evidence that something
-    # is worth doing, and ordering by it says otherwise.
-    #
-    # So leverage orders the list, because it is known for every item, and the
-    # rate rides along where it exists.
-    items.sort(key=lambda item: (-item.leverage, item.name))
+    items.sort(key=rank_key)
+    shown = items[:TOP_N]
 
-    # Named separately instead. With two or more estimates there is a real
-    # comparison to report; with one there is nothing to compare it against and
-    # saying "best value" of a list of one is noise dressed as a finding.
-    estimated = [item for item in items if item.per_hour is not None]
-    best_value = (
-        max(estimated, key=lambda item: (item.per_hour, item.leverage)).grade_id
-        if len(estimated) >= 2 else None
-    )
+    # Counted over what is shown rather than over everything outstanding: these
+    # two feed a line that says "these" beside three visible rows, and a count
+    # taken from the whole set would be describing items nobody can see.
+    estimated = [item for item in shown if item.per_hour is not None]
 
     best = project_average(course, 1.0)
     return CheapestPath(
@@ -144,10 +165,12 @@ def cheapest_path(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> Chea
         # Says whether the target is still arithmetically available, so the
         # ranking is not read as a plan that gets you there when nothing can.
         reachable=best >= target,
-        items=items,
-        best_value_grade_id=best_value,
+        items=shown,
+        # What the cut hid, so the panel can say "top 3 of 8" rather than
+        # implying eight outstanding items are three.
+        remaining_count=len(items),
         estimated_count=len(estimated),
-        unestimated_count=len(items) - len(estimated),
+        unestimated_count=len(shown) - len(estimated),
     )
 
 

@@ -24,15 +24,17 @@ Shipped so far (do not re-propose)
           right. Worth fixing the label too.
         Cheapest path to a target. Ranks what is left in a course by how much of
           the final average each item still controls, with a per-hour rate where
-          the task carries an estimate. Ranked by points rather than by rate:
-          running it over real courses showed a single estimated lab worth 4
-          points outranking an unestimated final worth 45, because having an
-          estimate was being read as evidence of being worth doing. The best
-          rate is named on its own line instead.
-          NOTE: only 1 of your 22 outstanding items has a time estimate, and no
-          course has its own target, so every target falls back to the account
-          default. The panel works without either; estimates just make it
-          sharper.
+          the task carries an estimate. Top three only, ranked by points per
+          hour and then by points -- asked for directly, and it replaced an
+          earlier rule that ranked on points alone.
+          NOTE: that earlier rule existed for a reason, and the reason has not
+          gone away. An item with no estimate has no rate, so it ranks below
+          every item that has one. With 1 estimate across 23 outstanding items
+          that means STAT_V 201 now shows Lab 3 (4.3 pts, estimated) above the
+          Final Exam (45 pts, not estimated). The other six courses have no
+          estimates at all, so they rank on points exactly as before. Add
+          estimates and the ranking becomes what it claims to be; leave them off
+          and the rate has nothing to rank.
         The browser tab says Account rather than App.
         Editing a task at all. Every row has an Edit button and a task on the
           calendar opens the same dialog, which also carries the Complete

@@ -220,13 +220,11 @@ export interface CheapestPath {
   best: number;
   /** Whether the target is still arithmetically available at all. */
   reachable: boolean;
-  /** Ranked by leverage, the one figure known for every item. */
+  /** The top three, ranked by points per hour and then by points. */
   items: RemainingItem[];
-  /**
-   * The best rate among items carrying an estimate, named only when at least
-   * two do -- "best value" of a list of one compares nothing.
-   */
-  best_value_grade_id: string | null;
+  /** How many were outstanding before the cut to three. */
+  remaining_count: number;
+  /** Both counted over the three shown, not over everything outstanding. */
   estimated_count: number;
   unestimated_count: number;
 }

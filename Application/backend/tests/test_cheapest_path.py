@@ -123,9 +123,9 @@ def test_an_estimate_turns_leverage_into_a_rate(db, user):
     assert path.items[0].per_hour == round(path.items[0].leverage / 2, 2)
 
 
-def test_the_best_rate_is_named_rather_than_put_at_the_top(db, user):
-    """The cheap item that pays best per hour is worth saying, but it is not
-    the heaviest thing left and the list must not claim it is."""
+def test_the_best_rate_leads_even_when_it_is_not_the_heaviest(db, user):
+    """Rate is the ranking now, so the cheap item that pays best per hour goes
+    first -- above an item carrying more than twice the points."""
     course = course_with(db, user, {"Assignment": 30.0, "Final": 70.0})
     quick = grade(db, user, course, "Assignment 1", "Assignment",
                   due=datetime.date(2026, 10, 1))
@@ -135,14 +135,22 @@ def test_the_best_rate_is_named_rather_than_put_at_the_top(db, user):
 
     path = cheapest_path(db, user.id, course.id)
 
-    assert [item.name for item in path.items] == ["Final exam", "Assignment 1"]
-    assert path.best_value_grade_id == quick.id
+    assert [item.name for item in path.items] == ["Assignment 1", "Final exam"]
+    assert path.items[0].per_hour > path.items[1].per_hour
+    assert path.items[0].leverage < path.items[1].leverage, "and it is the smaller item"
 
 
-def test_one_estimate_does_not_drag_a_small_item_to_the_top(db, user):
-    """The bug that only showed up against real courses: a single estimated lab
-    worth four points outranked an unestimated final worth forty-five, because
-    carrying an estimate was being read as evidence of being worth doing."""
+def test_a_lone_estimate_takes_the_top_spot_from_a_heavier_item(db, user):
+    """Asked for deliberately, and the cost of it recorded here rather than
+    discovered again.
+
+    Ranking on rate means an item with an estimate outranks every item without
+    one, because nothing unrated has a rate to beat it. A lab worth ten points
+    therefore sits above a final worth ninety. That is the rule working, not
+    failing -- but with one estimate across twenty-three real outstanding items
+    it is the ordinary case, so the panel's prompt to add estimates is load
+    bearing and not a nicety.
+    """
     course = course_with(db, user, {"Assignment": 10.0, "Final": 90.0})
     small = grade(db, user, course, "Assignment 1", "Assignment",
                   due=datetime.date(2026, 10, 1))
@@ -151,20 +159,29 @@ def test_one_estimate_does_not_drag_a_small_item_to_the_top(db, user):
 
     path = cheapest_path(db, user.id, course.id)
 
-    assert [item.name for item in path.items] == ["Final exam", "Assignment 1"]
+    assert [item.name for item in path.items] == ["Assignment 1", "Final exam"]
+    assert path.items[0].leverage < path.items[1].leverage
     assert (path.estimated_count, path.unestimated_count) == (1, 1)
 
 
-def test_a_lone_estimate_names_no_best_value(db, user):
-    """There is nothing to compare it against, and "best of one" is noise
-    dressed as a finding."""
+def test_an_unrated_item_never_outranks_a_rated_one(db, user):
+    """The half of the rule that has no number behind it. An item with no
+    estimate has no rate, and it is not given one -- zero would bury it,
+    infinity would crown it. It sorts below every rated item instead.
+    """
     course = course_with(db, user, {"Assignment": 50.0, "Final": 50.0})
     one = grade(db, user, course, "Assignment 1", "Assignment",
                 due=datetime.date(2026, 10, 1))
-    estimate(db, one, 60)
+    # Twenty hours for fifty points: a dreadful rate, and still ahead of an
+    # item with no rate at all.
+    estimate(db, one, 60 * 20)
     grade(db, user, course, "Final exam", "Final")
 
-    assert cheapest_path(db, user.id, course.id).best_value_grade_id is None
+    path = cheapest_path(db, user.id, course.id)
+
+    assert [item.name for item in path.items] == ["Assignment 1", "Final exam"]
+    assert path.items[0].per_hour is not None
+    assert path.items[1].per_hour is None
 
 
 # ------------------------------------------------------------ the target --
@@ -271,3 +288,74 @@ def test_the_panel_reports_the_stored_average(db, user):
 
     db.refresh(course)
     assert cheapest_path(db, user.id, course.id).current == round(course.average, 2)
+
+
+# ------------------------------------------------------------ the top three --
+
+def test_only_three_items_are_ever_returned(db, user):
+    """"At all times" -- a course with eight things left shows three."""
+    course = course_with(db, user, {"Assignment": 100.0})
+    for n in range(1, 9):
+        grade(db, user, course, f"Assignment {n}", "Assignment")
+
+    path = cheapest_path(db, user.id, course.id)
+
+    assert len(path.items) == 3
+    assert path.remaining_count == 8, "and it still says how many there were"
+
+
+def test_the_cut_happens_after_the_ranking(db, user):
+    """The failure this guards is "top three" quietly meaning "first three
+    found". The heaviest item is created last here, so a cut taken before the
+    sort would drop precisely the one that should lead.
+    """
+    course = course_with(db, user, {"Quiz": 5.0, "Assignment": 15.0, "Final": 80.0})
+    grade(db, user, course, "Quiz 1", "Quiz")
+    grade(db, user, course, "Quiz 2", "Quiz")
+    grade(db, user, course, "Quiz 3", "Quiz")
+    grade(db, user, course, "Assignment 1", "Assignment")
+    grade(db, user, course, "Final exam", "Final")
+
+    path = cheapest_path(db, user.id, course.id)
+
+    assert path.items[0].name == "Final exam"
+    assert [item.name for item in path.items] == \
+        ["Final exam", "Assignment 1", "Quiz 1"]
+
+
+def test_points_break_a_tie_between_equal_rates(db, user):
+    """The "then by pts" half of the rule.
+
+    The weights are 25/75 so the two leverages come out exact -- at 30/60 they
+    normalise to 33.33 and 66.67 and the "equal" rates differ in the second
+    decimal, which makes the tie a rounding artifact and tests nothing.
+
+    The names are chosen so the last-resort alphabetical fallback would answer
+    "Assignment 1". Only points give "Final exam", so a pass here is the
+    tiebreak working rather than the sort merely being stable.
+    """
+    course = course_with(db, user, {"Assignment": 25.0, "Final": 75.0})
+    small = grade(db, user, course, "Assignment 1", "Assignment",
+                  due=datetime.date(2026, 10, 1))
+    big = grade(db, user, course, "Final exam", "Final", due=datetime.date(2026, 12, 1))
+    estimate(db, small, 60)       # 25 points in an hour
+    estimate(db, big, 180)        # 75 points in three -- the same rate
+
+    path = cheapest_path(db, user.id, course.id)
+
+    assert path.items[0].per_hour == path.items[1].per_hour, "the rates must tie"
+    assert [item.name for item in path.items] == ["Final exam", "Assignment 1"]
+
+
+def test_the_counts_describe_the_three_on_screen(db, user):
+    """They feed a line that says "these" next to three visible rows, so a
+    count taken over everything outstanding would describe items nobody can
+    see -- "5 of these carry no estimate" beside three of them."""
+    course = course_with(db, user, {"Assignment": 100.0})
+    for n in range(1, 7):
+        grade(db, user, course, f"Assignment {n}", "Assignment")
+
+    path = cheapest_path(db, user.id, course.id)
+
+    assert path.estimated_count + path.unestimated_count == len(path.items) == 3
+    assert path.remaining_count == 6

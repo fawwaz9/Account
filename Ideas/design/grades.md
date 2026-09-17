@@ -216,19 +216,28 @@ whether or not the value ends up where it started, so the GET carries a pending
 UPDATE that the next commit anywhere would flush. The test asserts on the
 session, and it took a mutation to work that out.
 
-### Ranked by points, not by rate
+### Ranked by rate, then by points — top three only
 
-Hours come from the task a dated grade raised. The obvious reading of "most per
-hour" was to rank the estimated items first, and running it over real courses
-killed it: a course with one estimated lab worth 4 points and an unestimated
-final worth 45 put **the lab at the top**. Carrying an estimate is not evidence
-of being worth doing.
+Hours come from the task a dated grade raised. The list is ordered by **points
+per hour**, with points breaking ties beneath it, and cut to three.
 
-So one list, ordered by leverage, which is known for every item. The rate rides
-along where it exists, and where there are two or more estimates — a real
-comparison — the best rate is named on its own line. With one estimate there is
-nothing to compare against, and "best value" of a list of one is noise dressed
-as a finding.
+An item with no estimate has no rate and is not given one: zero would sort it
+last as though it paid nothing, infinity first as though it were free. Rated
+items rank above unrated, and the unrated fall back to points among themselves.
+
+> **This was ranked on points alone first, and the reason still stands.**
+> Ranking on rate means an item with an estimate outranks every item without
+> one, because nothing unrated has a rate to beat. Over the real courses that
+> puts STAT_V 201's Lab 3 — 4.3 points, the only estimated item — above its
+> Final Exam at 45. The rate ranking was asked for deliberately in full view of
+> that, and the trade is recorded here rather than left to be rediscovered as a
+> bug. It is why the panel keeps asking for the missing estimates: with one
+> estimate across 23 outstanding items, the prompt is the feature.
+
+The cut happens **after** the sort, and there is a test whose fixture creates
+the heaviest item last so that cutting first would drop exactly the row that
+should lead. Both the ranking and the cut are server-side, so the rule is one
+thing in one place with tests on it rather than a slice in the component.
 
 Bonus categories are excluded: they add on top of the average rather than
 composing it, so chasing one is how you spend a weekend moving a number that was

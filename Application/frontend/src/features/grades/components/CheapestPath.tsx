@@ -23,9 +23,10 @@ function Row({ item }: { readonly item: RemainingItem }) {
         <span className="pathItemCategory">{item.category}</span>
       </span>
       <span className="pathItemFigures">
-        {/* The rate leads where there is one, because it is the thing being
-            ranked on -- and the raw points follow it, because a rate with no
-            size attached cannot tell a big win from a cheap one. */}
+        {/* The rate leads because it is what the list is ordered on, and the
+            raw points follow it, because a rate with no size attached cannot
+            tell a big win from a cheap one -- 20 pts/h is an afternoon or a
+            fortnight depending on the number beside it. */}
         {item.per_hour !== null && (
           <strong className="pathItemRate">{points(item.per_hour)}/h</strong>
         )}
@@ -45,13 +46,16 @@ function Row({ item }: { readonly item: RemainingItem }) {
  * item is scored by how much of the final average it still controls -- the
  * difference between finishing it perfectly and not at all.
  *
- * One list, ranked by leverage, because that is the figure known for every
- * item. Ranking the estimated ones first was the obvious reading of "most per
- * hour" and running it over real courses showed why it is wrong: a course with
- * one estimated lab worth four points and an unestimated final worth forty-five
- * put the lab at the top. Carrying an estimate is not evidence of being worth
- * doing. Where a real comparison exists -- two or more estimates -- the best
- * rate is named instead.
+ * Three items, ranked by points per hour and then by points. The rate leads
+ * because the question is what to spend the next hour on, and the server does
+ * both the ranking and the cut -- a slice taken here would be a second rule
+ * with nothing testing it.
+ *
+ * An item with no estimate has no rate and ranks below every item that has one,
+ * so a single estimate anywhere in a course takes the top row whatever it is
+ * worth. That is why the prompt to add estimates stays on screen rather than
+ * being a hint that fades: it is the only thing that makes this ranking mean
+ * anything.
  *
  * Hidden once nothing is outstanding, matching GradeBand: a course with nothing
  * left has no next thing to do.
@@ -79,10 +83,6 @@ export default function CheapestPath({ userId, courseId, nonce }: CheapestPathPr
 
   if (!path || path.items.length === 0) return null;
 
-  const bestValue = path.best_value_grade_id
-    ? path.items.find((item) => item.grade_id === path.best_value_grade_id)
-    : undefined;
-
   return (
     <div className="cheapestPath">
       <div className="pathHead">
@@ -107,21 +107,19 @@ export default function CheapestPath({ userId, courseId, nonce }: CheapestPathPr
         {path.items.map((item) => <Row key={item.grade_id} item={item} />)}
       </ul>
 
-      {/* Said rather than sorted on. The best rate is genuinely worth knowing
-          and it is usually not the heaviest thing left, so it gets a line of
-          its own instead of a place in the order it has not earned. */}
-      {bestValue && (
+      {path.remaining_count > path.items.length && (
         <p className="pathNote">
-          Best value for the time: <strong>{bestValue.name}</strong>, at{" "}
-          {points(bestValue.per_hour ?? 0)} an hour.
+          The top {path.items.length} of {path.remaining_count} still outstanding.
         </p>
       )}
 
+      {/* Load bearing, not a nicety: without estimates this is ranked on points
+          alone, and one estimate anywhere takes the top row on its own. */}
       {path.unestimated_count > 0 && (
         <p className="pathNote">
           {path.estimated_count === 0
-            ? "None of these carry a time estimate."
-            : `${path.unestimated_count} of these carry no time estimate.`}{" "}
+            ? "None of these carry a time estimate, so they are ranked on points alone."
+            : `${path.unestimated_count} of these carry no time estimate, so they rank below the ones that do.`}{" "}
           Add one in Tasks and it gets a rate here.
         </p>
       )}
