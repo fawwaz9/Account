@@ -306,30 +306,29 @@ Grades:
         Syllabus paste: drop the text in, get categories, weights and due dates proposed for review.
         Make syllabus parser the main when adding courses but add a button to do it manually.
         When editing courses the manual is the default but syllabus parser will be available under the manual grid.
-        How are term dates currently calculated.
-          ANSWER: they are not stored anywhere. term_span() in
-          Finances/services/tuition_service.py:389 takes min(start_date) and
-          max(end_date) across the courses in the term. A course with no dates
-          contributes nothing rather than defaulting to today, which would
-          quietly shrink the span. Only Grades knows when a term runs, and it
-          knows it per course rather than centrally.
-          WHY THAT MATTERS HERE: 6 of your 27 courses carry dates, and all six
-          are this term. So the term span works right now and is blank for every
-          past term -- which is why the term retrospective and Term Budget have
-          nothing to measure historically. Fixed dates would fix that.
-        Chanage it to
-          Fall - Sep 1 to dec 31
-          Winter - Jan 1 to Apr 30
-          Spring - May 1 to June 31        <-- June has 30 days
-          Summer - July 1 to August 31
-          NOTE: your current Fall courses run Sep 9 to Dec 7, so a fixed
-          Sep 1 - Dec 31 span is WIDER than the real one. Term Budget measures
-          spending over the span, so widening it pulls in a few weeks of summer
-          and winter-break spending that no course was running for. Worth
-          deciding whether the fixed dates replace the per-course ones or only
-          fill in when a course has none -- the second keeps both behaviours.
-          Also: your courses only ever use Fall, Winter and Summer. Spring is
-          new to your DATA but not to the CODE -- see point 3 below.
+        Fixed term dates -- DONE 2026-09-17, shipped exactly as asked below.
+          Kept only because it records what changed and what is still owed.
+          WAS: nothing stored anywhere. term_span() took min(start_date) and
+          max(end_date) across a term's courses, so a term could only be
+          measured if its courses happened to carry dates -- and 21 of 27 did
+          not. That is why every past term had nothing to measure.
+          NOW: Grades/utils/terms.py holds TERM_DATES and every reader goes
+          through one accessor, term_dates(semester, school_year, first_year):
+            Fall    Sep 1  - Dec 31   (the school year's own calendar year)
+            Winter  Jan 1  - Apr 30   (+1)
+            Spring  May 1  - Jun 30   (+1)   <-- corrected on the way in
+            Summer  Jul 1  - Aug 31   (+1)
+          The +1 is the whole reason a school year is written 2025-2026; without
+          it Winter lands eight months before the Fall it follows.
+          THE WIDER SPAN WAS ACCEPTED DELIBERATELY. Your Fall really runs Sep 9
+          to Dec 7, so Term Budget now counts a few weeks either side. Fixed
+          dates WIN over a course's own -- that was the decision -- with one
+          carve-out: the class timetable still uses each course's real dates, or
+          it would invent three lectures before term and three after.
+          Jobs was reading its own duplicated copy of the old rule and now
+          imports the same accessor. That bug is what the duplication cost.
+          STILL OWED BEFORE ANY OF IT SHOWS: nobody has set the first-year
+          anchor in Settings. It suggests 2024 from your dated courses.
 
         Is it worth it or safe to make not just the dates but the semesters editable due to how integral they are to the structure of the app.
           Safe, but not free, and there are three things to know first.
@@ -347,8 +346,8 @@ Grades:
              Fall -- wrong order, no error. Any editable scheme needs an order
              per term, not just a name.
           3. Spring is ALREADY in both enums -- it is only absent from your
-             data. So adding Spring to the term-date table needs no code change
-             at all.
+             data. DONE: the term-date table now exists and carries Spring at
+             May 1 - Jun 30, so there is nothing left to add for it.
           Renaming is the risky operation, not adding: courses store the string,
           so a rename orphans every course carrying the old one unless it
           updates them in the same transaction.
@@ -387,6 +386,17 @@ Jobs:
           good enough is worth finding out before building anything.
         Confirmed shifts leave the shifts section after 20 days They are still in db and calendar. 
           Also unconfirmed shifts should be placed at the top of the list sorted by the closest dates.
+
+Budget:
+        Reimbursement state, and who and when for money lent out. On whichever
+          account you actually keep it in -- there is no seeded pot for it since
+          the "Money Lent" default was removed.
+        Account ordering is stored (position) but has no editor, so the grid
+          order is whatever creation happened to produce. Worth a drag handle
+          only if the list gets long.
+        (Restored 2026-09-17. These two were listed only in design/finances.md
+        and in the "Needs new storage" section below, so the module list read as
+        though Budget had nothing left. It does.)
 
 Grades x Budget (nothing else does this):
         A dollar figure next to a dropped course, since the deadline to drop with a refund is a date on the calendar.
@@ -437,11 +447,13 @@ not covered by that description -- read the per-module list as the live one and
 this section as the reasoning behind the ordering.
 
 Next, and cheapest
-- The rate limiters key on the wrong address (step 12a / D5.5). Not a feature,
-  but it is the one thing that has to be fixed before the invite list opens:
-  behind Cloud Run every caller looks like Google's front end, so all the limits
-  are one shared budget and one person hitting the login limit locks out the
-  rest. Production logs show 99 of 99 requests from 169.254.169.126.
+- The rate limiters key on the wrong address (step 12a / D5.5). Behind Cloud Run
+  every caller looks like Google's front end, so the limits are one shared
+  budget. Production logs show 99 of 99 requests from 169.254.169.126.
+  SMALLER THAN THIS ENTRY USED TO CLAIM, checked 2026-09-17: the throttle covers
+  only /login and /register at 8 attempts per 15 minutes, and 4 of 5 users sign
+  in with Google, which never reaches it. So it is a wide-invite blocker, not a
+  today problem. Fix is in client_ip(), api/routes/auth.py:33.
 - Request caching on the frontend (audit #35). Every navigation refetches what
   it already has, and every reload() refetches all four endpoints when one row
   changed. This was invisible on localhost and is not from a phone.
@@ -468,13 +480,9 @@ Needs new storage, so later
 - Reimbursement state, and who/when for money lent out. No seeded pot to hang
   it on any more -- the "Money Lent" default was removed, so this attaches to
   whichever account the student actually keeps it in.
-  NOTE: the "Budget:" heading that carried these two was removed from the
-  per-module list above, but the items themselves are still open and are still
-  listed in Ideas/design/finances.md under "Still open". So they are tracked in
-  two places and visible in neither of the obvious ones. Either put a Budget
-  heading back with these two under it, or drop them from the design note too --
-  right now the module list reads as though Budget has nothing left, which is
-  not true.
+  DONE 2026-09-17: the Budget heading is back in the per-module list above,
+  carrying this and account ordering. The module list no longer reads as though
+  Budget has nothing left.
 - Grade-to-effort log. Worth noting it now has a precedent: shift_records keys
   on (event_id, on_date) to record what happened on one date of a repeating
   thing, and hours against a grade is the same shape.
