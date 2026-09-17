@@ -8,11 +8,15 @@ Shipped so far (do not re-propose)
           nothing unchecks one now. Clearing a score leaves the task closed,
           which reverses the old behaviour on purpose: clearing a score is about
           the gradebook, not about whether you did the work.
-        LIVE as of 2026-09-17: image 18e3376, revision account-api-00008-r8w.
-          Schema applied to Supabase first (courses.links,
-          users.first_year_calendar_year), then the API, then main. Nobody has
-          an anchor set yet, so Term Budget and the Jobs term stay quiet until
-          Settings gets one -- that is the designed behaviour, not a fault.
+        LIVE as of 2026-09-17: image e494729, revision account-api-00010-ktd.
+          Three deploys that day: 18e3376 (links, term dates, cheapest path --
+          the only one needing a schema step, for courses.links and
+          users.first_year_calendar_year), 89a7c22 (the pts/h ranking) and
+          e494729 (the task-reopen fix, API only).
+          STILL TRUE AND WORTH DOING: nobody has set the first-year anchor, so
+          Term Budget and the Jobs term stay quiet until Settings gets one. It
+          suggests 2024 from your dated courses. That is designed behaviour, not
+          a fault -- an unanchored term must not silently become year 1.
         Course resource links. Canvas, Piazza, PrairieLearn and anything else,
           as chips above the insights row with one muted underlined control.
           Stored as JSON on the course and reassigned whole, because SQLAlchemy
@@ -350,6 +354,24 @@ Grades:
           updates them in the same transaction.
           How about the ability to edit the names and dates of the semester but the order must stay intact.
           Suggest ways to accomodate this system also suggest ways to accomodate classes that span multiple semesters.
+          ANSWERED, and the answer is the design above: FOUR FIXED SLOTS WITH
+            EDITABLE LABELS. The stored value stays "Fall" forever as an id
+            nobody sees; only the label is edited. That keeps order intact for
+            free -- SEMESTER_ORDER keys on the id, so point 2 above stops being
+            a problem -- and it removes the one genuinely dangerous operation, a
+            rename that orphans every course carrying the old string, because
+            zero course rows are touched by a rename.
+            Editable DATES are the same shape: TERM_DATES in Grades/utils/
+            terms.py is already behind one accessor, term_dates(semester,
+            school_year, first_year), which was built as the seam for exactly
+            this. Moving the table into a user-owned column changes one function
+            and nothing that calls it.
+          MULTI-SEMESTER COURSES were deferred on purpose, to avoid disturbing
+            term bucketing while fixed term dates landed. No course in the data
+            spans terms today. When it is picked up, the question to settle
+            first is which term a two-term course's grades and costs belong to,
+            because Term Budget, the Jobs term and cheapest path all bucket by
+            a single semester string.
 
 
 Jobs:   
@@ -734,6 +756,10 @@ Deployment -- DONE. The app is live.
   Supabase Postgres 17.6 in us-west-2. A second person is using it.
 - Steps 1-37 of Ideas/deployment.md are done. Only 38 (watch it for a week) and
   39 (invite the rest) remain, and both are time passing rather than work.
+- Read Ideas/shipping.md to BUILD AND SHIP a change. It is the loop -- build,
+  verify, deploy, record -- in the order the steps have to happen, and every
+  rule in it names the day it cost something. Written 2026-09-17 and used for
+  real on the deploy the same day.
 - Read Ideas/ROLLBACK.md if something is broken. It is written to be read while
   stressed: commands first, reasoning second.
 - Read Ideas/deployment.md for how it got there, and Ideas/plan-a-decisions.md
@@ -742,6 +768,13 @@ Deployment -- DONE. The app is live.
 What the deploy leaves open, in the order it will bite
 - The rate limiters key on the peer address, which behind Cloud Run is Google's
   front end, so every limit is one shared budget. Fix before step 39. D5.5.
+  NARROWER THAN THIS ENTRY LONG IMPLIED, checked 2026-09-17: the throttle covers
+  only /login and /register, at 8 attempts per 15 minutes, and 4 of the 5 users
+  sign in with Google, which never touches it. So it bites password sign-ins and
+  bursts of sign-ups, not everyday use. Still worth fixing before a wide invite;
+  not the emergency it reads as. The fix is to trust Cloud Run's forwarded-for
+  header in client_ip() (api/routes/auth.py:33), which deliberately does not
+  read it today because an unvalidated X-Forwarded-For is worse than none.
 - Backups exist in exactly one place: GitHub Actions artifacts, 90-day
   retention. A second copy in a GCS bucket or B2 was flagged and not done.
 - The Dockerfile hardcodes uvicorn on 8000 instead of honouring $PORT, which is
@@ -768,6 +801,54 @@ Things that are easy to get wrong now that it is deployed
 - Local dev is still SQLite at data/app.db, deliberately, and the test suite
   REFUSES a remote TEST_DATABASE_URL unless TEST_DATABASE_ALLOW_REMOTE is set.
   conftest drops every table twice per run.
+
+Will this still be running in three years -- measured 2026-09-17
+Asked directly. Capacity is nowhere near binding; what ends it is neglect.
+
+What is fine, with room to spare:
+- Database 12 MB of a 500 MB ceiling, at 5 users and 819 rows.
+- Requests roughly 36k/month at 20 users, against 2M/month.
+- Each nightly backup is 30 KB gzipped. Ninety of them is under 3 MB.
+- GitHub Actions about 2 minutes a day, against 2,000 minutes a month.
+- Artifact Registry holds 7 images in 95 MB total, not 7 x 85 MB: they share
+  every layer but the thin app one, so a deploy costs a few MB, not an image.
+- All 10 backend dependencies pinned exactly; the frontend builds from a
+  lockfile. Nothing breaks from an upstream release on its own.
+
+What will actually bite, roughly in order:
+- SUMMER. Supabase free projects pause after about 7 days of no activity, and
+  students stop using a school app in July. The thing quietly preventing it is
+  the NIGHTLY BACKUP, which opens a real Postgres connection every day and reads
+  as activity. That workflow is therefore load bearing for UPTIME, not just for
+  recovery -- do not disable it to tidy up. Worth confirming Supabase's current
+  pause-and-delete policy directly, since vendors change it.
+- Backups are one copy, one place, 90 days. Corruption noticed in month four has
+  nothing clean to go back to. They are 30 KB; a second destination costs
+  nothing but the habit.
+- The second Supabase project, ommqbgaasrusrlizzyzm, still holds everyone's
+  financial data and password hashes. It is both a standing breach surface and
+  the occupant of the spare slot on a 2-project free plan.
+- Security drift. Pinned dependencies are excellent for reproducibility and
+  terrible for patches, because nothing updates them. Over two or three years
+  that is real CVE exposure in FastAPI, SQLAlchemy and the JWT library. A
+  deliberate bump once a term, run through the suite, handles it.
+- Bus factor: deploys are manual and need someone who can follow shipping.md.
+  That is now written down, which is most of the fix.
+
+Before more friends join, in order: fix the forwarded-for keying, delete the
+second Supabase project, then make the second backup destination a habit.
+
+Housekeeping, learned the hard way 2026-09-17
+- Docker on the dev machine reached 7.6 GB, of which 5.5 GB was build cache
+  nothing ever clears. `docker builder prune -f` reclaimed 5.1 GB. Deleting a
+  LOCAL image tag does not touch the registry copy, so it costs no rollback
+  path. Local dev data was never at risk: docker-compose bind-mounts
+  ./backend/data, so the SQLite file is on disk, not in a volume.
+- README.md's Status block is STALE and contradicts its own opening paragraph:
+  it says development is on grades-branch and that Calendar and Tasks return
+  hardcoded sample dicts. Both are fully built and the app is in production.
+  The first paragraph was rewritten 2026-09-17 to lead with the goal; the block
+  under it was left alone and needs the same treatment.
 
 Not built, from the original features.txt sketch
 - Notes, Goals and Study Analytics. Listed on day one, never designed, never
