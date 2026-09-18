@@ -328,7 +328,21 @@ Grades:
           Jobs was reading its own duplicated copy of the old rule and now
           imports the same accessor. That bug is what the duplication cost.
           STILL OWED BEFORE ANY OF IT SHOWS: nobody has set the first-year
-          anchor in Settings. It suggests 2024 from your dated courses.
+          anchor in Settings. It suggests 2024 from your dated courses. One
+          click now fixes three things at once -- the Term Budget span, the Jobs
+          term, and the heading above them.
+        term_label is no longer trusted for the term heading -- DONE 2026-09-17.
+          It read "Fall 2025-2026" above a span computed over 2026, because the
+          heading came from a free-text field and the dates came from the
+          anchor. term_name() now derives the label from the anchor too, so one
+          fact feeds both. Winter deliberately keeps the SCHOOL year's calendar
+          year, so January 2027 still reads 2026-2027 rather than starting a new
+          one -- there is a test for exactly that, and the mutation that used
+          the term's own year instead fails it.
+          term_label survives only as the fallback for a user with no anchor.
+          It has NO EDITOR anywhere in the app, which is why it went stale and
+          stayed stale, so it is a column nobody can fix by hand. Worth removing
+          once every user has an anchor; nothing else reads it.
 
         Is it worth it or safe to make not just the dates but the semesters editable due to how integral they are to the structure of the app.
           Safe, but not free, and there are three things to know first.

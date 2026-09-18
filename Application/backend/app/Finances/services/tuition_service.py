@@ -40,7 +40,7 @@ from app.Finances.services.transaction_service import (
     delete_transaction,
     owned_account,
 )
-from app.Grades.utils.terms import CURRENT, term_bucket, term_dates
+from app.Grades.utils.terms import CURRENT, calendar_year_of, term_bucket, term_dates
 
 
 def current_term(db: Session, user_id: uuid.UUID) -> tuple[int | None, str | None]:
@@ -54,13 +54,32 @@ def term_name(db: Session, user_id: uuid.UUID) -> str:
     """A term as a person would write it.
 
     school_year is a year of standing, not a calendar year, so pasting it in
-    front of the semester produced "3 Fall". The user's own term_label ("2025-
-    2026") is the right thing when they have set one; failing that the semester
-    alone reads better than a bare ordinal.
+    front of the semester produced "3 Fall".
+
+    **Derived from the anchor, not from `term_label`.** The label is free text
+    that nothing keeps honest -- there is no editor for it anywhere in the app,
+    so once it is wrong it stays wrong, and it was: it read "2025-2026" while
+    the year-3 Fall it named ran September 2026. Worse, it sat directly above a
+    span that `term_dates` computes from the anchor, so the heading and the
+    dates under it disagreed by a year.
+
+    The anchor is the one fact both can come from. `calendar_year_of` gives the
+    calendar year the school year's Fall began in, which is the first half of
+    the label -- and it is deliberately the SCHOOL year's own year rather than
+    the term's, so Winter, which runs in January of the following year, still
+    reads as part of "2026-2027" rather than starting a new one.
+
+    `term_label` stays as the fallback for a user who has no anchor set, since
+    dropping it would replace a stale label with no label at all.
     """
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
     if user is None or not user.current_semester:
         return "your current term"
+
+    began = calendar_year_of(user.current_school_year, user.first_year_calendar_year)
+    if began is not None:
+        return f"{user.current_semester} {began}-{began + 1}"
+
     if user.term_label:
         return f"{user.current_semester} {user.term_label}"
     return user.current_semester

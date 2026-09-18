@@ -14,7 +14,7 @@ import uuid
 from app._database.models import TransactionModel
 from app.Finances.schemas.transaction import TransactionCreate, TransactionKind
 from app.Finances.services.transaction_service import create_transaction
-from app.Finances.services.tuition_service import term_budget, term_span
+from app.Finances.services.tuition_service import term_budget, term_name, term_span
 from conftest import make_account, make_category, make_course
 
 #: When the teaching actually runs, which is no longer what is measured.
@@ -204,3 +204,58 @@ def test_progress_through_the_term_is_clamped(db, user):
     assert during.days_elapsed == 1
     assert after.days_elapsed == after.days_total
     assert during.days_total == (TERM_END - TERM_START).days + 1
+
+
+# ------------------------------------------------------ what the term is called --
+#
+# Nothing tested term_name at all until the heading was reported as wrong -- it
+# read "Fall 2025-2026" above a span measured over 2026. That is the same gap
+# that let the Jobs term bug live through 870 green tests: a figure on screen
+# that no assertion ever looked at.
+
+def test_the_term_is_named_from_the_anchor(db, user):
+    """The reported bug. term_label said 2025-2026; the anchor says 2026."""
+    set_term(db, user, year=3, semester="Fall")
+    user.term_label = "2025-2026"
+    db.commit()
+
+    assert term_name(db, user.id) == "Fall 2026-2027"
+
+
+def test_winter_stays_in_the_school_year_it_belongs_to(db, user):
+    """Winter of year 3 runs in January 2027 but is part of 2026-2027, not
+    2027-2028. The label takes the SCHOOL year's own calendar year, which is
+    why it reads calendar_year_of rather than the term's start date."""
+    set_term(db, user, year=3, semester="Winter")
+
+    assert term_name(db, user.id) == "Winter 2026-2027"
+
+
+def test_advancing_a_year_moves_the_name_with_it(db, user):
+    set_term(db, user, year=4, semester="Fall")
+
+    assert term_name(db, user.id) == "Fall 2027-2028"
+
+
+def test_without_an_anchor_the_old_label_is_still_used(db, user):
+    """Dropping the fallback would replace a stale label with no label."""
+    set_term(db, user, year=3, semester="Fall", anchor=None)
+    user.term_label = "2025-2026"
+    db.commit()
+
+    assert term_name(db, user.id) == "Fall 2025-2026"
+
+
+def test_with_neither_the_semester_alone_reads_better_than_an_ordinal(db, user):
+    """Concatenating school_year gave "3 Fall", which is what this avoids."""
+    set_term(db, user, year=3, semester="Fall", anchor=None)
+    user.term_label = None
+    db.commit()
+
+    assert term_name(db, user.id) == "Fall"
+
+
+def test_a_user_who_has_set_nothing_gets_a_sentence(db, user):
+    set_term(db, user, year=None, semester=None, anchor=None)
+
+    assert term_name(db, user.id) == "your current term"
