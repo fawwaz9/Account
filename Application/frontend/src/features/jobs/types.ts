@@ -205,6 +205,15 @@ export interface JobEarnings {
   assumed_count: number;
   gross_earned: number;
   cash_tips: number;
+  /**
+   * From this job's cheques dated inside the window. Kept apart from
+   * gross_earned for the same reason the window-level pair is: one is what the
+   * hours say, the other what the bank saw, and a cheque arriving now usually
+   * pays for work done before the window opened.
+   */
+  gross_paid: number;
+  deducted: number;
+  net_paid: number;
 }
 
 export interface EarningsWindow {

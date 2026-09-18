@@ -20,17 +20,24 @@ interface EarningsProps {
  * cheques that arrived. One combined figure would hide the thing this page
  * exists to surface -- a fortnight worked that nobody has paid for yet.
  *
- * The headline on each window is what was PAID, net. Earned sits with the
- * hours that produced it on the line below, because those two come from the
- * same place. Note that the two are not a sum and a remainder: earned counts
- * shifts falling inside the window, while paid counts cheques DATED inside it,
- * and a cheque arriving this week usually pays for last fortnight. They are
- * two accounts of different work, deliberately side by side.
+ * So the split is by source, not by window. The cards at the top are money
+ * that arrived -- net paid, the gross and deduction behind it, and which jobs
+ * it came from. Everything the shifts merely predict lives under Estimates.
+ *
+ * The two are not a sum and a remainder, and separating them makes that easier
+ * to forget rather than harder: earned counts shifts falling INSIDE a window,
+ * paid counts cheques DATED inside it, and a cheque arriving this week usually
+ * pays for last fortnight. They are two accounts of different work.
  */
 export default function Earnings({ earnings }: EarningsProps) {
   if (!earnings) return null;
 
-  const windows = [earnings.week, earnings.month, earnings.term].filter(
+  // Month and term only. Pay does not arrive weekly, so a weekly pay figure was
+  // a number nobody could act on. `earnings.week` is still computed and still
+  // on the wire -- it is the window that test_earnings.py makes thirteen
+  // assertions through, where a fixed seven days makes the expected shift
+  // counts obvious -- it is simply not drawn.
+  const windows = [earnings.month, earnings.term].filter(
     (window): window is EarningsWindow => window !== null
   );
 
@@ -51,13 +58,17 @@ export default function Earnings({ earnings }: EarningsProps) {
         {earnings.this_week && <CommitmentCard week={earnings.this_week} />}
       </div>
 
-      {earnings.upcoming.length > 0 && <Owed rows={earnings.upcoming} />}
+      <Estimates windows={windows} rows={earnings.upcoming} />
     </section>
   );
 }
 
 function WindowCard({ window }: { readonly window: EarningsWindow }) {
-  const assumed = window.per_job.reduce((total, job) => total + job.assumed_count, 0);
+  // Jobs that were actually paid in this window. Filtering on the paid figure
+  // rather than on `per_job.length` matters now that the rows show pay: the
+  // list also carries jobs that only worked, and a breakdown of the paid total
+  // that lists jobs paid nothing does not explain the number above it.
+  const paid = window.per_job.filter((job) => job.net_paid > 0);
 
   return (
     <div className="earnCard">
@@ -72,34 +83,20 @@ function WindowCard({ window }: { readonly window: EarningsWindow }) {
         <span className="earnHeadline earnHeadlineEmpty">Nothing paid yet</span>
       )}
 
-      {/* The shifts story, grouped: hours, what they were worth, and the tips
-          that never pass through a cheque. */}
-      <span className="small-text muted">
-        {hours(window.counted_minutes)} worked
-        {` · ${formatMoney(window.gross_earned)} earned`}
-        {window.cash_tips > 0 && ` · ${formatMoney(window.cash_tips)} cash tips`}
-      </span>
-
-      {/* The cheque story, under it. The gap between this and earned above is
-          the point of the page: a fortnight worked that nobody has paid for. */}
       {window.gross_paid > 0 && (
         <span className="small-text muted earnPaid">
           {formatMoney(window.gross_paid)} gross, {formatMoney(window.deducted)} deducted
         </span>
       )}
 
-      {assumed > 0 && (
-        <span className="small-text earnAssumed">
-          {assumed} {assumed === 1 ? "shift" : "shifts"} still unconfirmed
-        </span>
-      )}
-
-      {window.per_job.length > 1 && (
+      {/* Which jobs the headline came from. Only worth drawing when more than
+          one job paid, since one job's breakdown is the headline again. */}
+      {paid.length > 1 && (
         <ul className="earnPerJob">
-          {window.per_job.map((job) => (
+          {paid.map((job) => (
             <li key={job.job_id}>
               <span>{job.job_name}</span>
-              <span>{formatMoney(job.gross_earned)}</span>
+              <span>{formatMoney(job.net_paid)}</span>
             </li>
           ))}
         </ul>
@@ -165,26 +162,78 @@ function CommitmentCard({ week }: { readonly week: HoursAgainstClasses }) {
   );
 }
 
-function Owed({ rows }: { readonly rows: UpcomingPay[] }) {
+interface EstimatesProps {
+  readonly windows: EarningsWindow[];
+  readonly rows: UpcomingPay[];
+}
+
+/**
+ * Everything the shifts say, in one place.
+ *
+ * This was "Not paid yet" and already was an estimates section in substance --
+ * per job, the hours no cheque has covered since the last period closed, what
+ * they are probably worth, and when the next cheque is due. The figures the
+ * window cards used to carry moved in beside it when those cards became purely
+ * about money that arrived.
+ *
+ * Folded into the existing block rather than added as a third one: two headings
+ * both answering "what do the shifts say", differing only by window, is two
+ * places to look for one answer.
+ *
+ * Every figure here is a projection. The unconfirmed count is said per window
+ * rather than totalled, because month and term overlap and adding them would
+ * count the same unconfirmed shift twice.
+ */
+function Estimates({ windows, rows }: EstimatesProps) {
   const owed = rows.filter((row) => row.unpaid_minutes > 0 || row.next_pay_on);
-  if (owed.length === 0) return null;
+  const worked = windows.filter(
+    (window) => window.counted_minutes > 0 || window.gross_earned > 0
+  );
+  if (owed.length === 0 && worked.length === 0) return null;
 
   return (
     <div className="earnOwed">
-      <span className="small-text muted earnLabel">Not paid yet</span>
-      <ul className="earnOwedList">
-        {owed.map((row) => (
-          <li key={row.job_id}>
-            <span>{row.job_name}</span>
-            <span className="small-text muted">
-              {row.unpaid_minutes > 0 ? hours(row.unpaid_minutes) : "nothing outstanding"}
-              {row.unpaid_estimate !== null && row.unpaid_estimate > 0 &&
-                ` · about ${formatMoney(row.unpaid_estimate)}`}
-              {row.next_pay_on && ` · next cheque ${dueLabel(row.next_pay_on)}`}
-            </span>
-          </li>
-        ))}
-      </ul>
+      <span className="small-text muted earnLabel">Estimates</span>
+
+      {worked.length > 0 && (
+        <ul className="earnOwedList">
+          {worked.map((window) => {
+            const assumed = window.per_job.reduce(
+              (total, job) => total + job.assumed_count, 0
+            );
+            return (
+              <li key={window.label}>
+                <span>{window.label}</span>
+                <span className="small-text muted">
+                  {hours(window.counted_minutes)} worked
+                  {` · ${formatMoney(window.gross_earned)} earned`}
+                  {window.cash_tips > 0 && ` · ${formatMoney(window.cash_tips)} cash tips`}
+                  {assumed > 0 &&
+                    ` · ${assumed} ${assumed === 1 ? "shift" : "shifts"} unconfirmed`}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {owed.length > 0 && (
+        <ul className="earnOwedList">
+          {owed.map((row) => (
+            <li key={row.job_id}>
+              <span>{row.job_name}</span>
+              <span className="small-text muted">
+                {row.unpaid_minutes > 0
+                  ? `${hours(row.unpaid_minutes)} unpaid`
+                  : "nothing outstanding"}
+                {row.unpaid_estimate !== null && row.unpaid_estimate > 0 &&
+                  ` · about ${formatMoney(row.unpaid_estimate)}`}
+                {row.next_pay_on && ` · next cheque ${dueLabel(row.next_pay_on)}`}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

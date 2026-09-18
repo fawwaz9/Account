@@ -1,4 +1,24 @@
 Shipped so far (do not re-propose)
+        Jobs leads with what was PAID, not what was earned. The window cards are
+          money that arrived -- net paid as the headline, "X gross, Y deducted"
+          under it, and a per-job breakdown of pay. Everything the shifts only
+          predict moved into Estimates, which is the old "Not paid yet" block
+          renamed and widened rather than a third section beside it.
+          The Past week card is gone: pay does not arrive weekly. The week
+          window is still computed and still on the wire because
+          test_earnings.py makes 13 assertions through it -- a fixed 7 days
+          keeps the expected shift counts obvious -- it is just not drawn.
+          JobEarnings gained gross_paid/deducted/net_paid. The window always had
+          a paid total but no way to say which job it came from, so a per-job
+          breakdown could only ever show earned.
+          A BUG FOUND WHILE DOING IT: the per-job loop skipped any job with no
+          shifts and nothing earned, so a job paid in the window for work done
+          before it opened -- the normal case -- was dropped from the breakdown
+          while the window total still counted its money. The rows disagreed
+          with the headline above them and every existing test stayed green.
+          NOTE: "This month" and "This term" read identically until Oct 1,
+          because Fall began Sep 1. That is the same coincidence behind the
+          original "term is the same as past week" report, and is not a fault.
         A ticked-off task stays ticked off. The gradebook used to derive a
           task's done flag from its grade in BOTH directions, so any save of a
           grade with an empty score box ran set_done(task, False) -- which nulls

@@ -115,16 +115,30 @@ def window_earnings(
     for shift in shifts:
         by_job.setdefault(shift.job_id, []).append(shift)
 
+    cheques = cheques_in(db, user_id, start, end)
+    cheques_by_job: dict[uuid.UUID, list] = {}
+    for cheque in cheques:
+        cheques_by_job.setdefault(cheque.job_id, []).append(cheque)
+
     per_job: list[JobEarnings] = []
     for job in jobs:
         mine = by_job.get(job.id, [])
+        paid_to_me = cheques_by_job.get(job.id, [])
         periods = periods_in(job, start, end) if job.kind == JobKind.SALARIED.value else 0
         earned, cash = earned_from_shifts(job, mine)
         if periods:
             earned = money(earned + periods * (job.period_amount or 0.0))
 
-        if not mine and earned == 0.0:
+        # A cheque counts a job in even when no shift does. Pay arrives for work
+        # done before the window opened, so a job can be the only thing in the
+        # paid breakdown while contributing no hours at all -- dropping it here
+        # would lose money that the window's own total still includes, and the
+        # per-job rows would not add up to the headline.
+        if not mine and earned == 0.0 and not paid_to_me:
             continue
+
+        job_gross = money(sum(c.gross_amount for c in paid_to_me))
+        job_deducted = deducted_from(db, paid_to_me)
 
         per_job.append(JobEarnings(
             job_id=job.id,
@@ -135,9 +149,11 @@ def window_earnings(
             assumed_count=sum(1 for s in mine if s.assumed),
             gross_earned=earned,
             cash_tips=cash,
+            gross_paid=job_gross,
+            deducted=job_deducted,
+            net_paid=money(job_gross - job_deducted),
         ))
 
-    cheques = cheques_in(db, user_id, start, end)
     gross_paid = money(sum(c.gross_amount for c in cheques))
     deducted = deducted_from(db, cheques)
 

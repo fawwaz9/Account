@@ -135,11 +135,18 @@ salary to an implied hourly rate would make a long week read as a pay cut.
 
 One service, one pass, in the shape of `load_service`:
 
-- **Week / month / term**, per job and total, hours beside money. Term dates from
-  `Grades/utils/terms.py`, the same accessor Term Budget uses. It once restated
-  that rule here instead of importing it, and the two disagreed: the term began
-  on the earliest course's start date while the budget's began on Sep 1, so
-  "this term" and "this past week" reported the same figure.
+- **Month / term**, per job and total. Term dates from `Grades/utils/terms.py`,
+  the same accessor Term Budget uses. It once restated that rule here instead of
+  importing it, and the two disagreed: the term began on the earliest course's
+  start date while the budget's began on Sep 1, so "this term" and "this past
+  week" reported the same figure.
+  A **week** window is still computed and still on the wire, and is deliberately
+  not drawn — pay does not arrive weekly, so a weekly pay figure was a number
+  nobody could act on. It stays because `test_earnings.py` makes thirteen
+  assertions through it, where a fixed seven days keeps the expected shift
+  counts obvious; month-to-date holds a different number of shifts depending on
+  the day. Removing it means recomputing every one of those, in tests whose
+  subject is shift arithmetic rather than which cards render.
 - **Effective hourly rate** — net ÷ hours, beside the advertised rate. Measured
   over the periods cheques actually *covered*, not every hour worked: otherwise
   unpaid hours drag it down and a cheque still to come reads as a pay cut.
@@ -147,6 +154,28 @@ One service, one pass, in the shape of `load_service`:
   `class_minutes` split.
 - **Unpaid, and when** — hours since the last cheque's period, plus the next date
   the pay rule produces.
+
+### Paid leads; the guesses live together
+
+The window cards are **money that arrived**: net paid, the gross and deduction
+behind it, and which jobs it came from. Everything the shifts merely predict —
+hours worked, earned, cash tips, unconfirmed shifts, unpaid hours — sits under
+**Estimates**, which is the old "Not paid yet" block renamed and widened rather
+than a third section competing with it.
+
+`JobEarnings` gained `gross_paid`/`deducted`/`net_paid` to make that possible:
+the window carried a paid total from the start but no way to say which job it
+came from, so a per-job breakdown could only ever show earned.
+
+> **A job with a cheque and no shifts still belongs in the breakdown.** Pay
+> arrives for work done before the window opened — that is the normal case. The
+> per-job loop used to skip any job with no shifts and nothing earned, which
+> dropped exactly those rows while the window's own total still counted the
+> money, so the rows silently failed to add up to the headline above them.
+
+The two figures are **not a sum and a remainder**, and putting them in separate
+sections makes that easier to forget: earned counts shifts falling *inside* a
+window, paid counts cheques *dated* inside it.
 
 ## Notes
 

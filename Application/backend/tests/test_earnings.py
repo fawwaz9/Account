@@ -207,6 +207,90 @@ def test_a_cheque_fills_in_the_paid_side(db, user, accounts, hourly):
     assert week.net_paid == pytest.approx(148.0, abs=CENT)
 
 
+# --- paid, per job --------------------------------------------------------
+#
+# The window carried a paid total from the start but no way to say which job it
+# came from, so a per-job breakdown could only ever show earned. These four
+# cover the split, and the third is the one that needed a change to the loop
+# rather than just a new field.
+
+def test_a_cheque_lands_on_the_job_that_issued_it(db, user, accounts, hourly):
+    record_paycheque(db, user.id, PaychequeCreate(
+        job_id=hourly.id, occurred_on=datetime.date(2026, 10, 9),
+        gross_amount=185.0, period_start=datetime.date(2026, 10, 5),
+        period_end=ANCHOR,
+        deductions=[DeductionEntry(description="Income tax", amount=37.0)],
+    ))
+
+    week = summary(db, user).week
+    [row] = [entry for entry in week.per_job if entry.job_id == hourly.id]
+
+    assert row.gross_paid == pytest.approx(185.0, abs=CENT)
+    assert row.deducted == pytest.approx(37.0, abs=CENT)
+    assert row.net_paid == pytest.approx(148.0, abs=CENT)
+
+
+def test_the_per_job_rows_add_up_to_the_headline(db, user, accounts, hourly):
+    """The property the breakdown has to have: it explains the big number."""
+    second = create_job(db, user.id, JobCreate(
+        name="Tutoring", kind=JobKind.HOURLY, hourly_rate=30.0, started_on=TERM_START,
+    ))
+    for job, gross, tax in ((hourly, 185.0, 37.0), (second, 90.0, 18.0)):
+        record_paycheque(db, user.id, PaychequeCreate(
+            job_id=job.id, occurred_on=datetime.date(2026, 10, 9),
+            gross_amount=gross, period_start=datetime.date(2026, 10, 5),
+            period_end=ANCHOR,
+            deductions=[DeductionEntry(description="Income tax", amount=tax)],
+        ))
+
+    week = summary(db, user).week
+
+    assert sum(entry.net_paid for entry in week.per_job) == \
+        pytest.approx(week.net_paid, abs=CENT)
+    assert week.net_paid == pytest.approx(220.0, abs=CENT)
+
+
+def test_a_job_paid_for_older_work_is_still_in_the_breakdown(db, user, accounts, hourly):
+    """The guard the loop needed, and the reason the rows would not have added up.
+
+    A cheque pays for work done before the window opened -- that is the normal
+    case, not a corner. So a job can have a cheque inside the window and not one
+    shift in it. The loop skipped any job with no shifts and nothing earned,
+    which dropped exactly those rows while the window's own total still counted
+    the money: a breakdown that silently disagreed with the headline above it.
+    """
+    quiet = create_job(db, user.id, JobCreate(
+        name="Summer warehouse", kind=JobKind.HOURLY, hourly_rate=22.0,
+        started_on=datetime.date(2026, 6, 1),
+    ))
+    # No schedule, so no shifts anywhere -- and a cheque inside the window.
+    record_paycheque(db, user.id, PaychequeCreate(
+        job_id=quiet.id, occurred_on=datetime.date(2026, 10, 9),
+        gross_amount=500.0, period_start=datetime.date(2026, 8, 1),
+        period_end=datetime.date(2026, 8, 31),
+        deductions=[DeductionEntry(description="Income tax", amount=100.0)],
+    ))
+
+    week = summary(db, user).week
+    names = [entry.job_name for entry in week.per_job]
+
+    assert "Summer warehouse" in names, "a job paid in this window vanished from it"
+    [row] = [entry for entry in week.per_job if entry.job_name == "Summer warehouse"]
+    assert row.counted_minutes == 0, "and it contributed no hours, which is the point"
+    assert row.net_paid == pytest.approx(400.0, abs=CENT)
+    assert sum(entry.net_paid for entry in week.per_job) == \
+        pytest.approx(week.net_paid, abs=CENT)
+
+
+def test_a_job_worked_but_not_paid_reads_as_zero_not_missing(db, user, accounts, hourly):
+    """The Estimates section still needs its earned figure, so the row stays."""
+    week = summary(db, user).week
+    [row] = [entry for entry in week.per_job if entry.job_id == hourly.id]
+
+    assert row.net_paid == 0.0
+    assert row.gross_earned == pytest.approx(185.0, abs=CENT)
+
+
 # --- the effective rate ---------------------------------------------------
 
 def test_the_effective_rate_is_what_survives_deductions(db, user, accounts, hourly):

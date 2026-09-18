@@ -21,6 +21,13 @@ class JobEarnings(BaseModel):
     gross_earned: float = 0.0
     #: Cash tips, which reach you without passing through a cheque.
     cash_tips: float = 0.0
+    #: From this job's cheques dated inside the window, kept apart from
+    #: `gross_earned` for the same reason the window-level pair is: one is what
+    #: the hours say, the other is what the bank saw, and a cheque arriving now
+    #: usually pays for work done before the window opened.
+    gross_paid: float = 0.0
+    deducted: float = 0.0
+    net_paid: float = 0.0
 
 
 class EarningsWindow(BaseModel):
