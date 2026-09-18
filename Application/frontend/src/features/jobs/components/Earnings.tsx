@@ -19,6 +19,13 @@ interface EarningsProps {
  * questions: earned comes from the shifts and is a prediction, paid comes from
  * cheques that arrived. One combined figure would hide the thing this page
  * exists to surface -- a fortnight worked that nobody has paid for yet.
+ *
+ * The headline on each window is what was PAID, net. Earned sits with the
+ * hours that produced it on the line below, because those two come from the
+ * same place. Note that the two are not a sum and a remainder: earned counts
+ * shifts falling inside the window, while paid counts cheques DATED inside it,
+ * and a cheque arriving this week usually pays for last fortnight. They are
+ * two accounts of different work, deliberately side by side.
  */
 export default function Earnings({ earnings }: EarningsProps) {
   if (!earnings) return null;
@@ -55,18 +62,31 @@ function WindowCard({ window }: { readonly window: EarningsWindow }) {
   return (
     <div className="earnCard">
       <span className="small-text muted earnLabel">{window.label}</span>
-      <span className="earnHeadline">{formatMoney(window.gross_earned)}</span>
+      {/* What the bank actually saw. A window with work in it but no cheque
+          yet says so in words rather than showing a confident $0.00, which
+          would read as "you earned nothing" in exactly the case this page
+          exists to surface. Same treatment as the rate card. */}
+      {window.gross_paid > 0 ? (
+        <span className="earnHeadline">{formatMoney(window.net_paid)}</span>
+      ) : (
+        <span className="earnHeadline earnHeadlineEmpty">Nothing paid yet</span>
+      )}
+
+      {/* The shifts story, grouped: hours, what they were worth, and the tips
+          that never pass through a cheque. */}
       <span className="small-text muted">
         {hours(window.counted_minutes)} worked
+        {` · ${formatMoney(window.gross_earned)} earned`}
         {window.cash_tips > 0 && ` · ${formatMoney(window.cash_tips)} cash tips`}
       </span>
 
-      {/* What arrived, under what was earned. The gap is the point. */}
-      <span className="small-text muted earnPaid">
-        {window.gross_paid > 0
-          ? `${formatMoney(window.net_paid)} paid, after ${formatMoney(window.deducted)}`
-          : "Nothing paid yet"}
-      </span>
+      {/* The cheque story, under it. The gap between this and earned above is
+          the point of the page: a fortnight worked that nobody has paid for. */}
+      {window.gross_paid > 0 && (
+        <span className="small-text muted earnPaid">
+          {formatMoney(window.gross_paid)} gross, {formatMoney(window.deducted)} deducted
+        </span>
+      )}
 
       {assumed > 0 && (
         <span className="small-text earnAssumed">
