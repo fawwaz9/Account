@@ -245,13 +245,21 @@ def test_ensure_indexes_adds_what_an_older_database_lacks(db):
 
 
 def test_ensure_indexes_is_safe_to_run_twice(db):
-    """It runs on every startup, so it has to be idempotent."""
+    """It runs on every startup, so it has to be idempotent.
+
+    Asserts through the same `connection` the indexes were written on, for the
+    reason the test above spells out. Reading through the application `engine`
+    instead pointed this at a different database entirely -- the throwaway file
+    conftest binds `DATABASE_URL` to -- so it passed on indexes some earlier run
+    had left there and failed on a clean machine. A test that only holds because
+    of what the last run left behind is not testing idempotence.
+    """
     connection = db.connection()
 
     ensure_indexes(bind=connection)
     ensure_indexes(bind=connection)
 
-    assert "ix_transactions_account_id" in index_names(engine, "transactions")
+    assert "ix_transactions_account_id" in index_names(connection, "transactions")
 
 
 def test_every_foreign_key_column_is_indexed(db):
