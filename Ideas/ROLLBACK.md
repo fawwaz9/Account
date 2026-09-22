@@ -2,7 +2,7 @@
 
 Written to be read while something is down and you are stressed. Commands
 first, reasoning second. Every figure here was re-checked against the live
-deployment on **2026-09-14**, including that traffic is on `LATEST`.
+deployment on **2026-09-22**, including that traffic is on `LATEST`.
 
 > **Shipping a change rather than fixing one?** `shipping.md` is the loop —
 > build, verify, deploy, in the order the steps have to happen. This file is
@@ -18,8 +18,8 @@ deployment on **2026-09-14**, including that traffic is on `LATEST`.
 | Database | Supabase project `kujxxairehpwhxhnkbct`, region `us-west-2`, Postgres 17.6 |
 | Backups | GitHub Actions artifacts, `Backup database` workflow, 90-day retention |
 | Secrets | Google Secret Manager: `jwt-secret`, `database-url` |
-| Current image | `…/backend:1ceb30f` — revision `account-api-00011-zsl`, serving 100% |
-| Previous image | `…/backend:e494729` — revision `account-api-00010-ktd` |
+| Current image | `…/backend:ca86a3e` — revision `account-api-00012-xfk`, serving 100% |
+| Previous image | `…/backend:1ceb30f` — revision `account-api-00011-zsl` |
 | GCP project | `account-504419`, registry `us-west1-docker.pkg.dev/account-504419/account` |
 | Repo | `fawwaz9/Account` — a push to `main` rebuilds the **frontend** only |
 
@@ -82,8 +82,8 @@ reference, a concurrency setting.
 > ```
 > `LATEST (currently …)` is healthy. A bare revision name means you are pinned.
 
-**It now fixes bad code too.** Eight image tags exist: `1ceb30f` (current),
-`e494729`, `89a7c22`, `18e3376`, `7c1531a`, `18205eb`, `f6f7c32` and `26e249f`. Keep at least two — do not delete
+**It now fixes bad code too.** Nine image tags exist: `ca86a3e` (current),
+`1ceb30f`, `e494729`, `89a7c22`, `18e3376`, `7c1531a`, `18205eb`, `f6f7c32` and `26e249f`. Keep at least two — do not delete
 the older tags, and do not rely on `latest`, which by definition points at
 whatever just broke.
 
@@ -134,6 +134,23 @@ whatever just broke.
 > It changes one string: the term heading is derived from the anchor instead of
 > the user's `term_label`. Rolling back restores a stale label, not a fault.
 >
+> **`ca86a3e` rolls back cleanly on its own, in both directions.** Checked
+> rather than assumed, the way this section requires. It adds `gross_paid`,
+> `deducted` and `net_paid` to each *per-job* row of the earnings windows, so a
+> window can say which job its pay came from.
+>
+> The window-level paid figures are **older than this change** and still arrive
+> from an earlier API, so the headline and its "X gross, Y deducted" line keep
+> working. The only new reads are behind
+> `per_job.filter(job => job.net_paid > 0)` — against an old API that is
+> `undefined > 0`, which is `false`, so the list is empty, `paid.length > 1`
+> is false and the per-job `formatMoney(job.net_paid)` is never reached. The
+> breakdown disappears; nothing renders `NaN` and nothing throws.
+>
+> Rolling the **frontend** back alone is equally safe: the older page never
+> selects the three fields. There is **no database change** in this deploy, so
+> there is nothing to undo there either.
+
 > **`e494729` is API-only and rolls back cleanly, but think before you do.** It
 > is a behaviour change with no schema and no frontend change — the bundle is
 > byte-identical, so Pages has nothing to roll back. Going back to `89a7c22`

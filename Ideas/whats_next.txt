@@ -1,4 +1,29 @@
 Shipped so far (do not re-propose)
+        LIVE as of 2026-09-22: image ca86a3e, revision account-api-00012-xfk.
+          One deploy, carrying the two jobs paid-vs-earned commits (25e42fd,
+          49c129e) that had been sitting on main undeployed since 2026-09-17,
+          plus ca86a3e itself. NO SCHEMA STEP: nothing under app/_database/
+          changed, checked with the step 11 diff rather than assumed.
+          Safe to roll back on its own in both directions -- the reasoning is
+          written out in ROLLBACK.md rather than here.
+          Verified end to end on a COPY of data/app.db before deploying: over
+          the real three jobs, every per-job breakdown sums to its window
+          headline -- $795.25 gross, $177.82 deducted, $617.43 net -- which is
+          precisely the bug 49c129e fixed, so the check would have caught its
+          reintroduction.
+          NOTE: "This month" and "This term" still read identically, because
+          Fall began Sep 1. Known coincidence, not a fault; it stops on Oct 1.
+        A test that was only passing on what the last run left behind.
+          test_ensure_indexes_is_safe_to_run_twice wrote its indexes on the test
+          session's connection and then asserted through the APPLICATION engine,
+          which conftest deliberately binds to a throwaway file so the suite can
+          never reach the live ledger. Two different databases: it passed on
+          indexes an earlier run had left in that file, and failed the moment
+          the file was deleted -- which is how it surfaced, as a one-off red on
+          an otherwise green suite. Now asserts through the same connection it
+          wrote on, which is also the only bind that is safe against Postgres:
+          reading through the engine opens a second connection outside the
+          test's transaction, the deadlock the test above it warns about.
         Jobs leads with what was PAID, not what was earned. The window cards are
           money that arrived -- net paid as the headline, "X gross, Y deducted"
           under it, and a per-job breakdown of pay. Everything the shifts only
@@ -545,7 +570,7 @@ Worth knowing before picking anything up
   false pass.
 - gh is installed and authenticated, so a PR opens from the terminal. The push
   credential lives in the macOS keychain.
-- 791 backend tests. Run the suite with -W error::sqlalchemy.exc.SAWarning:
+- 904 backend tests. Run the suite with -W error::sqlalchemy.exc.SAWarning:
   that is how a duplicate cascade delete surfaced. Update this number in place
   rather than adding a line -- four stale counts had stacked up here, none of
   them current, and only the last one still joined onto this sentence.
