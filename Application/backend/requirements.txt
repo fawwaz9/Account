@@ -36,3 +36,8 @@ google-auth[requests]==2.49.0
 # Previously undeclared: the suite has always needed it, and a fresh clone
 # following the README could not run a single test.
 pytest==9.1.1
+# Starlette's TestClient is built on httpx and three test files use it, but
+# httpx ships only under fastapi[standard] / starlette[full] and this pins
+# plain fastapi -- so it was installed here by accident and absent from a
+# fresh clone. Same gap as pytest above, found the same way.
+httpx==0.28.1

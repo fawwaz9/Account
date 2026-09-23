@@ -6,60 +6,6 @@
   font-family: Arial, sans-serif;
 }
 
-.grid {
-  display: flex;
-  gap: 20px;
-  flex-wrap: wrap;
-}
-
-.widget {
-  background: var(--bg-gradient);
-  border: var(--deep-border);
-  border-radius: 12px;
-  padding: 20px;
-  width: 260px;
-  cursor: pointer;
-  transition: 0.2s ease;
-  text-align: left;
-  color: inherit;
-  font: inherit;
-}
-
-.widget:hover {
-  transform: translateY(-4px);
-  border-color: var(--gold);
-}
-
-.widget:focus-visible {
-  outline: 2px solid var(--gold);
-  outline-offset: 2px;
-}
-
-.widget h2 {
-  color: var(--gold);
-}
-
-.widget p {
-  color: var(--muted);
-  font-size: 0.9rem;
-}
-
-.widget-link {
-  display: inline-block;
-  margin-top: 12px;
-  padding: 8px 12px;
-  background: var(--gold);
-  border: none;
-  color: var(--bg);
-  font-weight: bold;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.widget-link:hover {
-  background: var(--gold-soft);
-}
-
 .disabled {
   opacity: 0.5;
   cursor: not-allowed;

@@ -372,10 +372,6 @@
 }
 
 /* Not an error: a figure resting partly on assumed hours, saying so. */
-.earnAssumed {
-  color: var(--gold);
-}
-
 .earnPerJob {
   margin: 6px 0 0;
   padding: 6px 0 0;

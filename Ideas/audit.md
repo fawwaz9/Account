@@ -61,6 +61,35 @@ reasons are worth keeping:
 closed in the passes below. **See the deployment pass at the end for what is
 actually still open — it is one item.**
 
+## Status as of the second dead-code pass
+
+**Closes the `_database/design.txt` item from the "Also medium" tail**, by
+deleting it: 95 lines of Postgres DDL that nothing referenced, describing tables
+that have since been built differently, in a project that now runs real Postgres
+in production -- so it had stopped being a harmless sketch and become a file
+someone could mistake for the schema.
+
+Four other things went with it, each verified unreferenced first rather than
+deleted for looking unused: `get_all_users`, an unfiltered query over every user
+row left behind when the user-listing endpoints were removed; `weekday_code` in
+the recurrence engine; `app/temp_data/`, by then holding nothing but a stale
+`.pyc` of a module deleted in the first pass; and the five dashboard buttons that
+only called `navigate()` somewhere the sidebar already links -- which did not
+even list Jobs, so they had been both redundant *and* incomplete for a while.
+Removing those orphaned `.grid`, the whole `.widget` family and `.widget-link`,
+which had been dead since the first commit in July: 54 of the 113 lines of
+`dashboard.css`.
+
+**And it added a dependency rather than removing one.** Three test files use
+Starlette's `TestClient`, which needs `httpx`, and `httpx` ships only under
+`fastapi[standard]` / `starlette[full]` while `requirements.txt` pins plain
+`fastapi` -- so it was present in the working venv by accident and absent from a
+fresh clone. Exactly the gap the first pass found with pytest, and the
+verification that would have caught it (a throwaway virtualenv built from the
+file alone) predates the tests that introduced it. Verified both ways this time:
+a fresh venv from `requirements.txt` alone runs all 40 of those tests, and
+uninstalling `httpx` from that same venv fails all three files at collection.
+
 ## Status as of the dead-code pass
 
 **Closed: #56**, plus the `pip freeze` requirements file from the "Also medium" tail.

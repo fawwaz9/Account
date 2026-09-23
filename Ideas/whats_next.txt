@@ -314,6 +314,31 @@ Shipped so far (do not re-propose)
           courses, so one hard class cannot trigger it alone.
 
 
+Dead code removed, second pass 2026-09-23. 102 lines out, 5 in.
+        Each verified unreferenced before deletion, not deleted for looking
+        unused -- and one candidate survived the check: `.space-between` looked
+        dead in a first sweep that was itself broken, and a second sweep found
+        it genuinely unused as a class while every other hit was the CSS value
+        of the same name.
+        Gone: get_all_users (an unfiltered query over every user row, left when
+        the user-listing endpoints were removed -- the route went, the service
+        did not); weekday_code in the recurrence engine; app/temp_data/, holding
+        only a stale .pyc of a module deleted in the first pass;
+        _database/design.txt, 95 lines of Postgres DDL nothing referenced and
+        which a reader could now mistake for the real schema; and the five
+        dashboard buttons that only called navigate() somewhere the sidebar
+        already links. Those buttons had gone stale as well as redundant -- they
+        never listed Jobs. Removing them orphaned .grid, the whole .widget
+        family and .widget-link, dead since the first commit in July: 54 of the
+        113 lines of dashboard.css.
+        ADDED: httpx==0.28.1. Three test files use Starlette's TestClient, which
+        needs it, and it ships only under fastapi[standard] -- so it was in the
+        working venv by accident and missing from a fresh clone. The same gap as
+        the undeclared pytest, and the check that would have caught it predates
+        the tests that introduced it. A fresh venv from requirements.txt alone
+        now runs all 40 of them; uninstalling httpx from that venv fails all
+        three files at collection.
+
 What is left, by module.
 
 Settings:

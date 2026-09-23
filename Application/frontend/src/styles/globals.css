@@ -77,13 +77,6 @@ body {
   text-align: right;       
 }
 
-.space-between {
-  display: flex;
-  align-items: center;    
-  justify-content: space-between; 
-  text-align: left;       
-}
-
 h1 {
   font-size: 40px;
 }

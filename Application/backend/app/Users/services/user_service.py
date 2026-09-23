@@ -43,10 +43,6 @@ def create_user(db: Session, user_data: UserCreate):
     return user
 
 
-def get_all_users(db: Session):
-    return db.query(UserModel).all()
-
-
 def get_user(db: Session, user_id: UUID):
     return db.query(UserModel).filter(UserModel.id == user_id).first()
 

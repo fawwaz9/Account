@@ -1,4 +1,3 @@
-import { useNavigate } from "react-router-dom";
 import "../styles/dashboard.css";
 import { useAuth } from "../app/auth/AuthContext";
 import { useDashboard } from "../features/grades/hooks/useDashboard";
@@ -8,7 +7,6 @@ import { duration } from "../shared/utils/dateUtils";
 import { formatMoney } from "../features/budget/money";
 
 export default function Dashboard() {
-  const navigate = useNavigate();
   const { user } = useAuth();
 
   const { summary, error: summaryError } = useDashboard();
@@ -144,33 +142,6 @@ export default function Dashboard() {
           )}
         </section>
       )}
-
-      <div className="grid">
-        <button type="button" className="widget action-widget" onClick={() => navigate("/grades")}>
-          <h2>Grades</h2>
-          <p>View your courses, marks, and progress.</p>
-        </button>
-
-        <button type="button" className="widget action-widget" onClick={() => navigate("/calendar")}>
-          <h2>Calendar</h2>
-          <p>View your schedule and create events.</p>
-        </button>
-
-        <button type="button" className="widget action-widget" onClick={() => navigate("/tasks")}>
-          <h2>Tasks</h2>
-          <p>See your task list powered by the backend.</p>
-        </button>
-
-        <button type="button" className="widget action-widget" onClick={() => navigate("/budget")}>
-          <h2>Budget</h2>
-          <p>Review budgets and manage your spending.</p>
-        </button>
-
-        <button type="button" className="widget action-widget" onClick={() => navigate("/settings")}>
-          <h2>Settings</h2>
-          <p>Manage your account and sign-in methods.</p>
-        </button>
-      </div>
     </div>
   );
 }

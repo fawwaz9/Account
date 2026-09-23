@@ -57,10 +57,6 @@ class Rule:
         return self.freq in FREQUENCIES
 
 
-def weekday_code(day: date) -> str:
-    return WEEKDAY_CODES[day.weekday()]
-
-
 def parse_byday(raw: str | None) -> tuple[str, ...]:
     """"MO,WE,FR" -> ("MO", "WE", "FR"), ignoring anything unrecognised."""
     if not raw:
