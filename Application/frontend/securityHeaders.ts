@@ -36,7 +36,18 @@ const GOOGLE_SIGN_IN_STYLE = "https://accounts.google.com/gsi/style";
 export function originOf(apiBaseUrl: string): string | null {
   if (apiBaseUrl.startsWith("/")) return "";
   try {
-    return new URL(apiBaseUrl).origin;
+    const url = new URL(apiBaseUrl);
+    // Only http(s) has an origin `connect-src` can name. This is not
+    // defensive tidying: `new URL("localhost:8001/api")` *succeeds* -- with no
+    // scheme, "localhost:" is read as one -- and its origin serialises to the
+    // string "null", which sails straight past the `=== null` check below and
+    // puts a bare `null` token into the policy. That matches no origin, so
+    // every API call is refused before it is sent, and the warning meant to be
+    // loud about exactly this never fires. Omitting the scheme is the likeliest
+    // way to set this variable wrongly, and the Pages dashboard is where nobody
+    // would see it.
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    return url.origin;
   } catch {
     return null;
   }

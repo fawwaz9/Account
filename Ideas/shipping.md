@@ -103,8 +103,13 @@ were found stale only because a deploy went looking.
 
 ```sh
 cd Application/backend  && .venv/bin/python -m pytest tests/ -q -W error::sqlalchemy.exc.SAWarning
-cd Application/frontend && ./node_modules/.bin/tsc --noEmit && npm run build
+cd Application/frontend && npm test && ./node_modules/.bin/tsc --noEmit && npm run build
 ```
+
+> **`npm test` is deliberately not part of `npm run build`.** Cloudflare Pages
+> runs the build script, so a red test there would take away your ability to
+> deploy a hotfix. The gate belongs here, in front of a person, not in the
+> deploy path.
 
 > **Use `./node_modules/.bin/tsc`, not `npx tsc`.** With no local TypeScript on
 > the path, `npx tsc` prints *"This is not the tsc command you are looking

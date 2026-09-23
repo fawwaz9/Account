@@ -771,9 +771,29 @@ Worth knowing before picking anything up
 - An ordinary task's due date pre-fills 23:59, because a deadline with no time
   means the end of that day. Clearing the date clears the time, which the API
   rejects on its own ("A time of day needs a date to go with it").
-- The frontend still has no test runner. The week view's overlap maths and now
-  placeTasks were both checked with one-off esbuild harnesses, which run only
-  when someone remembers to write one. Vitest would slot in beside Vite cheaply.
+- The frontend has a test runner now: vitest 4.1.11, pinned, `npm test`. Its
+  peer range accepts Vite 7, so nothing else had to move. Configured in its own
+  vitest.config.ts rather than in vite.config.ts, which is a function that reads
+  VITE_API_BASE_URL and builds the CSP plugin -- none of which means anything in
+  a test run, and all of which would have to be satisfied for `npm test` to
+  start. The suite pins TZ to America/Regina: every date here is a plain local
+  date, so a run in UTC would pass while the bug being guarded against -- a date
+  read one day early west of Greenwich -- is exactly what cannot happen there.
+  Saskatchewan keeps no daylight saving, so the offset is the same all year and
+  no test starts failing for half of it.
+  IT FOUND A REAL BUG ON THE FIRST RUN, in the file with the quietest failure
+  mode in the project. originOf() in securityHeaders.ts returned the *string*
+  "null" for an API base with no scheme -- `new URL("localhost:8001/api")`
+  parses, reading "localhost:" as the scheme -- so the `=== null` check meant to
+  be loud about it never fired, and connect-src shipped a bare `null` token that
+  matches no origin. Every API call would then be refused by the browser before
+  it was sent, with the API's own logs staying clean. Omitting the scheme is the
+  likeliest way to set that variable wrongly and the Pages dashboard is where
+  nobody would see it. Fixed by requiring http/https; mutation-tested.
+  Production was never affected -- the live connect-src names the Cloud Run URL
+  correctly -- so this was a landmine rather than an outage.
+  Still checked only by one-off harnesses: the week view's overlap maths,
+  placeTasks and timeline.ts. They are the next modules to cover.
 - A ClassMeeting carries its own interval and its own first_on. Interval belongs
   on the meeting rather than the timetable because a weekly lecture beside a
   fortnightly lab is the ordinary case, and it suits what was already there:
