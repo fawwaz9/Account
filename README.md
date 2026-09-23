@@ -1,17 +1,33 @@
 # Account — The Ultimate Student App
 
-A full-stack personal productivity application built for self-use, covering academics, scheduling, finances, tasks, and goals. Built as both a daily-use tool and a long-term learning vehicle — designed to be iterated on and scaled over several years.
+**One place to run a student life.** Grades, deadlines, classes and money normally live in four apps that know nothing about each other, which leaves the student as the integration layer — entering the same assignment as a calendar event, a to-do and a row in a grade calculator, and still not knowing what next week actually costs. Account is built on the premise that these are not four subjects but one life, and that the answers worth having only appear where they meet: a dated assignment is a task *and* a calendar block, a course carries a cost and a target, a term has a budget that knows when it begins and ends.
+
+The aim is a tool good enough to live in every day, not one to demonstrate — built for real use first, and meant to be worked on and relied on for years rather than finished.
 
 **Repository:** [github.com/fawwaz9/Account](https://github.com/fawwaz9/Account)
 
-> **Status:** Active development on `grades-branch`. **Auth**, **Grades** and
-> **Finances/Budget** are complete end-to-end vertical slices (DB → service → API →
-> typed client → UI). **Calendar** and **Tasks** still return hardcoded sample dicts
-> from the backend. Notes, Goals and Study Analytics are not started; Settings is
-> partly built (academic status, credit target, GPA scale, password).
+> **Status: live in production**, and a second person is using it. The frontend is
+> on [account-2a7.pages.dev](https://account-2a7.pages.dev), the API on Cloud Run in
+> `us-west1`, and the data in Supabase Postgres 17.6. Development is on **`main`**,
+> and a push to it rebuilds the frontend.
 >
-> Open defects and their priority live in `Ideas/audit.md`; the feature backlog and
-> its build order live in `Ideas/whats_next.txt`.
+> **Five modules ship** — Grades, Finances/Budget, Calendar, Tasks and Jobs — over 23
+> tables and 904 backend tests, with Auth, Users and Settings underneath them. Only
+> the last three boxes of the tree below are unbuilt: Notes, Goals and Study
+> Analytics have never been started, and nothing depends on them.
+>
+> **`Ideas/` is the live record, and it is what to read rather than this file.**
+> [`Ideas/design/`](Ideas/design/README.md) carries how each module works and *why*,
+> which is what stops a settled decision being reversed for looking inconvenient;
+> [`whats_next.txt`](Ideas/whats_next.txt) holds what has shipped and what is next;
+> [`shipping.md`](Ideas/shipping.md) is the loop for building and deploying a change;
+> [`ROLLBACK.md`](Ideas/ROLLBACK.md) is for when something is broken; and
+> [`audit.md`](Ideas/audit.md) is the defect record — 56 findings, one still open.
+>
+> **Sections further down still describe the app as it was before any of that
+> shipped** — they name Calendar and Tasks as stubs, list closed security findings as
+> open, and point at files since deleted. They are being brought current; until they
+> are, trust `Ideas/` over anything below this line.
 
 ---
 
