@@ -18,8 +18,8 @@ deployment on **2026-09-22**, including that traffic is on `LATEST`.
 | Database | Supabase project `kujxxairehpwhxhnkbct`, region `us-west-2`, Postgres 17.6 |
 | Backups | GitHub Actions artifacts, `Backup database` workflow, 90-day retention |
 | Secrets | Google Secret Manager: `jwt-secret`, `database-url` |
-| Current image | `…/backend:ca86a3e` — revision `account-api-00012-xfk`, serving 100% |
-| Previous image | `…/backend:1ceb30f` — revision `account-api-00011-zsl` |
+| Current image | `…/backend:0224d31` — revision `account-api-00013-lst`, serving 100% |
+| Previous image | `…/backend:ca86a3e` — revision `account-api-00012-xfk` |
 | GCP project | `account-504419`, registry `us-west1-docker.pkg.dev/account-504419/account` |
 | Repo | `fawwaz9/Account` — a push to `main` rebuilds the **frontend** only |
 
@@ -82,8 +82,8 @@ reference, a concurrency setting.
 > ```
 > `LATEST (currently …)` is healthy. A bare revision name means you are pinned.
 
-**It now fixes bad code too.** Nine image tags exist: `ca86a3e` (current),
-`1ceb30f`, `e494729`, `89a7c22`, `18e3376`, `7c1531a`, `18205eb`, `f6f7c32` and `26e249f`. Keep at least two — do not delete
+**It now fixes bad code too.** Ten image tags exist: `0224d31` (current),
+`ca86a3e`, `1ceb30f`, `e494729`, `89a7c22`, `18e3376`, `7c1531a`, `18205eb`, `f6f7c32` and `26e249f`. Keep at least two — do not delete
 the older tags, and do not rely on `latest`, which by definition points at
 whatever just broke.
 
@@ -134,6 +134,23 @@ whatever just broke.
 > It changes one string: the term heading is derived from the anchor instead of
 > the user's `term_label`. Rolling back restores a stale label, not a fault.
 >
+> **`0224d31` rolls back cleanly in both directions, and is mostly deletion.**
+> It removes code nothing called — `get_all_users`, `weekday_code`,
+> `app/temp_data/`, `_database/design.txt` — and the five dashboard buttons that
+> duplicated the sidebar, with the CSS they orphaned. **No API contract changed
+> and no column moved**, so an older frontend against this API and a newer
+> frontend against an older API both behave exactly as before.
+>
+> The one addition is `httpx` in `requirements.txt`, which is a **test**
+> dependency: three files use Starlette's `TestClient`, which needs it, and it
+> ships only under `fastapi[standard]`. It changes nothing the server does at
+> runtime.
+>
+> **Its `app/_database/` diff is not a schema change**, which matters because
+> shipping.md step 11 keys on that directory being untouched. The only file
+> there is the deleted `design.txt`, a 95-line DDL sketch nothing read. No
+> `.py` under `_database/` moved, so no schema step was run and none is owed.
+
 > **`72f149f` is FRONTEND ONLY -- no image, no revision, nothing to roll back
 > on Cloud Run.** The API is still serving `ca86a3e`, and the gap between that
 > tag and `main` is expected rather than a deploy someone forgot: this change
