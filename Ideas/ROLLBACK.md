@@ -134,6 +134,22 @@ whatever just broke.
 > It changes one string: the term heading is derived from the anchor instead of
 > the user's `term_label`. Rolling back restores a stale label, not a fault.
 >
+> **`72f149f` is FRONTEND ONLY -- no image, no revision, nothing to roll back
+> on Cloud Run.** The API is still serving `ca86a3e`, and the gap between that
+> tag and `main` is expected rather than a deploy someone forgot: this change
+> touched no backend file. Roll it back from the Pages dashboard alone
+> (*Deployments* -> the previous one -> **Rollback**).
+>
+> It carries two small fixes worth knowing, neither of which changes an API
+> contract or a database column. A term-timeline bar for a one-day course on
+> the last day of term was drawn half a percent past its axis; and `originOf`
+> in `securityHeaders.ts` returned the *string* "null" for an API base with no
+> scheme, which would have put a bare `null` token in `connect-src` and had the
+> browser refuse every API call before sending it. Production was never in that
+> state -- the live `connect-src` names the Cloud Run URL correctly, checked
+> after this deploy -- so rolling back restores a latent bug rather than fixing
+> anything.
+
 > **`ca86a3e` rolls back cleanly on its own, in both directions.** Checked
 > rather than assumed, the way this section requires. It adds `gross_paid`,
 > `deducted` and `net_paid` to each *per-job* row of the earnings windows, so a
