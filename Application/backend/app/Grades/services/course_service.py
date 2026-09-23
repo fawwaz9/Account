@@ -247,20 +247,6 @@ def delete_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
     return course
 
 
-def get_course_statistics(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
-    course = get_course(db, user_id, course_id)
-    if not course:
-        return None
-
-    return {
-        "course_id": course.id,
-        "course_code": course.code,
-        # Named `average` like every other route; this was the lone
-        # `current_grade` for the same value. Reports the same null as every
-        # other surface when nothing has been marked.
-        "average": course.reported_average,
-    }
-
 
 def search_courses(db: Session, user_id: uuid.UUID, query: str):
     user = db.query(UserModel).filter(UserModel.id == user_id).first()

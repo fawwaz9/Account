@@ -10,7 +10,6 @@ from app.Grades.services.course_service import (
     delete_course,
     get_all_courses,
     get_course,
-    get_course_statistics,
     search_courses,
     update_course,
 )
@@ -20,8 +19,6 @@ from app.Grades.schemas.grade import Grade, GradeCreate, GradeUpdate
 from app.Grades.services.grade_service import (
     add_grade,
     add_grades_bulk,
-    calculate_current_average,
-    calculate_letter_grade,
     calculate_grade_band,
     calculate_required_final,
     delete_grade,
@@ -166,14 +163,6 @@ def remove_course(user_id: VerifiedUserId, course_id: UUID, db: DBSession):
     )
     return deleted_course
 
-@router.get("/{user_id}/courses/{course_id}/statistics", response_model=dict, responses=responses["course_404"])
-def get_singlecourse_statistics(user_id: VerifiedUserId, course_id: UUID, db: DBSession):
-    statistics = get_course_statistics(db, user_id, course_id)
-    if statistics is None:
-        raise HTTPException(status_code=404, detail=error_course["not_found"])
-
-    return statistics
-
 @router.get("/{user_id}/courses/{course_id}/category-weights", responses=responses["course_404"])
 def get_course_category_weights(user_id: VerifiedUserId, course_id: UUID, db: DBSession):
     category_weights = get_category_weights(db, user_id, course_id)
@@ -193,35 +182,6 @@ def edit_course_category_weights(user_id: VerifiedUserId, course_id: UUID, categ
         raise HTTPException(status_code=404, detail=error_course["not_found"])
 
     return updated_weights
-
-@router.get("/{user_id}/courses/{course_id}/average", responses=responses["course_both"])
-def get_course_average(user_id: VerifiedUserId, course_id: UUID, db: DBSession):
-    course = get_course(db, user_id, course_id)
-    if course is None:
-        raise HTTPException(status_code=404, detail=error_course["not_found"])
-
-    # Into a local, never onto course.average. Assigning to a mapped column
-    # inside a GET makes the read a pending write, and it stays harmless only
-    # for as long as nothing downstream in the request happens to commit.
-    try:
-        average = calculate_current_average(course)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    return {"course_id": course.id, "average": average}
-
-@router.get("/{user_id}/courses/{course_id}/letter-grade", responses=responses["course_404"])
-def get_course_letter_grade(user_id: VerifiedUserId, course_id: UUID, db: DBSession):
-    course = get_course(db, user_id, course_id)
-    if course is None:
-        raise HTTPException(status_code=404, detail=error_course["not_found"])
-
-    average = calculate_current_average(course)
-    return {
-        "course_id": course.id,
-        "average": average,
-        "letter_grade": calculate_letter_grade(course, average),
-    }
 
 @router.get("/{user_id}/courses/{course_id}/grade-band", responses=responses["course_both"])
 def get_grade_band(
