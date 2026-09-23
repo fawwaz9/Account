@@ -18,8 +18,8 @@ deployment on **2026-09-22**, including that traffic is on `LATEST`.
 | Database | Supabase project `kujxxairehpwhxhnkbct`, region `us-west-2`, Postgres 17.6 |
 | Backups | GitHub Actions artifacts, `Backup database` workflow, 90-day retention |
 | Secrets | Google Secret Manager: `jwt-secret`, `database-url` |
-| Current image | `…/backend:0224d31` — revision `account-api-00013-lst`, serving 100% |
-| Previous image | `…/backend:ca86a3e` — revision `account-api-00012-xfk` |
+| Current image | `…/backend:d635bf5` — revision `account-api-00014-zxv`, serving 100% |
+| Previous image | `…/backend:0224d31` — revision `account-api-00013-lst` |
 | GCP project | `account-504419`, registry `us-west1-docker.pkg.dev/account-504419/account` |
 | Repo | `fawwaz9/Account` — a push to `main` rebuilds the **frontend** only |
 
@@ -82,8 +82,8 @@ reference, a concurrency setting.
 > ```
 > `LATEST (currently …)` is healthy. A bare revision name means you are pinned.
 
-**It now fixes bad code too.** Ten image tags exist: `0224d31` (current),
-`ca86a3e`, `1ceb30f`, `e494729`, `89a7c22`, `18e3376`, `7c1531a`, `18205eb`, `f6f7c32` and `26e249f`. Keep at least two — do not delete
+**It now fixes bad code too.** Eleven image tags exist: `d635bf5` (current),
+`0224d31`, `ca86a3e`, `1ceb30f`, `e494729`, `89a7c22`, `18e3376`, `7c1531a`, `18205eb`, `f6f7c32` and `26e249f`. Keep at least two — do not delete
 the older tags, and do not rely on `latest`, which by definition points at
 whatever just broke.
 
@@ -134,6 +134,22 @@ whatever just broke.
 > It changes one string: the term heading is derived from the anchor instead of
 > the user's `term_label`. Rolling back restores a stale label, not a fault.
 >
+> **`d635bf5` rolls back cleanly in both directions.** Two changes, neither of
+> which alters a stored value or a response the client reads.
+>
+> It moved `today()` and `money()` out of thirteen services into
+> `app/shared/`, which is a move and not a behaviour change — there is a
+> mutation test proving both module families read the one function now — and it
+> removed three endpoints nothing has ever called:
+> `GET /courses/{id}/statistics`, `/average` and `/letter-grade`. Those answer
+> **404 rather than 401** from this image onward, which is the quickest way to
+> tell which image is serving. Nothing became unreachable: `average` and
+> `letter_grade` both travel on the course itself, which is where the frontend
+> already read them.
+>
+> **No schema change**, so nothing to undo in the database, and an older
+> frontend against this API behaves exactly as before.
+
 > **`0224d31` rolls back cleanly in both directions, and is mostly deletion.**
 > It removes code nothing called — `get_all_users`, `weekday_code`,
 > `app/temp_data/`, `_database/design.txt` — and the five dashboard buttons that
