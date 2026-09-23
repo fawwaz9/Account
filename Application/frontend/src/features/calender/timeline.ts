@@ -84,12 +84,20 @@ export function buildTimeline(courses: Course[], today: string): Timeline {
     const offset = daysBetween(span.starts_on, course.start_date);
     const length = daysBetween(course.start_date, course.end_date) + 1;
 
+    // A one-day course would otherwise be invisible; a floor keeps every
+    // course clickable and countable.
+    const width = Math.max((length / span.days) * 100, 1.5);
+
     placed.push({
       course,
-      left: (offset / span.days) * 100,
-      // A one-day course would otherwise be invisible; a floor keeps every
-      // course clickable and countable.
-      width: Math.max((length / span.days) * 100, 1.5),
+      // Slid back where the floor above would otherwise hang the bar off the
+      // end: a one-day course on the last day of a hundred-day term is laid at
+      // 99% and then widened to 1.5%, which paints half a percent past an axis
+      // that nothing clips -- reading as a course running past the end of term.
+      // Moving it is the lesser distortion, because the bar is already wider
+      // than the day it represents.
+      left: Math.max(0, Math.min((offset / span.days) * 100, 100 - width)),
+      width,
     });
   }
 

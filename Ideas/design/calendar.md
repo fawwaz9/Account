@@ -107,8 +107,10 @@ single `list_occurrences` call.
 - A repeat's `count` is measured from the event's own start, not from the window,
   so paging forward cannot hand you occurrences seven and eight of a five-week
   series. A skipped date consumes one of `count`.
-- The week view's overlap maths and `placeTasks` were each checked with a one-off
-  esbuild harness. There is still no frontend test runner.
+- The week view's overlap maths and `placeTasks` are covered by
+  `weekLayout.test.ts` now, under `vitest`. They were each checked with a
+  one-off esbuild harness before, which is to say checked once, by whoever
+  remembered.
 - Tasks reach the calendar as chips the client merges in, not through
   `list_occurrences`. A task due at a specific time is placed on the clock; one
   due at end of day stays in the all-day band, since that is what a bare due date
@@ -142,9 +144,22 @@ a course is in) are still computed server-side.
 
 `timeline.ts` is kept out of the component for the same reason `weekLayout.ts`
 is: position arithmetic goes wrong silently, because a bar an inch off looks
-like a design choice rather than a bug. Fourteen assertions cover it, including
-that no bar can be laid outside the axis and that a one-day course keeps a floor
-width rather than vanishing into a hairline.
+like a design choice rather than a bug.
+
+Both are covered by `vitest` now -- `timeline.test.ts` and `weekLayout.test.ts`
+-- where before they had only one-off esbuild harnesses that ran when someone
+remembered to write one.
+
+> **This paragraph used to claim fourteen assertions covering, among other
+> things, "that no bar can be laid outside the axis". Writing them found that
+> one was not true.** The floor width and the axis bound are in direct tension
+> and the floor won: a one-day course on the last day of a hundred-day term was
+> laid at 99% and then widened to 1.5%, painting half a percent past a track
+> that has `position: relative` and nothing to clip it -- so it read as a course
+> running past the end of term. `buildTimeline` now slides such a bar back
+> inside the axis instead, which is the lesser distortion, since a bar at the
+> floor is already wider than the day it stands for. Both guarantees hold
+> together now, and the test that says so fails if the clamp is removed.
 
 Courses with no dates are **named underneath, not dropped**. Most courses in this
 app carry none, so a chart showing three of six would under-report the term while

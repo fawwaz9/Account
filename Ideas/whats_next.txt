@@ -792,8 +792,21 @@ Worth knowing before picking anything up
   nobody would see it. Fixed by requiring http/https; mutation-tested.
   Production was never affected -- the live connect-src names the Cloud Run URL
   correctly -- so this was a landmine rather than an outage.
-  Still checked only by one-off harnesses: the week view's overlap maths,
-  placeTasks and timeline.ts. They are the next modules to cover.
+  98 tests now, over the eight pure modules: dateUtils, money, securityHeaders,
+  weekLayout, timeline, bonus, taskFields and dueTime. The one-off esbuild
+  harnesses are retired -- place, placeTasks and timeline.ts are covered for
+  real.
+  A SECOND BUG CAME OUT OF WRITING THEM, in timeline.ts, and design/calendar.md
+  had claimed an assertion covering exactly it. The floor width that keeps a
+  one-day course visible and the axis bound are in tension, and the floor won:
+  such a course on the last day of a hundred-day term was laid at 99% and
+  widened to 1.5%, half a percent past a track nothing clips, reading as a
+  course running past the end of term. It is slid back inside now.
+  Worth knowing about the coupling the tests found: mutating hasSpecificTime to
+  treat 23:59 as a real deadline fails a test in weekLayout as well as its own,
+  which is the grid and the all-day band staying exactly complementary. That is
+  the property that decides whether a task is drawn twice or not at all, and it
+  now has something holding it.
 - A ClassMeeting carries its own interval and its own first_on. Interval belongs
   on the meeting rather than the timetable because a weekly lecture beside a
   fortnightly lab is the ordinary case, and it suits what was already there:
