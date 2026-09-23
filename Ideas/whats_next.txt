@@ -339,6 +339,37 @@ Dead code removed, second pass 2026-09-23. 102 lines out, 5 in.
         now runs all 40 of them; uninstalling httpx from that venv fails all
         three files at collection.
 
+Duplicate helpers consolidated, 2026-09-23.
+        money() existed in four services and today() in nine, byte-identical
+        every time, and earnings_service imported money from paycheque_service
+        rather than write a fifth copy -- a service importing from another
+        service, which is the layering rule becoming a suggestion. Both now
+        live in app/shared/ beside the tokenizer and the audit log, and
+        earnings_service reads the shared one.
+        Mutation-tested, and this is what makes it a consolidation rather than
+        a tidy-up: changing the shared money() ONCE fails 20 tests spread
+        across Jobs (earnings, paycheques) and Finances (safe-to-spend, sinking
+        funds, subscriptions). Changing today() fails tests in Tasks. Both
+        module families genuinely read the one function now.
+        FOUND WHILE DOCUMENTING IT: the `+ 0.0` in money() does less than it
+        looks. It normalises an input that is already -0.0 -- which is what
+        stops a balance of nothing reading as "-0.00" -- but it runs BEFORE the
+        rounding, so a small negative that rounds away keeps its sign:
+        money(-0.004) is -0.0. Moving the addition after the round would close
+        that and would change no other value, but it is a behaviour change
+        rather than a move, so it was deliberately left out of this commit.
+        tests/test_shared_helpers.py pins both halves.
+        On the frontend, features/budget/dates.ts is gone: pad, isoDate and
+        firstOfMonth were byte-identical to shared/utils/dateUtils, localToday
+        was today under another name, and dateUtils' own header already said
+        the two matched rather than removing one. Six importers moved. The
+        equivalence was proven by a throwaway vitest file asserting each pair
+        agreed while both modules still existed, then deleted with the module.
+        Also routed SinkingFundModal and AddMoneyModal through formatMoney --
+        both rendered money with a raw toFixed(2), so a four-figure amount read
+        "1234.50" where the rest of the app says "$1,234.50", in a file whose
+        own docstring calls itself the one place that decides how money reads.
+
 What is left, by module.
 
 Settings:

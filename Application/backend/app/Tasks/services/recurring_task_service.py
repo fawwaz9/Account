@@ -39,6 +39,7 @@ from app.Tasks.schemas.recurring_task import (
     RecurringTaskRun,
     RecurringTaskUpdate,
 )
+from app.shared.dates import today
 
 #: How far ahead occurrences are written. Wide enough to fill the calendar's
 #: month view and the task page's fortnight, so neither has to ask for more;
@@ -50,10 +51,6 @@ MATERIALISE_AHEAD_DAYS = 60
 #: is not work to do, it is noise -- unlike a missed payment, which really is
 #: owed. So this is much shorter than the payment catch-up.
 MATERIALISE_BEHIND_DAYS = 14
-
-
-def today() -> date:
-    return date.today()
 
 
 def user_exists(db: Session, user_id: uuid.UUID) -> bool:

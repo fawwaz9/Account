@@ -7,6 +7,7 @@ from app._database.models import AccountModel, TransactionModel
 from app.Finances.schemas.deposit import DepositAllocation, DepositCreate, DepositPreview
 from app.Finances.schemas.transaction import TransactionKind
 from app.Finances.services.transaction_service import as_schema
+from app.shared.dates import today
 
 
 def active_accounts(db: Session, user_id: uuid.UUID) -> list[AccountModel]:
@@ -103,5 +104,4 @@ def record_deposit(db: Session, user_id: uuid.UUID, data: DepositCreate):
     return [as_schema(row) for row in rows]
 
 
-def today() -> date:
-    return date.today()
+

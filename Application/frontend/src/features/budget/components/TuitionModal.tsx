@@ -11,7 +11,7 @@ import { getErrorMessage } from "../../grades/components/AddCourseModal";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { useDebounce } from "../../../shared/hooks/useDebounce";
 import { formatMoney } from "../money";
-import { localToday } from "../dates";
+import { today } from "../../../shared/utils/dateUtils";
 import Modal from "../../../shared/components/Modal";
 
 interface TuitionModalProps {
@@ -45,7 +45,7 @@ export default function TuitionModal({
 }: TuitionModalProps) {
   const { user } = useAuth();
   const [accountId, setAccountId] = useState("");
-  const [occurredOn, setOccurredOn] = useState(localToday());
+  const [occurredOn, setOccurredOn] = useState(today());
   const [costPerCredit, setCostPerCredit] = useState("");
   const [fees, setFees] = useState("");
   const [description, setDescription] = useState("");
@@ -78,7 +78,7 @@ export default function TuitionModal({
 
     if (!paymentId || !user) {
       setAccountId(accounts[0]?.id ?? "");
-      setOccurredOn(localToday());
+      setOccurredOn(today());
       setCostPerCredit("");
       setFees("");
       setDescription("");

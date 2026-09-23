@@ -20,7 +20,7 @@ import {
   UpcomingCharge,
   NetWorth,
 } from "../types";
-import { currentMonth, daysAgo, daysAhead, localToday } from "../dates";
+import { addDays, firstOfMonth, today } from "../../../shared/utils/dateUtils";
 import { useAuth } from "../../../app/auth/AuthContext";
 
 /** Accounts with their balances, and the recent ledger, loaded together. */
@@ -39,7 +39,7 @@ export function useBudget() {
   const [upcoming, setUpcoming] = useState<UpcomingCharge[]>([]);
   const [safe, setSafe] = useState<SafeToSpend | null>(null);
   const [worth, setWorth] = useState<NetWorth | null>(null);
-  const [month, setMonth] = useState(currentMonth());
+  const [month, setMonth] = useState(firstOfMonth(today()));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -87,14 +87,14 @@ export function useBudget() {
         fetchAccounts(userId),
         // Only what is genuinely recent; the whole history lives on each
         // account's own page.
-        fetchTransactions(userId, { start: daysAgo(1), end: localToday() }),
+        fetchTransactions(userId, { start: addDays(today(), -1), end: today() }),
         fetchCategories(userId),
         fetchBudgetSummary(userId, month),
         fetchRecurring(userId),
         // Six weeks ahead: far enough to see the next rent and the next
         // subscription, near enough that it is still what you are committed to
         // rather than a forecast.
-        fetchUpcoming(userId, localToday(), daysAhead(42)),
+        fetchUpcoming(userId, today(), addDays(today(), 42)),
         // Read after runRecurring above, so a payment written on this load
         // already counts as committed rather than as cash still in hand.
         fetchSafeToSpend(userId),

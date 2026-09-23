@@ -32,6 +32,7 @@ from app.Tasks.schemas.task import (
     TaskUpdate,
 )
 from app.Users.services.user_service import get_preferences
+from app.shared.dates import today
 
 #: How far below target a course has to be for each band, in percentage points.
 #: Two thresholds rather than one, because "below target" covers both a course
@@ -41,10 +42,6 @@ RISK_BANDS = ((10.0, "severe"), (5.0, "moderate"), (0.0, "mild"))
 
 #: Sort order for the bands, worst first. Anything unbadged sorts last.
 RISK_RANK = {"severe": 0, "moderate": 1, "mild": 2, None: 3}
-
-
-def today() -> date:
-    return date.today()
 
 
 def user_exists(db: Session, user_id: uuid.UUID) -> bool:

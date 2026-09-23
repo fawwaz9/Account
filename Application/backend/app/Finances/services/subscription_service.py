@@ -32,16 +32,13 @@ from app.Finances.schemas.subscription import (
 )
 from app.Finances.services.recurring_service import create_rule
 from app.Tasks.services.task_service import user_exists
+from app.shared.money import money
 
 #: A trailing reference number -- "NETFLIX.COM 8842119", "Spotify #33012" -- is
 #: how a payment processor tells two charges apart, not part of the merchant's
 #: name. Stripped so the same subscription groups under one key instead of one
 #: per invoice number.
 _TRAILING_DIGITS = re.compile(r"\d{3,12}$")
-
-
-def money(value: float) -> float:
-    return round(value + 0.0, 2)
 
 
 def normalize(description: str | None) -> str:

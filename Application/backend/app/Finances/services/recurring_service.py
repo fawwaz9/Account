@@ -55,6 +55,7 @@ from app.Finances.services.transaction_service import (
     owned_account,
     owned_category,
 )
+from app.shared.dates import today
 
 #: How far past a missed payment the catch-up still reaches. A rule left alone
 #: over a summer should not write four months of rent the moment the app opens
@@ -63,10 +64,6 @@ MAX_CATCHUP_DAYS = 120
 
 #: Longest window the upcoming view will project.
 MAX_PROJECTION_DAYS = 400
-
-
-def today() -> date:
-    return date.today()
 
 
 def attach_rule(db: Session, instruction: RecurringTransactionModel) -> RecurringTransactionModel:

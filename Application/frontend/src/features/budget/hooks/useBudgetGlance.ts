@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchAccounts, fetchBudgetSummary, fetchNetWorth } from "../api";
 import { Account, BudgetSummary, NetWorth } from "../types";
-import { currentMonth } from "../dates";
+import { firstOfMonth, today } from "../../../shared/utils/dateUtils";
 import { useAuth } from "../../../app/auth/AuthContext";
 
 /**
@@ -26,7 +26,7 @@ export function useBudgetGlance() {
     let cancelled = false;
     Promise.all([
       fetchAccounts(userId),
-      fetchBudgetSummary(userId, currentMonth()),
+      fetchBudgetSummary(userId, firstOfMonth(today())),
       fetchNetWorth(userId),
     ])
       .then(([nextAccounts, nextSummary, nextWorth]) => {

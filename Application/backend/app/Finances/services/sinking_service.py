@@ -42,20 +42,14 @@ from app.Finances.schemas.sinking import (
 )
 from app.Finances.schemas.transaction import TransactionKind
 from app.Tasks.services.task_service import user_exists
-
-
-def today() -> date:
-    return date.today()
+from app.shared.dates import today
+from app.shared.money import money
 
 
 # Every function that produces a figure takes an `on_day`. The monthly amount
 # depends on how many months are left, so a service that reads the wall clock
 # cannot be tested at a fixed date -- and a test that computes its expectation
 # from the same clock agrees with any answer, including a wrong one.
-
-
-def money(value: float) -> float:
-    return round(value + 0.0, 2)
 
 
 def first_of(day: date) -> date:

@@ -34,11 +34,8 @@ from app.Jobs.schemas.earnings import (
 )
 from app.Jobs.schemas.job import JobKind
 from app.Jobs.services.job_service import list_shifts, next_pay_on
-from app.Jobs.services.paycheque_service import money
-
-
-def today() -> date:
-    return date.today()
+from app.shared.dates import today
+from app.shared.money import money
 
 
 def earned_from_shifts(job: JobModel, shifts) -> tuple[float, float]:

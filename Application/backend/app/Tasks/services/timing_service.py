@@ -18,13 +18,10 @@ from sqlalchemy.orm import Session
 from app._database.models import TaskModel, UserModel
 from app.Tasks.schemas.timing import CompletionTiming, TimingWindow
 from app.Users.services.user_service import get_preferences
+from app.shared.dates import today
 
 #: Length of the rolling window, in days, counting today.
 PAST_WEEK_DAYS = 7
-
-
-def today() -> date:
-    return date.today()
 
 
 def zone_of(user: UserModel) -> ZoneInfo:

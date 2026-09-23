@@ -44,11 +44,7 @@ from app.Jobs.schemas.paycheque import (
 )
 from app.Jobs.services.job_service import list_shifts, owned_job
 from app.Tasks.services.task_service import user_exists
-
-
-def money(value: float) -> float:
-    """Cents, so a sum of parts can equal the whole it came from."""
-    return round(value + 0.0, 2)
+from app.shared.money import money
 
 
 def net_of(gross: float, deductions) -> float:

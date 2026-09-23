@@ -4,6 +4,7 @@ import { createSinkingFund } from "../api";
 import { Account, SinkingFundCreate } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { addDays, today } from "../../../shared/utils/dateUtils";
+import { formatMoney } from "../money";
 
 interface SinkingFundModalProps {
   readonly open: boolean;
@@ -156,7 +157,7 @@ export default function SinkingFundModal({
             disagrees with the target it is meant to reach. */}
         {form.target_amount > 0 && (
           <p className="small-text muted">
-            About {perMonth.toFixed(2)} a month over {months || 1}{" "}
+            About {formatMoney(perMonth)} a month over {months || 1}{" "}
             {months === 1 ? "month" : "months"}. Recalculated as you go, so a
             missed month raises the rest rather than moving the date.
           </p>

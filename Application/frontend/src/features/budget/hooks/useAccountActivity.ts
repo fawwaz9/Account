@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchAccountActivity, fetchCategories, fetchTransactions } from "../api";
 import { AccountActivity, SpendCategory, Transaction } from "../types";
-import { currentMonth } from "../dates";
+import { firstOfMonth, today } from "../../../shared/utils/dateUtils";
 import { useAuth } from "../../../app/auth/AuthContext";
 
 /** One account's selected month: its figures, its ledger and the category list. */
@@ -9,7 +9,7 @@ export function useAccountActivity(accountId: string | undefined) {
   const [activity, setActivity] = useState<AccountActivity | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<SpendCategory[]>([]);
-  const [month, setMonth] = useState(currentMonth());
+  const [month, setMonth] = useState(firstOfMonth(today()));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();

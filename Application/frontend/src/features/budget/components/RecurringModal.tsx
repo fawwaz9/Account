@@ -10,7 +10,7 @@ import {
   SpendCategory,
 } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
-import { localToday } from "../dates";
+import { today } from "../../../shared/utils/dateUtils";
 
 const KIND_LABELS: Record<RecurringKind, string> = {
   expense: "Expense",
@@ -45,7 +45,7 @@ function blankRule(accounts: Account[]): RecurringCreate {
     account_id: accounts[0]?.id ?? null,
     to_account_id: null,
     category_id: null,
-    starts_on: localToday(),
+    starts_on: today(),
     // Monthly by default: almost everything that recurs with money is monthly,
     // and the editor below can change it.
     recurrence: { freq: "monthly", interval: 1, byday: [], until: null, count: null },

@@ -29,8 +29,8 @@ Application/
       <Module>/utils/       pure functions. No session, no models
       api/routes/           thin. Parse, call one service, map errors to status
       _database/            models, engine, migrations
-      shared/               tokenizer, audit, error bodies
-    tests/                  715 test functions, 740 cases
+      shared/               tokenizer, audit, error bodies, money, dates
+    tests/                  911 cases
   frontend/
     src/features/<area>/    api.ts, types.ts, components/, hooks/
     src/pages/              one per route, composing features
@@ -153,9 +153,21 @@ save with a 500.
 It silently undid a corrected paycheque gross. `db.flush()` is almost always what
 was wanted.
 
-**Money is float here.** Round to cents at the boundary, compare with a tolerance
-or use `Decimal`, and never assert float equality. Where a split has to sum to
-its whole, put the rounding remainder on the largest share.
+**Money is float here.** Round to cents at the boundary with `money()` from
+`app/shared/money.py`, compare with a tolerance or use `Decimal`, and never
+assert float equality. Where a split has to sum to its whole, put the rounding
+remainder on the largest share.
+
+> **Do not write a local `money()` or `today()`.** They existed thirteen times
+> between them — `money` in four services, `today` in nine — byte-identical
+> every time, and a fifth service imported `money` from *another service* rather
+> than add a fifth copy, which is a layering rule turning into a suggestion.
+> Both now live in `app/shared/`, next to the tokenizer and the audit log. The
+> `+ 0.0` inside `money()` is load-bearing and narrower than it looks: it
+> normalises an input that is already `-0.0`, so a balance of nothing does not
+> read as `-0.00`. It runs before the rounding, so it does *not* catch a small
+> negative that rounds away — `money(-0.004)` is still `-0.0`, and there is a
+> test pinning both halves so neither gets tidied into the other.
 
 **Fixed-size buttons need their own padding.** The base `.container button` rule
 sets `padding: 7px 14px`, so anything with a fixed width and height needs

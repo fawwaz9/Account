@@ -57,6 +57,7 @@ from app.Jobs.schemas.job import (
     ShiftScheduleCreate,
 )
 from app.Tasks.services.task_service import user_exists
+from app.shared.dates import today
 
 SHIFT = EventKind.SHIFT.value
 INCOME = TransactionKind.INCOME.value
@@ -64,10 +65,6 @@ INCOME = TransactionKind.INCOME.value
 #: How far ahead the next pay date is looked for. A rule that produces nothing
 #: inside a year has effectively stopped, and walking further is a spin.
 PAY_LOOKAHEAD_DAYS = 366
-
-
-def today() -> date:
-    return date.today()
 
 
 def minutes_between(start: time, end: time) -> int:

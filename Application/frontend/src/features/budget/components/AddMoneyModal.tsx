@@ -6,8 +6,9 @@ import { Course } from "../../grades/types";
 import CoursePicker from "./CoursePicker";
 import { getErrorMessage } from "../../grades/components/AddCourseModal";
 import { useAuth } from "../../../app/auth/AuthContext";
-import { localToday } from "../dates";
+import { today } from "../../../shared/utils/dateUtils";
 import Modal from "../../../shared/components/Modal";
+import { formatMoney } from "../money";
 
 interface AddMoneyModalProps {
   readonly open: boolean;
@@ -34,7 +35,7 @@ export default function AddMoneyModal({
   const [toAccountId, setToAccountId] = useState("");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
-  const [occurredOn, setOccurredOn] = useState(localToday());
+  const [occurredOn, setOccurredOn] = useState(today());
   const [categoryId, setCategoryId] = useState("");
   const [courseId, setCourseId] = useState("");
   const [allocations, setAllocations] = useState<DepositAllocation[]>([]);
@@ -55,7 +56,7 @@ export default function AddMoneyModal({
     setToAccountId("");
     setAmount("");
     setDescription("");
-    setOccurredOn(localToday());
+    setOccurredOn(today());
     setCategoryId("");
     setCourseId("");
     setAllocations([]);
@@ -248,8 +249,8 @@ export default function AddMoneyModal({
             {allocations.length > 0 && (
               <span className="small-text muted depositSum">
                 Allocated{" "}
-                {allocations.reduce((sum, entry) => sum + entry.amount, 0).toFixed(2)} of{" "}
-                {(Number(amount) || 0).toFixed(2)}
+                {formatMoney(allocations.reduce((sum, entry) => sum + entry.amount, 0))} of{" "}
+                {formatMoney(Number(amount) || 0)}
               </span>
             )}
           </div>
