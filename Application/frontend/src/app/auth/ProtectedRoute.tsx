@@ -1,4 +1,5 @@
 import { Navigate } from "react-router-dom";
+import Loading from "../../shared/components/Loading";
 import { useAuth } from "./AuthContext";
 
 export default function ProtectedRoute({ children }: { readonly children: React.ReactNode }) {
@@ -7,14 +8,8 @@ export default function ProtectedRoute({ children }: { readonly children: React.
   if (isLoading) {
     // Rendering null here gave a blank white page on every cold load, for as
     // long as the session check took -- indistinguishable from the app being
-    // broken. `<output>` carries the status role natively, which is what
-    // S6819 asks for over a div with role="status".
-    return (
-      <output className="authBootstrap">
-        <span className="authBootstrapSpinner" aria-hidden="true" />
-        <span className="small-text muted">Signing you in…</span>
-      </output>
-    );
+    // broken.
+    return <Loading label="Signing you in…" />;
   }
 
   if (!isAuthenticated) {

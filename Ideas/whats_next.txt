@@ -1,4 +1,51 @@
 Shipped so far (do not re-propose)
+        The first download is 40% smaller, and the API handshake starts earlier.
+          The app had no code splitting at all: App.tsx statically imported all
+          ten pages, so the login screen downloaded Grades, Calendar, Tasks,
+          Jobs, Budget and Settings before it could draw a password field, and
+          paid it again on every cache miss. The nine signed-in pages are now
+          lazy() routes behind one Suspense in MainLayout; LoginPage and the
+          shell stay eager, because an unauthenticated visitor needs nothing
+          else and deferring them would only add a round trip.
+          MEASURED, not estimated: entry chunk 486,867 -> 253,561 raw and
+          135,705 -> 81,199 gzipped, across 22 files instead of 1. Proved with
+          controls rather than by reading the build log -- "Loading your
+          accounts" (from BudgetView) is absent from the entry and present in
+          BudgetPage's chunk, so the grep that says so is known to work.
+          THE STYLESHEET IS UNCHANGED, and that was the point of setting
+          build.cssCodeSplit: false. Vite would otherwise emit a stylesheet per
+          chunk, loaded in whatever order pages were visited, and this app
+          cannot take that -- see design/README.md. Verified as identical size
+          and identical rule multiset; the only difference is ordering, and both
+          moves are provably inert (Tailwind's rules are all inside @layer,
+          which ranks below unlayered CSS whatever the source order, and every
+          dashboard.css selector is defined exactly once in the whole file).
+          index.html now carries a preconnect to the API origin, so DNS, TCP and
+          TLS happen alongside the bundle download instead of after it. It comes
+          from originOf() in securityHeaders.ts -- the same function connect-src
+          uses -- so the origin the browser warms and the origin it is allowed
+          to call cannot drift. crossorigin is on it deliberately: the calls
+          carry an Authorization header, and an anonymous connection cannot be
+          reused for a credentialled one.
+          THE ONE NEW FAILURE MODE, named because it did not exist before: a tab
+          open across a deploy holds chunk names the new release does not serve.
+          It reloads itself once, guarded by a timestamp rather than a
+          "did it work" flag -- a flag needs a success signal and a missed
+          signal is an unescapable reload loop. A second failure inside ten
+          seconds falls through to a crash screen that says the app was updated
+          rather than that the page broke.
+          A COMMENT CHANGED THE CSS. Tailwind scans source files for candidate
+          class names and cannot tell prose from markup, so a bare utility word
+          written in a comment in chunkErrors.ts added a real, unused
+          text-transform rule to the production stylesheet. Caught only because
+          the stylesheet was being compared byte for byte.
+          NOT DONE, and deliberately: narrowing what each mutation invalidates,
+          and a request cache. Both can show a stale number that looks like a
+          fresh one, and safe_to_spend reads Jobs as well as Finances, so the
+          invalidation map crosses a module boundary the budget hook cannot see.
+          The runRecurring-before-reads waterfall in useBudget is also still
+          there -- free to fix, but it edits the ordering rule safe-to-spend
+          correctness depends on.
         LIVE as of 2026-09-22: image ca86a3e, revision account-api-00012-xfk.
           One deploy, carrying the two jobs paid-vs-earned commits (25e42fd,
           49c129e) that had been sitting on main undeployed since 2026-09-17,

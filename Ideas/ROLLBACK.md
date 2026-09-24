@@ -276,6 +276,14 @@ back also fixes it, and is the faster move if you are unsure.
 Pages keeps every deployment. Dashboard → the project → *Deployments* → pick
 the last good one → **Rollback**. No CLI needed, no rebuild.
 
+**"The app was updated" screen, or a route that will not open.** Since the
+bundle was split, a tab left open across a deploy is holding chunk file names
+this release no longer serves. The page reloads itself once and the problem is
+gone; that screen only appears if a second failure follows inside ten seconds.
+It is not a fault and there is nothing to roll back. If it appears *repeatedly*
+on fresh loads, the deploy is genuinely missing files — roll the Pages
+deployment back and check the build log.
+
 If the site loads but every request fails, it is almost certainly one of:
 
 - **CORS.** `ALLOWED_ORIGINS` on Cloud Run must be exactly

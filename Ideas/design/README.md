@@ -174,6 +174,27 @@ sets `padding: 7px 14px`, so anything with a fixed width and height needs
 `display:inline-flex; padding:0; box-sizing:border-box` or its glyph sits low and
 right. This has caught five controls.
 
+**Every page is a `lazy()` route.** `src/app/App.tsx` loads the nine signed-in
+pages on demand; `LoginPage` and the shell stay eager. A new page added with a
+static import silently folds itself back into the first download and nothing
+fails to say so. The one `Suspense` lives in `MainLayout` around `<Outlet />`,
+so the sidebar stays put while a route arrives.
+
+> **`build.cssCodeSplit` is deliberately `false`.** Vite's default is a
+> stylesheet per async chunk, which makes the cascade order depend on the order
+> pages were visited — and this app cannot take that, since `main.tsx` loads
+> `calendar.css` eagerly for the shared `.calRow`/`.calField`/`.calInput` form
+> primitives and the base `.container button` rule has already caught five
+> controls. The whole stylesheet is 16.7 KB gzipped against the JavaScript's
+> 136 KB, so splitting it would win almost nothing and risk a silent visual
+> class of bug. Splitting the routes cut the first download from 136 KB to
+> 81 KB gzipped and left the stylesheet byte-for-byte identical.
+
+**Tailwind scans comments too.** It looks for candidate class names in source
+files and cannot tell prose from markup, so writing a bare utility word in a
+comment adds a real rule to the production stylesheet. One did: a comment in
+`chunkErrors.ts` put an unused `text-transform` rule in the CSS.
+
 **Stage explicit paths when committing.** `git add -A` swept in-flight edits into
 commits twice.
 
