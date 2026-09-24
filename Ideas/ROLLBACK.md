@@ -134,6 +134,20 @@ whatever just broke.
 > It changes one string: the term heading is derived from the anchor instead of
 > the user's `term_label`. Rolling back restores a stale label, not a fault.
 >
+> **`f98a1b9` is FRONTEND ONLY and rolls back from the Pages dashboard alone.**
+> The API is still serving `d635bf5`, and that gap is expected rather than a
+> deploy someone forgot: this change touched no backend file.
+>
+> It splits the budget page's load so a month step fetches only the month's
+> summary instead of re-reading eight things and re-sending a write. **No API
+> contract changed and no request was added** — the same eight endpoints are
+> called, just not all of them every time — so rolling back restores extra
+> requests, not correctness.
+>
+> Its three new dependencies are **dev-only** (`vitest` already, plus `jsdom`,
+> `@testing-library/react`, `@testing-library/dom`). Confirmed absent from the
+> deployed bundle, so they cost the browser nothing.
+
 > **`d635bf5` rolls back cleanly in both directions.** Two changes, neither of
 > which alters a stored value or a response the client reads.
 >
