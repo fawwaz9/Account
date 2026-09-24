@@ -328,10 +328,24 @@ Cloudflare Pages.
 
 **Still open, and it is one item plus a sweep:**
 
-- **#35 — no request caching.** Dashboard → Budget → Dashboard still issues
-  redundant round trips, and every `reload()` refetches all four endpoints when
-  one row changed. This mattered less on localhost than it does now: the same
-  page from a phone on mobile data pays real latency for each of them.
+- **#35 — no request caching. Still open, and both halves of it are.**
+  Dashboard → Budget → Dashboard still issues redundant round trips, and every
+  `reload()` still refetches everything when one row changed. This mattered
+  less on localhost than it does now: the same page from a phone on mobile data
+  pays real latency for each of them.
+
+  > **A third case, larger than either of these, was found while scoping the
+  > fix and is now closed — but it is not one this finding ever described, so
+  > #35 does not shrink.** Stepping the month picker re-ran the whole load:
+  > eight reads and a write, where only `fetchBudgetSummary` takes a month at
+  > all. The other seven are the same figure whichever month is on screen, and
+  > the write had nothing to record because no time passes between two clicks.
+  > A month step is now one request, and it no longer blanks the page while it
+  > runs. `useBudget.test.ts` counts the requests, since nothing on screen
+  > looks different either way.
+  >
+  > The count in this finding is also stale: it says "all four endpoints".
+  > `reload()` refetched **eight**, from 18 call sites on the budget page.
 - **Inputs labelled by placeholder only**, from the accessibility tail — a sweep
   across a dozen forms, not a single fix.
 

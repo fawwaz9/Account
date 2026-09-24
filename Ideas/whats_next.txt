@@ -389,6 +389,38 @@ Three dead endpoints removed, 2026-09-23. 137 routes, was 140.
         finding was fixed long ago; the endpoints it was about are now gone
         entirely.
 
+A month step costs one request, 2026-09-24.
+        The budget page loaded eight things and wrote one, and re-ran the lot
+        every time the month picker moved -- where only fetchBudgetSummary takes
+        a month at all. The other seven are the same figure whichever month is
+        on screen: two are windowed on today() and five take no date. The write
+        is runRecurring, which is what makes "open the app and last month's rent
+        is already there" work without a scheduler -- genuinely needed on the
+        first load, and pointless between two clicks, because no time passes.
+        A BONUS THAT WAS NOT THE POINT: `loading` gates the whole page body, so
+        stepping the month used to hide the accounts, the ledger and the charts
+        to fetch one figure. The summary now keeps its previous value while the
+        new one arrives.
+        Mutations are deliberately untouched -- reload() still catches up and
+        refetches all eight from all 18 call sites. Narrowing that is where the
+        staleness risk is: today's full reload is crude but correct, and a
+        stale balance on a money page is the wrong answer that looks exactly
+        like a right one.
+        VERIFIED BY COUNTING, because nothing on screen looks different either
+        way. useBudget.test.ts asserts a month step calls fetchBudgetSummary
+        once and the other seven not at all, and that reload() still calls
+        everything. Mutation-tested against the old hook: the two tests about
+        the change fail and the two about unchanged behaviour pass, which is
+        what says they measure this and nothing else.
+        This needed jsdom and @testing-library/react, the first hook test in
+        the project. Per-file via a `// @vitest-environment jsdom` docblock, so
+        the eight pure modules stay on node. NOTE: installing under
+        --legacy-peer-deps (the npm arborist workaround) does not install peers,
+        so @testing-library/dom had to be added by hand afterwards -- expect
+        that for anything else installed that way.
+        AUDIT #35 IS STILL OPEN. It describes two different cases -- refetching
+        across pages, and reload() after a mutation -- and this fixed neither.
+
 What is left, by module.
 
 Settings:
