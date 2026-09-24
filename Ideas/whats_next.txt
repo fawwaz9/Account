@@ -1,4 +1,27 @@
 Shipped so far (do not re-propose)
+        Budget and Account pages went narrow, and the cause was my own claim.
+          .budgetPage and .accountPage each carried max-width:980px that had
+          NEVER APPLIED in production: .container on the same element sets
+          max-width:none (to defeat Tailwind's container utility), both rules
+          are unlayered and one class of specificity, so the winner was decided
+          purely by which file the bundler emitted last -- globals.css. Making
+          the routes lazy changed the module graph, the order flipped, the dead
+          rules woke up, and both pages clamped to 980px.
+          CORRECTION TO THE ENTRY BELOW: it says the stylesheet was unchanged
+          and that the ordering differences were inert. The first half is true
+          and the second half is false. cssCodeSplit:false keeps one FILE, which
+          preserves the rule set, NOT the order within it -- and order is what
+          breaks a tie between two unlayered rules of equal specificity. An
+          identical rule multiset was the evidence I leaned on, and it cannot
+          see this class of bug at all.
+          Fixed by deleting both dead max-width declarations rather than by
+          restoring the order, because an appearance that depends on bundler
+          emission order is not a fixed appearance -- it is the same bug waiting
+          for the next import to move. .accountPage keeps position:relative,
+          which is load-bearing.
+          GUARDED: pageWidth.test.ts fails if any class used beside "container"
+          declares its own max-width, with a control asserting the scan really
+          sees budgetPage and accountPage so it cannot pass by reading nothing.
         LIVE as of 2026-09-24: frontend 972fff5, entry index-BTL-dvNy.js,
           stylesheet style-H5jp_U0I.css. Frontend only -- no schema step, no
           image, no Cloud Run deploy, because nothing outside

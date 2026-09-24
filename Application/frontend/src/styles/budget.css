@@ -1,5 +1,18 @@
 /* ===== Budget ===== */
-.budgetPage { max-width: 980px; margin: 0 auto; }
+/* Full width, like the rest of the app.
+
+   A `max-width: 980px` sat here for a long time and never once applied. The
+   same element carries `container`, whose rule in globals.css sets
+   `max-width: none` to defeat Tailwind's container utility; both are unlayered
+   and one class of specificity, so the winner was decided purely by which file
+   the bundler emitted last -- and that was globals.css. Making the routes lazy
+   changed the module graph, the order flipped, this rule woke up, and the page
+   went narrow with no CSS having been edited at all.
+
+   Whether a page is clamped must not depend on the module graph, so the rule is
+   gone rather than re-ordered. To genuinely clamp this page, set the width on
+   an inner wrapper that does not also carry `container` -- see
+   pageWidth.test.ts, which fails if a max-width comes back here. */
 
 .budgetHeader {
   display: flex;

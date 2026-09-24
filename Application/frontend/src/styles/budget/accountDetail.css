@@ -1,5 +1,9 @@
 /* ===== Account detail ===== */
-.accountPage { max-width: 980px; margin: 0 auto; position: relative; }
+/* `position: relative` only. The `max-width: 980px` that used to be here was
+   dead for the same reason, and in the same way, as the one budget.css
+   describes at length -- `.container` on the same element won on source order.
+   It is removed rather than re-ordered. */
+.accountPage { position: relative; }
 
 .accountHeader {
   display: flex;

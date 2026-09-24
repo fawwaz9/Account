@@ -180,6 +180,19 @@ static import silently folds itself back into the first download and nothing
 fails to say so. The one `Suspense` lives in `MainLayout` around `<Outlet />`,
 so the sidebar stays put while a route arrives.
 
+> **One stylesheet preserves its CONTENTS, not its ORDER.** This is the trap,
+> and it shipped a visible regression before it was understood.
+> `cssCodeSplit: false` keeps every rule in one file, so the rule *set* is
+> identical — which is reassuring and insufficient. The *order* within that file
+> follows the module graph, and making the routes lazy changed the module graph.
+> `.budgetPage` and `.accountPage` each carried a `max-width: 980px` that had
+> never once applied, because `.container` on the same element sets
+> `max-width: none` and globals.css happened to be emitted after them. The order
+> flipped, the dead rules woke up, and both pages went narrow with no CSS edited.
+> **Never let a page class that shares an element with `.container` set its own
+> `max-width`** — the two are both unlayered and one class of specificity, so the
+> winner is decided by the bundler. Clamp an inner wrapper instead.
+
 > **`build.cssCodeSplit` is deliberately `false`.** Vite's default is a
 > stylesheet per async chunk, which makes the cascade order depend on the order
 > pages were visited — and this app cannot take that, since `main.tsx` loads
@@ -188,7 +201,7 @@ so the sidebar stays put while a route arrives.
 > controls. The whole stylesheet is 16.7 KB gzipped against the JavaScript's
 > 136 KB, so splitting it would win almost nothing and risk a silent visual
 > class of bug. Splitting the routes cut the first download from 136 KB to
-> 81 KB gzipped and left the stylesheet byte-for-byte identical.
+> 81 KB gzipped. It did **not** leave the stylesheet unchanged — see above.
 
 **Tailwind scans comments too.** It looks for candidate class names in source
 files and cannot tell prose from markup, so writing a bare utility word in a
