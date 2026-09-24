@@ -276,6 +276,14 @@ back also fixes it, and is the faster move if you are unsure.
 Pages keeps every deployment. Dashboard → the project → *Deployments* → pick
 the last good one → **Rollback**. No CLI needed, no rebuild.
 
+**A missing chunk does not 404.** Pages serves `index.html` for any unmatched
+path, including `/assets/*.js`, so a chunk that is gone comes back as HTTP 200
+with `content-type: text/html`. The browser refuses to run it as a module
+(`nosniff` is set), so the dynamic import rejects and the handling below takes
+over. Two consequences: a script checking chunks must compare **content-type,
+not status** — a status check cannot fail here and so is not a check — and a
+`200` in a log is no evidence a chunk exists.
+
 **"The app was updated" screen, or a route that will not open.** Since the
 bundle was split, a tab left open across a deploy is holding chunk file names
 this release no longer serves. The page reloads itself once and the problem is

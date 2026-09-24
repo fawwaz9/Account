@@ -1,4 +1,28 @@
 Shipped so far (do not re-propose)
+        LIVE as of 2026-09-24: frontend 972fff5, entry index-BTL-dvNy.js,
+          stylesheet style-H5jp_U0I.css. Frontend only -- no schema step, no
+          image, no Cloud Run deploy, because nothing outside
+          Application/frontend/ changed.
+          Verified on the deployed site, not locally: entry 253,589 raw /
+          81,200 gzipped against 486,867 / 135,705 before; "Loading your
+          accounts" absent from the entry and present in BudgetPage-DZe6-Pmd.js;
+          all 20 referenced chunks served; the preconnect origin and the
+          connect-src origin identical; 6 of 6 headers; / /budget /calendar all
+          200. THE DEPLOYED STYLESHEET IS 90,773 BYTES WITH AN IDENTICAL RULE
+          MULTISET to the pre-split one -- the cssCodeSplit decision holding up
+          in production and not just in the local build.
+          A CHECK THAT COULD NOT FAIL, caught by its control: Pages serves
+          index.html for any unmatched path, so a MISSING chunk returns 200 with
+          content-type text/html rather than 404. Asserting status 200 on a
+          chunk therefore proves nothing -- a deleted chunk passes. Compare
+          content-type instead; a real chunk is application/javascript. Written
+          up in ROLLBACK.md, because it also means a 200 in a log is no evidence
+          a chunk exists.
+          NOT VERIFIED FROM HERE, and worth a look in a browser: the exact error
+          string a stale chunk produces. The server side is confirmed (200,
+          text/html, nosniff, so the module is refused and the import rejects),
+          and the four phrasings matched in chunkErrors.ts are the documented
+          ones, but no browser was driven to check.
         The first download is 40% smaller, and the API handshake starts earlier.
           The app had no code splitting at all: App.tsx statically imported all
           ten pages, so the login screen downloaded Grades, Calendar, Tasks,
