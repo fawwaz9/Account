@@ -193,6 +193,13 @@ so the sidebar stays put while a route arrives.
 > `max-width`** — the two are both unlayered and one class of specificity, so the
 > winner is decided by the bundler. Clamp an inner wrapper instead.
 
+> Guarded by `src/styles/pageWidth.test.ts`, which fails if a class used beside
+> `container` declares its own `max-width`. Two controls, because the scan
+> reports "nothing wrong" and so does a scan that reads nothing: one asserts it
+> sees the pages, the other that it can see a `max-width` that *is* there.
+> Vitest stubs CSS imports as empty strings, so it reads from disk — a glob
+> returns the filenames with no contents and passes while proving nothing.
+
 > **`build.cssCodeSplit` is deliberately `false`.** Vite's default is a
 > stylesheet per async chunk, which makes the cascade order depend on the order
 > pages were visited — and this app cannot take that, since `main.tsx` loads
