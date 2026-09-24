@@ -8,6 +8,8 @@ interface PlannedSpendProps {
   readonly month: string;
   readonly onMonthChange: (month: string) => void;
   readonly onSetTarget: (accountId: string, planned: number) => Promise<void>;
+  /** True while a newly-picked month's figures are still in flight. */
+  readonly pending?: boolean;
 }
 
 export default function PlannedSpend({
@@ -15,6 +17,7 @@ export default function PlannedSpend({
   month,
   onMonthChange,
   onSetTarget,
+  pending = false,
 }: PlannedSpendProps) {
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -31,7 +34,7 @@ export default function PlannedSpend({
   }
 
   return (
-    <section className="plannedSpend">
+    <section className="plannedSpend" aria-busy={pending}>
       <div className="sectionHeading">
         <h2>Planned spend</h2>
         <input

@@ -420,6 +420,22 @@ A month step costs one request, 2026-09-24.
         that for anything else installed that way.
         AUDIT #35 IS STILL OPEN. It describes two different cases -- refetching
         across pages, and reload() after a mutation -- and this fixed neither.
+        AND IT SHIPPED FEELING SLOWER, which is the lesson. `loading` was the
+        only feedback on that page, and the month step deliberately stopped
+        setting it -- so a click changed nothing on screen until the figure
+        landed, where before the page visibly flashed. Eight requests down to
+        one is not something anyone can feel; the missing flash is. Reported as
+        "if anything it feels slower" and it was right.
+        Fixed by reporting on the two panels a month actually changes --
+        PlannedSpend, which owns the picker, and WhereItWent -- rather than on
+        the page. They keep their previous figures and dim while the new ones
+        arrive. Keyed on aria-busy rather than a class, so the attribute that
+        tells a screen reader the region is updating is the same one that dims
+        it, and there is one state rather than two that can disagree.
+        THE GENERAL RULE, worth having before the next optimisation: removing
+        work can still read as slower if it also removes the only sign that a
+        click registered. Feedback is not what the page was waiting on -- it is
+        what the person was.
 
 What is left, by module.
 

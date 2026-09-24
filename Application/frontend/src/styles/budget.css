@@ -1238,3 +1238,17 @@
   gap: 8px;
   margin-top: 4px;
 }
+
+/* A month step changes these two panels and nothing else, so it reports itself
+   here rather than on the page. They keep their previous figures while the new
+   ones arrive -- blanking the accounts, the ledger and the charts to fetch one
+   number is what this replaced -- but silence was worse: the click looked like
+   it had done nothing, which reads as slower than the page flash it replaced
+   even though it is an eighth of the work.
+   Keyed on aria-busy rather than a class, so the same attribute that tells a
+   screen reader the region is updating is the one that dims it. */
+.plannedSpend[aria-busy="true"],
+.categorySpend[aria-busy="true"] {
+  opacity: 0.5;
+  transition: opacity 90ms ease-in;
+}

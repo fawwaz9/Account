@@ -86,6 +86,31 @@ describe("useBudget", () => {
     expect(result.current.loading).toBe(false);
   });
 
+  /**
+   * The other half of not blanking the page, and it is not optional.
+   *
+   * Reported as "if anything it feels slower": with no page flash and nothing
+   * else saying anything, a month step changed nothing on screen until the new
+   * figure landed, so the click read as having done nothing at all. Fewer
+   * requests is not felt; silence is. The two panels a month actually changes
+   * carry this as `aria-busy`.
+   */
+  it("says a month is loading, on the panels that change", async () => {
+    let release: (() => void) | undefined;
+    calls.fetchBudgetSummary.mockImplementationOnce(
+      () => new Promise((resolve) => { release = () => resolve(null); })
+    );
+
+    const { result } = renderHook(() => useBudget());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() => result.current.setMonth("2026-08-01"));
+    await waitFor(() => expect(result.current.summaryLoading).toBe(true));
+
+    act(() => release?.());
+    await waitFor(() => expect(result.current.summaryLoading).toBe(false));
+  });
+
   it("still reloads everything when money moves", async () => {
     const { result } = renderHook(() => useBudget());
     await waitFor(() => expect(result.current.loading).toBe(false));

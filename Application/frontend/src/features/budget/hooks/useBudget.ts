@@ -41,6 +41,11 @@ export function useBudget() {
   const [worth, setWorth] = useState<NetWorth | null>(null);
   const [month, setMonth] = useState(firstOfMonth(today()));
   const [loading, setLoading] = useState(true);
+  // Separate from `loading`, which gates the whole page body. A month step
+  // changes two panels, so it says so on those two rather than emptying the
+  // screen -- but it does have to say it somewhere, or the click looks like it
+  // did nothing at all.
+  const [summaryLoading, setSummaryLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Every load takes a ticket, and only the newest one is allowed to write state.
@@ -73,6 +78,7 @@ export function useBudget() {
     if (!userId) return;
 
     const ticket = ++latestSummary.current;
+    setSummaryLoading(true);
     try {
       const next = await fetchBudgetSummary(userId, month);
       if (ticket !== latestSummary.current) return;
@@ -80,6 +86,8 @@ export function useBudget() {
     } catch (err) {
       if (ticket !== latestSummary.current) return;
       setError(err instanceof Error ? err.message : "Could not load your budget");
+    } finally {
+      if (ticket === latestSummary.current) setSummaryLoading(false);
     }
   }, [userId, month]);
 
@@ -204,6 +212,7 @@ export function useBudget() {
     month,
     setMonth,
     loading,
+    summaryLoading,
     error,
     reload: load,
   };

@@ -31,7 +31,7 @@ export default function BudgetView() {
   const { user } = useAuth();
   const {
     accounts, transactions, categories, summary, recurring, upcoming,
-    safe, worth, month, setMonth, loading, error, reload,
+    safe, worth, month, setMonth, loading, summaryLoading, error, reload,
   } = useBudget();
   // Reused rather than refetched: the course picker needs the same list the
   // Grades page already loads.
@@ -165,6 +165,7 @@ export default function BudgetView() {
                 month={month}
                 onMonthChange={setMonth}
                 onSetTarget={handleSetTarget}
+                pending={summaryLoading}
               />
 
               <section className="ledgerSection">
@@ -189,6 +190,7 @@ export default function BudgetView() {
               entries={spendByCategory}
               onEditSplit={() => setSplitOpen(true)}
               onEditCategories={() => setCategoriesOpen(true)}
+              pending={summaryLoading}
             />
           </div>
 

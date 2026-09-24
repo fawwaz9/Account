@@ -10,15 +10,18 @@ interface WhereItWentProps {
    */
   readonly onEditSplit?: () => void;
   readonly onEditCategories?: () => void;
+  /** True while a newly-picked month's figures are still in flight. */
+  readonly pending?: boolean;
 }
 
 export default function WhereItWent({
   entries,
   onEditSplit,
   onEditCategories,
+  pending = false,
 }: WhereItWentProps) {
   return (
-    <section className="categorySpend">
+    <section className="categorySpend" aria-busy={pending}>
       <div className="sectionHeading">
         <h2>Where it went</h2>
       </div>
