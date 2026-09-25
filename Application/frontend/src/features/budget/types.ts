@@ -101,14 +101,6 @@ export interface SpendCategory {
   name: string;
   archived: boolean;
   position: number;
-  /**
-   * What you mean to spend here each month, every month, until changed.
-   *
-   * `null` is "no limit". `0` is "nothing is meant to go here", under which any
-   * spending at all is over. The two are different answers and must not be
-   * collapsed -- an empty input clears the limit, it does not set it to zero.
-   */
-  monthly_limit: number | null;
 }
 
 export interface AccountBudget {
@@ -134,28 +126,6 @@ export interface CategorySpend {
   category_id: string | null;
   category_name: string;
   actual: number;
-  /**
-   * The limit in force this month: the month's override if there is one, else
-   * the category's standing limit.
-   *
-   * `null` means no limit, and the row must then render exactly as it did
-   * before limits existed -- no bar, no figures. That covers three cases at
-   * once: a category nobody has budgeted, Uncategorised (which has no row to
-   * hang a limit on), and every row on the account detail page, where a
-   * whole-budget limit judged against one account would be a different and
-   * wrong number.
-   */
-  limit: number | null;
-  /** limit - actual. Negative is overspent. 0 when there is no limit. */
-  remaining: number;
-  /**
-   * The server's figure, 0-100+, not clamped. Passed to ProgressBar rather than
-   * derived for the reason that component documents: recomputing here disagrees
-   * with the server at the `close` boundary.
-   */
-  used_percent: number;
-  /** True when this month differs from the category's standing limit. */
-  limit_is_override: boolean;
 }
 
 export interface BudgetSummary {

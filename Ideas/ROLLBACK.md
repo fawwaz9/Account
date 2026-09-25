@@ -307,40 +307,35 @@ browser console shows everything.
 
 | | |
 |---|---|
-| API | image `93c9d73`, revision **`account-api-00015-25t`**, `latestRevision: True` |
-| Previous API | image `d635bf5`, revision `account-api-00014-zxv` |
-| Frontend | `index-BhgbsV2X.js` / `style-Dn5prJnf.css`, from `93c9d73` |
-| Schema | `spend_categories.monthly_limit` + `category_budgets`, applied 2026-09-24 |
+| API | image `93c9d73`, revision `account-api-00015-25t` — **superseded by the rollback below; updated once it redeploys** |
+| Frontend | from `93c9d73` — likewise |
 
-### `93c9d73` cannot have its API rolled back on its own
+## Two orphaned schema objects, left on purpose
 
-Roll back the API alone and the **frontend breaks visibly**: the old API omits
-`limit`, `remaining` and `used_percent` from every category row, and the client
-tests `entry.limit === null`. `undefined === null` is **false**, so every row
-takes the has-a-limit branch, draws a bar with no target, and renders
-`formatMoney(undefined)` — **"$NaN left" under every category**. Checked by
-running it, not by reading it.
+Supabase carries `spend_categories.monthly_limit` and the `category_budgets`
+table. **Nothing reads or writes either.** They are what remains of a
+per-category spending-limit feature that shipped on 2026-09-24 and was rolled
+back the same day, the judgement being that limits belong in the
+spending-account section, where Planned spend already sets a per-account target.
 
-**So roll back both halves together**: the Cloud Run revision *and* the Pages
-deployment (Dashboard → the project → Deployments → the build before
-`93c9d73`). Either alone leaves a mismatch.
+They were left rather than dropped, deliberately:
 
-The hardening, if this comes up again: `entry.limit == null` — loose, catching
-both `null` and `undefined` — would make the client degrade to "no limits"
-against an older API instead of showing NaN. Not applied, because it is a change
-to code that is already deployed and working.
+- The column is nullable and **every row is NULL**; the table is **empty**. They
+  cost a little catalogue space and nothing else.
+- `DROP COLUMN` and `DROP TABLE` against production are irreversible, and the
+  backup that would undo a mistake is the one taken before they were *added*.
+  Trading a real risk for no measurable gain is a bad trade.
+- Migrations in this project are additive by design, and `ensure_schema` only
+  ever adds. There is no drop path to reuse, so removing them means hand-written
+  DDL against the live database.
 
-### The schema is allowed to be ahead of the code
+The same two objects exist in the local `data/app.db`, which the dev server
+migrated on reload, and are equally inert there.
 
-A new nullable column and a new empty table are invisible to the running image,
-which is why shipping goes schema → API → main; the reverse order is what 500s.
-So if you are reading this mid-incident, **the schema being ahead is not the
-cause**, and rolling the API back needs no schema change with it — nothing the
-old code reads has moved.
-
-What is *not* safe is the other direction: code expecting a column Supabase does
-not have. That reads as `UndefinedColumn` or `relation ... does not exist` in
-the logs, and it means the schema step was skipped.
+**So: if you are reading the schema and cannot find the code behind these, that
+is the reason, and nothing is missing.** If they are ever genuinely in the way,
+drop them as their own deliberate change with its own backup — not as
+housekeeping bundled into something else.
 
 ## Data: restore a backup
 

@@ -193,63 +193,6 @@ to want them, and made the page silently switch between one and two columns.
 The section takes its two actions as optional props: the account detail page
 reuses it for a single account, where page-level controls would be out of place.
 
-## Category limits, and the zero that is not an absence
-
-A category was a label and nothing more, so "Where it went" reported $412 on
-Groceries without the one fact that makes the figure mean anything — whether
-$412 was more than you meant to spend. Accounts already had that in Planned
-spend; this gives categories the same treatment, using the same `ProgressBar`
-and the same three colours, so the two panels stop disagreeing about whether
-budgeting exists.
-
-**A standing limit, with a per-month override.** `spend_categories.monthly_limit`
-is what the category is meant to cost in a month, every month. `category_budgets`
-holds one row per month that differs, and **only** for months that differ — a
-category budgeted the same all year has no rows at all, which is what lets
-changing the standing limit move every month that was never overridden. That is
-what "standing" has to mean for the word to be worth anything.
-
-It follows that **presence, not value, decides whether an override applies.**
-
-> **`None` and `0` are different answers, in three places.** `NULL` is "no limit
-> on this category"; `0` is "nothing is meant to go here", under which any
-> spending at all is over. `effective_limit` in `Finances/utils/limits.py`
-> therefore tests `override is not None` rather than truthiness — the obvious
-> version reads a month deliberately closed as merely unbudgeted, on the month
-> somebody cared enough about to set to zero. A test fails on the falsy check.
-> The same distinction runs through the nullable column, and through the UI:
-> **an emptied input clears the limit, it does not set one of nothing.**
-
-**A limited category appears even with nothing spent.** `by_category` used to be
-built from spending alone, so a limit you were safely under simply was not
-there — you could only ever see the limits you were already breaking, which is
-the half of a budget that tells you things are fine. It is now the union of
-categories with spending and non-archived categories with a limit. The sort is
-unchanged, so the new rows settle at the end.
-
-**Where each half is edited says what it is.** The standing limit lives in the
-Categories dialog, which has no month and should not pretend to. A single
-month's override is set by clicking the figure in "Where it went", the same
-inline edit Planned spend uses — because that panel is where a month is on
-screen. Clearing the override deletes the row rather than writing the standing
-value into it: a row holding 400 would look identical today and stop following
-the standing limit the moment it changed.
-
-**The account detail page shows no limits, deliberately.** It reuses the same
-section for one account, and a limit spans every account — judging it against a
-single account's share would answer a question nobody asked and look
-authoritative doing it. No flag was needed: `activity_service` leaves `limit` as
-`None`, and a row with no limit renders exactly as it did before limits existed.
-Uncategorised is the same case, having no row to hang a limit on.
-
-> **That null id had a bug in it.** `editing` starts as `null` and
-> Uncategorised's `category_id` *is* `null`, so `editing === id` was true on
-> first render and that row came up as a live input with a Save button, before
-> anyone clicked anything — on the one category that can never have a limit. The
-> test written for it passed, because it looked only for a button named like a
-> limit and the editor's button says "Save". It asserts what the row *shows*
-> now. Found by mutation-testing, which is the only reason it was found at all.
-
 ## The tuition shape, and why everything reuses it
 
 A tuition payment writes **exactly one ledger row**, never one per course.

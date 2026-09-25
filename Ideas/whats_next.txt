@@ -1,82 +1,25 @@
 Shipped so far (do not re-propose)
-        Categories have spending limits, and "Where it went" is coloured by them.
-          A standing monthly_limit on spend_categories, plus category_budgets
-          holding one row per month that DIFFERS -- a category budgeted the same
-          all year has no rows there, which is what makes the standing limit
-          standing. Resolution is effective_limit in Finances/utils/limits.py,
-          shaped on Grades' effective_target.
-          THE RULE THAT MATTERS: None and 0 are different answers. NULL is "no
-          limit"; 0 is "nothing is meant to go here", under which any spending is
-          over. effective_limit tests `is not None`, not truthiness, and a test
-          fails on the falsy version. Same distinction in the UI: an emptied box
-          CLEARS the limit rather than setting one of nothing.
-          Clearing a standing limit needed exclude_unset on the PATCH: with every
-          field defaulting to None, "leave it alone" and "remove it" are the same
-          value and are told apart only by whether the key was sent. Without it a
-          limit could be set and never removed. update_category already did this,
-          so it took no change -- worth knowing before anyone "simplifies" it.
-          by_category is now the union of categories with spending and
-          non-archived categories with a limit, because the old list was built
-          from spending alone: you could only ever see limits you were already
-          breaking. Sort key unchanged, so existing order is untouched.
-          Colours reuse ProgressBar's existing three states rather than the
-          red/green that was asked for -- gold at 90% warns BEFORE you overspend,
-          and the panel then matches Planned spend directly above it.
-          A BUG FOUND BY MUTATION TESTING: Uncategorised has category_id null and
-          `editing` starts null, so `editing === id` was true on first render and
-          that row opened as a live editor, unprompted, on the one category that
-          can never have a limit. The test written for it passed, because it
-          looked only for a button named like a limit and the editor's says
-          "Save". It asserts what the row shows now.
-          Exercised end to end against a VACUUM INTO copy of data/app.db over the
-          real 44 categories and 143 transactions: standing limit, override,
-          zero, clearing, and every row count identical before and after.
-          LIVE as of 2026-09-24: API image 93c9d73 on revision
-          account-api-00015-25t (latestRevision True), frontend
-          index-BhgbsV2X.js, schema applied to Supabase.
-          Verified on the deployed site with controls, not by eye: the new route
-          answers 401 while a route that does not exist answers 404 -- without
-          that second call a 401 could merely mean auth refuses everything. All
-          five new strings found across four chunks (the bundle is split now, so
-          they are NOT all in BudgetPage: category-limits is in the entry,
-          limit_amount in the api chunk, the WhereItWent strings in the budget
-          chunk), and a bogus control string found in none. No UndefinedColumn
-          or missing-relation in the API logs; CORS returns the Pages origin.
-          THE API CANNOT BE ROLLED BACK ALONE. An older API omits limit,
-          remaining and used_percent, and the client tests `limit === null` --
-          `undefined === null` is false, so every row would take the has-a-limit
-          branch and render "$NaN left". Confirmed by running it. Roll back the
-          Pages deployment with the Cloud Run revision, or neither. A loose
-          `== null` would harden this; not applied, since the deployed code
-          works and that is a change for its own deploy.
-          WAS HALF DEPLOYED FOR A WHILE, ON PURPOSE, AND SAFE. Stopped between steps 11 and 12
-          because Docker Desktop froze -- its UI processes were up, no Linux VM
-          existed, `docker ps` hung rather than erring, and the backend log had
-          stopped advancing. A clean quit-and-relaunch did not revive it.
-          DONE: backup (run 36077617209, completed success) and the Supabase
-          schema. monthly_limit is double precision, NULLABLE, NO DEFAULT (a
-          default would have put all 57 categories a cent over budget);
-          category_budgets has its 5 columns and all 4 indexes including
-          uq_category_budgets_user_category_month; 57 categories and 132
-          transactions unchanged; every existing category reads as "no limit";
-          the override table is empty. Asserted ABSENT first, so "present
-          after" meant something.
-          NOT DONE: the API image and the `main` push. The API still serves
-          d635bf5 on revision account-api-00014-zxv, latestRevision True.
-          WHY THIS IS SAFE TO LEAVE: a new nullable column and a new empty table
-          are invisible to the running image, which is exactly why shipping.md
-          orders it schema -> API -> main. Verified rather than assumed:
-          /health returns {"status":"ok","database":"ok"}, the new route answers
-          404 (absent, not deployed) while /budget-summary answers 401 -- the
-          control that makes the 404 mean "no such route" rather than "auth
-          refuses everything".
-          TO RESUME: skip steps 10 and 11, they are done and re-running the
-          schema is harmless but pointless. Start at step 12 -- build
-          --platform linux/amd64 --provenance=false, smoke-test the container
-          (GOOGLE_CLIENT_ID has no default and its absence reads only as
-          "failed to start and listen on the port"), push, deploy with
-          --port=8000, confirm latestRevision True, then push main and verify
-          the frontend BY CONTENT. The commit to deploy is f0dfede.
+        Category spending limits were built, shipped, and ROLLED BACK.
+          A standing monthly_limit per category with a per-month override, and
+          red/amber/green colouring of "Where it went" against it. Deployed on
+          2026-09-24 and removed the same day: the user judged that limits
+          belong in the spending-account section only, where Planned spend
+          already sets a per-account target and draws the same bar. DO NOT
+          RE-PROPOSE per-category budgets, caps or category colour coding.
+          "Where it went" is a record of where money went; "was that more than I
+          meant to spend" is answered one level up, against the account.
+          THE SUPABASE COLUMN AND TABLE WERE DELIBERATELY LEFT IN PLACE.
+          spend_categories.monthly_limit is nullable and every row is NULL;
+          category_budgets exists and is empty. Neither is referenced by any
+          code now. Dropping a column and a table in production is irreversible
+          and buys nothing measurable, so they stay -- documented here so the
+          next person reading the schema does not mistake them for something in
+          use. The same is true of the local data/app.db, which the dev server
+          migrated on reload.
+          WORTH KEEPING FROM IT: the row layout fix. "Where it went" had
+          justify-content on the li itself, which only works while a row is
+          exactly two spans; the padding increase from that work is kept, the
+          rest reverted with the feature.
         Budget and Account pages went narrow, and the cause was my own claim.
           .budgetPage and .accountPage each carried max-width:980px that had
           NEVER APPLIED in production: .container on the same element sets

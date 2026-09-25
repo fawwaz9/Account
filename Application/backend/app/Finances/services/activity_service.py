@@ -129,11 +129,6 @@ def get_account_activity(
             continue
         per_category[row.category_id] = per_category.get(row.category_id, 0.0) + abs(row.amount)
 
-    # No `limit` here, deliberately, so the shared "Where it went" section draws
-    # no bars on this page. A category limit spans every account; judging it
-    # against one account's share of the spending would answer a question nobody
-    # asked and look authoritative doing it. The client needs no flag for this --
-    # a row with no limit renders exactly as it did before limits existed.
     by_category = sorted(
         (
             CategorySpend(

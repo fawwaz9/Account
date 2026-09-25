@@ -21,7 +21,7 @@ import TuitionModal from "./TuitionModal";
 import TermBudget from "./TermBudget";
 import { useTransactionDelete } from "../hooks/useTransactionDelete";
 import DeleteConfirmModal from "../../grades/components/DeleteConfirmModal";
-import { deleteRecurring, setBudgetTarget, setCategoryLimit } from "../api";
+import { deleteRecurring, setBudgetTarget } from "../api";
 import { Account, RecurringTransaction, Transaction } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
 
@@ -67,20 +67,6 @@ export default function BudgetView() {
   async function handleSetTarget(accountId: string, planned: number) {
     if (!user) return;
     await setBudgetTarget(user.id, accountId, month, planned);
-    await reload();
-  }
-
-  /**
-   * This month's limit for one category, or null to clear it back to the
-   * standing one set in the Categories dialog.
-   *
-   * Reloads everything rather than just the summary: a limit changes what the
-   * term panel reports too, and this is a click somebody makes a few times a
-   * month, not on every month step.
-   */
-  async function handleSetCategoryLimit(categoryId: string, limit: number | null) {
-    if (!user) return;
-    await setCategoryLimit(user.id, categoryId, month, limit);
     await reload();
   }
 
@@ -204,7 +190,6 @@ export default function BudgetView() {
               entries={spendByCategory}
               onEditSplit={() => setSplitOpen(true)}
               onEditCategories={() => setCategoriesOpen(true)}
-              onSetLimit={handleSetCategoryLimit}
               pending={summaryLoading}
             />
           </div>

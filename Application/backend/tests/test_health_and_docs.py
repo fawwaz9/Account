@@ -220,7 +220,7 @@ def test_applying_the_schema_is_idempotent(monkeypatch, tmp_path):
 
     from app._database.db import engine
     from sqlalchemy import inspect
-    assert len(inspect(engine).get_table_names()) == 24
+    assert len(inspect(engine).get_table_names()) == 23
 
 
 # ---------------------------------------------------------- allowed origins --
