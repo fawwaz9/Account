@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app._database.models import (
     AccountCategoryLimitModel,
+    AccountCategoryMonthLimitModel,
     AccountModel,
     BudgetTargetModel,
     SpendCategoryModel,
@@ -23,7 +24,7 @@ from app.Finances.schemas.budget import (
     SpendCategoryUpdate,
     first_of_month,
 )
-from app.Finances.utils.limits import planned_for_account
+from app.Finances.utils.limits import effective_category_limit, planned_for_account
 from app.Finances.schemas.transaction import TransactionKind
 
 #: Seeded once so the first expense has somewhere to go.
@@ -167,6 +168,11 @@ def delete_category(db: Session, user_id: uuid.UUID, category_id: uuid.UUID):
         AccountCategoryLimitModel.category_id == category_id,
     ).delete(synchronize_session=False)
 
+    db.query(AccountCategoryMonthLimitModel).filter(
+        AccountCategoryMonthLimitModel.user_id == user_id,
+        AccountCategoryMonthLimitModel.category_id == category_id,
+    ).delete(synchronize_session=False)
+
     # Scoped to the owner: without the user_id filter this UPDATE reaches every
     # row carrying the id, including other people's.
     db.query(TransactionModel).filter(
@@ -251,29 +257,59 @@ def set_account_category_limit(
     if category is None:
         return False
 
-    row = (
-        db.query(AccountCategoryLimitModel)
-        .filter(
-            AccountCategoryLimitModel.user_id == user_id,
-            AccountCategoryLimitModel.account_id == data.account_id,
-            AccountCategoryLimitModel.category_id == data.category_id,
+    # Two tables, chosen by whether a month was named. A month writes that
+    # month's override and leaves the standing figure alone; no month writes the
+    # standing figure and leaves every override alone.
+    if data.month is None:
+        row = (
+            db.query(AccountCategoryLimitModel)
+            .filter(
+                AccountCategoryLimitModel.user_id == user_id,
+                AccountCategoryLimitModel.account_id == data.account_id,
+                AccountCategoryLimitModel.category_id == data.category_id,
+            )
+            .first()
         )
-        .first()
-    )
-
-    if data.limit_amount is None:
-        if row is not None:
-            db.delete(row)
-    elif row is None:
-        db.add(AccountCategoryLimitModel(
-            id=uuid.uuid4(),
-            user_id=user_id,
-            account_id=data.account_id,
-            category_id=data.category_id,
-            limit_amount=data.limit_amount,
-        ))
+        if data.limit_amount is None:
+            if row is not None:
+                db.delete(row)
+        elif row is None:
+            db.add(AccountCategoryLimitModel(
+                id=uuid.uuid4(),
+                user_id=user_id,
+                account_id=data.account_id,
+                category_id=data.category_id,
+                limit_amount=data.limit_amount,
+            ))
+        else:
+            row.limit_amount = data.limit_amount
     else:
-        row.limit_amount = data.limit_amount
+        row = (
+            db.query(AccountCategoryMonthLimitModel)
+            .filter(
+                AccountCategoryMonthLimitModel.user_id == user_id,
+                AccountCategoryMonthLimitModel.account_id == data.account_id,
+                AccountCategoryMonthLimitModel.category_id == data.category_id,
+                AccountCategoryMonthLimitModel.month == data.month,
+            )
+            .first()
+        )
+        if data.limit_amount is None:
+            # Deleted, not zeroed. A row holding the standing figure would look
+            # identical today and stop following it the moment it changed.
+            if row is not None:
+                db.delete(row)
+        elif row is None:
+            db.add(AccountCategoryMonthLimitModel(
+                id=uuid.uuid4(),
+                user_id=user_id,
+                account_id=data.account_id,
+                category_id=data.category_id,
+                month=data.month,
+                limit_amount=data.limit_amount,
+            ))
+        else:
+            row.limit_amount = data.limit_amount
 
     db.commit()
     return True
@@ -326,13 +362,35 @@ def get_budget_summary(db: Session, user_id: uuid.UUID, month: date):
 
     # One query for every account's category limits, grouped here, rather than
     # one per account inside the loop below.
-    limits_by_account: dict[uuid.UUID, list[float]] = {}
+    standing_by_account: dict[uuid.UUID, dict[uuid.UUID, float]] = {}
     for row in (
         db.query(AccountCategoryLimitModel)
         .filter(AccountCategoryLimitModel.user_id == user_id)
         .all()
     ):
-        limits_by_account.setdefault(row.account_id, []).append(row.limit_amount)
+        standing_by_account.setdefault(row.account_id, {})[row.category_id] = row.limit_amount
+
+    # Resolved for *this* month, so the budget page's total matches the account
+    # page's for the month on screen rather than for a typical one.
+    overrides_by_account: dict[uuid.UUID, dict[uuid.UUID, float]] = {}
+    for row in (
+        db.query(AccountCategoryMonthLimitModel)
+        .filter(
+            AccountCategoryMonthLimitModel.user_id == user_id,
+            AccountCategoryMonthLimitModel.month == start,
+        )
+        .all()
+    ):
+        overrides_by_account.setdefault(row.account_id, {})[row.category_id] = row.limit_amount
+
+    limits_by_account: dict[uuid.UUID, list[float]] = {}
+    for account_id in standing_by_account.keys() | overrides_by_account.keys():
+        st = standing_by_account.get(account_id, {})
+        ov = overrides_by_account.get(account_id, {})
+        limits_by_account[account_id] = [
+            effective_category_limit(st.get(cid), ov.get(cid))
+            for cid in st.keys() | ov.keys()
+        ]
 
     entries = []
     for account in sorted(accounts, key=lambda a: (a.position, a.name)):

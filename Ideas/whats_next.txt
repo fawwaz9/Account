@@ -1,4 +1,23 @@
 Shipped so far (do not re-propose)
+        Category limits can now differ for one month.
+          The standing figure still carries into every month; a single month can
+          be given its own, and says "this month only" on the row. The editor
+          has a "This month only" tick that opens ALREADY TICKED on a row that
+          is showing an override, so editing an overridden month does not
+          silently rewrite the standing figure behind it.
+          TWO TABLES, NOT A NULLABLE MONTH COLUMN. A unique index cannot enforce
+          "at most one standing row" when the distinguishing column is NULL --
+          Postgres and SQLite both treat NULLs as distinct, so the constraint
+          would accept two standing limits for the same pair. Partial indexes
+          could express it but are dialect-specific, and ensure_indexes walks
+          the metadata generically.
+          effective_category_limit tests `override is not None`, not truthiness:
+          an override of 0 means "nothing this month" and a falsy check would
+          fall through to the standing figure. Mutation-tested.
+          Exercised against a VACUUM INTO copy of data/app.db: standing applies
+          to both months, one month overridden leaves its neighbour alone,
+          moving the standing figure moves the non-overridden month only, and
+          clearing deletes the row rather than freezing today's value.
         LIVE as of 2026-09-25: API image da6ac93 on revision
           account-api-00017-kwt, frontend index-DKAVzYQ6.js, schema applied.
           Verified with controls: the new route answers 401 while a route that

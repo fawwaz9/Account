@@ -21,6 +21,7 @@ function entry(over: Partial<CategorySpend> = {}): CategorySpend {
     limit: 400,
     remaining: -12,
     used_percent: 103,
+    limit_is_override: false,
     ...over,
   };
 }
@@ -73,7 +74,7 @@ describe("a category with no limit", () => {
 });
 
 describe("editing this account's limit", () => {
-  it("sends the number typed", async () => {
+  it("sets the standing limit by default", async () => {
     const onSetLimit = vi.fn(async () => undefined);
     render(<WhereItWent entries={[entry()]} onSetLimit={onSetLimit} />);
 
@@ -83,7 +84,43 @@ describe("editing this account's limit", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    await waitFor(() => expect(onSetLimit).toHaveBeenCalledWith("c1", 500));
+    // false -- the standing figure, which carries into every month.
+    await waitFor(() => expect(onSetLimit).toHaveBeenCalledWith("c1", 500, false));
+  });
+
+  it("sets only this month when asked to", async () => {
+    const onSetLimit = vi.fn(async () => undefined);
+    render(<WhereItWent entries={[entry()]} onSetLimit={onSetLimit} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Change the limit for Groceries/ }));
+    fireEvent.change(screen.getByLabelText("Limit for Groceries on this account"), {
+      target: { value: "600" },
+    });
+    fireEvent.click(screen.getByLabelText("This month only"));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(onSetLimit).toHaveBeenCalledWith("c1", 600, true));
+  });
+
+  /**
+   * Opening an already-overridden row must not silently rewrite the standing
+   * figure behind it. The box starts ticked because that is what the row shows.
+   */
+  it("opens on this month when the row is already an override", async () => {
+    const onSetLimit = vi.fn(async () => undefined);
+    render(<WhereItWent entries={[entry({ limit_is_override: true })]} onSetLimit={onSetLimit} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Change the limit for Groceries/ }));
+    expect((screen.getByLabelText("This month only") as HTMLInputElement).checked).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    // 400, the limit the row is showing -- not 412, which is what was spent.
+    await waitFor(() => expect(onSetLimit).toHaveBeenCalledWith("c1", 400, true));
+  });
+
+  it("says when a row is showing an overridden month", () => {
+    render(<WhereItWent entries={[entry({ limit_is_override: true })]} />);
+    expect(screen.getByText(/this month only/)).toBeDefined();
   });
 
   /**
@@ -101,7 +138,7 @@ describe("editing this account's limit", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    await waitFor(() => expect(onSetLimit).toHaveBeenCalledWith("c1", null));
+    await waitFor(() => expect(onSetLimit).toHaveBeenCalledWith("c1", null, false));
   });
 
   /**

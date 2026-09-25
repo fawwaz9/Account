@@ -41,3 +41,23 @@ def planned_for_account(
         return manual_target, False
 
     return round(sum(category_limits), 2), True
+
+
+def effective_category_limit(
+    standing: float | None, override: float | None
+) -> float | None:
+    """This month's limit for one category: the month's own, else the standing one.
+
+    **Tests for None, not for truthiness, and that is the whole function.** An
+    override of `0` is a real instruction -- "nothing is meant to go here this
+    month" -- under which any spending at all is over. A falsy check would read
+    that as "no override", fall through to the standing figure, and report a
+    month deliberately closed as merely budgeted as usual: the exact inversion
+    of what was asked, on the month someone cared enough about to set to zero.
+
+    None from both means no limit, which the client renders as a plain total
+    rather than a bar against nothing.
+    """
+    if override is not None:
+        return override
+    return standing

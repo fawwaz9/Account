@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app._database.models import (
     AccountCategoryLimitModel,
+    AccountCategoryMonthLimitModel,
     AccountModel,
     BudgetTargetModel,
     RecurringTransactionModel,
@@ -420,6 +421,11 @@ def delete_account(db: Session, user_id: uuid.UUID, account_id: uuid.UUID):
     db.query(AccountCategoryLimitModel).filter(
         AccountCategoryLimitModel.user_id == user_id,
         AccountCategoryLimitModel.account_id == account_id,
+    ).delete(synchronize_session=False)
+
+    db.query(AccountCategoryMonthLimitModel).filter(
+        AccountCategoryMonthLimitModel.user_id == user_id,
+        AccountCategoryMonthLimitModel.account_id == account_id,
     ).delete(synchronize_session=False)
 
     db.delete(account)

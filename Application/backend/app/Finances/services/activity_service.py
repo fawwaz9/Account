@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app._database.models import (
     AccountModel,
     AccountCategoryLimitModel,
+    AccountCategoryMonthLimitModel,
     BudgetTargetModel,
     SpendCategoryModel,
     TransactionModel,
@@ -20,7 +21,7 @@ from app._database.models import (
 from app.Finances.schemas.account import AccountActivity, BalancePoint, DayFlow
 from app.Finances.schemas.budget import CategorySpend
 from app.Finances.services.budget_service import month_bounds
-from app.Finances.utils.limits import planned_for_account
+from app.Finances.utils.limits import effective_category_limit, planned_for_account
 from app.Finances.schemas.transaction import TransactionKind
 
 
@@ -134,7 +135,7 @@ def get_account_activity(
     # What this account means to spend, per category. Keyed on the pair, so the
     # limit and the spending below cover the same money -- which is the thing
     # the whole-budget version got wrong.
-    limits = {
+    standing = {
         row.category_id: row.limit_amount
         for row in db.query(AccountCategoryLimitModel)
         .filter(
@@ -142,6 +143,22 @@ def get_account_activity(
             AccountCategoryLimitModel.account_id == account_id,
         )
         .all()
+    }
+    # Only the months that were overridden have rows here; a category budgeted
+    # the same all year has none, which is what makes the standing limit stand.
+    overrides = {
+        row.category_id: row.limit_amount
+        for row in db.query(AccountCategoryMonthLimitModel)
+        .filter(
+            AccountCategoryMonthLimitModel.user_id == user_id,
+            AccountCategoryMonthLimitModel.account_id == account_id,
+            AccountCategoryMonthLimitModel.month == start,
+        )
+        .all()
+    }
+    limits = {
+        cid: effective_category_limit(standing.get(cid), overrides.get(cid))
+        for cid in standing.keys() | overrides.keys()
     }
 
     # A limited category appears even with nothing spent on it here. Built from
@@ -162,6 +179,7 @@ def get_account_activity(
             # A limit of 0 divides into nothing, so it reports 0% and the row is
             # shown as over on `remaining` instead.
             used_percent=round(actual / limit * 100, 1) if limit else 0.0,
+            limit_is_override=category_id in overrides,
         ))
     by_category.sort(key=lambda entry: entry.actual, reverse=True)
 
@@ -178,7 +196,7 @@ def get_account_activity(
     # Planned spend when there are not -- which is what keeps Savings and Money
     # Lent, who carry targets and no categories, reading as budgeted.
     planned, planned_is_derived = planned_for_account(
-        list(limits.values()),
+        [v for v in limits.values() if v is not None],
         round(target.planned_amount if target else 0.0, 2),
     )
     spent = round(total_out, 2)

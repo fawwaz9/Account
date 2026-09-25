@@ -185,11 +185,14 @@ export async function setAccountCategoryLimit(
   userId: string,
   accountId: string,
   categoryId: string,
-  limitAmount: number | null
+  limitAmount: number | null,
+  /** Null sets the standing limit; a month sets that month's override only. */
+  month: string | null = null
 ) {
   return put<unknown>(endpoints.finances.accountCategoryLimits(userId), {
     account_id: accountId,
     category_id: categoryId,
+    month,
     limit_amount: limitAmount,
   });
 }

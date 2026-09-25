@@ -94,6 +94,9 @@ class CategorySpend(BaseModel):
     #: Share of the limit used, 0-100+, not clamped -- the client needs to see it
     #: pass 100 to colour the bar. 0.0 when there is no limit.
     used_percent: float = 0.0
+    #: True when this month differs from the account's standing limit for the
+    #: category, so the UI can say why the figure is not the usual one.
+    limit_is_override: bool = False
 
 
 class AccountCategoryLimitUpsert(BaseModel):
@@ -107,7 +110,15 @@ class AccountCategoryLimitUpsert(BaseModel):
 
     account_id: UUID
     category_id: UUID
+    #: None sets the **standing** limit, which applies to every month. A date
+    #: sets that month's override instead, leaving the standing figure alone.
+    month: date | None = None
     limit_amount: float | None = Field(default=None, ge=0)
+
+    @field_validator("month")
+    @classmethod
+    def normalize_month(cls, value: date | None) -> date | None:
+        return first_of_month(value) if value is not None else None
 
 
 class BudgetSummary(BaseModel):

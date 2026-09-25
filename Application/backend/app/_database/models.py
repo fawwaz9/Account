@@ -369,6 +369,37 @@ class AccountCategoryLimitModel(Base):
     limit_amount = Column(Float, nullable=False, default=0.0)
 
 
+class AccountCategoryMonthLimitModel(Base):
+    """One month's override of an account's standing limit for a category.
+
+    Sparse on purpose: a row exists **only** for a month that differs from the
+    standing figure in `account_category_limits`. A category budgeted the same
+    all year has none, which is what lets changing the standing limit move every
+    month nobody overrode -- the thing "standing" has to mean to be worth having.
+
+    A second table rather than a nullable `month` on the standing one. A unique
+    index cannot enforce "at most one standing row" when the distinguishing
+    column is NULL: both Postgres and SQLite treat NULLs as distinct, so
+    `UNIQUE (user, account, category, month)` would happily accept two standing
+    limits for the same pair. Partial indexes could express it, but they are
+    dialect-specific and `ensure_indexes` walks the metadata generically. Two
+    tables, each with a unique index that actually holds.
+
+    **Presence, not value, is what makes an override apply.** A row of 0 is a
+    real instruction -- "nothing this month" -- see `effective_category_limit`.
+    """
+
+    __tablename__ = "account_category_month_limits"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False)
+    account_id = Column(Uuid, ForeignKey("accounts.id"), nullable=False)
+    category_id = Column(Uuid, ForeignKey("spend_categories.id"), nullable=False)
+    #: Always the first of the month, normalized on the way in.
+    month = Column(Date, nullable=False)
+    limit_amount = Column(Float, nullable=False, default=0.0)
+
+
 class EventModel(Base):
     """Something that happens on a date, optionally repeating.
 
@@ -1023,6 +1054,13 @@ Index("ix_budget_targets_account_id", BudgetTargetModel.account_id)
 Index("ix_account_category_limits_account_id", AccountCategoryLimitModel.account_id)
 Index("ix_account_category_limits_category_id", AccountCategoryLimitModel.category_id)
 
+# The month's overrides are read as a set per account, and a category delete
+# has to find them by category.
+Index("ix_account_category_month_limits_account_month",
+      AccountCategoryMonthLimitModel.account_id, AccountCategoryMonthLimitModel.month)
+Index("ix_account_category_month_limits_category_id",
+      AccountCategoryMonthLimitModel.category_id)
+
 Index("ix_events_user_id", EventModel.user_id)
 Index("ix_events_course_id", EventModel.course_id)
 Index("ix_events_grade_id", EventModel.grade_id)
@@ -1096,5 +1134,13 @@ Index(
     AccountCategoryLimitModel.user_id,
     AccountCategoryLimitModel.account_id,
     AccountCategoryLimitModel.category_id,
+    unique=True,
+)
+Index(
+    "uq_account_category_month_limits_user_account_category_month",
+    AccountCategoryMonthLimitModel.user_id,
+    AccountCategoryMonthLimitModel.account_id,
+    AccountCategoryMonthLimitModel.category_id,
+    AccountCategoryMonthLimitModel.month,
     unique=True,
 )

@@ -20,7 +20,12 @@ interface WhereItWentProps {
    * them. Rows there carry no limit either, so nothing renders even if a
    * handler were passed.
    */
-  readonly onSetLimit?: (categoryId: string, limit: number | null) => Promise<void>;
+  readonly onSetLimit?: (
+    categoryId: string,
+    limit: number | null,
+    /** False sets the standing limit; true sets only the month on screen. */
+    thisMonthOnly: boolean,
+  ) => Promise<void>;
   /** True while a newly-picked month's figures are still in flight. */
   readonly pending?: boolean;
 }
@@ -41,16 +46,21 @@ export default function WhereItWent({
 }: WhereItWentProps) {
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const [justThisMonth, setJustThisMonth] = useState(false);
   const [saving, setSaving] = useState(false);
 
   async function commit(categoryId: string) {
     if (!onSetLimit) return;
     setSaving(true);
     try {
-      // An empty box clears the limit rather than setting one of nothing. The
-      // two are different instructions and a blank field is far likelier to
-      // mean "never mind" than "allow zero".
-      await onSetLimit(categoryId, draft.trim() === "" ? null : Number(draft));
+      // An empty box clears whichever limit is being edited rather than setting
+      // one of nothing. The two are different instructions, and a blank field is
+      // far likelier to mean "never mind" than "allow zero".
+      await onSetLimit(
+        categoryId,
+        draft.trim() === "" ? null : Number(draft),
+        justThisMonth,
+      );
       setEditing(null);
     } finally {
       setSaving(false);
@@ -101,6 +111,18 @@ export default function WhereItWent({
                         }}
                         aria-label={`Limit for ${entry.category_name} on this account`}
                       />
+                      {/* Which of the two is being set. Unchecked edits the
+                          standing limit, which is what carries into every
+                          month; checked touches only the month on screen and
+                          leaves the standing figure alone. */}
+                      <label className="limitScope small-text muted">
+                        <input
+                          type="checkbox"
+                          checked={justThisMonth}
+                          onChange={(event) => setJustThisMonth(event.target.checked)}
+                        />
+                        This month only
+                      </label>
                       <button
                         type="button"
                         className="buttons"
@@ -117,6 +139,11 @@ export default function WhereItWent({
                       onEdit={() => {
                         setEditing(id);
                         setDraft(entry.limit === null ? "" : String(entry.limit));
+                        // Opens on whichever this row is already showing, so
+                        // editing an overridden month edits that month by
+                        // default rather than silently rewriting the standing
+                        // figure behind it.
+                        setJustThisMonth(entry.limit_is_override);
                       }}
                     />
                   )}
@@ -132,7 +159,10 @@ export default function WhereItWent({
                       percent={entry.used_percent}
                       label={`${entry.category_name} spend against limit`}
                     />
-                    <span className="small-text muted plannedNote">{note}</span>
+                    <span className="small-text muted plannedNote">
+                      {note}
+                      {entry.limit_is_override && " · this month only"}
+                    </span>
                   </>
                 )}
               </li>

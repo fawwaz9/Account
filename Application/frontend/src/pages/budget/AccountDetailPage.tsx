@@ -59,9 +59,17 @@ export default function AccountDetailPage() {
    * moves the Planned spend figure above it -- that target is the sum of these
    * when there are any.
    */
-  async function handleSetLimit(categoryId: string, limit: number | null) {
+  async function handleSetLimit(
+    categoryId: string,
+    limit: number | null,
+    thisMonthOnly: boolean,
+  ) {
     if (!user || !accountId) return;
-    await setAccountCategoryLimit(user.id, accountId, categoryId, limit);
+    // The month on screen when overriding, and null for the standing figure --
+    // which is what carries into every month that was never overridden.
+    await setAccountCategoryLimit(
+      user.id, accountId, categoryId, limit, thisMonthOnly ? month : null,
+    );
     await reload();
   }
   const remove = useTransactionDelete(reload);

@@ -150,6 +150,8 @@ export interface CategorySpend {
   remaining: number;
   /** The server's figure, 0-100+, deliberately not clamped so the bar can go red. */
   used_percent: number;
+  /** True when this month differs from the account's standing limit. */
+  limit_is_override: boolean;
 }
 
 export interface BudgetSummary {

@@ -259,3 +259,119 @@ def test_a_limit_on_someone_elses_account_is_refused(db, user):
         account_id=account.id, category_id=category.id, limit_amount=1.0,
     )) is False
     assert db.query(AccountCategoryLimitModel).count() == 0
+
+
+# ------------------------------------------------- a month that differs --
+
+from app._database.models import AccountCategoryMonthLimitModel
+from app.Finances.utils.limits import effective_category_limit
+
+APRIL = date(2026, 4, 1)
+
+
+def test_a_months_override_beats_the_standing_limit():
+    assert effective_category_limit(standing=400.0, override=500.0) == 500.0
+
+
+def test_an_override_of_zero_still_wins():
+    """The falsy-check bug. Zero is a stricter instruction, not the absence of one."""
+    assert effective_category_limit(standing=400.0, override=0.0) == 0.0
+
+
+def test_the_standing_limit_applies_when_the_month_has_no_row():
+    assert effective_category_limit(standing=400.0, override=None) == 400.0
+
+
+def test_no_limit_at_all_stays_none():
+    assert effective_category_limit(standing=None, override=None) is None
+
+
+def override(db, user, account, category, month, amount):
+    return set_account_category_limit(db, user.id, AccountCategoryLimitUpsert(
+        account_id=account.id, category_id=category.id, month=month, limit_amount=amount,
+    ))
+
+
+def test_one_month_can_differ_and_the_others_do_not(db, user):
+    account = make_account(db, user.id, "Chequing")
+    food = make_category(db, user.id, "Food")
+    set_limit(db, user, account, food, 400.0)
+
+    override(db, user, account, food, MONTH, 600.0)
+
+    march = row_for(get_account_activity(db, user.id, account.id, MONTH).by_category, "Food")
+    april = row_for(get_account_activity(db, user.id, account.id, APRIL).by_category, "Food")
+
+    assert march.limit == 600.0 and march.limit_is_override is True
+    assert april.limit == 400.0, "a neighbouring month must be untouched"
+    assert april.limit_is_override is False
+
+
+def test_an_overridden_month_derives_its_target_from_the_override(db, user):
+    """The override has to reach the account's total, not just its own row."""
+    account = make_account(db, user.id, "Chequing")
+    food = make_category(db, user.id, "Food")
+    set_limit(db, user, account, food, 400.0)
+    override(db, user, account, food, MONTH, 600.0)
+
+    assert get_account_activity(db, user.id, account.id, MONTH).planned == 600.0
+    assert get_account_activity(db, user.id, account.id, APRIL).planned == 400.0
+
+
+def test_clearing_an_override_falls_back_rather_than_storing_the_standing_value(db, user):
+    """A row holding 400 would look identical today and stop following the
+    standing limit the moment it changed."""
+    account = make_account(db, user.id, "Chequing")
+    food = make_category(db, user.id, "Food")
+    set_limit(db, user, account, food, 400.0)
+    override(db, user, account, food, MONTH, 600.0)
+
+    override(db, user, account, food, MONTH, None)
+
+    row = row_for(get_account_activity(db, user.id, account.id, MONTH).by_category, "Food")
+    assert row.limit == 400.0 and row.limit_is_override is False
+    assert db.query(AccountCategoryMonthLimitModel).count() == 0
+
+
+def test_a_month_can_be_closed_to_zero(db, user):
+    account = make_account(db, user.id, "Chequing")
+    food = make_category(db, user.id, "Food")
+    set_limit(db, user, account, food, 400.0)
+    override(db, user, account, food, MONTH, 0.0)
+    spend(db, user, account, food, 15.0)
+
+    row = row_for(get_account_activity(db, user.id, account.id, MONTH).by_category, "Food")
+    assert row.limit == 0.0, "not 400 -- the override of zero is the instruction"
+    assert row.remaining == -15.0
+
+
+def test_a_month_can_budget_a_category_with_no_standing_limit(db, user):
+    account = make_account(db, user.id, "Chequing")
+    food = make_category(db, user.id, "Food")
+
+    override(db, user, account, food, MONTH, 250.0)
+
+    assert row_for(get_account_activity(db, user.id, account.id, MONTH).by_category, "Food").limit == 250.0
+    # April has no limit and nothing spent, so the category does not appear at
+    # all -- an override budgets its own month and leaves the others alone.
+    april = get_account_activity(db, user.id, account.id, APRIL).by_category
+    assert all(r.category_name != "Food" for r in april)
+
+
+def test_deleting_a_category_removes_its_month_overrides_too(db, user):
+    account = make_account(db, user.id, "Chequing")
+    food = make_category(db, user.id, "Food")
+    override(db, user, account, food, MONTH, 250.0)
+
+    delete_category(db, user.id, food.id)
+
+    assert db.query(AccountCategoryMonthLimitModel).count() == 0
+
+
+def test_deleting_an_account_removes_its_month_overrides_too(db, user):
+    account = make_account(db, user.id, "Spare", kind="other")
+    override(db, user, account, make_category(db, user.id, "Food"), MONTH, 250.0)
+
+    delete_account(db, user.id, account.id)
+
+    assert db.query(AccountCategoryMonthLimitModel).count() == 0

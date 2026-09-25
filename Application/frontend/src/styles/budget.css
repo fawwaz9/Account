@@ -383,6 +383,11 @@
 .plannedFigureDerived:hover { border-color: transparent; color: var(--text); }
 
 .plannedEdit { display: flex; align-items: center; gap: 6px; }
+
+/* The scope switch inside the limit editor. `flex-wrap` on the row above lets
+   it drop to its own line on a narrow column rather than squeezing the input. */
+.plannedEdit { flex-wrap: wrap; }
+.limitScope { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .plannedInput { width: 110px; padding: 5px 8px; }
 .plannedNote { margin-top: 1px; }
 

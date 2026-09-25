@@ -204,10 +204,19 @@ safely under budget. It shipped, and was rolled back the same day. Keying on the
 pair means the limit and the spending it is measured against cover the same
 money.
 
-**Standing, not per-month.** One row says what this account means to spend here
-every month, until changed. A month column and a resolution rule can be added
-without moving anything here; the previous attempt built that machinery and
-threw it away with the rest.
+**Standing, with a per-month override.** `account_category_limits` holds what
+this account means to spend here every month; `account_category_month_limits`
+holds one row per month that *differs*, and only those. A category budgeted the
+same all year has no override rows at all, which is what lets moving the
+standing figure move every month nobody overrode.
+
+> **Two tables rather than a nullable `month` on one.** A unique index cannot
+> enforce "at most one standing row" when the distinguishing column is NULL --
+> Postgres and SQLite both treat NULLs as distinct, so
+> `UNIQUE (user, account, category, month)` would accept two standing limits for
+> the same pair. Partial indexes could say it, but they are dialect-specific and
+> `ensure_indexes` walks the metadata generically. Two tables, each with a unique
+> index that actually holds.
 
 > **A row of 0 is a real instruction**, and its absence is the only thing that
 > means "no limit". `planned_for_account` in `Finances/utils/limits.py`
