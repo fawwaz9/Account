@@ -174,6 +174,26 @@ export async function setBudgetTarget(
   });
 }
 
+/**
+ * Set what one account may spend on one category, or clear it with `null`.
+ *
+ * `null` removes the limit rather than setting one of zero -- and if it was the
+ * account's last, the account goes back to the target typed into Planned spend.
+ * Sending `0` instead would close the category *and* keep the account derived.
+ */
+export async function setAccountCategoryLimit(
+  userId: string,
+  accountId: string,
+  categoryId: string,
+  limitAmount: number | null
+) {
+  return put<unknown>(endpoints.finances.accountCategoryLimits(userId), {
+    account_id: accountId,
+    category_id: categoryId,
+    limit_amount: limitAmount,
+  });
+}
+
 export async function fetchBudgetSummary(userId: string, month: string) {
   return get<BudgetSummary>(`${endpoints.finances.budgetSummary(userId)}?month=${month}`);
 }

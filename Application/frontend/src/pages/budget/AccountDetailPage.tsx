@@ -11,7 +11,7 @@ import Transactions from "../../features/budget/components/Transactions";
 import WhereItWent from "../../features/budget/components/WhereItWent";
 import { useAccountActivity } from "../../features/budget/hooks/useAccountActivity";
 import { useCourses } from "../../features/grades/hooks/useCourses";
-import { fetchAccounts } from "../../features/budget/api";
+import { fetchAccounts, setAccountCategoryLimit } from "../../features/budget/api";
 import { useTransactionDelete } from "../../features/budget/hooks/useTransactionDelete";
 import { formatMoney } from "../../features/budget/money";
 import { Account, Transaction } from "../../features/budget/types";
@@ -51,6 +51,19 @@ export default function AccountDetailPage() {
     useAccountActivity(accountId);
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [recording, setRecording] = useState(false);
+
+  /**
+   * This account's limit for one category, or null to remove it.
+   *
+   * Reloads the whole page rather than just the list, because a limit also
+   * moves the Planned spend figure above it -- that target is the sum of these
+   * when there are any.
+   */
+  async function handleSetLimit(categoryId: string, limit: number | null) {
+    if (!user || !accountId) return;
+    await setAccountCategoryLimit(user.id, accountId, categoryId, limit);
+    await reload();
+  }
   const remove = useTransactionDelete(reload);
 
   const label = monthLabel(month);
@@ -143,17 +156,17 @@ export default function AccountDetailPage() {
 
           {/* Below the target bar, the same split again: what the month went on
               under the tiles, and the longer balance history under the chart it
-              continues. With no categories recorded there is nothing to put in
-              the left column, so the history takes the full width rather than
-              sitting beside a gap. */}
-          {activity.by_category.length > 0 ? (
-            <div className="accountSplit">
-              <WhereItWent entries={activity.by_category} />
-              <AccountBalanceChart points={activity.balance_history} />
-            </div>
-          ) : (
+              continues.
+
+              Always rendered now, where it used to appear only once something
+              had been spent. Category limits are set from inside this section,
+              so hiding it on an empty month hid the only way to budget an
+              account that has not been used yet -- the same reasoning that made
+              the budget page's copy unconditional. */}
+          <div className="accountSplit">
+            <WhereItWent entries={activity.by_category} onSetLimit={handleSetLimit} />
             <AccountBalanceChart points={activity.balance_history} />
-          )}
+          </div>
 
           <section className="ledgerSection">
             <div className="sectionHeading">

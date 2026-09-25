@@ -85,18 +85,37 @@ export default function PlannedSpend({
                         Save
                       </button>
                     </span>
-                  ) : (
-                    <button
-                      type="button"
-                      className="plannedFigure"
-                      onClick={() => {
-                        setEditing(entry.account_id);
-                        setDraft(String(entry.planned || ""));
-                      }}
-                    >
-                      {formatMoney(entry.actual)} / {formatMoney(entry.planned)}
-                    </button>
-                  )}
+                  ) : (() => {
+                    const figure = `${formatMoney(entry.actual)} / ${formatMoney(entry.planned)}`;
+
+                    // A derived target is the sum of that account's category
+                    // limits, set on its own page. Shown here, but not
+                    // editable: one number with two places to set it is the
+                    // shape where whichever you edited last quietly wins.
+                    if (entry.planned_is_derived) {
+                      return (
+                        <span
+                          className="plannedFigure plannedFigureDerived"
+                          title="From this account's category limits — set them on the account's page"
+                        >
+                          {figure}
+                        </span>
+                      );
+                    }
+
+                    return (
+                      <button
+                        type="button"
+                        className="plannedFigure"
+                        onClick={() => {
+                          setEditing(entry.account_id);
+                          setDraft(String(entry.planned || ""));
+                        }}
+                      >
+                        {figure}
+                      </button>
+                    );
+                  })()}
                 </div>
 
                 <ProgressBar
@@ -108,6 +127,7 @@ export default function PlannedSpend({
 
                 <span className="small-text muted plannedNote">
                   {(() => {
+                    if (entry.planned_is_derived) return "Budgeted by category on this account's page";
                     if (entry.planned === 0) return "No target set — click the figure to add one";
                     if (entry.remaining < 0) return `${formatMoney(-entry.remaining)} over`;
                     return `${formatMoney(entry.remaining)} left`;

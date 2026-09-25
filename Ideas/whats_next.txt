@@ -1,4 +1,37 @@
 Shipped so far (do not re-propose)
+        Record spending on the account page, and category limits keyed to it.
+          Two changes to the account detail page. A Record spending button with
+          NO ACCOUNT PICKER -- on an account's own page the account is not a
+          question, and a picker there can only be answered wrongly. Expense
+          only; income, transfers and the income-split deposit stay on the
+          budget page where more than one account is in view.
+          And category limits keyed on (account, category), which is the fix for
+          what got the first attempt removed: a whole-budget limit was judged
+          against one account's share of the spending, so a category split
+          across two accounts always looked under budget.
+          THE ACCOUNT'S TARGET IS NOW THE SUM OF ITS CATEGORY LIMITS, but only
+          when it has any. Savings ($9,000) and Money Lent ($1,200) carry real
+          targets and would never be itemised by category; deriving
+          unconditionally would report both as budgeting nothing. One pure
+          function, planned_for_account, read by both the account page and the
+          budget summary so they cannot disagree. It keys on the list being
+          EMPTY, not on its sum being falsy -- a single limit of 0 is a budget
+          of nothing, and a test fails on the falsy version.
+          The budget page shows derived targets read-only and no category limits
+          at all. Both absences are load-bearing: one number with two places to
+          set it is where the last edit quietly wins, and a per-account limit has
+          nothing to be judged against on a page spanning every account.
+          THE ROW LAYOUT BROKE THE SAME WAY TWICE and is now pinned by
+          categoryRow.test.ts. Adding a bar gives a row a third child, and
+          justify-content on the li only works while a row is exactly two spans.
+          jsdom has no layout engine, so no test that renders the component can
+          see this -- it reads the stylesheet from disk instead.
+          Mutation testing found a real integrity bug: without clearing
+          account_category_limits first, deleting a category fails with FOREIGN
+          KEY constraint failed. Both deletes clear it now, both tested.
+          Exercised end to end against a VACUUM INTO copy of data/app.db over
+          the real 18 accounts, 44 categories and 8 targets -- derive, agree
+          across both screens, clear, revert -- with every row count identical.
         Category spending limits were built, shipped, and ROLLED BACK.
           A standing monthly_limit per category with a per-month override, and
           red/amber/green colouring of "Where it went" against it. Deployed on

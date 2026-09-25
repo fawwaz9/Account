@@ -193,6 +193,77 @@ to want them, and made the page silently switch between one and two columns.
 The section takes its two actions as optional props: the account detail page
 reuses it for a single account, where page-level controls would be out of place.
 
+## Budgeting a category, on the account it is spent from
+
+A limit is keyed on **(account, category)**, and that pair is the whole design.
+
+The first attempt put the limit on the category alone and showed it on the
+account page, so a limit covering every account was judged against one account's
+share of the spending -- a category split across two accounts always looked
+safely under budget. It shipped, and was rolled back the same day. Keying on the
+pair means the limit and the spending it is measured against cover the same
+money.
+
+**Standing, not per-month.** One row says what this account means to spend here
+every month, until changed. A month column and a resolution rule can be added
+without moving anything here; the previous attempt built that machinery and
+threw it away with the rest.
+
+> **A row of 0 is a real instruction**, and its absence is the only thing that
+> means "no limit". `planned_for_account` in `Finances/utils/limits.py`
+> therefore keys on the list being **empty**, not on its sum being falsy -- a
+> single limit of 0 is a budget of nothing, and the obvious check reads a
+> deliberately closed account as merely unbudgeted.
+
+**The account's target is the sum of its category limits, when it has any.**
+Otherwise it keeps the figure typed into Planned spend. That condition is what
+protects Savings and Money Lent, which carry real targets and would never be
+itemised by "Groceries" -- deriving unconditionally would report both as
+budgeting nothing. The rule returns the figure and a `planned_is_derived` flag
+together, so no caller can take one without the other and describe a derived
+number as a manual one.
+
+Both screens read that one function, so they cannot report different targets for
+the same account. On the budget page a derived figure is shown but **not
+editable**: one number with two places to set it is the shape where whichever
+you edited last quietly wins.
+
+**The budget page shows no category limits at all**, and that absence is load-
+bearing rather than an oversight. It spans every account, so a per-account limit
+has nothing there to be judged against. It falls out of the data -- the summary
+leaves `limit` as None and such a row renders as a plain total.
+
+**Both deletes clear the table first.** `account_category_limits` has foreign
+keys to accounts and categories, so leaving rows behind is not untidiness, it is
+an integrity error on the delete. Mutation-testing proved it: removing the
+cleanup fails with `FOREIGN KEY constraint failed` rather than merely littering.
+
+> **The category row layout has now broken twice for the same reason.** Giving a
+> row a bar gives it a third child, and `justify-content` on the `li` only works
+> while a row is exactly two spans. The `li` stacks and `.categoryTop` spreads,
+> which is what `.plannedRow` / `.plannedTop` has always done one panel up.
+> `categoryRow.test.ts` pins it, because jsdom has no layout engine and no test
+> that renders the component can see this class of fault.
+
+## Recording spending from an account
+
+The account page has its own **Record spending** button, and it has no account
+picker. On an account's own page the account is not a question, and a picker
+there is a field that is always already answered and can only be answered
+wrongly.
+
+Its own dialog rather than a fifth mode on `AddMoneyModal`, which carries four
+modes, a debounced deposit preview and two account pickers -- locking that down
+would mean threading conditionals through all of it to switch most of it off.
+Expense only: income and transfers belong to the budget page where both accounts
+are in view, and a deposit splits across every account by income share, which is
+the opposite of what the dialog means.
+
+"Where it went" on this page now renders even with nothing spent, because limits
+are set from inside it and hiding it on an empty month hid the only way to
+budget an account that has not been used yet. That is the same reasoning that
+made the budget page's copy unconditional.
+
 ## The tuition shape, and why everything reuses it
 
 A tuition payment writes **exactly one ledger row**, never one per course.

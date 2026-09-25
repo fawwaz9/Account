@@ -35,6 +35,7 @@ from app.Finances.services.subscription_service import confirm_subscription, fin
 from app.Finances.schemas.budget import (
     BudgetSummary,
     TermBudget,
+    AccountCategoryLimitUpsert,
     BudgetTargetUpsert,
     SpendCategory,
     SpendCategoryCreate,
@@ -85,6 +86,7 @@ from app.Finances.services.budget_service import (
     delete_category,
     get_budget_summary,
     get_categories,
+    set_account_category_limit,
     set_target,
     update_category,
 )
@@ -536,6 +538,25 @@ def upsert_budget_target(user_id: VerifiedUserId, target: BudgetTargetUpsert, db
         "account_id": saved.account_id,
         "month": saved.month,
         "planned_amount": saved.planned_amount,
+    }
+
+
+@router.put("/{user_id}/account-category-limits", responses=ACCOUNT_404)
+def upsert_account_category_limit(
+    user_id: VerifiedUserId, limit: AccountCategoryLimitUpsert, db: DBSession
+):
+    """Set what one account may spend on one category, or clear it.
+
+    A null `limit_amount` removes the limit. If it was that account's last one,
+    the account goes back to the target typed into Planned spend.
+    """
+    if not set_account_category_limit(db, user_id, limit):
+        raise HTTPException(status_code=404, detail="Account or category not found")
+
+    return {
+        "account_id": limit.account_id,
+        "category_id": limit.category_id,
+        "limit_amount": limit.limit_amount,
     }
 
 

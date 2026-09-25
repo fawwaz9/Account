@@ -156,6 +156,10 @@ class AccountActivity(BaseModel):
     planned: float = 0.0
     remaining: float = 0.0
     used_percent: float = 0.0
+    #: True when `planned` is the sum of this account's category limits rather
+    #: than a figure typed into Planned spend. Sent so the client can say where
+    #: the number came from instead of offering to edit something derived.
+    planned_is_derived: bool = False
 
     #: One entry per day of the month, zero-filled, so the axis is a true
     #: calendar rather than only the days that happened to have movement.

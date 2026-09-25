@@ -65,12 +65,49 @@ class AccountBudget(BaseModel):
     remaining: float = 0.0
     #: Share of the plan used, 0-100+. 0 when nothing is planned.
     used_percent: float = 0.0
+    #: True when `planned` is the sum of this account's category limits. The
+    #: budget page shows such a figure without offering to edit it -- one number
+    #: with two places to set it is the shape where the last edit quietly wins.
+    planned_is_derived: bool = False
 
 
 class CategorySpend(BaseModel):
+    """One category's month.
+
+    `limit` is populated **only on an account's own page**, where the limit and
+    the spending it is judged against cover the same money. The budget summary
+    spans every account and leaves it None, so its rows render as plain totals:
+    a per-account limit has nothing to be measured against there, and showing
+    one would repeat the mistake that got the first attempt removed.
+
+    It is also None for Uncategorised, which has no row to hang a limit on.
+    """
+
     category_id: UUID | None = None
     category_name: str
     actual: float = 0.0
+    #: What this account means to spend here. None is "no limit"; 0 is "nothing
+    #: is meant to go here", under which any spending is over.
+    limit: float | None = None
+    #: limit - actual. Negative is overspent. 0.0 when there is no limit.
+    remaining: float = 0.0
+    #: Share of the limit used, 0-100+, not clamped -- the client needs to see it
+    #: pass 100 to colour the bar. 0.0 when there is no limit.
+    used_percent: float = 0.0
+
+
+class AccountCategoryLimitUpsert(BaseModel):
+    """Set or clear what one account may spend on one category.
+
+    `limit_amount` of None **deletes the row**, so the category goes back to
+    having no limit on this account -- and if it was the last one, the account
+    goes back to its manually set target. A PUT because the pair's limit is
+    replaced whole, including with nothing.
+    """
+
+    account_id: UUID
+    category_id: UUID
+    limit_amount: float | None = Field(default=None, ge=0)
 
 
 class BudgetSummary(BaseModel):

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app._database.models import (
     AccountModel,
+    AccountCategoryLimitModel,
     BudgetTargetModel,
     SpendCategoryModel,
     TransactionModel,
@@ -19,6 +20,7 @@ from app._database.models import (
 from app.Finances.schemas.account import AccountActivity, BalancePoint, DayFlow
 from app.Finances.schemas.budget import CategorySpend
 from app.Finances.services.budget_service import month_bounds
+from app.Finances.utils.limits import planned_for_account
 from app.Finances.schemas.transaction import TransactionKind
 
 
@@ -129,18 +131,39 @@ def get_account_activity(
             continue
         per_category[row.category_id] = per_category.get(row.category_id, 0.0) + abs(row.amount)
 
-    by_category = sorted(
-        (
-            CategorySpend(
-                category_id=category_id,
-                category_name=names.get(category_id, "Uncategorised"),
-                actual=round(actual, 2),
-            )
-            for category_id, actual in per_category.items()
-        ),
-        key=lambda entry: entry.actual,
-        reverse=True,
-    )
+    # What this account means to spend, per category. Keyed on the pair, so the
+    # limit and the spending below cover the same money -- which is the thing
+    # the whole-budget version got wrong.
+    limits = {
+        row.category_id: row.limit_amount
+        for row in db.query(AccountCategoryLimitModel)
+        .filter(
+            AccountCategoryLimitModel.user_id == user_id,
+            AccountCategoryLimitModel.account_id == account_id,
+        )
+        .all()
+    }
+
+    # A limited category appears even with nothing spent on it here. Built from
+    # spending alone, a limit you were safely under would be invisible, and you
+    # could only ever see the ones you were already breaking.
+    by_category = []
+    for category_id in per_category.keys() | limits.keys():
+        actual = round(per_category.get(category_id, 0.0), 2)
+        # Uncategorised has no row to hang a limit on, so `.get` returns None
+        # for it and the row renders as a plain total.
+        limit = limits.get(category_id)
+        by_category.append(CategorySpend(
+            category_id=category_id,
+            category_name=names.get(category_id, "Uncategorised"),
+            actual=actual,
+            limit=limit,
+            remaining=round(limit - actual, 2) if limit is not None else 0.0,
+            # A limit of 0 divides into nothing, so it reports 0% and the row is
+            # shown as over on `remaining` instead.
+            used_percent=round(actual / limit * 100, 1) if limit else 0.0,
+        ))
+    by_category.sort(key=lambda entry: entry.actual, reverse=True)
 
     target = (
         db.query(BudgetTargetModel)
@@ -151,7 +174,13 @@ def get_account_activity(
         )
         .first()
     )
-    planned = round(target.planned_amount if target else 0.0, 2)
+    # Derived from the categories when there are any, and the figure typed into
+    # Planned spend when there are not -- which is what keeps Savings and Money
+    # Lent, who carry targets and no categories, reading as budgeted.
+    planned, planned_is_derived = planned_for_account(
+        list(limits.values()),
+        round(target.planned_amount if target else 0.0, 2),
+    )
     spent = round(total_out, 2)
 
     balance = (
@@ -172,6 +201,7 @@ def get_account_activity(
         planned=planned,
         remaining=round(planned - spent, 2),
         used_percent=round(spent / planned * 100, 1) if planned > 0 else 0.0,
+        planned_is_derived=planned_is_derived,
         daily=[flows[key] for key in sorted(flows)],
         by_category=by_category,
         balance_history=running_balance(db, account_id),

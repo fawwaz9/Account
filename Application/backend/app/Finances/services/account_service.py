@@ -4,6 +4,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app._database.models import (
+    AccountCategoryLimitModel,
     AccountModel,
     BudgetTargetModel,
     RecurringTransactionModel,
@@ -412,6 +413,13 @@ def delete_account(db: Session, user_id: uuid.UUID, account_id: uuid.UUID):
     db.query(BudgetTargetModel).filter(
         BudgetTargetModel.user_id == user_id,
         BudgetTargetModel.account_id == account_id,
+    ).delete(synchronize_session=False)
+
+    # The account's category limits go with it. They are a foreign key, so
+    # leaving them is not untidiness -- it is an integrity error on the delete.
+    db.query(AccountCategoryLimitModel).filter(
+        AccountCategoryLimitModel.user_id == user_id,
+        AccountCategoryLimitModel.account_id == account_id,
     ).delete(synchronize_session=False)
 
     db.delete(account)

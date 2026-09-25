@@ -377,6 +377,11 @@
 
 .plannedFigure:hover { border-color: var(--border); color: var(--gold); }
 
+/* A derived figure is a span, not a button, so it must not invite a click it
+   cannot answer. Default cursor and no hover border. */
+.plannedFigureDerived { cursor: default; }
+.plannedFigureDerived:hover { border-color: transparent; color: var(--text); }
+
 .plannedEdit { display: flex; align-items: center; gap: 6px; }
 .plannedInput { width: 110px; padding: 5px 8px; }
 .plannedNote { margin-top: 1px; }
@@ -403,8 +408,15 @@
 
 .categoryList li {
   display: flex;
-  justify-content: space-between;
-  gap: 12px;
+  /* Column, because a row with a limit has three children -- the name-and-
+     figure line, the bar, and the note. This was `justify-content:
+     space-between` on the li itself, which is right while a row is exactly two
+     spans and wrong the moment it is not: the three spread sideways, and a row
+     with no bar shrank its single child to its content so the amount never
+     reached the right-hand edge. The comment warning about this was written
+     beside this rule after it happened the first time. */
+  flex-direction: column;
+  gap: 6px;
   font-size: 0.88rem;
   /* Room to breathe off the separator below, and a little inset from the panel
      edge, rather than text sitting on the line. Kept from the category-limits
@@ -420,8 +432,35 @@
   border-bottom: 1px solid #1f2a44;
 }
 
+/* The line that actually spreads. `width: 100%` is load-bearing: as a flex
+   child of a column it is stretched anyway, but stating it keeps this right if
+   the row is ever made a row again. */
+.categoryTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Long names give way; the figure never does. Without `min-width: 0` a flex
+   child refuses to shrink below its content, so one long category name would
+   shove the amount out of the row. */
+.categoryName { min-width: 0; overflow-wrap: anywhere; }
+
 .categoryList li:last-child { border-bottom: none; }
-.categoryAmount { font-variant-numeric: tabular-nums; color: var(--gold); }
+/* Padded to match `.plannedFigure`, which is what this becomes when the row is
+   editable. Without it an editable amount sits 7px left of a plain one and the
+   column of figures visibly fails to line up -- and the rows that differ are
+   the quiet ones: Uncategorised, and every row on the budget page. */
+.categoryAmount {
+  font-variant-numeric: tabular-nums;
+  color: var(--gold);
+  padding: 2px 6px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
 
 /* ===== Deposit split ===== */
 .depositSplit {

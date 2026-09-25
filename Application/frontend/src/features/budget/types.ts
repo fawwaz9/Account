@@ -120,12 +120,36 @@ export interface AccountBudget {
   actual: number;
   remaining: number;
   used_percent: number;
+  /**
+   * True when `planned` is the sum of this account's category limits rather
+   * than a figure typed into Planned spend. When it is, the figure is shown
+   * but not editable: one number with two places to set it is the shape where
+   * whichever you edited last quietly wins.
+   */
+  planned_is_derived: boolean;
 }
 
 export interface CategorySpend {
   category_id: string | null;
   category_name: string;
   actual: number;
+  /**
+   * What this account means to spend here, or `null` for no limit.
+   *
+   * Populated **only on an account's own page**, where the limit and the
+   * spending cover the same money. The budget summary spans every account and
+   * sends `null`, so its rows stay plain totals -- showing a per-account limit
+   * there would judge it against the wrong money, which is what got the first
+   * attempt at this removed.
+   *
+   * Also `null` for Uncategorised, which has no row to hang a limit on. A row
+   * with `null` here must render exactly as it did before limits existed.
+   */
+  limit: number | null;
+  /** limit - actual. Negative is overspent. 0 when there is no limit. */
+  remaining: number;
+  /** The server's figure, 0-100+, deliberately not clamped so the bar can go red. */
+  used_percent: number;
 }
 
 export interface BudgetSummary {
@@ -189,6 +213,13 @@ export interface AccountActivity {
   planned: number;
   remaining: number;
   used_percent: number;
+  /**
+   * True when `planned` is the sum of this account's category limits rather
+   * than a figure typed into Planned spend. When it is, the figure is shown
+   * but not editable: one number with two places to set it is the shape where
+   * whichever you edited last quietly wins.
+   */
+  planned_is_derived: boolean;
   /** One entry per day of the month, zero-filled */
   daily: DayFlow[];
   by_category: CategorySpend[];

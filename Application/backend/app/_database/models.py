@@ -340,6 +340,35 @@ class BudgetTargetModel(Base):
     planned_amount = Column(Float, nullable=False, default=0.0)
 
 
+class AccountCategoryLimitModel(Base):
+    """What one account is meant to spend on one category in a month.
+
+    Keyed on the **pair**, which is the whole point. An earlier attempt put the
+    limit on the category alone and showed it on a single account's page, so a
+    limit covering every account was judged against one account's share of the
+    spending -- and a category split across two accounts always looked safely
+    under budget. Here the limit and the spending it is measured against cover
+    the same money.
+
+    Standing rather than per-month: one row says what this account means to
+    spend here every month, until changed. There is deliberately no month
+    column; if a single month ever needs to differ, that is a month column and a
+    resolution rule, not a redesign.
+
+    **A row of 0 is a real instruction** -- "nothing is meant to go here" --
+    which is why the absence of a row, and not a falsy amount, is what means
+    "no limit". See `Finances/utils/limits.py`.
+    """
+
+    __tablename__ = "account_category_limits"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False)
+    account_id = Column(Uuid, ForeignKey("accounts.id"), nullable=False)
+    category_id = Column(Uuid, ForeignKey("spend_categories.id"), nullable=False)
+    limit_amount = Column(Float, nullable=False, default=0.0)
+
+
 class EventModel(Base):
     """Something that happens on a date, optionally repeating.
 
@@ -988,6 +1017,12 @@ Index("ix_spend_categories_user_id", SpendCategoryModel.user_id)
 # leads with user_id, and an index is only usable from its first column.
 Index("ix_budget_targets_account_id", BudgetTargetModel.account_id)
 
+# Both directions get one: "what does this account budget" drives the account
+# page, and "who budgets this category" is what a category delete has to find.
+# The unique index below leads with user_id, so neither is served by it.
+Index("ix_account_category_limits_account_id", AccountCategoryLimitModel.account_id)
+Index("ix_account_category_limits_category_id", AccountCategoryLimitModel.category_id)
+
 Index("ix_events_user_id", EventModel.user_id)
 Index("ix_events_course_id", EventModel.course_id)
 Index("ix_events_grade_id", EventModel.grade_id)
@@ -1054,5 +1089,12 @@ Index(
     BudgetTargetModel.user_id,
     BudgetTargetModel.account_id,
     BudgetTargetModel.month,
+    unique=True,
+)
+Index(
+    "uq_account_category_limits_user_account_category",
+    AccountCategoryLimitModel.user_id,
+    AccountCategoryLimitModel.account_id,
+    AccountCategoryLimitModel.category_id,
     unique=True,
 )

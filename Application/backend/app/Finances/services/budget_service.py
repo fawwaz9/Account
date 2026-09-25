@@ -6,6 +6,7 @@ from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from app._database.models import (
+    AccountCategoryLimitModel,
     AccountModel,
     BudgetTargetModel,
     SpendCategoryModel,
@@ -14,6 +15,7 @@ from app._database.models import (
 )
 from app.Finances.schemas.budget import (
     AccountBudget,
+    AccountCategoryLimitUpsert,
     BudgetSummary,
     BudgetTargetUpsert,
     CategorySpend,
@@ -21,6 +23,7 @@ from app.Finances.schemas.budget import (
     SpendCategoryUpdate,
     first_of_month,
 )
+from app.Finances.utils.limits import planned_for_account
 from app.Finances.schemas.transaction import TransactionKind
 
 #: Seeded once so the first expense has somewhere to go.
@@ -157,6 +160,13 @@ def delete_category(db: Session, user_id: uuid.UUID, category_id: uuid.UUID):
     if category is None:
         return None
 
+    # Any limits set against this category, on any account. A foreign key, so
+    # leaving them behind fails the delete rather than merely littering.
+    db.query(AccountCategoryLimitModel).filter(
+        AccountCategoryLimitModel.user_id == user_id,
+        AccountCategoryLimitModel.category_id == category_id,
+    ).delete(synchronize_session=False)
+
     # Scoped to the owner: without the user_id filter this UPDATE reaches every
     # row carrying the id, including other people's.
     db.query(TransactionModel).filter(
@@ -207,6 +217,68 @@ def set_target(db: Session, user_id: uuid.UUID, data: BudgetTargetUpsert):
     return target
 
 
+def set_account_category_limit(
+    db: Session, user_id: uuid.UUID, data: AccountCategoryLimitUpsert
+) -> bool:
+    """Set or clear what one account may spend on one category.
+
+    False when either the account or the category is not this user's, which the
+    route maps to a 404 -- the same answer as "does not exist", deliberately, so
+    the API does not confirm which ids are real.
+
+    A `limit_amount` of None **deletes the row** rather than storing a zero. The
+    two are different instructions: no row means this account does not budget
+    that category, and a row of 0 means it budgets it at nothing. Storing 0 for
+    "remove" would also keep the account deriving its target when it should have
+    gone back to the manual one.
+    """
+    account = (
+        db.query(AccountModel)
+        .filter(AccountModel.id == data.account_id, AccountModel.user_id == user_id)
+        .first()
+    )
+    if account is None:
+        return False
+
+    category = (
+        db.query(SpendCategoryModel)
+        .filter(
+            SpendCategoryModel.id == data.category_id,
+            SpendCategoryModel.user_id == user_id,
+        )
+        .first()
+    )
+    if category is None:
+        return False
+
+    row = (
+        db.query(AccountCategoryLimitModel)
+        .filter(
+            AccountCategoryLimitModel.user_id == user_id,
+            AccountCategoryLimitModel.account_id == data.account_id,
+            AccountCategoryLimitModel.category_id == data.category_id,
+        )
+        .first()
+    )
+
+    if data.limit_amount is None:
+        if row is not None:
+            db.delete(row)
+    elif row is None:
+        db.add(AccountCategoryLimitModel(
+            id=uuid.uuid4(),
+            user_id=user_id,
+            account_id=data.account_id,
+            category_id=data.category_id,
+            limit_amount=data.limit_amount,
+        ))
+    else:
+        row.limit_amount = data.limit_amount
+
+    db.commit()
+    return True
+
+
 # ------------------------------------------------------------------ summary --
 
 def get_budget_summary(db: Session, user_id: uuid.UUID, month: date):
@@ -252,9 +324,24 @@ def get_budget_summary(db: Session, user_id: uuid.UUID, month: date):
     )
     actual = {account_id: abs(total or 0.0) for account_id, total in spend_rows}
 
+    # One query for every account's category limits, grouped here, rather than
+    # one per account inside the loop below.
+    limits_by_account: dict[uuid.UUID, list[float]] = {}
+    for row in (
+        db.query(AccountCategoryLimitModel)
+        .filter(AccountCategoryLimitModel.user_id == user_id)
+        .all()
+    ):
+        limits_by_account.setdefault(row.account_id, []).append(row.limit_amount)
+
     entries = []
     for account in sorted(accounts, key=lambda a: (a.position, a.name)):
-        plan = round(planned.get(account.id, 0.0), 2)
+        # The same rule the account page uses, from the same function, so the
+        # two screens cannot report different targets for one account.
+        plan, is_derived = planned_for_account(
+            limits_by_account.get(account.id, []),
+            round(planned.get(account.id, 0.0), 2),
+        )
         spent = round(actual.get(account.id, 0.0), 2)
         entries.append(AccountBudget(
             account_id=account.id,
@@ -263,6 +350,7 @@ def get_budget_summary(db: Session, user_id: uuid.UUID, month: date):
             actual=spent,
             remaining=round(plan - spent, 2),
             used_percent=round(spent / plan * 100, 1) if plan > 0 else 0.0,
+            planned_is_derived=is_derived,
         ))
 
     category_rows = (
