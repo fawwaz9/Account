@@ -39,7 +39,7 @@ Application/
     src/styles/             one stylesheet per area
 ```
 
-Twenty-three tables. FastAPI + SQLAlchemy 2.0 + Pydantic v2; React 19 + Vite 7 +
+Twenty-four tables. FastAPI + SQLAlchemy 2.0 + Pydantic v2; React 19 + Vite 7 +
 Tailwind v4 + react-router-dom.
 
 **Two databases, one schema.** SQLite is the local default and the working copy

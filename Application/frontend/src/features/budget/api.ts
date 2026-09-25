@@ -147,10 +147,24 @@ export async function createCategory(userId: string, name: string) {
  * were built; this function is what was missing, which is why nothing could
  * edit one.
  */
+/**
+ * Patch a category. An omitted key is left alone; `monthly_limit: null` is sent
+ * explicitly and **clears** the limit.
+ *
+ * The distinction is whether the key is present, not what it holds, so the
+ * caller must omit `monthly_limit` rather than pass undefined alongside it --
+ * `JSON.stringify` drops undefined, which happens to do the right thing here,
+ * but relying on that silently would make the next edit a coin toss.
+ */
 export async function updateCategory(
   userId: string,
   categoryId: string,
-  payload: { name?: string; archived?: boolean; position?: number }
+  payload: {
+    name?: string;
+    archived?: boolean;
+    position?: number;
+    monthly_limit?: number | null;
+  }
 ) {
   return patch<SpendCategory>(endpoints.finances.category(userId, categoryId), payload);
 }
@@ -171,6 +185,26 @@ export async function setBudgetTarget(
     account_id: accountId,
     month,
     planned_amount: plannedAmount,
+  });
+}
+
+/**
+ * Override one category's limit for one month, or clear that override.
+ *
+ * `null` clears it, and the month falls back to the category's standing limit.
+ * That is deliberately not the same as sending `0`, which sets the month's
+ * limit to nothing and makes any spending overspending.
+ */
+export async function setCategoryLimit(
+  userId: string,
+  categoryId: string,
+  month: string,
+  limitAmount: number | null
+) {
+  return put<unknown>(endpoints.finances.categoryLimits(userId), {
+    category_id: categoryId,
+    month,
+    limit_amount: limitAmount,
   });
 }
 

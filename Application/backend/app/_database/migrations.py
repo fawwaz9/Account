@@ -71,6 +71,12 @@ ADDED_COLUMNS: dict[str, dict[str, str]] = {
     "recurring_tasks": {
         "priority": "INTEGER NOT NULL DEFAULT 3",
     },
+    "spend_categories": {
+        # Nullable on purpose: NULL means "no limit", which existing rows should
+        # read as. A DEFAULT 0 here would silently put every category that has
+        # ever existed one cent over budget.
+        "monthly_limit": "FLOAT",
+    },
     "transactions": {
         "category_id": "CHAR(32)",
         "recurring_id": "CHAR(32)",

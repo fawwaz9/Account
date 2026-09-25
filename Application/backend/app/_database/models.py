@@ -322,6 +322,13 @@ class SpendCategoryModel(Base):
     name = Column(String, nullable=False)
     archived = Column(Boolean, nullable=False, default=False)
     position = Column(Integer, nullable=False, default=0)
+    #: What you mean to spend here in a month, every month, until changed.
+    #:
+    #: **NULL and 0 are different answers.** NULL is "no limit on this category",
+    #: and 0 is "nothing is meant to go here", under which any spending at all is
+    #: over. A falsy check collapses the second into the first and silently
+    #: reports overspending as unbudgeted -- see `effective_limit`.
+    monthly_limit = Column(Float, nullable=True)
 
     transactions = relationship("TransactionModel", back_populates="category")
 
@@ -338,6 +345,31 @@ class BudgetTargetModel(Base):
     #: one value rather than any of twenty-eight.
     month = Column(Date, nullable=False)
     planned_amount = Column(Float, nullable=False, default=0.0)
+
+
+class CategoryBudgetModel(Base):
+    """One month's override of a category's standing limit.
+
+    Deliberately sparse: a row exists **only** for a month that differs from
+    `spend_categories.monthly_limit`. A category budgeted the same all year has
+    no rows here at all, so changing the standing limit moves every month that
+    was never overridden -- which is what "standing" has to mean for the word to
+    be worth anything.
+
+    It follows that **presence, not value, is what makes an override apply.** A
+    row of 0 is a real instruction ("nothing this month"), and is why
+    `effective_limit` tests for None rather than for truthiness.
+    """
+
+    __tablename__ = "category_budgets"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False)
+    category_id = Column(Uuid, ForeignKey("spend_categories.id"), nullable=False)
+    #: Always the first of the month, normalized on the way in so a month is
+    #: one value rather than any of twenty-eight.
+    month = Column(Date, nullable=False)
+    limit_amount = Column(Float, nullable=False, default=0.0)
 
 
 class EventModel(Base):
@@ -988,6 +1020,11 @@ Index("ix_spend_categories_user_id", SpendCategoryModel.user_id)
 # leads with user_id, and an index is only usable from its first column.
 Index("ix_budget_targets_account_id", BudgetTargetModel.account_id)
 
+# Same reasoning as budget_targets above: category_id does not lead the unique
+# index, so the "what does this category cost me" direction needs its own.
+Index("ix_category_budgets_category_id", CategoryBudgetModel.category_id)
+Index("ix_category_budgets_user_month", CategoryBudgetModel.user_id, CategoryBudgetModel.month)
+
 Index("ix_events_user_id", EventModel.user_id)
 Index("ix_events_course_id", EventModel.course_id)
 Index("ix_events_grade_id", EventModel.grade_id)
@@ -1054,5 +1091,12 @@ Index(
     BudgetTargetModel.user_id,
     BudgetTargetModel.account_id,
     BudgetTargetModel.month,
+    unique=True,
+)
+Index(
+    "uq_category_budgets_user_category_month",
+    CategoryBudgetModel.user_id,
+    CategoryBudgetModel.category_id,
+    CategoryBudgetModel.month,
     unique=True,
 )

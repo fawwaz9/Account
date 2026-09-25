@@ -26,6 +26,7 @@ export default function CategoriesModal({
 }: CategoriesModalProps) {
   const { user } = useAuth();
   const [names, setNames] = useState<Record<string, string>>({});
+  const [limits, setLimits] = useState<Record<string, string>>({});
   const [adding, setAdding] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
@@ -37,6 +38,11 @@ export default function CategoriesModal({
     setAdding("");
     setConfirmingDelete(null);
     setNames(Object.fromEntries(categories.map((c) => [c.id, c.name])));
+    // Empty string for "no limit", so the input shows blank rather than "null"
+    // or a 0 that would read as a real limit of nothing.
+    setLimits(Object.fromEntries(
+      categories.map((c) => [c.id, c.monthly_limit === null ? "" : String(c.monthly_limit)]),
+    ));
   }, [open, categories]);
 
   if (!open) return null;
@@ -73,6 +79,36 @@ export default function CategoriesModal({
                   const next = (names[category.id] ?? "").trim();
                   if (!next || next === category.name) return;
                   run(category.id, () => updateCategory(user!.id, category.id, { name: next }));
+                }}
+              />
+
+              {/* The standing limit: what this category is meant to cost in a
+                  month, every month. A single month can be overridden from
+                  "Where it went", which is where a month is on screen -- this
+                  dialog has no month and should not pretend to have one. */}
+              <input
+                className="loginInput categoryLimitInput"
+                type="number"
+                min={0}
+                step="0.01"
+                placeholder="No limit"
+                aria-label={`Monthly limit for ${category.name}`}
+                value={limits[category.id] ?? ""}
+                disabled={busyId === category.id}
+                onChange={(event) =>
+                  setLimits((prev) => ({ ...prev, [category.id]: event.target.value }))
+                }
+                onBlur={() => {
+                  const raw = (limits[category.id] ?? "").trim();
+                  // Empty clears the limit; it does not set one of zero. Sent
+                  // explicitly as null, because the server tells "leave it
+                  // alone" from "remove it" by whether the key is present.
+                  const next = raw === "" ? null : Number(raw);
+                  if (next !== null && !Number.isFinite(next)) return;
+                  if (next === category.monthly_limit) return;
+                  run(category.id, () =>
+                    updateCategory(user!.id, category.id, { monthly_limit: next })
+                  );
                 }}
               />
 

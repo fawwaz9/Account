@@ -1,4 +1,39 @@
 Shipped so far (do not re-propose)
+        Categories have spending limits, and "Where it went" is coloured by them.
+          A standing monthly_limit on spend_categories, plus category_budgets
+          holding one row per month that DIFFERS -- a category budgeted the same
+          all year has no rows there, which is what makes the standing limit
+          standing. Resolution is effective_limit in Finances/utils/limits.py,
+          shaped on Grades' effective_target.
+          THE RULE THAT MATTERS: None and 0 are different answers. NULL is "no
+          limit"; 0 is "nothing is meant to go here", under which any spending is
+          over. effective_limit tests `is not None`, not truthiness, and a test
+          fails on the falsy version. Same distinction in the UI: an emptied box
+          CLEARS the limit rather than setting one of nothing.
+          Clearing a standing limit needed exclude_unset on the PATCH: with every
+          field defaulting to None, "leave it alone" and "remove it" are the same
+          value and are told apart only by whether the key was sent. Without it a
+          limit could be set and never removed. update_category already did this,
+          so it took no change -- worth knowing before anyone "simplifies" it.
+          by_category is now the union of categories with spending and
+          non-archived categories with a limit, because the old list was built
+          from spending alone: you could only ever see limits you were already
+          breaking. Sort key unchanged, so existing order is untouched.
+          Colours reuse ProgressBar's existing three states rather than the
+          red/green that was asked for -- gold at 90% warns BEFORE you overspend,
+          and the panel then matches Planned spend directly above it.
+          A BUG FOUND BY MUTATION TESTING: Uncategorised has category_id null and
+          `editing` starts null, so `editing === id` was true on first render and
+          that row opened as a live editor, unprompted, on the one category that
+          can never have a limit. The test written for it passed, because it
+          looked only for a button named like a limit and the editor's says
+          "Save". It asserts what the row shows now.
+          Exercised end to end against a VACUUM INTO copy of data/app.db over the
+          real 44 categories and 143 transactions: standing limit, override,
+          zero, clearing, and every row count identical before and after.
+          NOT DEPLOYED YET. This adds a column AND a table, so the Supabase
+          schema step is mandatory -- RUN_SCHEMA_ON_STARTUP=0 means deploying
+          alone does not create them, and every budget read would 500.
         Budget and Account pages went narrow, and the cause was my own claim.
           .budgetPage and .accountPage each carried max-width:980px that had
           NEVER APPLIED in production: .container on the same element sets

@@ -36,6 +36,7 @@ from app.Finances.schemas.budget import (
     BudgetSummary,
     TermBudget,
     BudgetTargetUpsert,
+    CategoryLimitUpsert,
     SpendCategory,
     SpendCategoryCreate,
     SpendCategoryUpdate,
@@ -85,6 +86,7 @@ from app.Finances.services.budget_service import (
     delete_category,
     get_budget_summary,
     get_categories,
+    set_category_limit,
     set_target,
     update_category,
 )
@@ -536,6 +538,24 @@ def upsert_budget_target(user_id: VerifiedUserId, target: BudgetTargetUpsert, db
         "account_id": saved.account_id,
         "month": saved.month,
         "planned_amount": saved.planned_amount,
+    }
+
+
+@router.put("/{user_id}/category-limits", responses=CATEGORY_404)
+def upsert_category_limit(user_id: VerifiedUserId, limit: CategoryLimitUpsert, db: DBSession):
+    """Override one category's limit for one month, or clear that override.
+
+    A null `limit_amount` clears it, and the month falls back to the category's
+    standing `monthly_limit`. PUT rather than PATCH because the month's override
+    is replaced whole, including with nothing.
+    """
+    if not set_category_limit(db, user_id, limit):
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    return {
+        "category_id": limit.category_id,
+        "month": limit.month,
+        "limit_amount": limit.limit_amount,
     }
 
 

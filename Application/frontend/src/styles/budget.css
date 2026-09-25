@@ -401,6 +401,14 @@
 
 .categoryList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 
+/* A row with a limit carries a bar and a note, so it needs room the plain rows
+   do not. Keyed off the extra class rather than applied to every row, so a
+   category with no limit -- and every row on the account detail page -- keeps
+   exactly the spacing it had before limits existed. */
+.categoryRow { display: flex; flex-direction: column; gap: 4px; padding: 4px 0; }
+.categoryTop { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-width: 0; }
+.categoryLimitInput { width: 104px; flex: 0 0 auto; }
+
 .categoryList li {
   display: flex;
   justify-content: space-between;

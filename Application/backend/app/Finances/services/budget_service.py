@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app._database.models import (
     AccountModel,
     BudgetTargetModel,
+    CategoryBudgetModel,
     SpendCategoryModel,
     TransactionModel,
     UserModel,
@@ -16,11 +17,13 @@ from app.Finances.schemas.budget import (
     AccountBudget,
     BudgetSummary,
     BudgetTargetUpsert,
+    CategoryLimitUpsert,
     CategorySpend,
     SpendCategoryCreate,
     SpendCategoryUpdate,
     first_of_month,
 )
+from app.Finances.utils.limits import effective_limit
 from app.Finances.schemas.transaction import TransactionKind
 
 #: Seeded once so the first expense has somewhere to go.
@@ -207,6 +210,58 @@ def set_target(db: Session, user_id: uuid.UUID, data: BudgetTargetUpsert):
     return target
 
 
+def set_category_limit(db: Session, user_id: uuid.UUID, data: CategoryLimitUpsert) -> bool:
+    """Override one category's limit for one month, or clear the override.
+
+    Returns False when the category is not this user's, which the route maps to
+    a 404 -- the same answer as "does not exist", deliberately, so the API does
+    not confirm which ids are real.
+
+    A `limit_amount` of None **deletes the row**, so the month falls back to the
+    standing limit. That is the only way back: leaving a row behind holding the
+    same number as the standing limit would look identical today and stop
+    tracking it the moment the standing limit changed, which is exactly the bug
+    that makes a "default" not a default.
+    """
+    category = (
+        db.query(SpendCategoryModel)
+        .filter(
+            SpendCategoryModel.id == data.category_id,
+            SpendCategoryModel.user_id == user_id,
+        )
+        .first()
+    )
+    if category is None:
+        return False
+
+    override = (
+        db.query(CategoryBudgetModel)
+        .filter(
+            CategoryBudgetModel.user_id == user_id,
+            CategoryBudgetModel.category_id == data.category_id,
+            CategoryBudgetModel.month == data.month,
+        )
+        .first()
+    )
+
+    if data.limit_amount is None:
+        if override is not None:
+            db.delete(override)
+    elif override is None:
+        db.add(CategoryBudgetModel(
+            id=uuid.uuid4(),
+            user_id=user_id,
+            category_id=data.category_id,
+            month=data.month,
+            limit_amount=data.limit_amount,
+        ))
+    else:
+        override.limit_amount = data.limit_amount
+
+    db.commit()
+    return True
+
+
 # ------------------------------------------------------------------ summary --
 
 def get_budget_summary(db: Session, user_id: uuid.UUID, month: date):
@@ -276,24 +331,61 @@ def get_budget_summary(db: Session, user_id: uuid.UUID, month: date):
         .group_by(TransactionModel.category_id)
         .all()
     )
-    names = {
-        category.id: category.name
-        for category in db.query(SpendCategoryModel)
+    categories = (
+        db.query(SpendCategoryModel)
         .filter(SpendCategoryModel.user_id == user_id)
         .all()
-    }
-    by_category = sorted(
-        (
-            CategorySpend(
-                category_id=category_id,
-                category_name=names.get(category_id, "Uncategorised"),
-                actual=round(abs(total or 0.0), 2),
-            )
-            for category_id, total in category_rows
-        ),
-        key=lambda entry: entry.actual,
-        reverse=True,
     )
+    names = {category.id: category.name for category in categories}
+    standing = {category.id: category.monthly_limit for category in categories}
+    archived = {category.id for category in categories if category.archived}
+
+    # Only the months that were overridden have rows; a category budgeted the
+    # same all year has none, which is what makes the standing limit standing.
+    overrides = {
+        row.category_id: row.limit_amount
+        for row in db.query(CategoryBudgetModel)
+        .filter(CategoryBudgetModel.user_id == user_id, CategoryBudgetModel.month == start)
+        .all()
+    }
+
+    spent_by_category = {
+        category_id: round(abs(total or 0.0), 2) for category_id, total in category_rows
+    }
+
+    # The union, and the reason for it: a limit you are safely under would
+    # otherwise be invisible, because this list was built from spending alone.
+    # You could only ever see the limits you were already breaking. Archived
+    # categories are excluded unless they have spending this month -- they are
+    # history, and a limit on one is not a plan.
+    limited = {
+        category.id
+        for category in categories
+        if not category.archived
+        and effective_limit(standing.get(category.id), overrides.get(category.id)) is not None
+    }
+
+    by_category = []
+    for category_id in spent_by_category.keys() | limited:
+        spent = spent_by_category.get(category_id, 0.0)
+        # Uncategorised has no row, so no limit: `.get` on both sides returns
+        # None and `effective_limit` agrees.
+        limit = effective_limit(standing.get(category_id), overrides.get(category_id))
+        by_category.append(CategorySpend(
+            category_id=category_id,
+            category_name=names.get(category_id, "Uncategorised"),
+            actual=spent,
+            limit=limit,
+            remaining=round(limit - spent, 2) if limit is not None else 0.0,
+            # Mirrors AccountBudget: a limit of 0 gives 0.0 rather than dividing,
+            # and the client shows the row as over on `remaining` instead.
+            used_percent=round(spent / limit * 100, 1) if limit else 0.0,
+            limit_is_override=category_id in overrides,
+        ))
+
+    # Unchanged sort, so the existing order is untouched and the rows that are
+    # new here -- a limit with nothing spent against it yet -- settle at the end.
+    by_category.sort(key=lambda entry: entry.actual, reverse=True)
 
     return BudgetSummary(
         month=start,
