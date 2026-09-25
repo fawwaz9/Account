@@ -1,4 +1,15 @@
 Shipped so far (do not re-propose)
+        LIVE as of 2026-09-25: API image da6ac93 on revision
+          account-api-00017-kwt, frontend index-DKAVzYQ6.js, schema applied.
+          Verified with controls: the new route answers 401 while a route that
+          does not exist answers 404; five new strings found across five chunks
+          (the bundle is split, so they are NOT all in one -- the endpoint is in
+          the entry, limit_amount in the api chunk, "Record spending" in
+          AccountDetailPage); a bogus control string found in none. No
+          UndefinedColumn in the logs; CORS returns the Pages origin.
+          NOT ROLLBACK-SAFE ON THE API ALONE -- an older API omits
+          planned_is_derived and the limit fields, and `undefined === null` is
+          false, so every category row would render $NaN. Both halves together.
         Record spending on the account page, and category limits keyed to it.
           Two changes to the account detail page. A Record spending button with
           NO ACCOUNT PICKER -- on an account's own page the account is not a

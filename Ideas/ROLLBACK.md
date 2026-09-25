@@ -307,20 +307,24 @@ browser console shows everything.
 
 | | |
 |---|---|
-| API | image `394cb7c`, revision **`account-api-00016-fnx`**, `latestRevision: True` |
-| Previous API | image `93c9d73`, revision `account-api-00015-25t` |
-| Frontend | `index-BTL-dvNy.js` / `style-DQ_-JRnk.css`, from `394cb7c` |
+| API | image `da6ac93`, revision **`account-api-00017-kwt`**, `latestRevision: True` |
+| Previous API | image `394cb7c`, revision `account-api-00016-fnx` |
+| Frontend | `index-DKAVzYQ6.js` / `style-CDxFZYk5.css`, from `da6ac93` |
+| Schema | `account_category_limits`, applied 2026-09-25 |
 
-`394cb7c` **can** have its API rolled back on its own. It only removes things:
-the reverted client reads no field the older image fails to send, so an older
-API beside this frontend is merely an API with routes nobody calls.
+### `da6ac93` cannot have its API rolled back on its own
 
-> **A removal deploys in the opposite order to an addition.** Shipping goes
-> schema → API → main because a column has to exist before code reads it. Taking
-> something out runs the other way — **frontend first, then the API** — because
-> the reverted API stops sending fields the live frontend still reads. Doing it
-> the usual way round here would have put `$NaN` under every category for the
-> length of a Pages build.
+The same shape as the last time this was true, and for the same reason. An
+older API omits `planned_is_derived` and the category `limit` fields, and the
+client tests `entry.limit === null`. `undefined === null` is **false**, so every
+category row on an account page would take the has-a-limit branch and render
+`$NaN`.
+
+**Roll back both halves together** — the Cloud Run revision *and* the Pages
+deployment. Either alone leaves a mismatch.
+
+The schema may stay where it is: `account_category_limits` is a new table that
+the older image does not know about, and nothing it reads has moved.
 
 ## Two orphaned schema objects, left on purpose
 
