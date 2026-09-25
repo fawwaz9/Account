@@ -6,6 +6,7 @@ import DeleteConfirmModal from "../../features/grades/components/DeleteConfirmMo
 import EditTransactionModal from "../../features/budget/components/EditTransactionModal";
 import TuitionModal from "../../features/budget/components/TuitionModal";
 import ProgressBar from "../../features/budget/components/ProgressBar";
+import RecordSpendModal from "../../features/budget/components/RecordSpendModal";
 import Transactions from "../../features/budget/components/Transactions";
 import WhereItWent from "../../features/budget/components/WhereItWent";
 import { useAccountActivity } from "../../features/budget/hooks/useAccountActivity";
@@ -49,6 +50,7 @@ export default function AccountDetailPage() {
   const { activity, transactions, categories, month, setMonth, loading, error, reload } =
     useAccountActivity(accountId);
   const [editing, setEditing] = useState<Transaction | null>(null);
+  const [recording, setRecording] = useState(false);
   const remove = useTransactionDelete(reload);
 
   const label = monthLabel(month);
@@ -76,6 +78,18 @@ export default function AccountDetailPage() {
               <span className="small-text muted accountBalanceNote">balance today</span>
             </div>
 
+            {/* Next to the month rather than down with the ledger: this is the
+                one thing you come to an account's page to *do*, and the figures
+                above it are what it changes. */}
+            <div className="accountHeaderActions">
+              <button
+                type="button"
+                className="buttons addCourseButton"
+                onClick={() => setRecording(true)}
+              >
+                Record spending
+              </button>
+
             <input
               className="loginInput monthPicker"
               type="month"
@@ -83,6 +97,7 @@ export default function AccountDetailPage() {
               onChange={(event) => setMonth(`${event.target.value}-01`)}
               aria-label="Month to show"
             />
+            </div>
           </div>
 
           {/* The month's figures beside the month's shape: four tiles in a 2x2
@@ -205,6 +220,21 @@ export default function AccountDetailPage() {
         onClose={() => setEditing(null)}
         onSaved={reload}
       />
+
+      {/* `activity` is what carries the account's name, so this is mounted only
+          once the page has it -- and by then `accountId` is certainly a string,
+          which is why the non-null assertion is safe rather than hopeful. */}
+      {activity && (
+        <RecordSpendModal
+          open={recording}
+          accountId={accountId!}
+          accountName={activity.account_name}
+          categories={categories}
+          courses={courses}
+          onClose={() => setRecording(false)}
+          onSaved={reload}
+        />
+      )}
     </div>
   );
 }
