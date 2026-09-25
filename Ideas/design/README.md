@@ -210,6 +210,17 @@ so the sidebar stays put while a route arrives.
 > class of bug. Splitting the routes cut the first download from 136 KB to
 > 81 KB gzipped. It did **not** leave the stylesheet unchanged — see above.
 
+**One stylesheet means one namespace.** `cssCodeSplit` is false, so every
+`styles/*.css` is concatenated and a bare class selector reaches every page.
+Two files defining the same name are in a cascade fight decided by whichever
+the bundler emitted last, and the loser is usually a page whose author never
+saw the other file. `.categoryList` was the budget's "Where it went" list *and*
+the grade-category list on a course page, and the budget rules won: grade rows
+were inset from their own border, given a second separator, shrunk a step and
+spaced apart. **Scope a page's rules under that page's own container** — the
+budget list is `.categorySpend .categoryList` now. `classCollisions.test.ts`
+fails on any bare class name defined in two stylesheets.
+
 **Tailwind scans comments too.** It looks for candidate class names in source
 files and cannot tell prose from markup, so writing a bare utility word in a
 comment adds a real rule to the production stylesheet. One did: a comment in

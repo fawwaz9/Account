@@ -29,11 +29,11 @@ describe("a category row", () => {
   it("is described by the stylesheet", () => {
     expect(CSS.length).toBeGreaterThan(1000);
     expect(rule(".categoryTop")).not.toBe("");
-    expect(rule(".categoryList li")).not.toBe("");
+    expect(rule(".categorySpend .categoryList li")).not.toBe("");
   });
 
   it("stacks its children rather than spreading them", () => {
-    expect(rule(".categoryList li")).toMatch(/flex-direction:\s*column/);
+    expect(rule(".categorySpend .categoryList li")).toMatch(/flex-direction:\s*column/);
   });
 
   it("spreads the name and the amount across the full line", () => {
