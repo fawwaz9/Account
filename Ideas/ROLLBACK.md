@@ -303,22 +303,44 @@ If the site loads but every request fails, it is almost certainly one of:
 Both fail silently from the server's side: the API's logs stay clean while the
 browser console shows everything.
 
-## When the schema is ahead of the code
+## Live now
 
-As of 2026-09-24 the Supabase schema carries `spend_categories.monthly_limit`
-and the `category_budgets` table, while the API still serves `d635bf5`, which
-knows about neither. **This is a normal resting state, not a fault.** Shipping
-goes schema -> API -> main precisely because a new nullable column and a new
-empty table are invisible to the running image; the reverse order is what 500s.
+| | |
+|---|---|
+| API | image `93c9d73`, revision **`account-api-00015-25t`**, `latestRevision: True` |
+| Previous API | image `d635bf5`, revision `account-api-00014-zxv` |
+| Frontend | `index-BhgbsV2X.js` / `style-Dn5prJnf.css`, from `93c9d73` |
+| Schema | `spend_categories.monthly_limit` + `category_budgets`, applied 2026-09-24 |
 
-So if you are reading this during an incident: the schema being ahead is not the
-cause. A rollback of the API needs no schema change to go with it, because
-nothing the old code reads has moved.
+### `93c9d73` cannot have its API rolled back on its own
 
-What is *not* safe is the other direction -- deploying code that expects a
-column Supabase does not have. That is `UndefinedColumn` or
-`relation ... does not exist` in the logs, and it means the schema step was
-skipped.
+Roll back the API alone and the **frontend breaks visibly**: the old API omits
+`limit`, `remaining` and `used_percent` from every category row, and the client
+tests `entry.limit === null`. `undefined === null` is **false**, so every row
+takes the has-a-limit branch, draws a bar with no target, and renders
+`formatMoney(undefined)` — **"$NaN left" under every category**. Checked by
+running it, not by reading it.
+
+**So roll back both halves together**: the Cloud Run revision *and* the Pages
+deployment (Dashboard → the project → Deployments → the build before
+`93c9d73`). Either alone leaves a mismatch.
+
+The hardening, if this comes up again: `entry.limit == null` — loose, catching
+both `null` and `undefined` — would make the client degrade to "no limits"
+against an older API instead of showing NaN. Not applied, because it is a change
+to code that is already deployed and working.
+
+### The schema is allowed to be ahead of the code
+
+A new nullable column and a new empty table are invisible to the running image,
+which is why shipping goes schema → API → main; the reverse order is what 500s.
+So if you are reading this mid-incident, **the schema being ahead is not the
+cause**, and rolling the API back needs no schema change with it — nothing the
+old code reads has moved.
+
+What is *not* safe is the other direction: code expecting a column Supabase does
+not have. That reads as `UndefinedColumn` or `relation ... does not exist` in
+the logs, and it means the schema step was skipped.
 
 ## Data: restore a backup
 

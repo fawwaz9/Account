@@ -31,7 +31,25 @@ Shipped so far (do not re-propose)
           Exercised end to end against a VACUUM INTO copy of data/app.db over the
           real 44 categories and 143 transactions: standing limit, override,
           zero, clearing, and every row count identical before and after.
-          HALF DEPLOYED, ON PURPOSE, AND SAFE. Stopped between steps 11 and 12
+          LIVE as of 2026-09-24: API image 93c9d73 on revision
+          account-api-00015-25t (latestRevision True), frontend
+          index-BhgbsV2X.js, schema applied to Supabase.
+          Verified on the deployed site with controls, not by eye: the new route
+          answers 401 while a route that does not exist answers 404 -- without
+          that second call a 401 could merely mean auth refuses everything. All
+          five new strings found across four chunks (the bundle is split now, so
+          they are NOT all in BudgetPage: category-limits is in the entry,
+          limit_amount in the api chunk, the WhereItWent strings in the budget
+          chunk), and a bogus control string found in none. No UndefinedColumn
+          or missing-relation in the API logs; CORS returns the Pages origin.
+          THE API CANNOT BE ROLLED BACK ALONE. An older API omits limit,
+          remaining and used_percent, and the client tests `limit === null` --
+          `undefined === null` is false, so every row would take the has-a-limit
+          branch and render "$NaN left". Confirmed by running it. Roll back the
+          Pages deployment with the Cloud Run revision, or neither. A loose
+          `== null` would harden this; not applied, since the deployed code
+          works and that is a change for its own deploy.
+          WAS HALF DEPLOYED FOR A WHILE, ON PURPOSE, AND SAFE. Stopped between steps 11 and 12
           because Docker Desktop froze -- its UI processes were up, no Linux VM
           existed, `docker ps` hung rather than erring, and the backend log had
           stopped advancing. A clean quit-and-relaunch did not revive it.
