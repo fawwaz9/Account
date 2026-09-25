@@ -401,25 +401,58 @@
 
 .categoryList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 
-/* A row with a limit carries a bar and a note, so it needs room the plain rows
-   do not. Keyed off the extra class rather than applied to every row, so a
-   category with no limit -- and every row on the account detail page -- keeps
-   exactly the spacing it had before limits existed. */
-.categoryRow { display: flex; flex-direction: column; gap: 4px; padding: 4px 0; }
-.categoryTop { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-width: 0; }
-.categoryLimitInput { width: 104px; flex: 0 0 auto; }
-
+/* The row stacks; the line inside it is what spreads.
+   
+   This was a row itself, with `space-between` directly on the `li`. That worked
+   while a row was exactly two spans, and broke the moment one gained a bar and
+   a note underneath: three children spread horizontally instead of stacking,
+   and on a row with no bar the single remaining child shrank to its content, so
+   the name and the amount sat together on the left with the space-between
+   pushing against nothing. Same shape as `.plannedRow` / `.plannedTop` above,
+   which is the structure this should have borrowed in the first place. */
 .categoryList li {
   display: flex;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  gap: 6px;
   font-size: 0.88rem;
-  padding: 4px 0;
+  /* Was `4px 0`. Room to breathe off the separator below it, and a little
+     inset from the panel edge so text is not flush against it. */
+  padding: 10px 4px;
   border-bottom: 1px solid #1f2a44;
 }
 
 .categoryList li:last-child { border-bottom: none; }
-.categoryAmount { font-variant-numeric: tabular-nums; color: var(--gold); }
+
+/* The part that actually spreads. `width: 100%` is load-bearing: as a flex
+   child of a column it is stretched anyway, but stating it keeps this correct
+   if the row ever goes back to being a row. */
+.categoryTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Long names give way; the figure never does. Without `min-width: 0` a flex
+   child refuses to shrink below its content, so one long category name would
+   shove the amount out of the row entirely. */
+.categoryName { min-width: 0; overflow-wrap: anywhere; }
+
+.categoryLimitInput { width: 104px; flex: 0 0 auto; }
+
+/* Padded to match `.plannedFigure`, which is what this becomes when the row is
+   editable. Without it an editable amount sits 7px further left than a plain
+   one -- Uncategorised, or any row on the account detail page -- and the column
+   of figures visibly fails to line up. */
+.categoryAmount {
+  font-variant-numeric: tabular-nums;
+  color: var(--gold);
+  padding: 2px 6px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
 
 /* ===== Deposit split ===== */
 .depositSplit {

@@ -76,10 +76,14 @@ export default function WhereItWent({
             const isEditing = id !== null && editing === id;
             const note = limitNote(entry);
 
+            // Every row stacks the same way, with or without a bar, so the
+            // line that spreads is `.categoryTop` rather than the `li` itself.
+            // A conditional class used to mark the rows with a bar; it turned
+            // out to be what kept the plain rows from spreading at all.
             return (
-              <li key={id ?? "none"} className={entry.limit === null ? undefined : "categoryRow"}>
+              <li key={id ?? "none"}>
                 <div className="categoryTop">
-                  <span>{entry.category_name}</span>
+                  <span className="categoryName">{entry.category_name}</span>
 
                   {isEditing ? (
                     <span className="plannedEdit">
