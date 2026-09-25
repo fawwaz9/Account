@@ -31,9 +31,34 @@ Shipped so far (do not re-propose)
           Exercised end to end against a VACUUM INTO copy of data/app.db over the
           real 44 categories and 143 transactions: standing limit, override,
           zero, clearing, and every row count identical before and after.
-          NOT DEPLOYED YET. This adds a column AND a table, so the Supabase
-          schema step is mandatory -- RUN_SCHEMA_ON_STARTUP=0 means deploying
-          alone does not create them, and every budget read would 500.
+          HALF DEPLOYED, ON PURPOSE, AND SAFE. Stopped between steps 11 and 12
+          because Docker Desktop froze -- its UI processes were up, no Linux VM
+          existed, `docker ps` hung rather than erring, and the backend log had
+          stopped advancing. A clean quit-and-relaunch did not revive it.
+          DONE: backup (run 36077617209, completed success) and the Supabase
+          schema. monthly_limit is double precision, NULLABLE, NO DEFAULT (a
+          default would have put all 57 categories a cent over budget);
+          category_budgets has its 5 columns and all 4 indexes including
+          uq_category_budgets_user_category_month; 57 categories and 132
+          transactions unchanged; every existing category reads as "no limit";
+          the override table is empty. Asserted ABSENT first, so "present
+          after" meant something.
+          NOT DONE: the API image and the `main` push. The API still serves
+          d635bf5 on revision account-api-00014-zxv, latestRevision True.
+          WHY THIS IS SAFE TO LEAVE: a new nullable column and a new empty table
+          are invisible to the running image, which is exactly why shipping.md
+          orders it schema -> API -> main. Verified rather than assumed:
+          /health returns {"status":"ok","database":"ok"}, the new route answers
+          404 (absent, not deployed) while /budget-summary answers 401 -- the
+          control that makes the 404 mean "no such route" rather than "auth
+          refuses everything".
+          TO RESUME: skip steps 10 and 11, they are done and re-running the
+          schema is harmless but pointless. Start at step 12 -- build
+          --platform linux/amd64 --provenance=false, smoke-test the container
+          (GOOGLE_CLIENT_ID has no default and its absence reads only as
+          "failed to start and listen on the port"), push, deploy with
+          --port=8000, confirm latestRevision True, then push main and verify
+          the frontend BY CONTENT. The commit to deploy is f0dfede.
         Budget and Account pages went narrow, and the cause was my own claim.
           .budgetPage and .accountPage each carried max-width:980px that had
           NEVER APPLIED in production: .container on the same element sets

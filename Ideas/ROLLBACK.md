@@ -303,6 +303,23 @@ If the site loads but every request fails, it is almost certainly one of:
 Both fail silently from the server's side: the API's logs stay clean while the
 browser console shows everything.
 
+## When the schema is ahead of the code
+
+As of 2026-09-24 the Supabase schema carries `spend_categories.monthly_limit`
+and the `category_budgets` table, while the API still serves `d635bf5`, which
+knows about neither. **This is a normal resting state, not a fault.** Shipping
+goes schema -> API -> main precisely because a new nullable column and a new
+empty table are invisible to the running image; the reverse order is what 500s.
+
+So if you are reading this during an incident: the schema being ahead is not the
+cause. A rollback of the API needs no schema change to go with it, because
+nothing the old code reads has moved.
+
+What is *not* safe is the other direction -- deploying code that expects a
+column Supabase does not have. That is `UndefinedColumn` or
+`relation ... does not exist` in the logs, and it means the schema step was
+skipped.
+
 ## Data: restore a backup
 
 **Never restore over production.** Restore into a second Supabase project, check
