@@ -121,24 +121,20 @@ export default function AccountDetailPage() {
             </div>
           </div>
 
-          {/* The month's figures beside the month's shape: four tiles in a 2x2
-              block, with the daily flow they summarise next to them rather than
-              a screen below. Every figure here is for the chosen month, so each
-              tile says so rather than leaving the reader to assume. */}
-          <div className="accountSplit">
-            <ul className="tileRow">
-              <Tile label={`In · ${label}`} value={formatMoney(activity.total_in)} tone="in" />
-              <Tile label={`Out · ${label}`} value={formatMoney(activity.total_out)} tone="out" />
-              <Tile
-                label={`Net · ${label}`}
-                value={formatMoney(activity.net, { signed: true })}
-                tone={activity.net < 0 ? "out" : "in"}
-              />
-              <Tile label={`Movements · ${label}`} value={String(activity.transaction_count)} />
-            </ul>
-
-            <AccountFlowChart days={activity.daily} monthLabel={label} />
-          </div>
+          {/* The month in four figures, across the full width. They are the
+              headline of the page and read as one row of "this month"; every
+              one is for the chosen month, so each tile says so rather than
+              leaving the reader to assume. */}
+          <ul className="tileRow">
+            <Tile label={`In · ${label}`} value={formatMoney(activity.total_in)} tone="in" />
+            <Tile label={`Out · ${label}`} value={formatMoney(activity.total_out)} tone="out" />
+            <Tile
+              label={`Net · ${label}`}
+              value={formatMoney(activity.net, { signed: true })}
+              tone={activity.net < 0 ? "out" : "in"}
+            />
+            <Tile label={`Movements · ${label}`} value={String(activity.transaction_count)} />
+          </ul>
 
           <section className="accountTarget">
             <div className="sectionHeading">
@@ -162,18 +158,23 @@ export default function AccountDetailPage() {
             </span>
           </section>
 
-          {/* Below the target bar, the same split again: what the month went on
-              under the tiles, and the longer balance history under the chart it
-              continues.
+          {/* What the month went on, beside the two readings of the same
+              money: the daily in-and-out first, because it is the month the
+              figures above describe, and the long balance history under it as
+              the wider context that flow sits inside.
 
-              Always rendered now, where it used to appear only once something
-              had been spent. Category limits are set from inside this section,
-              so hiding it on an empty month hid the only way to budget an
-              account that has not been used yet -- the same reasoning that made
-              the budget page's copy unconditional. */}
+              "Where it went" is always rendered, where it used to appear only
+              once something had been spent. Category limits are set from inside
+              it, so hiding it on an empty month hid the only way to budget an
+              account nobody has used yet -- the same reasoning that made the
+              budget page's copy unconditional. */}
           <div className="accountSplit">
             <WhereItWent entries={activity.by_category} onSetLimit={handleSetLimit} />
-            <AccountBalanceChart points={activity.balance_history} />
+
+            <div className="accountCharts">
+              <AccountFlowChart days={activity.daily} monthLabel={label} />
+              <AccountBalanceChart points={activity.balance_history} />
+            </div>
           </div>
 
           <section className="ledgerSection">

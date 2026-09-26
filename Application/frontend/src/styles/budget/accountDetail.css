@@ -60,19 +60,26 @@
   gap: 12px;
 }
 
-/* 2x2 rather than one flexible row: beside a chart there is only room for two
-   across, and a 2x2 block reads as one unit of "this month" rather than as a
-   strip of four unrelated figures. */
-.accountSplit .tileRow {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  /* The grid's own gap already separates the columns. */
-  margin-bottom: 0;
+/* Four across, full width. The base rule's `auto-fit` already does this; the
+   2x2 override that used to live here was for when the tiles sat beside the
+   flow chart, and that chart has moved down next to "Where it went". */
+
+/* The right-hand column: the month's flow above, the long balance history
+   below. A column of its own rather than two grid children, so "Where it went"
+   on the left stays one cell beside both of them instead of being stretched
+   down the height of two. */
+.accountCharts {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
 }
 
-/* .flowPanel already carries a bottom margin for when it is stacked; inside the
-   split the grid gap does that job, and the margin only leaves the two columns
+/* .flowPanel carries a bottom margin for when it is stacked on its own; inside
+   these layouts the gap does that job, and the margin only leaves the columns
    ending at different heights. */
-.accountSplit > .flowPanel {
+.accountSplit > .flowPanel,
+.accountCharts > .flowPanel {
   margin-bottom: 0;
 }
 
@@ -89,15 +96,20 @@
 }
 
 @media (max-width: 900px) {
-  /* One column: at this width the tiles and the chart each want the full
-     measure, and side by side neither gets it. */
+  /* One column: at this width "Where it went" and the charts each want the
+     full measure, and side by side neither gets it. The tiles are no longer
+     part of this split -- their own `auto-fit` reflows them to two across and
+     then one without help. */
   .accountSplit {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .accountSplit .tileRow {
-    margin-bottom: 0;
-  }
+  /* Nothing needed for .accountCharts: it is already a flex column with a gap,
+     so narrowing the page just makes it the only column.
+     
+     A rule restating that same gap sat here and was pure noise -- it set the
+     value the base rule already set, which is indistinguishable from a rule
+     doing something until you compare the two. */
 }
 
 .tile {
