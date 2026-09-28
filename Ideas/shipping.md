@@ -291,6 +291,46 @@ grep -c "a string only the new code has" /tmp/live.js
 Grep the **file**, never a shell variable — a 475 KB bundle in a variable gave a
 false negative once.
 
+> **The bundle is split, so `index-*.js` is not the app.** Routes are lazy since
+> the code-splitting work, and a new string lands in whichever chunk owns it. A
+> grep of the entry chunk that finds nothing has proved nothing. Find the chunk
+> that owns the code you changed, and read the **stylesheet separately** — CSS
+> is its own file and travels on its own schedule.
+
+> **Checking that a chunk exists by its status code is vacuous.** Pages serves
+> `index.html` — status **200**, `text/html` — for any asset it does not have,
+> so every URL you try comes back 200 whether the file is there or not. Check
+> `content-type` instead:
+>
+> ```sh
+> curl -sI "https://account-2a7.pages.dev/assets/$chunk" | grep -i content-type
+> # text/javascript = there. text/html = missing, and the 200 was a lie.
+> ```
+
+> **Read it twice.** A mid-propagation edge once served the new JS beside the
+> old CSS, which looks exactly like a broken deploy. A second cache-busted read
+> a minute later showed the correct pair.
+
+> ### `cssCodeSplit: false` preserves the CONTENTS of the CSS, not its ORDER
+>
+> This cost a day and is the least obvious thing in this file. Making routes
+> lazy changed the module graph, which changed the order rules are emitted in,
+> which flipped a specificity **tie** that had always been decided by emission
+> order. `.budgetPage { max-width: 980px }` had never applied; after the split
+> it did, and the budget page came out narrow with nothing in the diff to
+> explain it.
+>
+> **"The rule multiset is identical" is true and insufficient.** It was true,
+> and the page still broke. When a build config touches chunking, diff the
+> emitted CSS by **order** as well as by content, and check any two rules that
+> target the same element with equal specificity.
+>
+> **No component test can catch this.** jsdom has no layout engine and no
+> cascade, so a rendering test sees nothing. The guard has to read the built
+> stylesheet — and read it with `node:fs`, because **vitest stubs CSS imports as
+> empty strings**: `import.meta.glob` over `.css` hands back filenames with no
+> content, and a test written that way passes without ever looking at a rule.
+
 ### 15. Check it end to end
 
 ```sh
@@ -332,6 +372,33 @@ it has gone both ways:
 
 Check it while the code is in front of you and record the answer.
 
+### 18. If you REMOVED a feature, say what its table is now
+
+> **A removal deletes the code. It does not delete the table, and nobody
+> notices.** `394cb7c` took whole-budget category limits out — model, service,
+> routes, frontend — and `category_budgets` is still in production with four
+> indexes and two rows of real data. It was found four days later by counting
+> tables, not by anything failing, because nothing fails: no code selects from
+> it and no foreign key points at it.
+>
+> The cost is that production now has **26 tables where the schema builds 25**,
+> so the file every other document treats as the description of this database has
+> quietly stopped being it.
+>
+> **Do not reflexively drop it** — dropping destroys data that rolling the code
+> back does not, which is exactly why this is a decision and not a cleanup. Write
+> the answer down instead:
+>
+> ```sh
+> # what production actually has, against what the schema builds
+> SELECT table_name FROM information_schema.tables
+> WHERE table_schema='public' AND table_type='BASE TABLE' ORDER BY table_name;
+> ```
+>
+> Name the orphaned table in `whats_next.txt` with its row count, and say whether
+> it is kept for the data or waiting to be dropped. Either is fine; not knowing
+> which is not.
+
 ---
 
 ## The short version
@@ -346,5 +413,7 @@ Check it while the code is in front of you and record the answer.
 8. Schema to Supabase — only if `app/_database/` changed, columns asserted absent first.
 9. Build amd64, smoke-test, push.
 10. `gcloud run deploy --port=8000`, confirm `latestRevision: True`.
-11. Push `main`, verify the frontend **by content**.
+11. Push `main`, verify the frontend **by content**, and by chunk — the bundle is
+    split, and a 200 on a missing asset is Pages serving `index.html`.
 12. Update `ROLLBACK.md` and `whats_next.txt`.
+13. If you removed a feature, name the table it orphaned and say what happens to it.

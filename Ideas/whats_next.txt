@@ -1251,6 +1251,111 @@ Housekeeping, learned the hard way 2026-09-17
   The first paragraph was rewritten 2026-09-17 to lead with the goal; the block
   under it was left alone and needs the same treatment.
 
+From the front-end review, 2026-09-28
+- An outside model walked the live site and filed 23 claims. Nine held; they are
+  audit.md #57-#65. Fourteen did not, and are written up there so they are not
+  raised again -- including both of its "criticals", which were one observation
+  and not a defect.
+- Do #58 first. UserPreferences declares seven fields Settings never sends, and
+  one of them is timezone. It defaults to America/Regina and timing_service uses
+  it to decide whether a task was finished early or late, so every user outside
+  that zone gets a figure the module's own docstring calls "a systematic drift
+  toward late", with no way to correct it. currency is stored, validated as ISO
+  4217, and then ignored by formatMoney, which hardcodes $. The Settings form
+  already exists; this is fields, not architecture.
+- #57 is the cheapest: "Left to spend" keeps its label when it goes negative, so
+  an overspent month reads "-$51,650.99 left to spend". NetWorth already swaps
+  its label to "In the red" for the same reason -- copy that.
+- A design question, not a finding: should a category be able to declare itself
+  not-spending? A student loan recorded as an expense in a "Student Loans"
+  category distorts every budget-vs-plan figure downstream, and the app has no
+  opinion about it. The settled preference here is options over rules, so if
+  this is worth doing it is a flag the user sets, not a warning the app raises.
+
+Interface quality, asked for 2026-09-28
+Three standing asks, all of them about the app acknowledging the person using
+it. Counted against the code on the day they were written, so the numbers below
+are the size of each job rather than an impression of it.
+
+- CONFIRM EVERY DELETE. Four already do, through DeleteConfirmModal: a grade, a
+  course, an account, a transaction. NINE DO NOT, and two of those cascade:
+    * a task            TasksPage.handleDelete
+    * a calendar event  CalendarPage.handleDelete
+    * a reminder        ReminderModal.handleDelete
+    * a blocked period  BlackoutsModal.handleDelete
+    * a job             JobModal.handleDelete      -- cascades to its shifts and cheques
+    * a paycheque       PaychequeModal.handleDelete
+    * a tuition payment TuitionModal.handleDelete
+    * a sinking fund    SinkingFunds              -- cascades to its transfers
+    * a standing rule   Repeating.onStop, Recurring.onDelete
+  The fund is the sharp one: its own aria-label says "Remove {name} and its
+  transfers", so it announces the cascade and then performs it on one click.
+  There are also already TWO confirmation idioms -- the modal, and the inline
+  "Yes, delete / Keep" pair in CategoriesModal. Pick one before adding nine more
+  instances of the wrong one. The modal is the better default; the inline pair
+  is better inside a list you are editing, which is why CategoriesModal has it.
+
+- MAKE A CLICK FEEL LIKE A CLICK. 183 buttons in the app, 114 with a disabled
+  binding, so ~69 fire with no acknowledgement at all. `:active` appears ZERO
+  times in the entire stylesheet -- nothing anywhere shows a pressed state.
+  aria-busy is used twice; role="status" nine times. The cheapest large win is
+  one `:active` rule on the shared button classes, which is a few lines and
+  covers all 183. Then the pending state on anything that makes a request:
+  PlannedSpend's scoped aria-busy is the pattern to copy, and it exists because
+  removing the only feedback on a month step once made a faster app feel slower.
+
+- EXPLAIN ON DEMAND, NOT EVERYWHERE. 84 `small-text muted` nodes, 36 more plain
+  `muted`, 8 loginHint -- 128 sentences of ambient explanation. Each reads as
+  thoughtful on its own; together they crowd out the figures the panels exist to
+  show. Wanted instead: a (?) beside a feature that opens a short explanation,
+  or shows one on hover. There is no such component yet -- aria-describedby is
+  used twice, in QuickCapture and Omnibox, and that is the whole of it.
+  64 `title=` attributes are NOT the answer: a native tooltip never appears on
+  touch and is unreachable from the keyboard.
+    Build one shared HelpTip: a real <button> so it is focusable, an accessible
+    name of its own, content in a popover rather than a title attribute, and
+    dismissible with Escape. Then move the muted sentences into it panel by
+    panel rather than in one sweep -- some of them must be read BEFORE acting
+    and should stay ambient. The rule of thumb: text that answers "what is
+    this?" goes behind the (?), text that changes what you are about to do
+    stays on the page.
+
+A decision owed: the orphaned table, found 2026-09-28
+- category_budgets is still in the production database. f0dfede created it for
+  whole-budget category limits; 394cb7c removed that feature entirely -- model,
+  service, routes, frontend -- and left the table, its four indexes, and TWO
+  ROWS: $41,040 against September 2026 and $70 against October. Nothing reads
+  it, no foreign key points at it, and nothing has since 2026-09-24.
+- So production has 26 tables where python -m app._database.schema builds 25.
+  Nothing is broken by that. What is broken is that the schema module is the
+  file every other document treats as the description of this database, and it
+  has quietly stopped being it.
+- THE CHOICE IS YOURS AND IT IS NOT URGENT. Either is fine:
+    * DROP IT. Clean, and it destroys those two rows permanently. Back up first
+      -- the nightly artifact counts. The $41,040 row is the student-loan figure
+      from the feature that was removed, so it is probably not worth keeping,
+      but "probably" is not a reason to delete someone's data without asking.
+    * KEEP IT, and write here that it is kept deliberately. Costs nothing: it
+      is 2 rows in a 13 MB database against a 500 MB cap.
+  What is NOT fine is leaving it undecided, because the next person to count
+  tables has to work out which of the two numbers is wrong.
+- shipping.md step 18 now exists so a removal names its orphaned table at the
+  time, rather than being found by counting four days later. Audit #66.
+
+The production database, measured 2026-09-28
+- 912 rows, 13 MB against a 500 MB cap, 26 tables, 86 indexes. Five users --
+  four active, one soft-deleted on 2026-09-15, which purges 2026-10-15 on the
+  first cold start after that date.
+- Growth since 2026-09-14: courses 27 -> 30, grades 126 -> 206, accounts
+  16 -> 28, transactions 97 -> 143, events 20 -> 51, tasks 11 -> 82. Jobs and
+  spend_categories unchanged at 3 and 57.
+- account_category_limits holds 11 rows. account_category_month_limits holds
+  ZERO -- the per-month override shipped on 2026-09-25 and has not been used
+  once. Worth knowing before building anything else on top of it; it may be a
+  feature nobody wanted, or one nobody has found.
+- The per-user split was not re-measured. Accounts rising by 12 is consistent
+  with two more people signing in and having six each seeded on first read.
+
 Not built, from the original features.txt sketch
 - Notes, Goals and Study Analytics. Listed on day one, never designed, never
   started. Nothing depends on them. Recorded here so the sketch can go.

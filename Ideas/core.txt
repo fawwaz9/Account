@@ -1,3 +1,9 @@
+[HISTORICAL — the original sketch, written before any code existed.
+ Kept because it is the first statement of what this app is for, and most
+ of it was built. Not live work: for what exists read design/, for what is
+ next read whats_next.txt. Notes, Goals and Study Analytics, named below,
+ were never designed or started.]
+
 Calender part that is heavuly modifiable and helps me keep track of everything. Must have repeat features for events and ends by.
 Tasks on calender should have check box and progess bar for major goals like saving money gym consisitency.
 Grade calculator and class schedule.

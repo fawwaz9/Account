@@ -204,6 +204,13 @@ safely under budget. It shipped, and was rolled back the same day. Keying on the
 pair means the limit and the spending it is measured against cover the same
 money.
 
+> **That rollback left its table in production, and still has.** `category_budgets`
+> holds four indexes and two rows and is read by nothing; the removal took out the
+> model, the service, the routes and the frontend, and stopped there. Found by
+> counting tables on 2026-09-28, not by anything failing. Audit #66, and the
+> reason `shipping.md` now has a step 18. A feature can be removed from the code
+> in one commit; its table is a separate decision, and that one is still open.
+
 **Standing, with a per-month override.** `account_category_limits` holds what
 this account means to spend here every month; `account_category_month_limits`
 holds one row per month that *differs*, and only those. A category budgeted the
@@ -272,6 +279,26 @@ the opposite of what the dialog means.
 are set from inside it and hiding it on an empty month hid the only way to
 budget an account that has not been used yet. That is the same reasoning that
 made the budget page's copy unconditional.
+
+## What the account page puts where
+
+Rearranged 2026-09-28, and the order is the argument. Four metric tiles across
+the top, Planned spend under them, then "Where it went" beside the two charts --
+money in and out above, balance over time below -- and the ledger under
+everything.
+
+It reads top to bottom as **how much, against what, spent on what, over what
+time, and finally the rows themselves.** The ledger is last because it is the
+thing you scroll to when a figure above it surprised you; leading with it makes
+the page a list with some summaries attached, which is the wrong shape for a page
+you open to check on an account rather than to audit it.
+
+The tiles are one full-width `.tileRow` rather than a cell in the split, so
+`auto-fit` lays all four across instead of the 2x2 an earlier override forced.
+The two charts share a `.accountCharts` flex column, which is what lets them
+stack in one grid cell beside a "Where it went" that is now taller than it was,
+because every budgeted category carries a limit bar and a `$412.00 / $400.00`
+figure.
 
 ## The tuition shape, and why everything reuses it
 

@@ -30,13 +30,14 @@ Application/
       api/routes/           thin. Parse, call one service, map errors to status
       _database/            models, engine, migrations
       shared/               tokenizer, audit, error bodies, money, dates
-    tests/                  911 cases
+    tests/                  940 cases
   frontend/
     src/features/<area>/    api.ts, types.ts, components/, hooks/
     src/pages/              one per route, composing features
     src/shared/             components, utils, hooks used by more than one area
     src/services/           apiClient, endpoints
     src/styles/             one stylesheet per area
+    *.test.ts(x)            142 cases in 17 files, beside what they test
 ```
 
 Twenty-five tables. FastAPI + SQLAlchemy 2.0 + Pydantic v2; React 19 + Vite 7 +

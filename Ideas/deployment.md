@@ -23,17 +23,19 @@ below is contestable it names the decision, so `D2.3` means go and argue there.
 
 ## Where this stands
 
-**Steps 1 to 37 are done.** Only 38 (watch it for a week) and 39 (invite the
-rest) remain, and both are time passing rather than work.
+**Steps 1 to 38 are done.** Only 39 (invite the rest) remains, and that is a
+decision rather than work. Step 38's week has long passed — see the step for what
+the watch actually showed.
 
 | | |
 |---|---|
-| Backend tests | **740 on SQLite**, 730 + 2 skipped against Supabase itself |
-| Frontend | `tsc --noEmit` and `vite build` clean |
+| Backend tests | **940 on SQLite**. The Supabase run was 730 + 2 skipped at 740 and has not been repeated |
+| Frontend | `tsc --noEmit` and `vite build` clean, **142 vitest cases in 17 files** |
 | Frontend URL | `https://account-2a7.pages.dev` — Cloudflare Pages, builds from `main` |
 | API URL | `https://account-api-210502804146.us-west1.run.app` |
-| Serving | revision `account-api-00004-5t8`, image `backend:f6f7c32`, traffic on **LATEST** |
-| Database | Supabase `kujxxairehpwhxhnkbct`, `us-west-2`, Postgres 17.6, 23 tables |
+| Serving | revision `account-api-00018-2zp`, image `backend:8f73dca`, traffic on **LATEST** |
+| Database | Supabase `kujxxairehpwhxhnkbct`, `us-west-2`, Postgres 17.6. **26 tables live, 25 in the schema** — the 26th is `category_budgets`, left behind by a rollback; see `session-handoff.md` |
+| Size | 912 rows, 13 MB against a 500 MB cap — measured 2026-09-28 |
 | Backups | nightly GitHub Action, 09:00 UTC, 90-day artifacts — **restored once, for real** |
 | Monitoring | UptimeRobot on `/health` and on the frontend |
 | Part 1 (local code changes) | **Done** — steps 1–15, green light passed |
@@ -67,7 +69,7 @@ as non-root. It also found **B8** below, which nothing else would have.
 Cloudflare Pages serves the built JavaScript to the browser and holds no data and
 no secrets. The browser then calls Cloud Run, on a different origin, with a
 bearer token. Cloud Run holds all the logic and is the only thing that knows the
-database password. Supabase holds all 23 tables and is the only thing that
+database password. Supabase holds all 25 tables and is the only thing that
 remembers anything. **The browser never talks to Supabase** — this is deliberate,
 and `plan-a-decisions.md` D2.0 explains why using Supabase the usual way would be
 wrong here. A full trace of one request is in the "How Account Moves Data"
@@ -813,8 +815,10 @@ grants. **D3.7.**
 ### 26. Run the schema creation once — **DONE**
 
 **Do:** run `python -m app._database.schema` against Supabase once, with
-`DATABASE_URL` pointing at it. It builds the 23 tables and 49 indexes and is
-idempotent, so a retried deploy is harmless. The deployed service then runs with
+`DATABASE_URL` pointing at it. It was 23 tables and 49 indexes when this step
+was first run; it is **25 and 55** now, and it is idempotent, so a retried deploy
+is harmless — which is what makes it safe to re-run after each table this
+project has added since. The deployed service then runs with
 `RUN_SCHEMA_ON_STARTUP=0`.
 
 ### 27. Deploy to Cloud Run — **DONE**
@@ -1196,7 +1200,17 @@ Then confirm `spec.traffic[].latestRevision` is still `True` — a pinned servic
 takes the new revision and serves the old one, so the invite appears to have
 been ignored.
 
-### 38. Watch for a week — **running, started 2026-09-14**
+### 38. Watch for a week — **DONE**
+
+Started 2026-09-14, read again 2026-09-28. **Nothing in it argued for changing
+anything.** Cloud Run logged **16,202 entries in the trailing seven days** — that
+is log lines rather than requests, so it over-counts, and even read as requests
+it is about 69k a month against a 2 million free allowance. The service has taken
+four more deploys since (`93c9d73`, `394cb7c`, `da6ac93`, `8f73dca`) and traffic
+is still on `LATEST`.
+
+The commands are kept because they are what you re-run, not because the watch is
+still open:
 
 **Three numbers, and the commands that give them:**
 

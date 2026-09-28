@@ -2,27 +2,35 @@
 
 Written 2026-09-10 against the working tree at `ca2884f` plus the uncommitted
 account-activity work, and kept current as findings close -- most recently by the
-deployment pass of 2026-09-14. **The tiers below are a record, not a to-do list.**
-Read the status passes for what is actually open; there is one item.
+front-end review pass of 2026-09-28. **The tiers below are a record, not a to-do
+list.** Read the status passes for what is actually open.
 
 Everything here was reproduced — by probing the running API, querying the live
 database, building the frontend and reading the shipped artefact, or reading the
 code path end to end. Where a claim rests on reading
 alone rather than a reproduction, it says so.
 
-`Ideas/fix.txt` (an earlier review, 3 Aug) has been folded in. Its findings were
-re-checked against the current code rather than copied: the real ones are in the
-tiers below, and the seven that did not survive verification are recorded near the
-end so they are not raised again.
+**Two outside reviews have been folded in**, on the same terms: findings
+re-checked against the current code rather than copied, the real ones placed in the
+tiers below, and the ones that did not survive verification recorded near the end so
+they are not raised again. `Ideas/fix.txt` (3 Aug, a source read) contributed two
+findings and seven failed claims. `account-app-review.md` (27 Sep, a browser
+walkthrough of the live site by a model with no access to this code) contributed
+nine findings, #57-#65, and fourteen failed claims. Neither list is quoted; both
+were re-derived.
 
 **The project had no automated tests of any kind when this was written.** No pytest,
 no vitest, no conftest. That is the single fact that best explains the shape of this
 list: every defect below is one a test would have pinned down, and several are re-runs
 of bugs the project has already fixed once elsewhere.
 
-There is now a `backend/tests/` suite -- **740 cases in 45 files**, grown from the
-31 that were written alongside the critical fixes. Still nothing on the frontend,
-which is the one part of this finding that has not moved.
+There is now a `backend/tests/` suite -- **940 cases**, grown from the 31 that were
+written alongside the critical fixes, and a frontend suite of **142 cases in 17
+files** where there were none. **This finding is closed.** The sentence that stood
+here until 2026-09-28 -- "still nothing on the frontend, which is the one part of
+this finding that has not moved" -- is no longer true; the frontend tests arrived
+with the CSS cascade faults of the September deployment work, which is fitting,
+since those were the defects no amount of backend testing could have caught.
 
 ---
 
@@ -358,6 +366,93 @@ restored once for real, and uptime monitoring. Two known weaknesses were carried
 in deliberately and are written up there: the rate limiters key on Google's front
 end rather than the caller (D5.5), and backups exist in one place only.
 
+## Status as of the front-end review pass
+
+Written 2026-09-28, folding in `account-app-review.md` -- a read-only walkthrough of
+the live site at `https://account-2a7.pages.dev` done from the browser by another
+model, which saw the running app and none of this code. **Twenty-three claims. Nine
+survived, fourteen did not**, and the nine are #57-#65 below.
+
+It is worth saying why that ratio is not a criticism of the review. A reviewer with
+only the front end can see that a figure looks wrong; it cannot see whether the
+figure is wrong, whether the rule behind it is deliberate, or whether the string it
+read is the string the page renders. Every claim here was checked against the code
+path that produces it, the same standard the rest of this document holds to, and
+the fourteen are recorded in their own section so they are not raised a third time.
+
+**The single most useful thing it found, it found sideways.** It reported "no
+timezone anywhere on deadlines/events" as an accessibility nit. The real defect is
+larger and is now #58: `UserPreferences` declares seven fields the Settings page
+never sends, and `timezone` is one of them. It defaults to `America/Regina`, and
+`timing_service.local_completion_date` uses it to decide whether a task was
+finished early or late -- the one figure the module's own docstring warns is
+"a bias in one direction across most of the sample" if the zone is wrong. Anyone
+outside Saskatchewan gets that figure computed against the wrong day boundary and
+has no way to say so. A stored preference with no control is not a gap in the
+form; it is a setting that silently cannot be right.
+
+**And one whole class of its findings was an artefact of how it read the page,
+which is worth recording because the fingerprint is exact.** It reported "text
+spacing glitches" on four pages -- `17tasks· 40m`, `$628.84gross,$157.21deducted`,
+`4completedtasks have no due date` -- and concluded "screen readers hear garbled
+strings". They do not. `TaskList` renders:
+
+```jsx
+{tasks.length} {tasks.length === 1 ? "task" : "tasks"}
+{load && ` · ${load}`}
+```
+
+The space between `17` and `tasks` is a whitespace-only JSX text node. The space
+after `·` is *inside* a template literal, so it is part of a larger text node.
+Accessible-name computation trims each node and concatenates -- the first space is
+lost, the second survives. That is precisely the string the review quoted, down to
+which of the two spaces lived. `CompletionTiming` reproduces it exactly under the
+same rule. **The rendered text is correctly spaced and so is what a screen reader
+announces; what was read was the accessible-name tree, which is not the page.**
+The same mechanism explains "course name shown twice on cards" (a button's computed
+name beside its own children) and "Hours Hours" in Settings (the browser's names for
+the internal segments of `<input type="time">`).
+
+**Its two CRITICALs were one observation, and it is not a defect.** It reported that
+net worth excludes debt, and separately that a $41,040 student loan is recorded as
+spending. The first is false: `net_worth` sums balances where
+`counts_toward_net_worth`, a debt balance is already negative, and
+`account_service.py:183` carries a comment saying that subtracting it a second time
+is the bug the comment exists to prevent. `NetWorth.tsx` draws a Debt line beside
+the headline. The reason no debt appears is the second observation -- the loan is a
+*category* named "Student Loans", not a debt *account*, so there is no negative
+balance for net worth to include. The proof offered, that $27,886.34 − $41,040
+equals the term summary's −$13,153.66, matches a **stock** against a **flow**; they
+agree only because the same $41,040 is in both, meaning different things.
+
+That leaves the real question underneath, which is a design question and not a
+finding: should the app refuse, or warn about, a transaction categorised in a way
+that breaks budget-vs-plan? **The settled preference on this project is options over
+rules** -- so the answer is probably a way to mark a category as not-spending, which
+the user chooses, rather than a warning the app decides to show. Recorded here
+rather than as a defect because the ledger did what it was told.
+
+**Nothing in the review touched security, and nothing in it changed a tier above
+Low.** The nine that survived are one wording bug, one missing settings surface,
+and seven small UI and accessibility faults. Read against the fourteen that did not,
+that is the useful summary: the parts of this app that handle money and auth were
+looked at hard by something with fresh eyes and no access to the source, and it
+found nothing there.
+
+**What is open, as of this pass.** The deployment pass above says "one item plus a
+sweep", which was true when it was written and is superseded here:
+
+- **#35 — no request caching**, both halves. Unchanged since 2026-09-14.
+- **Inputs labelled by placeholder only**, the sweep across a dozen forms.
+- **#57-#65**, from this pass. #58 is the one worth doing first: it is the only
+  item on the list that makes a figure wrong rather than making a page awkward,
+  and the form it needs already exists.
+- **#66**, from the production census run the same day. It is the only finding in
+  this document that is a fact about the *database* rather than the code, and the
+  only one a reader cannot verify from the repository alone.
+
+Everything else in this document is closed.
+
 ---
 
 ## Summary
@@ -387,6 +482,16 @@ end rather than the caller (D5.5), and backups exist in one place only.
 | 21 | High | Auth | A stolen token cannot be revoked, and nothing records that it was used |
 | 22–46 | Medium | — | see below |
 | 47–56 | Low | — | see below |
+| 57 | Medium | UX | "Left to spend" keeps its label when it goes negative |
+| 58 | Medium | Settings | Seven stored preferences have no control; `timezone` skews the timing figures |
+| 59 | Medium | React | Every list renders its empty state while its own refetch is in flight |
+| 60 | Low | UX | An overdrawn spending account is conveyed by the minus sign alone |
+| 61 | Low | A11y | Week view renders all events then all due markers, so reading order is not time order |
+| 62 | Low | UX | A course card shows an average with no sign of how few items it rests on |
+| 63 | Low | UX | The grade trend axis can label 105 |
+| 64 | Low | A11y | Two priority selects can carry the same accessible name |
+| 65 | Low | A11y | The study-hours start input is labelled "Study hours", the end one "Study hours end" |
+| 66 | Medium | Database | A rolled-back feature left `category_budgets`, and two rows, in production |
 
 Nothing in this list is a style opinion. Items I checked and found **healthy** are
 recorded at the end so we don't re-audit them.
@@ -915,6 +1020,134 @@ landed, despite Grades and all of Budget shipping.
 
 ---
 
+## From the front-end review
+
+The nine claims in `account-app-review.md` that survived being checked against the
+code, renumbered into this document's sequence. Each was reproduced by reading the
+path that produces the behaviour; none needed a live probe, because all nine are
+decided in the client or in a schema. Severity is Low unless it says otherwise.
+
+57. **Medium. "Left to spend" goes negative and the label stops being English.**
+    `Dashboard.tsx` renders `total_planned - total_actual` under the fixed label
+    "Left to spend". The block is gated on `total_planned > 0` but not on the sign
+    of the difference, so a month that overspends its plan reads
+    `-$51,650.99 Left to spend` -- a sentence with no meaning. The figure is right;
+    the word for it changes when it crosses zero. "Over by $51,650.99" is the same
+    number said truthfully, and the page already has the pattern: `NetWorth` swaps
+    its own label to "In the red" for exactly this reason.
+
+58. **Medium. Seven stored preferences have no control anywhere, and one of them
+    changes a figure.** `UserPreferences` declares `timezone`, `currency`,
+    `week_start`, `theme`, `date_format`, `time_format` and
+    `default_reminder_minutes_before`. `SettingsPage` sends none of them -- it
+    covers `credit_target`, `gpa_scale_enabled`, `default_target_grade`, the study
+    window and `min_free_block_minutes`, and nothing else. The API validates all
+    seven, `timezone` against real IANA data, so the surface exists and only the
+    form is missing.
+
+    `timezone` is the one that matters, and it is not cosmetic.
+    `timing_service.local_completion_date` converts `completed_at` into the
+    student's own zone before comparing it to a due date, and its docstring says
+    why in terms this finding cannot improve on: in UTC−6 anything finished after
+    18:00 local is stored on the next UTC day, "so an evening's work on its due
+    date reads as a day late. Evening is when most of it gets done, so the error is
+    not noise -- it is a systematic drift toward 'late'." The default is
+    `America/Regina`. Every user outside it gets that drift and no way to stop it.
+
+    `currency` is validated as ISO 4217 and then ignored: `money.ts` hardcodes `$`.
+    Either wire it up or drop the field, but a validated preference nothing reads
+    is a promise the app does not keep.
+
+59. **Medium. Every list renders its empty state while its own refetch is in
+    flight.** `TaskList` shows `emptyMessage` whenever `tasks.length === 0`, with no
+    notion of loading. Ticking "Show completed" flips both `includeDone` and
+    `includeArchived`, which changes `useTasks`'s callback identity and starts a new
+    fetch; until it lands, `tasks` is the previous array and the Done group renders
+    "Nothing finished yet." beside a stats block saying 18 tasks were finished this
+    month. That is the contradiction the review reported, and it is a loading state,
+    not a disagreement between two figures -- both are right, one is a frame behind.
+
+    `TasksPage` does render `Loading…` with `role="status"`, but it is one line at
+    the top of the page and says nothing about which of the five groups is stale.
+    The narrow fix is for `TaskList` to take the flag it is already next to.
+
+60. **A spending account in overdraft is conveyed by the minus sign alone.**
+    `Sectors` gives a debt account `sectorCard--debt` and gives an overdrawn
+    spending account nothing -- `-$188.66` renders in the same weight and colour as
+    a healthy balance. This is the same fault the accessibility pass closed for
+    account *kind*, one field over: the card was taught to stop conveying kind by
+    colour alone and was never taught anything about sign. `SafeToSpend` does say
+    over-committed, but that is an aggregate a scroll away from the card.
+
+61. **Reading order in the week view is two sorted sequences, not one.** `place()`
+    sorts events by start minute and `placeTasks()` sorts due markers by theirs, so
+    the review's claim that events are not time-ordered is wrong. The residual is
+    real though: `WeekView` renders *all* of a day's event blocks and *then* all of
+    its task markers, so an 11pm lecture precedes a 9am deadline in the DOM. Both
+    sequences are sorted; their concatenation is not. The comment above the markers
+    explains the render order as a painting decision -- drawn after the blocks so a
+    deadline inside a lecture is not hidden -- which is correct for the canvas and
+    happens to also decide reading order, which it should not.
+
+62. **A course card states an average with no indication of how little it rests
+    on.** `GradeBand` exists precisely for this: "Can still finish 12 – 100" with
+    "17 items left to mark" under it. It renders only on the course detail page.
+    `CourseCard`, in the list, shows a `100` in the average circle and an `A+`
+    beside it from one marked item of eighteen, with nothing qualifying either. The
+    reviewer read that as final, which is what it looks like. The band's own
+    `outstanding_items` is the figure the card is missing.
+
+63. **The grade trend axis can label a grade that cannot exist.**
+    `GradeTrendChart` pads the observed maximum by 2 and rounds up to a multiple of
+    5, so a term at 100 draws a top tick of **105**. The review called the axis
+    "0–105"; the floor is data-driven too (`Math.floor((rawMin - 2) / 5) * 5`), so a
+    record from 77.5 to 100 actually draws 75–105. The ceiling half stands: the
+    chart should clamp at 100, where the scale ends.
+
+64. **Two priority selects can carry the same accessible name.** `TaskItem` labels
+    its select `Priority of ${task.title}`. A recurring task with two materialised
+    occurrences in the same list produces two controls a screen reader cannot tell
+    apart. Almost certainly the origin of the review's `dup=1/2` annotation, which
+    was otherwise unreproducible. The due date is already on the row and would
+    separate them.
+
+65. **The study-hours inputs are labelled asymmetrically.** `study-start` is
+    labelled "Study hours" by its `<label htmlFor>`; `study-end` carries
+    `aria-label="Study hours end"`. The first should say "start". One word.
+
+---
+
+## From the production census
+
+One finding, from a read-only census of the Supabase database on 2026-09-28. It
+is here rather than above because nothing in the code could have shown it: the
+defect is a difference between what the schema builds and what production holds,
+and you only see it by counting both.
+
+66. **Medium. A rolled-back feature left its table, and its data, in production.**
+    `category_budgets` was created by `f0dfede` for whole-budget category limits.
+    `394cb7c` removed that feature — model, service, routes, frontend, every
+    reference. **The table is still there**, with its four indexes and **two rows**:
+    $41,040 against September 2026 and $70 against October. No foreign key points
+    at it and nothing has read it since 2026-09-24.
+
+    Production therefore has **26 tables where `python -m app._database.schema`
+    builds 25**, and that is the part worth fixing. The schema module is the file
+    every other document treats as the description of this database; once it is
+    not, the next person to compare the two has to work out which of them is
+    wrong, with no record saying a rollback is the reason.
+
+    **This is a gap in the removal procedure, not a one-off.** `ROLLBACK.md`
+    already says a rollback cannot undo a table, and it is right — dropping one
+    destroys data that rolling code back does not. What is missing is the step
+    after: a removal should record the table it orphaned, so the decision to keep
+    or drop it is taken deliberately rather than discovered a week later by
+    counting. `shipping.md` step 17 is where that belongs.
+
+    Dropping it destroys two rows of real data, so it is the owner's call.
+
+---
+
 ## Claims from `fix.txt` that did not hold up
 
 Recorded so they are not raised a third time. Each was checked against the current
@@ -967,6 +1200,100 @@ without WAL or a busy timeout (#29).
 
 ---
 
+## Claims from the front-end review that did not hold up
+
+Fourteen, recorded so they are not raised again. Each was checked against the code
+path that produces the behaviour, not dismissed on reading. Several are good
+observations of the wrong thing, and those say what the right thing was.
+
+**"Budget net worth excludes debt (CRITICAL)."** It does not. `net_worth` sums the
+balances of every non-archived account with `counts_toward_net_worth` set, and a
+debt account's balance is already negative, so it is included by arithmetic rather
+than by special case. `account_service.py` carries a comment at `DEBT_KINDS` saying
+that set exists to *report* the debt line and not to subtract it, "the bug this
+comment is here to prevent". `NetWorth`'s docstring says the same again, and
+`NetWorth.tsx` draws a Debt row under the headline whenever `debt_total > 0`. See
+the status pass above for why the supporting arithmetic -- $27,886.34 − $41,040
+matching the term summary -- proves nothing: it sets a stock against a flow.
+
+**"Loan disbursement counted as spending (CRITICAL)."** Not a code defect. A
+$41,040 expense in a category named "Student Loans" is what the ledger was told to
+record, and every figure downstream of it is correctly derived from it. The design
+question underneath -- whether a category should be able to declare itself
+not-spending -- is in the status pass. The app accepting it "without warning" is
+the settled preference on this project, not an oversight.
+
+**"Recurring text-concatenation artifacts across Dashboard, Tasks, Jobs and
+Budget," and "screen readers hear garbled strings."** No. This is
+accessible-name computation trimming whitespace-only text nodes, not the DOM. The
+fingerprint is exact and is worked through in the status pass: in `17tasks· 40m`
+the lost space and the surviving space are two different kinds of JSX node. The
+rendered page and the announced text are both correctly spaced.
+
+**"Don't show course name twice on cards."** The same artefact. `CourseCard`'s
+button has one `<span>` with the code in it; the button's *computed name* is that
+span's text, so an accessibility-tree dump prints the string once as the button's
+name and once as its child. There is one code on screen.
+
+**"Fix awkward accessible names on study-hours inputs ('Hours Hours', 'Minutes
+Minutes', 'AM/PM AM/PM')."** Nothing in the app emits those. Both controls are
+`<input type="time">`, whose three internal segments are named by the browser. The
+real nit is one word and is #65.
+
+**"Give 'Set aside funds' a clear entry point -- section is empty with no way to
+add one."** `SinkingFunds` has a **New fund** button in its section heading, beside
+the `<h2>`, and an empty state that explains what a fund is for. The button is
+there when the list is empty; that is the case it was written for.
+
+**"Destructive actions without confirmed safeguards."** Grades, courses, accounts
+and transactions all route through `DeleteConfirmModal` -- `EditGradeModal`,
+`CourseDetailPage` (twice), `BudgetView` and `AccountDetailPage`, the last with a
+"Whole deposit" confirm label that is the visible half of the #3 fix. This was #17,
+closed in the accessibility pass. The review declined to test it, which is correct
+under a read-only brief, but the answer is yes.
+
+**"Don't mix unconfirmed 'Estimated' earnings into totals."** They are not mixed.
+`Earnings` splits by source, not by window, and its docstring argues the point at
+length: the cards carry money that arrived, everything the shifts merely predict
+lives under `Estimates`, "and the two are not a sum and a remainder". A window with
+work in it and no cheque yet says "Nothing paid yet" rather than a confident $0.00.
+
+**"Explain the 25% deduction -- tax withholding? fee? Users can't verify
+correctness."** The premise is wrong: it is not a rate the app applies.
+`deduction_percent` is `deducted / gross * 100` over the deduction lines the
+student entered on their own cheques. It is a measurement of their pay, not an
+assumption about it, so it is already as verifiable as the cheques behind it. The
+quoted "if it's not right, edit the job" does not appear in the codebase.
+
+**"Fix Priority combobox accessible names ('P1 dup=1/2')."** Not reproducible.
+The options read `1 · Lowest` through `5 · Highest` and the select is labelled
+`Priority of {title}`; no "P" prefix exists anywhere. The duplicate-name residual
+is real and is #64.
+
+**"Fix time-axis labels skipping 2am and 2pm."** Not reproducible. `WeekView` maps
+over all 24 `HOURS` with no conditional, and `hourLabel` returns `2am` and `2pm`
+for hours 2 and 14. Every hour is in the DOM.
+
+**"Ensure calendar events are time-ordered in the accessibility tree."** They are:
+`place()` sorts on `startMinutes` before anything is rendered. The true residual --
+events and due markers being two separately sorted runs -- is #61.
+
+**"Deduplicate recurring tasks."** Deliberate, with the reasoning in `Repeating`'s
+own docstring: the rule and its occurrence are different objects answering
+different questions, and "showing a rule inline among its own occurrences would
+make it look like a seventh thing to tick off." A rule in Repeats and a task in the
+fortnight are not a duplicate.
+
+**"Fix typo: 'Software Contruction'."** Not in the codebase -- `contruction`
+appears nowhere in any source file. It is the course name as typed into the app,
+and it is fixable from the course editor.
+
+Two more were right to ask and turned out healthy, so they are in the section below
+rather than here: the "Worth doing next" ranking, and whether the dashboard's budget
+figures trace to their source.
+
+---
+
 ## Verified healthy — do not re-audit
 
 - **Auth holds.** No token → 401. Malformed → 401. Expired → 401. Forged
@@ -1005,6 +1332,23 @@ without WAL or a busy timeout (#29).
   interpolates only from a module-level literal.
 - **Docker hygiene is otherwise good:** multi-stage build, non-root user, `.git` and
   `.env` excluded.
+- **"Worth doing next" handles weights and dropped grades.** `cheapest_path` filters
+  on `counts_toward_average`, so a dropped quiz cannot be offered as work; skips
+  `is_additive` categories, because bonus marks add on top of an average rather than
+  composing it and so are not a route to a target; scores leverage through
+  `project_average`, which carries the weights; and drops any item whose leverage is
+  zero, which is how a weightless category stays off the list. Covered by
+  `test_cheapest_path.py`.
+- **The dashboard's budget figures trace to their source.** `total_actual` and
+  `total_planned` come from `budget_service`, the same call the budget page reads,
+  and `Biggest this month` is `by_category[0]` from that response. The figures a
+  front-end reviewer found implausible are the ones the data produces; the only
+  defect in that block is the wording of one label (#57).
+- **Net worth includes debt.** Verified by reading the arithmetic rather than the
+  screen: negative balances enter the sum unchanged, and `debt_total` reports the
+  same money as a positive magnitude for display.
+- **Deletes confirm.** Every destructive control in Grades, Courses, Accounts and
+  Transactions opens `DeleteConfirmModal` first.
 
 ---
 

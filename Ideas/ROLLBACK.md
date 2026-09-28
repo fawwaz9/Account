@@ -2,7 +2,7 @@
 
 Written to be read while something is down and you are stressed. Commands
 first, reasoning second. Every figure here was re-checked against the live
-deployment on **2026-09-22**, including that traffic is on `LATEST`.
+deployment on **2026-09-28**, including that traffic is on `LATEST`.
 
 > **Shipping a change rather than fixing one?** `shipping.md` is the loop —
 > build, verify, deploy, in the order the steps have to happen. This file is
@@ -18,8 +18,8 @@ deployment on **2026-09-22**, including that traffic is on `LATEST`.
 | Database | Supabase project `kujxxairehpwhxhnkbct`, region `us-west-2`, Postgres 17.6 |
 | Backups | GitHub Actions artifacts, `Backup database` workflow, 90-day retention |
 | Secrets | Google Secret Manager: `jwt-secret`, `database-url` |
-| Current image | `…/backend:d635bf5` — revision `account-api-00014-zxv`, serving 100% |
-| Previous image | `…/backend:0224d31` — revision `account-api-00013-lst` |
+| Current image | `…/backend:8f73dca` — revision `account-api-00018-2zp`, serving 100% |
+| Previous image | `…/backend:da6ac93` — revision `account-api-00017-kwt` |
 | GCP project | `account-504419`, registry `us-west1-docker.pkg.dev/account-504419/account` |
 | Repo | `fawwaz9/Account` — a push to `main` rebuilds the **frontend** only |
 
@@ -82,10 +82,11 @@ reference, a concurrency setting.
 > ```
 > `LATEST (currently …)` is healthy. A bare revision name means you are pinned.
 
-**It now fixes bad code too.** Eleven image tags exist: `d635bf5` (current),
-`0224d31`, `ca86a3e`, `1ceb30f`, `e494729`, `89a7c22`, `18e3376`, `7c1531a`, `18205eb`, `f6f7c32` and `26e249f`. Keep at least two — do not delete
-the older tags, and do not rely on `latest`, which by definition points at
-whatever just broke.
+**It now fixes bad code too.** Fifteen image tags exist, newest first:
+`8f73dca` (current), `da6ac93`, `394cb7c`, `93c9d73`, `d635bf5`, `0224d31`,
+`ca86a3e`, `1ceb30f`, `e494729`, `89a7c22`, `18e3376`, `7c1531a`, `18205eb`,
+`f6f7c32` and `26e249f`. Keep at least two — do not delete the older tags, and
+do not rely on `latest`, which by definition points at whatever just broke.
 
 > ### Rolling the API back alone now breaks the frontend
 >
@@ -221,6 +222,44 @@ whatever just broke.
 > the student ticked off, and that bug **destroys data**: it nulls
 > `completed_at` and un-archives, and a row in that state cannot be told from
 > one never completed. Roll back for something else, not for this.
+
+> ### The category-limits sequence, `93c9d73` → `8f73dca`
+>
+> Four images in six days, easier to read as one story than as four notes.
+> **Two of them add a table, and a table is the one thing rolling back cannot
+> undo.**
+>
+> - **`93c9d73`** shipped category limits across the whole budget. Its API
+>   **cannot roll back alone** — recorded at the time, still true.
+> - **`394cb7c`** took that feature back out: a limit spanning every account was
+>   judged against one account's share of the spending, so anything split across
+>   two accounts always looked under budget. **A removal deploys in the inverse
+>   order — frontend first, then API** — which is the rule this sequence exists
+>   to have taught. **It also left its table behind**: `category_budgets` is
+>   still in production with four indexes and two rows, found by counting on
+>   2026-09-28 and written up as audit #66. Removing a feature removes the code;
+>   the table is a separate decision and this one was never taken.
+> - **`da6ac93`** rebuilt it keyed on `(account, category)`, the shape that makes
+>   the limit and the spending cover the same money. **Adds
+>   `account_category_limits`.**
+> - **`8f73dca`** adds `account_category_month_limits`, so one month's limit can
+>   differ from the standing one. **A second table.**
+>
+> **Rolling the API back past `da6ac93` needs the frontend rolled back first.**
+> The account page reads `planned_is_derived` and a per-category `limit`; an
+> older API returns neither, and the page renders a target it cannot explain.
+> Frontend first, then API — the order `394cb7c` established.
+>
+> **The two tables stay.** Older code never selects them, so they cost nothing
+> and orphan nothing, and dropping them would destroy limits the student set. If
+> you roll forward again the schema step is still owed, because production runs
+> `RUN_SCHEMA_ON_STARTUP=0` — but it is idempotent, so running it against tables
+> that already exist is safe.
+>
+> **`d0cdeda` and `9e7493c` are FRONTEND ONLY** — no image, no revision. The
+> first scopes the budget page's list rules so they stop reaching the grades
+> page; the second rearranges the account page. Roll either back from the Pages
+> dashboard alone. Both are CSS and JSX and neither touches an API contract.
 
 ```sh
 # once a second tag exists:

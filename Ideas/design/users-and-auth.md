@@ -108,6 +108,22 @@ the at-risk bands in Tasks), and the study window (free blocks).
 > class in this codebase; the other two were `events.skipped_dates` and a
 > recurring rule's.
 
+> **Seven of those keys have no control anywhere, and one of them is load-bearing
+> (audit #58).** `SettingsPage` sends `credit_target`, `gpa_scale_enabled`,
+> `default_target_grade` and the study window. It does not send `timezone`,
+> `currency`, `week_start`, `theme`, `date_format`, `time_format` or
+> `default_reminder_minutes_before` — the API validates all seven, so only the
+> form is missing.
+>
+> `timezone` is the one that matters. It defaults to `America/Regina` and
+> `timing_service.local_completion_date` converts `completed_at` through it
+> before comparing against a due date, so a wrong zone is not cosmetic: it is
+> the systematic drift toward "late" that module's own docstring warns about.
+> Every user outside that zone currently gets it and cannot say so. `currency`
+> is validated as ISO 4217 and then ignored — `money.ts` hardcodes `$`. The
+> additive-keys property that made these cheap to add is also what let them be
+> added without a control.
+
 ## Academic status
 
 `current_school_year` + `current_semester` are what `term_bucket` compares a

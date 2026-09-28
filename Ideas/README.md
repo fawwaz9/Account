@@ -3,7 +3,7 @@
 The thinking behind Account: what it is for, how each part works, why the
 decisions went the way they did, and how it got on the web.
 
-Reviewed and brought current on **2026-09-14**. Where a file is a historical
+Reviewed and brought current on **2026-09-28**. Where a file is a historical
 record rather than live work, it says so in its own first lines.
 
 ---

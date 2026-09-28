@@ -8,7 +8,9 @@ follow. Where I say "what would change my mind", that is a genuine falsifier —
 it turns out to be true, the decision should flip.
 
 Written against `main` at `a93e54e`, when 619 tests were green. Kept current as
-steps land: **740 green on SQLite, 730 + 2 skipped against Supabase itself.**
+steps land: **940 green on SQLite**, plus 142 frontend tests that did not exist
+when this was written. (The Supabase run was 730 + 2 skipped at 740; it has not
+been repeated since.)
 
 **All of this has now been run.** The app is live — steps 1 to 37 of
 `deployment.md` are done and a second person is using it. The decisions below
