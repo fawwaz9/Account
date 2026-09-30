@@ -1277,15 +1277,40 @@ longer than the step.
 
 ```sh
 docker builder prune -f      # the one that actually reclaims
-docker image prune -f        # dangling images, the untagged <none> rows
 docker system df             # confirm it went
 ```
 
 **Measured 2026-09-30:** 10 images at 1.0 GB, 45 build-cache entries at 1.3 GB,
 about **595 MB reclaimable that minute** — and this is a machine that had already
 been cleaned once. Before that clean it had reached **7.6 GB, of which 5.5 GB was
-build cache nothing ever clears on its own.** `docker builder prune` reclaimed
-5.1 GB in one command.
+build cache nothing ever clears on its own.** Running it reclaimed **295.4 MB**
+and took the cache from 45 entries to 37.
+
+> ### `docker image prune` reclaims nothing here, and never will
+>
+> This block said to run `docker image prune -f` until the first time it was
+> actually run, when it reported **0 B** — and that is not a one-off. It removes
+> **dangling** images only, meaning untagged `<none>` rows, and **every image this
+> project builds is tagged with its commit sha** by step 12. There are zero
+> dangling images on this machine and there normally will be.
+>
+> So `docker system df` keeps reporting image space as "reclaimable" — 258.9 MB of
+> it — that the documented command cannot touch. Those are the **superseded local
+> copies** of images the registry also holds, and clearing them is a different
+> command:
+>
+> ```sh
+> # Name them. Do NOT use `docker image prune -a`, which counts every image with
+> # no running container as unused -- including the one now in production.
+> docker image rm <old-sha> <old-sha> ...
+> docker images --format '{{.Tag}}'      # check what is left, and that the
+>                                       # current sha and `latest` are among it
+> ```
+>
+> Safe, because a local tag is a copy: the registry holds all fifteen and is the
+> rollback source. Worth doing occasionally rather than every deploy — it costs a
+> `docker pull` if you later want to inspect an old image locally, and 259 MB is
+> not urgent.
 
 **This costs no rollback path.** Deleting a local image tag does not touch the
 registry copy — the registry is the rollback source, and it is untouched by
