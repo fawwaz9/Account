@@ -415,6 +415,11 @@ image space `docker system df` calls reclaimable is superseded local copies, and
 clearing those is a named `docker image rm`, done occasionally — never
 `prune -a`, which would take the image now in production with it.
 
+**When you do clear those, do it BEFORE the cache prune.** An image reference pins
+the cache entries that built it, so the same `builder prune` reclaimed 295 MB with
+the images present and 629 MB once they were gone. And confirm the registry holds
+each tag first — that is the entire reason removing the local copy is safe.
+
 **Local only.** The registry tags are the rollback path, `ROLLBACK.md` requires
 keeping at least two, and all fifteen occupy 0.22 GB anyway because they share
 base layers. Deleting a local tag does not touch the registry copy. Full

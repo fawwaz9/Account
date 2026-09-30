@@ -1281,10 +1281,24 @@ docker system df             # confirm it went
 ```
 
 **Measured 2026-09-30:** 10 images at 1.0 GB, 45 build-cache entries at 1.3 GB,
-about **595 MB reclaimable that minute** — and this is a machine that had already
-been cleaned once. Before that clean it had reached **7.6 GB, of which 5.5 GB was
-build cache nothing ever clears on its own.** Running it reclaimed **295.4 MB**
-and took the cache from 45 entries to 37.
+on a machine that had already been cleaned once. Before that clean it had reached
+**7.6 GB, of which 5.5 GB was build cache nothing ever clears on its own.** The
+full clean on this day took it from **2.35 GB to 793 MB — 1.55 GB reclaimed**, and
+ended at one image and ten cache entries.
+
+> ### Order matters: images first, then the cache
+>
+> Found by doing it in the wrong order. `docker system df` reported 595 MB
+> reclaimable, `docker builder prune -f` took **295 MB**, and that looked like the
+> job done. Removing the nine superseded image tags then freed another **629 MB**
+> — and pushed the cache's *own* reclaimable figure from 40 MB straight back up to
+> **669 MB**, because **an image reference pins the cache entries that built it.**
+> A second identical `builder prune` then took **629 MB more**.
+>
+> So the same command reclaimed 295 MB before the images went and 629 MB after.
+> **Remove images first and one prune gets nearly all of it**; prune first and you
+> need two passes to reach the same place. Nothing is lost either way — it is
+> just the difference between one command and three.
 
 > ### `docker image prune` reclaims nothing here, and never will
 >
@@ -1308,9 +1322,15 @@ and took the cache from 45 entries to 37.
 > ```
 >
 > Safe, because a local tag is a copy: the registry holds all fifteen and is the
-> rollback source. Worth doing occasionally rather than every deploy — it costs a
-> `docker pull` if you later want to inspect an old image locally, and 259 MB is
-> not urgent.
+> rollback source. **Check that before deleting, not after** — one `gcloud
+> artifacts docker images list --include-tags` and confirm each tag you are about
+> to remove locally is in it. The whole safety argument is that the registry has a
+> copy, so it is worth the ten seconds to know it does.
+>
+> Done on 2026-09-30 for the nine tags from `da6ac93` back to `89a7c22`: 18
+> untag-and-delete operations, images **10 → 1**, and `8f73dca` plus `latest`
+> confirmed still present afterwards. 629 MB, plus the 669 MB of cache it
+> unpinned.
 
 **This costs no rollback path.** Deleting a local image tag does not touch the
 registry copy — the registry is the rollback source, and it is untouched by
