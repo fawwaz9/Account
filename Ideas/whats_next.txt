@@ -783,6 +783,26 @@ Quality of Life:
           Keep the text labels. Icon-only navigation is the accessibility
           regression this codebase has already fixed twice, most recently when
           account kind was a coloured stripe and nothing else.
+        Delete confirmations everywhere, and question mark icons instead of muted
+          text: both moved to "Interface quality" near the end of this file, where
+          they are written up with the counts. Not dropped -- the nine deletes
+          that lack a confirmation are named there one by one.
+
+        Light mode????
+          Answering the question marks, measured 2026-09-30: this is the largest
+          cosmetic job in the app and it is not a settings toggle.
+          12 stylesheets. 541 var(--...) uses, which is the good news -- most
+          colour already goes through a token. Against that, 36 distinct
+          hardcoded hex values and 93 rgba() literals that do not.
+          The tokens themselves are named for a dark design: --panel, --bg,
+          --deep-border, --muted. A light palette cannot just reassign them,
+          because several encode "darker than the page" rather than a role.
+          So the work is: tokenise the 36 + 93 stragglers, rename the tokens by
+          ROLE rather than by shade, then define a second palette, then look at
+          every screen again. The `theme` preference already exists, stores and
+          validates -- it is the only part that is done.
+          Worth doing as its own project with its own plan. Not worth smuggling
+          into another change, and not blocking anything.
 
 Wild:
         Grade-to-effort log: record hours against each grade, then find out whether effort actually correlates with your marks.
@@ -1294,6 +1314,16 @@ are the size of each job rather than an impression of it.
   "Yes, delete / Keep" pair in CategoriesModal. Pick one before adding nine more
   instances of the wrong one. The modal is the better default; the inline pair
   is better inside a list you are editing, which is why CategoriesModal has it.
+    THE TEST, in your words: "every delete button OR INSTANCE that PERMANENTLY
+    deletes something". Two useful refinements in that phrasing. "Or instance"
+    means the audit is of code paths, not buttons -- so the omnibox, quick
+    capture and any keyboard shortcut that can destroy a row count too, and the
+    nine above were found by reading delete call sites rather than by clicking
+    around. "Permanently" is the line that decides borderline cases: a soft
+    delete, an archive or a paused rule is recoverable and does NOT need a
+    confirmation, which is why archiving an account is not on this list while
+    deleting one is. Anything the user cannot get back by clicking again needs
+    the dialog.
 
 - MAKE A CLICK FEEL LIKE A CLICK. 183 buttons in the app, 114 with a disabled
   binding, so ~69 fire with no acknowledgement at all. `:active` appears ZERO
@@ -1307,18 +1337,27 @@ are the size of each job rather than an impression of it.
 - EXPLAIN ON DEMAND, NOT EVERYWHERE. 84 `small-text muted` nodes, 36 more plain
   `muted`, 8 loginHint -- 128 sentences of ambient explanation. Each reads as
   thoughtful on its own; together they crowd out the figures the panels exist to
-  show. Wanted instead: a (?) beside a feature that opens a short explanation,
-  or shows one on hover. There is no such component yet -- aria-describedby is
-  used twice, in QuickCapture and Omnibox, and that is the whole of it.
-  64 `title=` attributes are NOT the answer: a native tooltip never appears on
-  touch and is unreachable from the keyboard.
-    Build one shared HelpTip: a real <button> so it is focusable, an accessible
-    name of its own, content in a popover rather than a title attribute, and
-    dismissible with Escape. Then move the muted sentences into it panel by
-    panel rather than in one sweep -- some of them must be read BEFORE acting
-    and should stay ambient. The rule of thumb: text that answers "what is
-    this?" goes behind the (?), text that changes what you are about to do
-    stays on the page.
+  show.
+    THE SPEC, in your words: "Every important or confusing feature should have a
+    little clickable white question mark that extends a dialogue box from it
+    explaining the feature." Clickable, not hover-only -- which settles a
+    question the earlier note left open, because hover alone excludes touch and
+    the keyboard.
+  There is no such component yet -- aria-describedby is used twice, in
+  QuickCapture and Omnibox, and that is the whole of it.
+  64 `title=` attributes are NOT the answer, for the same reason: a native
+  tooltip never appears on touch and is unreachable from the keyboard.
+    Build one shared HelpTip: a real <button> so it is focusable and clickable,
+    white as asked, an accessible name of its own, content in a popover that
+    extends from the mark rather than a title attribute, and dismissible with
+    Escape. Hover MAY also open it, but the click is the contract.
+    Then move the muted sentences into it panel by panel rather than in one
+    sweep -- some of them must be read BEFORE acting and should stay ambient.
+    The rule of thumb: text that answers "what is this?" goes behind the (?),
+    text that changes what you are about to do stays on the page.
+    First use is already waiting: Ideas/settings-plan.md puts the explanation of
+    what the timezone setting affects behind one of these rather than adding a
+    129th muted line.
 
 A decision owed: the orphaned table, found 2026-09-28
 - category_budgets is still in the production database. f0dfede created it for
