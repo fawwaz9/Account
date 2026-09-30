@@ -1356,6 +1356,65 @@ The production database, measured 2026-09-28
 - The per-user split was not re-measured. Accounts rising by 12 is consistent
   with two more people signing in and having six each seeded on first read.
 
+Investment returns, asked for 2026-09-30
+An investment account's balance is the sum of its ledger -- what you put in. It
+says nothing about what the holding is now worth, so an account that has doubled
+and one that has halved read identically. This closes that.
+
+THE ASK, as given:
+- On an investment account, record each month the DOLLAR AMOUNT the investment
+  is higher or lower than its plain value -- plain value being the balance the
+  ledger already derives.
+- Total return is then computed, not typed.
+- The account card carries the all-time figure beside the balance, very small,
+  e.g. (+3.2%).
+- The monthly figure REPLACES the Movements tile in the investment account's
+  own page.
+
+WHY THE SHAPE WORKS, and it is worth writing down because it is the whole
+reason this is a small feature rather than a portfolio tracker:
+- What gets typed is a LEVEL, not a flow. "$500 higher than plain value" is a
+  snapshot of market minus cost, so the readings DO NOT SUM. All-time gain is
+  the LATEST reading, not the total of them. Getting this backwards is the one
+  way to make every figure wrong, so the rule wants a pure function and a test.
+- The difference is CONTRIBUTION-NEUTRAL, which is the happy accident that
+  makes the monthly figure easy. Put $1,000 in: plain value rises $1,000 and
+  market value rises $1,000, so the difference does not move. Gain $50: market
+  moves, plain does not, difference moves $50. So the difference IS cumulative
+  gain, and a month's gain is just difference(m) - difference(m-1) -- no
+  time-weighting, no adjusting for deposits. A design that stored market value
+  instead would need all of that.
+- All-time % = latest difference / balance. Month % = that month's gain over
+  the previous month's balance.
+
+WHERE IT TOUCHES:
+- Sectors.tsx, the .sectorBalance span -- the (+3.2%) goes beside it. Keep the
+  sign IN THE TEXT, not in the colour alone: audit #60 is already open against
+  this component for conveying an overdraft by the minus sign and nothing else,
+  and adding a second colour-only meaning to the same card makes that worse.
+- AccountDetailPage.tsx:136 -- the `Movements` tile, currently
+  activity.transaction_count. That is the one being replaced, for investment
+  accounts only.
+- AccountActivity DOES NOT CARRY `kind`. Both this and the older idea of gating
+  Record spending to spending accounts need it; one field on the schema serves
+  both, which is a reason to do it once rather than twice.
+- Storage: one row per (user, account, month), the shape
+  account_category_month_limits already uses. New table, so it arrives via
+  create_all -- and per shipping.md that makes the schema step MANDATORY, since
+  production runs RUN_SCHEMA_ON_STARTUP=0.
+
+QUESTIONS WORTH ANSWERING BEFORE BUILDING, not while:
+- A month with no reading: carry the last one forward and say when it was
+  taken, or show nothing? Carrying forward is the honest default -- an
+  investment you have not checked has not lost its value -- but it must be
+  dated on screen or a stale figure reads as current.
+- Investment accounts only, as asked. Savings accounts earn interest and would
+  take the same mechanism; the narrower thing ships first and the wider one is
+  a kind check, not a redesign.
+- A holding worth LESS than you put in gives a negative difference and a
+  (-8.1%). Make sure the first test written is that one, because a percentage
+  that only ever renders positive is the bug this kind of feature always has.
+
 Not built, from the original features.txt sketch
 - Notes, Goals and Study Analytics. Listed on day one, never designed, never
   started. Nothing depends on them. Recorded here so the sketch can go.
