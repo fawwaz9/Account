@@ -1267,6 +1267,65 @@ login limit would lock out the other nineteen.
 
 ---
 
+## Housekeeping — prune Docker after every deployment
+
+**Run this at the end of every deploy**, not when the disk complains. It is the
+last step of the loop in `shipping.md`, and it is here because the reasoning is
+longer than the step.
+
+### On the dev machine — do this every time
+
+```sh
+docker builder prune -f      # the one that actually reclaims
+docker image prune -f        # dangling images, the untagged <none> rows
+docker system df             # confirm it went
+```
+
+**Measured 2026-09-30:** 10 images at 1.0 GB, 45 build-cache entries at 1.3 GB,
+about **595 MB reclaimable that minute** — and this is a machine that had already
+been cleaned once. Before that clean it had reached **7.6 GB, of which 5.5 GB was
+build cache nothing ever clears on its own.** `docker builder prune` reclaimed
+5.1 GB in one command.
+
+**This costs no rollback path.** Deleting a local image tag does not touch the
+registry copy — the registry is the rollback source, and it is untouched by
+everything in this block. Local dev data is also never at risk: `docker-compose`
+bind-mounts `./backend/data`, so the SQLite file lives on disk rather than in a
+volume.
+
+### In the registry — leave it alone
+
+**Do not prune Artifact Registry as part of this.** Two reasons, and the first is
+the one that decides it:
+
+- **Those tags are the rollback path.** `ROLLBACK.md` requires keeping at least
+  two, and never relying on `latest`, which by definition points at whatever just
+  broke. A registry tag deleted to save space is a rollback you cannot perform
+  during an outage.
+- **There is nothing to save.** All **15 tags occupy 0.22 GB** across 76 blobs,
+  because every image shares the same base layers — so fifteen images cost
+  barely more than one. The free tier is 0.5 GB. Measured 2026-09-30:
+
+  ```sh
+  gcloud artifacts files list --repository=account --location=us-west1 \
+    --format=json | python3 -c \
+    "import json,sys; r=json.load(sys.stdin); \
+     print(sum(int(x['sizeBytes']) for x in r)/1073741824, 'GB in', len(r), 'blobs')"
+  ```
+
+**If the registry ever does need pruning** — it will not for a long while — keep
+the newest several and never fewer than two, do it as its own deliberate act, and
+update `ROLLBACK.md`'s tag list in the same commit. Never in the same motion as
+the local prune: one is free and reversible, the other is neither.
+
+> **`docker system df` is how you check, not `docker ps`.** And note that
+> **`timeout` does not exist on macOS** — a `cmd || echo DOWN` wrapped in
+> `timeout` once reported the local stack down when the `||` had actually fired
+> on command-not-found. If a health check here reads as a failure, confirm the
+> command exists before believing it.
+
+---
+
 ## Reference — audit findings, and where each is handled
 
 | | Finding | Step |

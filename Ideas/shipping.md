@@ -399,6 +399,21 @@ Check it while the code is in front of you and record the answer.
 > it is kept for the data or waiting to be dropped. Either is fine; not knowing
 > which is not.
 
+### 19. Prune Docker, locally only
+
+```sh
+docker builder prune -f      # the one that reclaims
+docker image prune -f        # dangling <none> images
+docker system df             # confirm
+```
+
+Every deploy, not when the disk complains — build cache is never cleared on its
+own and it reached 5.5 GB once. **Local only.** The registry tags are the rollback
+path, `ROLLBACK.md` requires keeping at least two, and all fifteen of them occupy
+0.22 GB anyway because they share base layers. Deleting a local tag does not touch
+the registry copy. Full reasoning and the measurements are in `deployment.md`
+under *Housekeeping*.
+
 ---
 
 ## The short version
@@ -417,3 +432,4 @@ Check it while the code is in front of you and record the answer.
     split, and a 200 on a missing asset is Pages serving `index.html`.
 12. Update `ROLLBACK.md` and `whats_next.txt`.
 13. If you removed a feature, name the table it orphaned and say what happens to it.
+14. `docker builder prune -f && docker image prune -f` — **local only**, never the registry.
