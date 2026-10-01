@@ -18,8 +18,8 @@ deployment on **2026-09-28**, including that traffic is on `LATEST`.
 | Database | Supabase project `kujxxairehpwhxhnkbct`, region `us-west-2`, Postgres 17.6 |
 | Backups | GitHub Actions artifacts, `Backup database` workflow, 90-day retention |
 | Secrets | Google Secret Manager: `jwt-secret`, `database-url` |
-| Current image | `…/backend:147d08b` — revision `account-api-00019-lcb`, serving 100% |
-| Previous image | `…/backend:8f73dca` — revision `account-api-00018-2zp` |
+| Current image | `…/backend:df1d9bd` — revision `account-api-00020-pb7`, serving 100% |
+| Previous image | `…/backend:147d08b` — revision `account-api-00019-lcb` |
 | GCP project | `account-504419`, registry `us-west1-docker.pkg.dev/account-504419/account` |
 | Repo | `fawwaz9/Account` — a push to `main` rebuilds the **frontend** only |
 
@@ -82,8 +82,8 @@ reference, a concurrency setting.
 > ```
 > `LATEST (currently …)` is healthy. A bare revision name means you are pinned.
 
-**It now fixes bad code too.** Sixteen image tags exist, newest first:
-`147d08b` (current), `8f73dca`, `da6ac93`, `394cb7c`, `93c9d73`, `d635bf5`,
+**It now fixes bad code too.** Seventeen image tags exist, newest first:
+`df1d9bd` (current), `147d08b`, `8f73dca`, `da6ac93`, `394cb7c`, `93c9d73`, `d635bf5`,
 `0224d31`, `ca86a3e`, `1ceb30f`, `e494729`, `89a7c22`, `18e3376`, `7c1531a`,
 `18205eb`, `f6f7c32` and `26e249f`. Keep at least two — do not delete the older
 tags, and do not rely on `latest`, which by definition points at whatever just
@@ -228,6 +228,24 @@ broke.
 > the student ticked off, and that bug **destroys data**: it nulls
 > `completed_at` and un-archives, and a row in that state cannot be told from
 > one never completed. Roll back for something else, not for this.
+
+> ### `df1d9bd` rolls back cleanly in both directions
+>
+> Deployed 2026-10-01. It gives a course's grades an order -- alphabetical, case
+> ignored, digit runs compared as numbers -- where they previously came back in
+> insertion order.
+>
+> **No schema change, no column moved, no contract changed.** The same fields in
+> the same shape; only the sequence of a list differs. Rolling back restores
+> insertion order, which is a worse page and not a broken one, and no stored data
+> is involved either way: the order is derived from the name on every read, and
+> there is deliberately no ordering column behind it.
+>
+> **Safe in either direction against any frontend.** The client does not sort and
+> never did -- the course page groups by category with reduce and push, which
+> preserves whatever sequence the API sent. So an old page against this API gets
+> sorted grades, and a new page against an older API gets insertion order. Neither
+> combination breaks.
 
 > ### `ca4752e` is FRONTEND ONLY — no image, no revision, nothing on Cloud Run
 >
