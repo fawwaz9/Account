@@ -18,8 +18,8 @@ deployment on **2026-09-28**, including that traffic is on `LATEST`.
 | Database | Supabase project `kujxxairehpwhxhnkbct`, region `us-west-2`, Postgres 17.6 |
 | Backups | GitHub Actions artifacts, `Backup database` workflow, 90-day retention |
 | Secrets | Google Secret Manager: `jwt-secret`, `database-url` |
-| Current image | `…/backend:df1d9bd` — revision `account-api-00020-pb7`, serving 100% |
-| Previous image | `…/backend:147d08b` — revision `account-api-00019-lcb` |
+| Current image | `…/backend:88500e6` — revision `account-api-00021-z29`, serving 100% |
+| Previous image | `…/backend:df1d9bd` — revision `account-api-00020-pb7` |
 | GCP project | `account-504419`, registry `us-west1-docker.pkg.dev/account-504419/account` |
 | Repo | `fawwaz9/Account` — a push to `main` rebuilds the **frontend** only |
 
@@ -82,17 +82,17 @@ reference, a concurrency setting.
 > ```
 > `LATEST (currently …)` is healthy. A bare revision name means you are pinned.
 
-**It now fixes bad code too.** Seventeen image tags exist, newest first:
-`df1d9bd` (current), `147d08b`, `8f73dca`, `da6ac93`, `394cb7c`, `93c9d73`, `d635bf5`,
-`0224d31`, `ca86a3e`, `1ceb30f`, `e494729`, `89a7c22`, `18e3376`, `7c1531a`,
-`18205eb`, `f6f7c32` and `26e249f`. Keep at least two — do not delete the older
-tags, and do not rely on `latest`, which by definition points at whatever just
+**It now fixes bad code too.** Eighteen image tags exist, newest first:
+`88500e6` (current), `df1d9bd`, `147d08b`, `8f73dca`, `da6ac93`, `394cb7c`, `93c9d73`,
+`d635bf5`, `0224d31`, `ca86a3e`, `1ceb30f`, `e494729`, `89a7c22`, `18e3376`,
+`7c1531a`, `18205eb`, `f6f7c32` and `26e249f`. Keep at least two — do not delete the
+older tags, and do not rely on `latest`, which by definition points at whatever just
 broke.
 
-> **Only two of these exist locally** (`147d08b` and `latest`). The nine
-> superseded local copies were cleared on 2026-09-30; the registry is the rollback
-> source and holds all sixteen. `docker pull` first if you need to inspect an old
-> one.
+> **Only the current and previous exist locally** — `88500e6` and `latest` (the
+> same digest) plus `df1d9bd`. Everything older is cleared after each deploy, which
+> is the standing housekeeping rule; the registry is the rollback source and holds
+> all eighteen. `docker pull` first if you need to inspect an older one.
 
 > ### Rolling the API back alone now breaks the frontend
 >
@@ -228,6 +228,39 @@ broke.
 > the student ticked off, and that bug **destroys data**: it nulls
 > `completed_at` and un-archives, and a row in that state cannot be told from
 > one never completed. Roll back for something else, not for this.
+
+> ### `88500e6` — the CODE rolls back. The TABLE and NET WORTH do not.
+>
+> Deployed 2026-10-01. Investment returns: a reading per month of what an
+> investment account's holding is worth, a `(+3.2%)` on the account card, a return
+> tile replacing Movements on investment accounts, and **recorded gain added to the
+> net-worth headline**.
+>
+> **Rolling the API back is safe and loses no data, but it changes a number.**
+> Net worth on `df1d9bd` is the sum of ledger balances; on `88500e6` it is that
+> plus each investment account's latest recorded difference. So a rollback makes
+> the headline *drop* by the total recorded gain, and rolling forward makes it rise
+> again. Nothing is broken in either state — the two are different definitions of
+> the same word — but if the figure is what someone is complaining about, this is
+> why, and it is not a bug in whichever one they are looking at.
+>
+> **The table `account_month_values` outlives a rollback, and that is correct.**
+> Applied by the schema step before this image deployed. An older image simply
+> never queries it, so the rows sit there costing nothing and come back intact when
+> you roll forward. **Do not drop it to "finish" a rollback** — that destroys every
+> reading anyone has recorded, and no code change requires it. Production now has
+> 27 tables where the schema builds 26; the extra is `category_budgets`, which is a
+> different and older issue (audit #66).
+>
+> **The frontend is safe in both directions.** An old page against this API ignores
+> the new fields. A new page against an older API gets `investment_return: null` on
+> every account and `investment_gain` absent, which renders as no percentage on the
+> cards, "Not recorded" in the tile, and no disclosure line under net worth — a
+> page with a feature missing, not a broken one. The one thing that will **fail**
+> is pressing Save in "What it is worth", because `PUT …/month-value` does not
+> exist on an older image: the panel shows "That did not save" and nothing is
+> written. So if you roll the API back and leave the frontend, expect that one
+> button to be dead rather than silently lying.
 
 > ### `df1d9bd` rolls back cleanly in both directions
 >
@@ -415,12 +448,15 @@ browser console shows everything.
 
 ## Live now
 
-| | |
-|---|---|
-| API | image `da6ac93`, revision **`account-api-00017-kwt`**, `latestRevision: True` |
-| Previous API | image `394cb7c`, revision `account-api-00016-fnx` |
-| Frontend | `index-DKAVzYQ6.js` / `style-CDxFZYk5.css`, from `da6ac93` |
-| Schema | `account_category_limits`, applied 2026-09-25 |
+> **See "What is where" at the top of this file — that table is the one kept
+> current.** This section used to repeat it and had drifted four revisions behind
+> (it still named `da6ac93` / `account-api-00017-kwt` on 2026-10-01, when the API
+> was on `account-api-00021-z29`). A second copy of the same fact is worse than no
+> copy during an outage, because there is no way to tell which one is stale. What
+> stays here is only what the top table cannot hold: the per-image notes on what
+> can and cannot be rolled back alone.
+>
+> Most recent schema change: `account_month_values`, applied 2026-10-01.
 
 ### `da6ac93` cannot have its API rolled back on its own
 
