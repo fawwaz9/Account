@@ -18,8 +18,8 @@ deployment on **2026-09-28**, including that traffic is on `LATEST`.
 | Database | Supabase project `kujxxairehpwhxhnkbct`, region `us-west-2`, Postgres 17.6 |
 | Backups | GitHub Actions artifacts, `Backup database` workflow, 90-day retention |
 | Secrets | Google Secret Manager: `jwt-secret`, `database-url` |
-| Current image | `…/backend:8f73dca` — revision `account-api-00018-2zp`, serving 100% |
-| Previous image | `…/backend:da6ac93` — revision `account-api-00017-kwt` |
+| Current image | `…/backend:147d08b` — revision `account-api-00019-lcb`, serving 100% |
+| Previous image | `…/backend:8f73dca` — revision `account-api-00018-2zp` |
 | GCP project | `account-504419`, registry `us-west1-docker.pkg.dev/account-504419/account` |
 | Repo | `fawwaz9/Account` — a push to `main` rebuilds the **frontend** only |
 
@@ -82,11 +82,17 @@ reference, a concurrency setting.
 > ```
 > `LATEST (currently …)` is healthy. A bare revision name means you are pinned.
 
-**It now fixes bad code too.** Fifteen image tags exist, newest first:
-`8f73dca` (current), `da6ac93`, `394cb7c`, `93c9d73`, `d635bf5`, `0224d31`,
-`ca86a3e`, `1ceb30f`, `e494729`, `89a7c22`, `18e3376`, `7c1531a`, `18205eb`,
-`f6f7c32` and `26e249f`. Keep at least two — do not delete the older tags, and
-do not rely on `latest`, which by definition points at whatever just broke.
+**It now fixes bad code too.** Sixteen image tags exist, newest first:
+`147d08b` (current), `8f73dca`, `da6ac93`, `394cb7c`, `93c9d73`, `d635bf5`,
+`0224d31`, `ca86a3e`, `1ceb30f`, `e494729`, `89a7c22`, `18e3376`, `7c1531a`,
+`18205eb`, `f6f7c32` and `26e249f`. Keep at least two — do not delete the older
+tags, and do not rely on `latest`, which by definition points at whatever just
+broke.
+
+> **Only two of these exist locally** (`147d08b` and `latest`). The nine
+> superseded local copies were cleared on 2026-09-30; the registry is the rollback
+> source and holds all sixteen. `docker pull` first if you need to inspect an old
+> one.
 
 > ### Rolling the API back alone now breaks the frontend
 >
@@ -222,6 +228,38 @@ do not rely on `latest`, which by definition points at whatever just broke.
 > the student ticked off, and that bug **destroys data**: it nulls
 > `completed_at` and un-archives, and a row in that state cannot be told from
 > one never completed. Roll back for something else, not for this.
+
+> ### `147d08b` — the API rolls back alone. The FRONTEND does not.
+>
+> Asymmetric, and the asymmetry is the whole note. Deployed 2026-10-01 with the
+> tabbed Settings page.
+>
+> **The API half is harmless to revert.** It changed one request type:
+> `UserUpdate.preferences` became a `UserPreferencesPatch` whose fields are
+> optional, so a patch naming three keys no longer writes all fourteen. An older
+> image given the same request fills in defaults instead — which is what it did
+> before, and what the fix existed to stop. Reverting restores the bug; it breaks
+> nothing and loses no data already stored.
+>
+> **Rolling back the API ALONE, while the new frontend is live, is destructive.**
+> Settings now has three tabs with a Save each, and each Save sends only its own
+> three preference keys. Against the old API every one of those requests is
+> parsed into all fourteen fields — so saving Calendar would reset the credit
+> target, the default grade and the CGPA toggle, and saving Academic would reset
+> the study window. The tabs are built on this image's behaviour.
+>
+> So if you roll the API back past `147d08b`, **roll the frontend back first**:
+> Pages dashboard → the project → *Deployments* → the deployment before
+> `147d08b` → **Rollback**. Frontend first, then API — the same order the
+> `394cb7c` removal established, for a different reason.
+>
+> No schema change, no column moved, so there is nothing to undo in the database.
+> `preferences` is an existing JSON column and the patch type is a request shape.
+>
+> One consequence worth knowing: the stored preferences of anyone who saved
+> Settings before this deploy already have all fourteen keys written, because the
+> old code wrote them. Nothing needs repairing — the values are now simply left
+> alone instead of being overwritten each time.
 
 > ### The category-limits sequence, `93c9d73` → `8f73dca`
 >

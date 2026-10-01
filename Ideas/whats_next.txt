@@ -1359,6 +1359,27 @@ are the size of each job rather than an impression of it.
     what the timezone setting affects behind one of these rather than adding a
     129th muted line.
 
+Settings, phases 0-2 LIVE 2026-10-01
+- API image 147d08b, revision account-api-00019-lcb. Frontend from the same
+  commit. 946 backend tests, 157 frontend.
+- Phase 0 fixed a live bug: every Settings save was resetting the preferences it
+  did not mention, timezone included, because UserUpdate.preferences was typed as
+  the full UserPreferences and every field of that has a default. It now takes a
+  UserPreferencesPatch and the merge dumps exclude_unset. Audit #58's first half
+  is closed; the six preferences nothing reads are still unexposed on purpose.
+- Phase 1 put Account and Password side by side, and gave the three cards an
+  actual card -- `.card` had been in that markup since the first commit and never
+  existed in any stylesheet.
+- Phase 2 grouped the rest into Academic, Calendar and Financial tabs. First real
+  tablist in the app. The study window moved to Calendar; Financial holds Income
+  split and Edit categories, which the Budget page still offers too.
+- STILL TO DO, from Ideas/settings-plan.md phase 4: the timezone control itself.
+  The bug that reset it is fixed, but there is still no way to SET it, so anyone
+  outside America/Regina gets reminder times and early/late figures computed
+  against the wrong day boundary. That is the remaining half of #58 and it is
+  small: a <select> off Intl.supportedValuesOf, in the Calendar tab that now
+  exists to hold it.
+
 A decision owed: the orphaned table, found 2026-09-28
 - category_budgets is still in the production database. f0dfede created it for
   whole-budget category limits; 394cb7c removed that feature entirely -- model,
