@@ -1058,6 +1058,32 @@ decided in the client or in a schema. Severity is Low unless it says otherwise.
     Either wire it up or drop the field, but a validated preference nothing reads
     is a promise the app does not keep.
 
+    > **CLOSED 2026-10-01, and the count in the heading was the wrong way to read
+    > it.** "Seven preferences have no control" sounds like seven controls to
+    > build. It was one bug, one control, and five things that were never built.
+    >
+    > - **The bug.** Worse than this finding said: Settings was not merely failing
+    >   to set `timezone`, it was *resetting* it on every save, because
+    >   `UserUpdate.preferences` was typed as the full `UserPreferences` and every
+    >   field of that has a default. Fixed in `b140088` with a real patch type;
+    >   proved against a throwaway database first.
+    > - **The control.** `timezone` is now a `<select>` in the Calendar tab, seeded
+    >   from the stored value and never from the browser's guess — the guess is
+    >   offered by a button, the way the first-year field offers one. A `(?)` says
+    >   what it affects.
+    > - **The five.** `currency`, `week_start`, `theme`, `date_format` and
+    >   `time_format` are read by nothing, and `default_reminder_minutes_before` by
+    >   nothing either. **They stay unexposed, and that is the finding's answer
+    >   rather than work outstanding.** A control that changes nothing is worse
+    >   than an absent one: it invites someone to set it and then quietly disagrees
+    >   with the app. Each needs its consumer built first, and three of them —
+    >   `week_start`, `date_format`, `time_format` — mean changing shared date
+    >   utilities the recurrence engine depends on. `theme` needs a light palette
+    >   that does not exist; see `whats_next.txt` for what that actually costs.
+    >
+    > So nothing here is pending. If one of those five is wanted, it is a feature
+    > with a consumer to build, not a field to add to a form.
+
 59. **Medium. Every list renders its empty state while its own refetch is in
     flight.** `TaskList` shows `emptyMessage` whenever `tasks.length === 0`, with no
     notion of loading. Ticking "Show completed" flips both `includeDone` and

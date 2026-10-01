@@ -5,6 +5,8 @@ import { updateAcademicStatus, updatePreferences } from "../services/currentUser
 import { fetchAccounts, fetchCategories } from "../features/budget/api";
 import { Account, SpendCategory } from "../features/budget/types";
 import IncomeSplitModal from "../features/budget/components/IncomeSplitModal";
+import BlackoutsModal from "../features/calender/components/BlackoutsModal";
+import HelpTip from "../shared/components/HelpTip";
 import CategoriesModal from "../features/budget/components/CategoriesModal";
 import "../styles/login.css";
 // The two budget modals reached from the Financial tab style their rows from
@@ -22,6 +24,48 @@ import "../styles/budget.css";
  */
 function clockValue(value: unknown, fallback: string): string {
   return typeof value === "string" ? value.slice(0, 5) : fallback;
+}
+
+/**
+ * The server's own default, repeated here so the two cannot drift.
+ *
+ * If this said anything else, a user whose preference has never been written
+ * would see one zone and have another applied to their reminders.
+ */
+const DEFAULT_ZONE = "America/Regina";
+
+/** Enough to choose from if the browser cannot list them. Canada, plus UTC. */
+const FALLBACK_ZONES = [
+  "America/St_Johns", "America/Halifax", "America/Toronto", "America/Winnipeg",
+  "America/Regina", "America/Edmonton", "America/Vancouver", "UTC",
+] as const;
+
+/**
+ * Every zone the browser knows, or a short list if it does not know how to say.
+ *
+ * Cast rather than raising tsconfig's `lib` from ES2020: `supportedValuesOf` is
+ * declared in `lib.es2022.intl`, and bumping the lib would change what the whole
+ * project type-checks against for the sake of one call. The runtime guard is
+ * needed either way -- which makes the cast and the fallback the same code rather
+ * than an extra thing to carry.
+ */
+function supportedTimeZones(): readonly string[] {
+  const intl = Intl as typeof Intl & { supportedValuesOf?: (key: string) => string[] };
+  try {
+    const zones = intl.supportedValuesOf?.("timeZone");
+    return zones && zones.length > 0 ? zones : FALLBACK_ZONES;
+  } catch {
+    return FALLBACK_ZONES;
+  }
+}
+
+/** What the browser thinks the clock is, offered but never applied. */
+function guessedZone(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -62,6 +106,11 @@ export default function SettingsPage() {
   const [studyStart, setStudyStart] = useState(clockValue(user?.preferences?.study_day_start, "08:00"));
   const [studyEnd, setStudyEnd] = useState(clockValue(user?.preferences?.study_day_end, "22:00"));
   const [minBlock, setMinBlock] = useState(String(user?.preferences?.min_free_block_minutes ?? 30));
+  // Stored value only. Seeding this from `guessedZone()` would mean that
+  // opening Settings in another city silently repointed every reminder on the
+  // next Calendar save -- a save changing something nobody asked it to, which
+  // is the fault the preference-patch fix existed to stop.
+  const [zone, setZone] = useState(user?.preferences?.timezone ?? DEFAULT_ZONE);
   const [academicError, setAcademicError] = useState<string | null>(null);
   const [academicSaved, setAcademicSaved] = useState(false);
   const [savingAcademic, setSavingAcademic] = useState(false);
@@ -91,6 +140,12 @@ export default function SettingsPage() {
   const [categories, setCategories] = useState<SpendCategory[]>([]);
   const [splitOpen, setSplitOpen] = useState(false);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
+  const [blackoutsOpen, setBlackoutsOpen] = useState(false);
+
+  // Neither depends on state, and the zone list runs to a few hundred
+  // entries, so both are read once per render rather than per option.
+  const zones = supportedTimeZones();
+  const guess = guessedZone();
 
   const loadMoneyBits = useCallback(async () => {
     if (!user) return;
@@ -119,6 +174,7 @@ export default function SettingsPage() {
     setStudyStart(clockValue(user.preferences?.study_day_start, "08:00"));
     setStudyEnd(clockValue(user.preferences?.study_day_end, "22:00"));
     setMinBlock(String(user.preferences?.min_free_block_minutes ?? 30));
+    setZone(user.preferences?.timezone ?? DEFAULT_ZONE);
   }, [user]);
 
   // Fetched once, not per tab open: two GETs on a page you visit to change one
@@ -219,6 +275,7 @@ export default function SettingsPage() {
 
     try {
       await updatePreferences(user.id, {
+        timezone: zone,
         study_day_start: studyStart,
         study_day_end: studyEnd,
         min_free_block_minutes: Number(minBlock),
@@ -525,6 +582,50 @@ export default function SettingsPage() {
             </p>
 
             <form className="loginForm" onSubmit={handleCalendarSubmit}>
+              {/* First in the panel because it is the one setting here that can
+                  make another figure wrong rather than merely unhelpful. */}
+              <div className="loginField">
+                {/* The mark is a sibling of the label, not inside it. A control's
+                    accessible name is computed from its label's contents, so a
+                    nested button would append its own name to the select's and
+                    leave it announced as "Time zone What the time zone affects". */}
+                <span className="settingsLabelRow">
+                  <label htmlFor="timezone">Time zone</label>
+                  <HelpTip label="What the time zone affects">
+                    Reminders fire on this clock, not the server&apos;s. It also
+                    decides which calendar day a task was finished on, so whether
+                    Tasks calls your work early or late is measured against it.
+                    Evening work in the wrong zone reads as a day late.
+                  </HelpTip>
+                </span>
+                <select
+                  id="timezone"
+                  className="loginInput"
+                  value={zone}
+                  onChange={(event) => setZone(event.target.value)}
+                >
+                  {/* A stored zone the browser cannot list would otherwise vanish
+                      from the control and be replaced on the next save. */}
+                  {!zones.includes(zone) && <option value={zone}>{zone}</option>}
+                  {zones.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+                {/* Offered, never applied -- the same treatment the first-year
+                    field gets, and for the same reason: getting this wrong moves
+                    every reminder you have, and it is the student who knows where
+                    they are. */}
+                {guess !== null && guess !== zone && (
+                  <button
+                    type="button"
+                    className="courseLinkAdd"
+                    onClick={() => setZone(guess)}
+                  >
+                    This device says {guess} — use it
+                  </button>
+                )}
+              </div>
+
               {/* What counts as usable study time. 03:00 is technically free and
                   is not it, so the gaps between classes are only offered inside
                   these hours. */}
@@ -579,6 +680,28 @@ export default function SettingsPage() {
                 {savingCalendar ? "Saving..." : "Save"}
               </button>
             </form>
+
+            {/* Outside the form: it writes for itself and has no part in the Save
+                above. Still on the Calendar page too, where you notice a reading
+                break while looking at the week it ruins. */}
+            {/* The mark sits beside the button, never inside it: a button cannot
+                contain a button, and nesting them would give one control two
+                meanings depending on where you clicked. */}
+            <div className="settingsActions">
+              <button
+                type="button"
+                className="calButton"
+                onClick={() => setBlackoutsOpen(true)}
+              >
+                Blocked periods
+              </button>
+              <HelpTip label="What blocked periods do">
+                Weeks when classes do not run. Entered once and applied to
+                everything attached to a course, so a reading break does not have
+                to be cancelled on each of six of them. Your own events, standing
+                payments and repeating tasks carry on.
+              </HelpTip>
+            </div>
           </div>
 
           {/* No form and no Save: both of these are their own dialogs that write
@@ -642,6 +765,17 @@ export default function SettingsPage() {
         categories={categories}
         onClose={() => setCategoriesOpen(false)}
         onSaved={() => void loadMoneyBits()}
+      />
+
+      {/* `onSaved` genuinely can do nothing here, unlike the two above. Those
+          render rows from a prop this page owns, so they need a refetch to stop
+          showing what was just deleted. This one fetches its own blackouts when
+          it opens and refetches them itself after a write, and Settings holds no
+          calendar data for a stale copy to live in. */}
+      <BlackoutsModal
+        open={blackoutsOpen}
+        onClose={() => setBlackoutsOpen(false)}
+        onSaved={() => undefined}
       />
     </div>
   );

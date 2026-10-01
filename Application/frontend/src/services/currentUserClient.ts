@@ -29,6 +29,14 @@ export interface CurrentUser {
    */
   suggested_first_year: number | null;
   preferences: {
+    /**
+     * IANA zone. Declared rather than left to the index signature below, because
+     * it is read at a call site that would otherwise get `unknown` -- and because
+     * it is the one preference in this object that changes behaviour rather than
+     * presentation: reminders fire on it, and so does whether a task counts as
+     * finished early or late.
+     */
+    timezone: string;
     credit_target: number;
     gpa_scale_enabled: boolean;
     default_target_grade: number;

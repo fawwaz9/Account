@@ -42,6 +42,9 @@ const user = {
   first_year_calendar_year: 2024,
   suggested_first_year: null,
   preferences: {
+    // Deliberately not whatever zone this test environment reports, so a browser
+    // guess leaking into the field is visible rather than coincidentally right.
+    timezone: "America/Vancouver",
     credit_target: 120,
     gpa_scale_enabled: true,
     default_target_grade: 85,
@@ -73,6 +76,14 @@ vi.mock("../features/budget/api", () => ({
   fetchCategories: vi.fn().mockResolvedValue([
     { id: "c1", name: "Groceries", archived: false, position: 0 },
   ]),
+}));
+
+// BlackoutsModal fetches its own data when it opens; stubbed so the dialog has
+// something to resolve rather than an unhandled rejection.
+vi.mock("../features/calender/api", () => ({
+  fetchBlackouts: vi.fn().mockResolvedValue([]),
+  createBlackout: vi.fn().mockResolvedValue({}),
+  deleteBlackout: vi.fn().mockResolvedValue({}),
 }));
 
 import SettingsPage from "./SettingsPage";
@@ -228,7 +239,7 @@ describe("each tab saves only its own preferences", () => {
     );
   });
 
-  it("sends the study window and not the academic keys", async () => {
+  it("sends the study window and the zone, and not the academic keys", async () => {
     render(<SettingsPage />);
     fireEvent.click(screen.getByRole("tab", { name: "Calendar" }));
 
@@ -237,9 +248,117 @@ describe("each tab saves only its own preferences", () => {
     await waitFor(() => expect(updatePreferences).toHaveBeenCalled());
     const sent = updatePreferences.mock.calls[0][1] as Record<string, unknown>;
     expect(Object.keys(sent).sort()).toEqual(
-      ["min_free_block_minutes", "study_day_end", "study_day_start"],
+      ["min_free_block_minutes", "study_day_end", "study_day_start", "timezone"],
     );
     expect(updateAcademicStatus).not.toHaveBeenCalled();
+  });
+});
+
+describe("the time zone control", () => {
+  /**
+   * The trap this was written to avoid, and the only test here that matters much.
+   *
+   * Seeding the field from `Intl.DateTimeFormat().resolvedOptions().timeZone`
+   * would mean that opening Settings anywhere else, touching nothing, and saving
+   * the Calendar tab silently repointed every reminder the student has. A save
+   * must not change something nobody asked it to -- which is the same fault the
+   * preference-patch fix existed to stop, arriving by a different door.
+   *
+   * This test's own premise is asserted first, deliberately. It can only detect a
+   * leaked guess while the environment's zone differs from the stored one --
+   * `vitest.config.ts` pins `TZ: "America/Regina"` and the fixture stores
+   * America/Vancouver, so today it does. If someone repins that TZ to match, this
+   * test would quietly stop testing anything, and the assertion below turns that
+   * into a failure rather than a false pass.
+   */
+  it("saves the stored zone when nothing was touched, not the browser's guess", async () => {
+    const envZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    expect(envZone, "this test cannot detect a leaked guess unless the two differ")
+      .not.toBe(user.preferences.timezone);
+
+    render(<SettingsPage />);
+    fireEvent.click(screen.getByRole("tab", { name: "Calendar" }));
+
+    fireEvent.submit(screen.getByLabelText("Shortest useful gap").closest("form")!);
+
+    await waitFor(() => expect(updatePreferences).toHaveBeenCalled());
+    const sent = updatePreferences.mock.calls[0][1] as Record<string, unknown>;
+    expect(sent.timezone).toBe("America/Vancouver");
+    expect(sent.timezone).not.toBe(envZone);
+  });
+
+  it("shows the stored zone as the selected option", () => {
+    render(<SettingsPage />);
+    fireEvent.click(screen.getByRole("tab", { name: "Calendar" }));
+
+    expect((screen.getByLabelText("Time zone") as HTMLSelectElement).value)
+      .toBe("America/Vancouver");
+  });
+
+  /** The control: a select nobody can pick from would pass every test above. */
+  it("sends a zone the user actually chose", async () => {
+    render(<SettingsPage />);
+    fireEvent.click(screen.getByRole("tab", { name: "Calendar" }));
+
+    fireEvent.change(screen.getByLabelText("Time zone"), {
+      target: { value: "America/Halifax" },
+    });
+    fireEvent.submit(screen.getByLabelText("Shortest useful gap").closest("form")!);
+
+    await waitFor(() => expect(updatePreferences).toHaveBeenCalled());
+    expect((updatePreferences.mock.calls[0][1] as Record<string, unknown>).timezone)
+      .toBe("America/Halifax");
+  });
+
+  it("offers a real list of zones, not just the fallback", () => {
+    render(<SettingsPage />);
+    fireEvent.click(screen.getByRole("tab", { name: "Calendar" }));
+
+    const options = (screen.getByLabelText("Time zone") as HTMLSelectElement).options;
+    expect(options.length).toBeGreaterThan(8);
+  });
+
+  it("offers the device's zone as a suggestion, and applying it does not save", () => {
+    render(<SettingsPage />);
+    fireEvent.click(screen.getByRole("tab", { name: "Calendar" }));
+
+    // The stored zone differs from whatever this environment reports, so the
+    // suggestion must be on offer.
+    const suggestion = screen.getByRole("button", { name: /use it$/ });
+    fireEvent.click(suggestion);
+
+    expect((screen.getByLabelText("Time zone") as HTMLSelectElement).value)
+      .not.toBe("America/Vancouver");
+    expect(updatePreferences).not.toHaveBeenCalled();
+  });
+
+  it("stops offering the suggestion once it has been taken", () => {
+    render(<SettingsPage />);
+    fireEvent.click(screen.getByRole("tab", { name: "Calendar" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /use it$/ }));
+
+    expect(screen.queryByRole("button", { name: /use it$/ })).toBeNull();
+  });
+});
+
+describe("blocked periods", () => {
+  it("is reachable from the calendar tab", () => {
+    render(<SettingsPage />);
+    fireEvent.click(screen.getByRole("tab", { name: "Calendar" }));
+
+    expect(screen.getByRole("button", { name: "Blocked periods" })).toBeDefined();
+  });
+
+  it("opens its dialog", async () => {
+    render(<SettingsPage />);
+    fireEvent.click(screen.getByRole("tab", { name: "Calendar" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Blocked periods" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("dialog", { name: "Blocked periods" })).toBeDefined(),
+    );
   });
 });
 

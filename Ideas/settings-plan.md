@@ -1,6 +1,8 @@
 # Settings: three tabs, and the bug that has to go first
 
-> **Status: planned, not started.** Written 2026-09-30 against `c81da5a`.
+> **Status: all four phases shipped.** Written 2026-09-30 against `c81da5a`;
+> phases 0-2 live on `147d08b` (2026-10-01), phases 3-4 after it. Kept as the
+> record of what was decided and why, not as a to-do list.
 > The standing design note for this area is
 > [design/users-and-auth.md](design/users-and-auth.md); read that for how
 > preferences work. Read this for what is being changed and in what order.
@@ -335,9 +337,19 @@ field.
 
 ## Error mapping
 
-The validator raises `ValueError` on an unknown zone. Confirm the user route maps
-that to **400**, not 500 — the audit has closed three findings of exactly this
-shape, and a `<select>` makes it unreachable from the UI but not from the API.
+**Answered, and the answer is 422 rather than the 400 this section first asked
+for.** The validator lives on the preferences model, so FastAPI runs it while
+parsing the request body — before `edit_user` is entered, and therefore before its
+`except ValueError` is on the stack to map anything. 422 is the right status for a
+malformed body and the route needs no change; it is recorded because the route
+documents 400 and 404 and not this. A route test asserts it, along with a control
+that a *valid* zone saves, so "invalid is refused" cannot pass by refusing
+everything.
+
+The status matters less than the reason the validator has to exist on the patch
+type at all: `get_preferences` re-validates on **read** through `UserPreferences`,
+from six call sites that catch nothing, so one stored bad value would surface as a
+500 on every page that reads a preference.
 
 ---
 

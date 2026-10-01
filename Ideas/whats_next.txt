@@ -1373,12 +1373,25 @@ Settings, phases 0-2 LIVE 2026-10-01
 - Phase 2 grouped the rest into Academic, Calendar and Financial tabs. First real
   tablist in the app. The study window moved to Calendar; Financial holds Income
   split and Edit categories, which the Budget page still offers too.
-- STILL TO DO, from Ideas/settings-plan.md phase 4: the timezone control itself.
-  The bug that reset it is fixed, but there is still no way to SET it, so anyone
-  outside America/Regina gets reminder times and early/late figures computed
-  against the wrong day boundary. That is the remaining half of #58 and it is
-  small: a <select> off Intl.supportedValuesOf, in the Calendar tab that now
-  exists to hold it.
+- Phases 3 and 4 followed the same day. The timezone control is in the Calendar
+  tab: a <select> off Intl.supportedValuesOf with a short Canadian fallback,
+  seeded from the STORED zone and never from the browser's guess -- the guess is
+  offered by a button instead, so opening Settings in another city cannot
+  silently repoint every reminder on the next save. Blocked periods got its
+  entry point there too.
+- AUDIT #58 IS CLOSED, and the way it was worded was misleading. "Seven
+  preferences have no control" reads as seven controls to build. It was one bug
+  (fixed), one control (built), and five things nothing reads -- currency,
+  week_start, theme, date_format, time_format, default_reminder_minutes_before.
+  Those stay unexposed deliberately. A control that changes nothing is worse
+  than an absent one.
+- The (?) exists now: shared/components/HelpTip.tsx, nine tests. Clickable, not
+  hover-only; the panel is inline in normal flow so it cannot overflow a narrow
+  screen; Escape closes it and is stopped from reaching a dialog around it. Two
+  in use so far, on the timezone field and on Blocked periods. THE REST OF THE
+  SWEEP IS STILL TO DO -- 128 ambient muted sentences were counted and two have
+  moved. Do it panel by panel, and leave anything that must be read BEFORE
+  acting where it is.
 
 A decision owed: the orphaned table, found 2026-09-28
 - category_budgets is still in the production database. f0dfede created it for
