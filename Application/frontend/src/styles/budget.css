@@ -402,11 +402,11 @@
 .plannedFigureDerived { cursor: default; }
 .plannedFigureDerived:hover { border-color: transparent; color: var(--text); }
 
-.plannedEdit { display: flex; align-items: center; gap: 6px; }
-
-/* The scope switch inside the limit editor. `flex-wrap` on the row above lets
-   it drop to its own line on a narrow column rather than squeezing the input. */
-.plannedEdit { flex-wrap: wrap; }
+/* `flex-wrap` is here so the scope switch inside the limit editor can drop to its
+   own line on a narrow column rather than squeezing the input. It used to be a
+   second `.plannedEdit` rule three lines down; one class wants one rule, or which
+   declaration wins is decided by source order. */
+.plannedEdit { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .limitScope { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .plannedInput { width: 110px; padding: 5px 8px; }
 .plannedNote { margin-top: 1px; }
@@ -1250,6 +1250,8 @@
 .sinkUndo,
 .sinkRemove {
   box-sizing: border-box;
+  align-self: flex-start;
+  margin-top: 2px;
   padding: 0;
   border: none;
   background: none;
@@ -1261,11 +1263,6 @@
 .sinkUndo:hover,
 .sinkRemove:hover {
   color: var(--gold);
-}
-
-.sinkRemove {
-  align-self: flex-start;
-  margin-top: 2px;
 }
 
 .sinkDone {
