@@ -131,247 +131,253 @@ export default function SettingsPage() {
       <h1 className="title">Settings</h1>
 
       <div className="settingsGrid">
-        <div className="card">
-          <h2>Account</h2>
-          <div className="settingsRow">
-            <span className="settingsLabel">Name</span>
-            <span>{user?.name}</span>
-          </div>
-          <div className="settingsRow">
-            <span className="settingsLabel">Email</span>
-            <span>{user?.email}</span>
-          </div>
-          <div className="settingsRow">
-            <span className="settingsLabel">Sign-in methods</span>
-            <span>
-              <span className={user?.has_google ? "settingsBadge" : "settingsBadge settingsBadgeOff"}>
-                Google
-              </span>{" "}
-              <span className={hasPassword ? "settingsBadge" : "settingsBadge settingsBadgeOff"}>
-                Password
-              </span>
-            </span>
-          </div>
-        </div>
-
-        <div className="card">
-          <h2>Academic</h2>
-          <p className="muted small-text">
-            Your current term decides which courses count as past, current, or future.
-          </p>
-
-          <form className="loginForm" onSubmit={handleAcademicSubmit}>
-            <div className="loginField">
-              <label htmlFor="school-year">Current school year</label>
-              <input
-                id="school-year"
-                className="loginInput"
-                type="number"
-                min={1}
-                max={10}
-                value={schoolYear}
-                onChange={(event) => setSchoolYear(event.target.value)}
-                placeholder="e.g. 2"
-                required
-              />
+        {/* Account and Password side by side: one subject, and both are short
+            enough that stacking them wasted the width. Everything below is a
+            form you work through, which is why the split stops here. */}
+        <div className="settingsTop">
+          <div className="settingsCard">
+            <h2>Account</h2>
+            <div className="settingsRow">
+              <span className="settingsLabel">Name</span>
+              <span>{user?.name}</span>
             </div>
-
-            <div className="loginField">
-              <label htmlFor="current-semester">Current semester</label>
-              <select
-                id="current-semester"
-                className="loginInput"
-                value={semester}
-                onChange={(event) => setSemester(event.target.value)}
-              >
-                {["Fall", "Winter", "Spring", "Summer"].map((option) => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-              </select>
+            <div className="settingsRow">
+              <span className="settingsLabel">Email</span>
+              <span>{user?.email}</span>
             </div>
-
-            <div className="loginField">
-              <label htmlFor="first-year">The year your first year began</label>
-              <input
-                id="first-year"
-                className="loginInput"
-                type="number"
-                min={1990}
-                max={2100}
-                value={firstYear}
-                onChange={(event) => setFirstYear(event.target.value)}
-                placeholder="e.g. 2023"
-              />
-              <span className="muted small-text">
-                A school year is 1, 2, 3 — not a calendar year — so this is what
-                gives each term real dates. Leave it blank and nothing that
-                measures a term can say when it ran.
-              </span>
-              {/* Worked out from courses that already carry dates, which is
-                  evidence rather than a label. Offered rather than applied:
-                  getting this wrong shifts every term in the app by a year,
-                  and it is the student who knows. */}
-              {user?.suggested_first_year != null &&
-                String(user.suggested_first_year) !== firstYear && (
-                  <button
-                    type="button"
-                    className="courseLinkAdd"
-                    onClick={() => setFirstYear(String(user.suggested_first_year))}
-                  >
-                    Your dated courses suggest {user.suggested_first_year} — use it
-                  </button>
-                )}
-            </div>
-
-            <div className="loginField">
-              <label htmlFor="credit-target">Credits required for your degree</label>
-              <input
-                id="credit-target"
-                className="loginInput"
-                type="number"
-                min={1}
-                max={400}
-                value={creditTarget}
-                onChange={(event) => setCreditTarget(event.target.value)}
-                required
-              />
-            </div>
-
-            <div className="loginField">
-              <label htmlFor="default-target">Default target grade</label>
-              <input
-                id="default-target"
-                className="loginInput"
-                type="number"
-                step="any"
-                min={0}
-                max={100}
-                value={defaultTarget}
-                onChange={(event) => setDefaultTarget(event.target.value)}
-                required
-              />
-              <span className="loginHint">
-                Used for any course without its own target.
-              </span>
-            </div>
-
-            {/* What counts as usable study time. 03:00 is technically free and
-                is not it, so the gaps between classes are only offered inside
-                these hours. */}
-            <div className="loginField">
-              <label htmlFor="study-start">Study hours</label>
-              <div className="studyHoursRow">
-                <input
-                  id="study-start"
-                  className="loginInput"
-                  type="time"
-                  value={studyStart}
-                  onChange={(event) => setStudyStart(event.target.value)}
-                  required
-                />
-                <span className="studyHoursTo">to</span>
-                <input
-                  id="study-end"
-                  className="loginInput"
-                  type="time"
-                  value={studyEnd}
-                  onChange={(event) => setStudyEnd(event.target.value)}
-                  aria-label="Study hours end"
-                  required
-                />
-              </div>
-              <span className="loginHint">
-                The hours free blocks are offered in.
-              </span>
-            </div>
-
-            <div className="loginField">
-              <label htmlFor="min-block">Shortest useful gap</label>
-              <input
-                id="min-block"
-                className="loginInput"
-                type="number"
-                min={5}
-                max={240}
-                value={minBlock}
-                onChange={(event) => setMinBlock(event.target.value)}
-                required
-              />
-              <span className="loginHint">
-                Minutes. Below this a gap is walking time, not study time.
-              </span>
-            </div>
-
-            <div className="settingsToggle">
-              <input
-                id="gpa-enabled"
-                type="checkbox"
-                checked={gpaEnabled}
-                onChange={(event) => setGpaEnabled(event.target.checked)}
-              />
-              <label htmlFor="gpa-enabled">
-                Show CGPA
-                <span className="small-text muted">
-                  {" "}&mdash; UBC doesn&apos;t put a GPA on transcripts, so this is optional.
+            <div className="settingsRow">
+              <span className="settingsLabel">Sign-in methods</span>
+              <span>
+                <span className={user?.has_google ? "settingsBadge" : "settingsBadge settingsBadgeOff"}>
+                  Google
+                </span>{" "}
+                <span className={hasPassword ? "settingsBadge" : "settingsBadge settingsBadgeOff"}>
+                  Password
                 </span>
-              </label>
+              </span>
             </div>
+          </div>
+          <div className="settingsCard">
+            <h2>{hasPassword ? "Change password" : "Add a password"}</h2>
+            <p className="muted small-text">
+              {hasPassword
+                ? "Enter your current password to set a new one."
+                : "Set a password to sign in with your email as well as Google."}
+            </p>
 
-            {academicError && <p className="loginError">{academicError}</p>}
-            {academicSaved && <p className="loginSuccess">Saved.</p>}
+            <form className="loginForm" onSubmit={handleSubmit}>
+              {hasPassword && (
+                <div className="loginField">
+                  <label htmlFor="current-password">Current password</label>
+                  <input
+                    id="current-password"
+                    className="loginInput"
+                    type="password"
+                    value={currentPassword}
+                    onChange={(event) => setCurrentPassword(event.target.value)}
+                    autoComplete="current-password"
+                    required
+                  />
+                </div>
+              )}
 
-            <button type="submit" className="loginSubmit" disabled={savingAcademic}>
-              {savingAcademic ? "Saving..." : "Save"}
-            </button>
-          </form>
-        </div>
-
-        <div className="card">
-          <h2>{hasPassword ? "Change password" : "Add a password"}</h2>
-          <p className="muted small-text">
-            {hasPassword
-              ? "Enter your current password to set a new one."
-              : "Set a password to sign in with your email as well as Google."}
-          </p>
-
-          <form className="loginForm" onSubmit={handleSubmit}>
-            {hasPassword && (
               <div className="loginField">
-                <label htmlFor="current-password">Current password</label>
+                <label htmlFor="new-password">New password</label>
                 <input
-                  id="current-password"
+                  id="new-password"
                   className="loginInput"
                   type="password"
-                  value={currentPassword}
-                  onChange={(event) => setCurrentPassword(event.target.value)}
-                  autoComplete="current-password"
+                  value={newPassword}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                  autoComplete="new-password"
+                  placeholder="At least 8 characters"
+                  minLength={8}
                   required
                 />
               </div>
-            )}
 
-            <div className="loginField">
-              <label htmlFor="new-password">New password</label>
-              <input
-                id="new-password"
-                className="loginInput"
-                type="password"
-                value={newPassword}
-                onChange={(event) => setNewPassword(event.target.value)}
-                autoComplete="new-password"
-                placeholder="At least 8 characters"
-                minLength={8}
-                required
-              />
-            </div>
+              {error && <p className="loginError">{error}</p>}
+              {success && <p className="loginSuccess">{success}</p>}
 
-            {error && <p className="loginError">{error}</p>}
-            {success && <p className="loginSuccess">{success}</p>}
+              <button type="submit" className="loginSubmit" disabled={submitting}>
+                {submitting ? "Saving..." : hasPassword ? "Change password" : "Set password"}
+              </button>
+            </form>
+          </div>
+        </div>
 
-            <button type="submit" className="loginSubmit" disabled={submitting}>
-              {submitting ? "Saving..." : hasPassword ? "Change password" : "Set password"}
-            </button>
-          </form>
+        <div className="settingsPanels">
+          <div className="settingsCard">
+            <h2>Academic</h2>
+            <p className="muted small-text">
+              Your current term decides which courses count as past, current, or future.
+            </p>
+
+            <form className="loginForm" onSubmit={handleAcademicSubmit}>
+              <div className="loginField">
+                <label htmlFor="school-year">Current school year</label>
+                <input
+                  id="school-year"
+                  className="loginInput"
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={schoolYear}
+                  onChange={(event) => setSchoolYear(event.target.value)}
+                  placeholder="e.g. 2"
+                  required
+                />
+              </div>
+
+              <div className="loginField">
+                <label htmlFor="current-semester">Current semester</label>
+                <select
+                  id="current-semester"
+                  className="loginInput"
+                  value={semester}
+                  onChange={(event) => setSemester(event.target.value)}
+                >
+                  {["Fall", "Winter", "Spring", "Summer"].map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="loginField">
+                <label htmlFor="first-year">The year your first year began</label>
+                <input
+                  id="first-year"
+                  className="loginInput"
+                  type="number"
+                  min={1990}
+                  max={2100}
+                  value={firstYear}
+                  onChange={(event) => setFirstYear(event.target.value)}
+                  placeholder="e.g. 2023"
+                />
+                <span className="muted small-text">
+                  A school year is 1, 2, 3 — not a calendar year — so this is what
+                  gives each term real dates. Leave it blank and nothing that
+                  measures a term can say when it ran.
+                </span>
+                {/* Worked out from courses that already carry dates, which is
+                    evidence rather than a label. Offered rather than applied:
+                    getting this wrong shifts every term in the app by a year,
+                    and it is the student who knows. */}
+                {user?.suggested_first_year != null &&
+                  String(user.suggested_first_year) !== firstYear && (
+                    <button
+                      type="button"
+                      className="courseLinkAdd"
+                      onClick={() => setFirstYear(String(user.suggested_first_year))}
+                    >
+                      Your dated courses suggest {user.suggested_first_year} — use it
+                    </button>
+                  )}
+              </div>
+
+              <div className="loginField">
+                <label htmlFor="credit-target">Credits required for your degree</label>
+                <input
+                  id="credit-target"
+                  className="loginInput"
+                  type="number"
+                  min={1}
+                  max={400}
+                  value={creditTarget}
+                  onChange={(event) => setCreditTarget(event.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="loginField">
+                <label htmlFor="default-target">Default target grade</label>
+                <input
+                  id="default-target"
+                  className="loginInput"
+                  type="number"
+                  step="any"
+                  min={0}
+                  max={100}
+                  value={defaultTarget}
+                  onChange={(event) => setDefaultTarget(event.target.value)}
+                  required
+                />
+                <span className="loginHint">
+                  Used for any course without its own target.
+                </span>
+              </div>
+
+              {/* What counts as usable study time. 03:00 is technically free and
+                  is not it, so the gaps between classes are only offered inside
+                  these hours. */}
+              <div className="loginField">
+                <label htmlFor="study-start">Study hours</label>
+                <div className="studyHoursRow">
+                  <input
+                    id="study-start"
+                    className="loginInput"
+                    type="time"
+                    value={studyStart}
+                    onChange={(event) => setStudyStart(event.target.value)}
+                    required
+                  />
+                  <span className="studyHoursTo">to</span>
+                  <input
+                    id="study-end"
+                    className="loginInput"
+                    type="time"
+                    value={studyEnd}
+                    onChange={(event) => setStudyEnd(event.target.value)}
+                    aria-label="Study hours end"
+                    required
+                  />
+                </div>
+                <span className="loginHint">
+                  The hours free blocks are offered in.
+                </span>
+              </div>
+
+              <div className="loginField">
+                <label htmlFor="min-block">Shortest useful gap</label>
+                <input
+                  id="min-block"
+                  className="loginInput"
+                  type="number"
+                  min={5}
+                  max={240}
+                  value={minBlock}
+                  onChange={(event) => setMinBlock(event.target.value)}
+                  required
+                />
+                <span className="loginHint">
+                  Minutes. Below this a gap is walking time, not study time.
+                </span>
+              </div>
+
+              <div className="settingsToggle">
+                <input
+                  id="gpa-enabled"
+                  type="checkbox"
+                  checked={gpaEnabled}
+                  onChange={(event) => setGpaEnabled(event.target.checked)}
+                />
+                <label htmlFor="gpa-enabled">
+                  Show CGPA
+                  <span className="small-text muted">
+                    {" "}&mdash; UBC doesn&apos;t put a GPA on transcripts, so this is optional.
+                  </span>
+                </label>
+              </div>
+
+              {academicError && <p className="loginError">{academicError}</p>}
+              {academicSaved && <p className="loginSuccess">Saved.</p>}
+
+              <button type="submit" className="loginSubmit" disabled={savingAcademic}>
+                {savingAcademic ? "Saving..." : "Save"}
+              </button>
+            </form>
+          </div>
         </div>
       </div>
     </div>

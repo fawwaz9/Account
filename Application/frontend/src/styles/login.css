@@ -188,11 +188,63 @@
   color: var(--muted);
 }
 
-/* ===== Settings ===== */
+/* ===== Settings =====
+ *
+ * The width lives here, on an inner wrapper, and must NOT move onto the
+ * `container` div. Two classes on one element both setting `max-width` is a
+ * specificity tie broken by whichever rule the bundler emitted last, and that
+ * tie is what made the budget page come out narrow: `.budgetPage` had carried a
+ * `max-width` that never applied until a build change flipped the order.
+ * `pageWidth.test.ts` reads the markup for exactly this and needs no editing as
+ * long as the number stays on a child.
+ *
+ * 900px because Account and Password sit side by side above the panels, and
+ * 900 is a breakpoint this project already uses in five places -- so the
+ * collapse below matches how every other two-column block here behaves.
+ */
 .settingsGrid {
   display: grid;
   gap: 16px;
-  max-width: 520px;
+  max-width: 900px;
+}
+
+/* Account and Password: one subject -- who you are and how you get in. */
+.settingsTop {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+/* Full width under the pair. The tab strip goes here. */
+.settingsPanels {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+/* `.card` was in the markup from the first commit and has never existed in any
+ * stylesheet -- three unstyled divs. Named `settingsCard` rather than defining
+ * the generic `.card` it looked for, because a bare global name is how
+ * `.categoryList` ended up shared between the budget and grades pages and broke
+ * one of them. The recipe is `.flowPanel`'s, which is what a panel looks like
+ * everywhere else in the app. */
+.settingsCard {
+  background: linear-gradient(145deg, var(--panel), var(--panel-2));
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px 20px;
+  min-width: 0;
+}
+
+.settingsCard h2 {
+  margin-top: 0;
+}
+
+@media (max-width: 900px) {
+  .settingsTop {
+    grid-template-columns: 1fr;
+  }
 }
 
 .settingsRow {
