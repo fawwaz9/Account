@@ -1,10 +1,11 @@
 from datetime import date
 from uuid import UUID, uuid4
 from typing import List
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.Grades.schemas.grade import Grade
 from app.Grades.utils.enums import GradeCategory, Semester
+from app.Grades.utils.ordering import sorted_grades
 from app.shared.errors import MAX_TOTAL_WEIGHT, weight_error
 
 #: Schemes a course link may use. An allowlist rather than a denylist, because
@@ -217,6 +218,14 @@ class Course(CourseBase):
 
 class CourseDetail(Course):
     grades: List[Grade] =  Field(default_factory=list)
+
+    # Ordered here rather than at every call site that builds one of these, so a
+    # new path cannot forget. See `grade_sort_key` for why it is not a plain
+    # string sort: three names in use start lowercase, and a third are numbered.
+    @field_validator("grades")
+    @classmethod
+    def order_grades(cls, grades: List[Grade]) -> List[Grade]:
+        return sorted_grades(grades)
     # Point-weighted average per category, computed server-side so the client
     # renders one authoritative number instead of reimplementing the formula.
     # Defaults to empty so any path that does not populate it still serializes.

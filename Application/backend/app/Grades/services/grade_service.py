@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session, joinedload
 from app._database.models import CourseModel, CourseCategoryWeightModel, GradeModel
 from app.Grades.schemas.grade import GradeCreate, GradeUpdate, Grade as GradeSchema
 from app.Grades.utils.enums import GradeCategory, GradeSchedule, is_additive
+from app.Grades.utils.ordering import sorted_grades
 from app.Grades.utils.terms import course_result_grade
 from app.Grades.services.grade_schedule import (
     forget_block_times,
@@ -285,7 +286,9 @@ def get_all_grades(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
     course = get_user_course(db, user_id, course_id)
     if course is None:
         return None
-    return course.grades
+    # Same order as the course detail response, from the same function. A client
+    # reading both must not see two different sequences.
+    return sorted_grades(course.grades)
 
 
 def record_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id: uuid.UUID, score: float):

@@ -1393,6 +1393,20 @@ Settings, phases 0-2 LIVE 2026-10-01
   moved. Do it panel by panel, and leave anything that must be read BEFORE
   acting where it is.
 
+Grades are sorted now, 2026-10-01
+- They used to come back in insertion order, so a quiz added late sat under the
+  final exam. One rule in Grades/utils/ordering.py, applied on both paths that
+  hand grades to a client -- the CourseDetail schema and the list endpoint -- so
+  a new path either calls it or fails the test that names both.
+- Alphabetical, with two departures the real data earned rather than taste.
+  CASE IS IGNORED: SQLite's default collation is byte order, which puts every
+  capital before every lowercase letter, and three names in use start lowercase.
+  NUMBERS COMPARE AS NUMBERS: strictly "Quiz 10" does precede "Quiz 2"
+  alphabetically, and that is the answer nobody wants; a third of the names in
+  use are numbered and a weekly quiz reaches ten.
+- No frontend change was needed: the category grouping uses reduce/push, which
+  preserves the order the server sent.
+
 A decision owed: the orphaned table, found 2026-09-28
 - category_budgets is still in the production database. f0dfede created it for
   whole-budget category limits; 394cb7c removed that feature entirely -- model,
