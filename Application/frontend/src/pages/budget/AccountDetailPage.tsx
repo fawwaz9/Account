@@ -4,6 +4,7 @@ import AccountBalanceChart from "../../features/budget/components/AccountBalance
 import AccountFlowChart from "../../features/budget/components/AccountFlowChart";
 import DeleteConfirmModal from "../../features/grades/components/DeleteConfirmModal";
 import EditTransactionModal from "../../features/budget/components/EditTransactionModal";
+import InvestmentReturnPanel from "../../features/budget/components/InvestmentReturnPanel";
 import TuitionModal from "../../features/budget/components/TuitionModal";
 import ProgressBar from "../../features/budget/components/ProgressBar";
 import RecordSpendModal from "../../features/budget/components/RecordSpendModal";
@@ -14,6 +15,7 @@ import { useCourses } from "../../features/grades/hooks/useCourses";
 import { fetchAccounts, setAccountCategoryLimit } from "../../features/budget/api";
 import { useTransactionDelete } from "../../features/budget/hooks/useTransactionDelete";
 import { formatMoney } from "../../features/budget/money";
+import { returnTile } from "../../features/budget/returnTile";
 import { Account, Transaction } from "../../features/budget/types";
 import { useAuth } from "../../app/auth/AuthContext";
 import "../../styles/budget.css";
@@ -133,8 +135,26 @@ export default function AccountDetailPage() {
               value={formatMoney(activity.net, { signed: true })}
               tone={activity.net < 0 ? "out" : "in"}
             />
-            <Tile label={`Movements · ${label}`} value={String(activity.transaction_count)} />
+            {/* An investment account's fourth tile is its return, not its
+                movement count. Counting deposits says nothing about whether the
+                holding grew, which is the question the account exists to answer.
+                Every other kind of account keeps Movements. */}
+            {activity.kind === "investment" ? (
+              <Tile {...returnTile(activity, label)} />
+            ) : (
+              <Tile label={`Movements · ${label}`} value={String(activity.transaction_count)} />
+            )}
           </ul>
+
+          {activity.kind === "investment" && (
+            <InvestmentReturnPanel
+              accountId={activity.account_id}
+              month={month}
+              figure={activity.investment_return}
+              ledgerAtMonth={activity.ledger_balance_at_month}
+              onSaved={reload}
+            />
+          )}
 
           <section className="accountTarget">
             <div className="sectionHeading">

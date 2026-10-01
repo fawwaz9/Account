@@ -10,6 +10,7 @@ from app.Finances.schemas.account import (
     Account,
     AccountActivity,
     AccountCreate,
+    AccountMonthValueUpsert,
     AccountUpdate,
     NetWorth,
 )
@@ -56,11 +57,13 @@ from app.Finances.schemas.transaction import (
     TransferCreate,
 )
 from app.Finances.services.account_service import (
+    clear_month_value,
     create_account,
     delete_account,
     get_account,
     get_accounts,
     net_worth,
+    set_month_value,
     update_account,
 )
 from app.Finances.services.tuition_service import (
@@ -354,6 +357,71 @@ def account_activity(
         raise HTTPException(status_code=404, detail="Account not found")
 
     return activity
+
+
+@router.put(
+    "/{user_id}/accounts/{account_id}/month-value",
+    response_model=Account,
+    responses=ACCOUNT_404,
+)
+def record_month_value(
+    user_id: VerifiedUserId,
+    account_id: UUID,
+    reading: AccountMonthValueUpsert,
+    db: DBSession,
+):
+    """Record what an investment account's holding is worth, for one month.
+
+    Send `market_value` -- the figure off a statement -- and the service stores
+    how far that sits above or below the month's ledger balance. `difference_amount`
+    is accepted instead, for setting the figure without a ledger lookup.
+
+    An upsert: sending the same month twice corrects it rather than failing, which
+    is also what the unique index would otherwise have to refuse.
+
+    Returns the whole account, so the card's figure comes back in this response
+    rather than needing a second fetch to see what changed.
+    """
+    try:
+        updated = set_month_value(db, user_id, account_id, reading)
+    except ValueError as exc:
+        # Not an investment account, so there is nothing for a reading to mean.
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    return updated
+
+
+@router.delete(
+    "/{user_id}/accounts/{account_id}/month-value",
+    response_model=Account,
+    responses=ACCOUNT_404,
+)
+def remove_month_value(
+    user_id: VerifiedUserId,
+    account_id: UUID,
+    db: DBSession,
+    month: date,
+):
+    """Forget one month's reading.
+
+    `month` is required rather than defaulted to today: a default here would mean
+    a request that forgot the parameter silently deleted the current month's
+    figure, which is the one most likely to be the one you just typed.
+    """
+    updated = clear_month_value(db, user_id, account_id, month)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    audit.deletion(
+        "investment reading",
+        user_id=user_id,
+        target_id=account_id,
+        detail=f"{updated.name} {month:%Y-%m}",
+    )
+    return updated
 
 
 @router.patch("/{user_id}/accounts/{account_id}", response_model=Account, responses=ACCOUNT_404)

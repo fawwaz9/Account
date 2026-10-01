@@ -400,6 +400,55 @@ class AccountCategoryMonthLimitModel(Base):
     limit_amount = Column(Float, nullable=False, default=0.0)
 
 
+class AccountMonthValueModel(Base):
+    """One month's reading of what an investment account is actually worth.
+
+    An account's balance is the sum of its ledger -- what you put in -- so a
+    holding that has doubled and one that has halved read identically. A row here
+    closes that for one month, by recording how far the holding sits above or
+    below that plain value.
+
+    **`difference_amount` is a level, not a month's gain, and the readings do not
+    sum.** All-time gain is the *latest* row, never the total of them; see
+    `Finances/utils/returns.py`. The column is deliberately not named
+    `gain_amount` for exactly that reason -- "gain" invites a `SUM()` over the
+    column, which would report a holding up $300 as up $600 and drift further with
+    every month recorded.
+
+    The level is stored rather than the market value, and that is not a
+    preference. The difference is contribution-neutral: a deposit raises plain
+    value and market value together, so it does not move. Store the market value
+    instead and the difference has to be derived against a dated ledger -- record
+    $10,543 on the 15th, deposit $1,000 on the 20th, and the month-end ledger is
+    $11,000, so the derived difference reads -$457 and a gain is reported as a
+    loss. This column survives that deposit; a market value does not.
+
+    One row per (user, account, month), the shape `account_category_month_limits`
+    above already uses, with `month` normalized to the first on the way in so a
+    month is one value rather than any of twenty-eight.
+
+    Rows are left alone when an account's kind changes away from `investment`.
+    They stop being read, because every path that reads them gates on kind, and
+    changing the kind back restores them -- where deleting recorded data on a
+    dropdown change could not be undone.
+    """
+
+    __tablename__ = "account_month_values"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False)
+    account_id = Column(Uuid, ForeignKey("accounts.id"), nullable=False)
+    #: Always the first of the month, normalized on the way in.
+    month = Column(Date, nullable=False)
+    #: Market value minus ledger balance. Positive is up on what you put in.
+    difference_amount = Column(Float, nullable=False)
+    #: What was actually typed, kept only so the form shows back the number
+    #: entered rather than one recomputed against a ledger that has since moved.
+    #: Never read for arithmetic -- `difference_amount` is the operative figure,
+    #: and after a later deposit these two deliberately disagree.
+    market_value = Column(Float, nullable=True)
+
+
 class EventModel(Base):
     """Something that happens on a date, optionally repeating.
 
@@ -1061,6 +1110,12 @@ Index("ix_account_category_month_limits_account_month",
 Index("ix_account_category_month_limits_category_id",
       AccountCategoryMonthLimitModel.category_id)
 
+# A month's reading is read as "this account's, at or before the month on
+# screen", so the pair is the index -- and the all-time figure on the card is the
+# same question with no upper bound.
+Index("ix_account_month_values_account_month",
+      AccountMonthValueModel.account_id, AccountMonthValueModel.month)
+
 Index("ix_events_user_id", EventModel.user_id)
 Index("ix_events_course_id", EventModel.course_id)
 Index("ix_events_grade_id", EventModel.grade_id)
@@ -1142,5 +1197,15 @@ Index(
     AccountCategoryMonthLimitModel.account_id,
     AccountCategoryMonthLimitModel.category_id,
     AccountCategoryMonthLimitModel.month,
+    unique=True,
+)
+# One reading per account per month. Without this, saving the same month twice
+# through a race would leave two rows and `latest_reading` would pick whichever
+# the database happened to return -- a figure that changes on refresh.
+Index(
+    "uq_account_month_values_user_account_month",
+    AccountMonthValueModel.user_id,
+    AccountMonthValueModel.account_id,
+    AccountMonthValueModel.month,
     unique=True,
 )

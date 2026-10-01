@@ -18,8 +18,19 @@ from app._database.models import (
     SpendCategoryModel,
     TransactionModel,
 )
-from app.Finances.schemas.account import AccountActivity, BalancePoint, DayFlow
+from app.Finances.schemas.account import (
+    AccountActivity,
+    AccountKind,
+    BalancePoint,
+    DayFlow,
+)
 from app.Finances.schemas.budget import CategorySpend
+from app.Finances.services.account_service import (
+    build_investment_return,
+    ledger_balance_as_of,
+    measured_on,
+    readings_for_account,
+)
 from app.Finances.services.budget_service import month_bounds
 from app.Finances.utils.limits import effective_category_limit, planned_for_account
 from app.Finances.schemas.transaction import TransactionKind
@@ -207,10 +218,33 @@ def get_account_activity(
         .scalar()
     )
 
+    # What an investment is actually worth, for the month on screen -- that
+    # month's reading, or the last one taken before it, flagged as carried
+    # forward so the page can date it.
+    #
+    # Gated on kind for two reasons: readings are deliberately left behind when
+    # an account stops being an investment, and the dated balance below is a
+    # query no other kind of account has any use for.
+    investment_return = None
+    ledger_at_month = 0.0
+    if account.kind == AccountKind.INVESTMENT.value:
+        # The month's own balance, not the all-time one above. The entry form
+        # subtracts a typed market value from this, and using today's balance for
+        # a past month would subtract every deposit made since.
+        ledger_at_month = ledger_balance_as_of(
+            db, user_id, account_id, measured_on(start)
+        )
+        investment_return = build_investment_return(
+            readings_for_account(db, user_id, account_id),
+            ledger_at_month,
+            for_month=start,
+        )
+
     return AccountActivity(
         account_id=account.id,
         account_name=account.name,
         month=start,
+        kind=account.kind,
         balance=round(balance or 0.0, 2),
         total_in=round(total_in, 2),
         total_out=spent,
@@ -223,4 +257,6 @@ def get_account_activity(
         daily=[flows[key] for key in sorted(flows)],
         by_category=by_category,
         balance_history=running_balance(db, account_id),
+        investment_return=investment_return,
+        ledger_balance_at_month=ledger_at_month,
     )

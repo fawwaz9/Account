@@ -492,6 +492,7 @@ Everything else in this document is closed.
 | 64 | Low | A11y | Two priority selects can carry the same accessible name |
 | 65 | Low | A11y | The study-hours start input is labelled "Study hours", the end one "Study hours end" |
 | 66 | Medium | Database | A rolled-back feature left `category_budgets`, and two rows, in production |
+| 67 | Low | CSS | Two dead Tailwind utility rules are emitted from English in code comments |
 
 Nothing in this list is a style opinion. Items I checked and found **healthy** are
 recorded at the end so we don't re-audit them.
@@ -1105,6 +1106,14 @@ decided in the client or in a schema. Severity is Low unless it says otherwise.
     colour alone and was never taught anything about sign. `SafeToSpend` does say
     over-committed, but that is an aggregate a scroll away from the card.
 
+    **Still open, and now with company on the same card.** Investment returns
+    (2026-10-01) added a second signed figure beside the balance, `(+3.2%)` /
+    `(−8.1%)`. It was deliberately given **no** sign-dependent colour -- the sign
+    lives in the text and `.sectorReturn` is muted in both directions -- precisely
+    so this finding is not deepened while it is open. Fixing #60 should therefore
+    treat the two together: whatever marks an overdrawn balance should be the thing
+    that marks a loss, rather than a third convention.
+
 61. **Reading order in the week view is two sorted sequences, not one.** `place()`
     sorts events by start minute and `placeTasks()` sorts due markers by theirs, so
     the review's claim that events are not time-ordered is wrong. The residual is
@@ -1157,8 +1166,10 @@ and you only see it by counting both.
     $41,040 against September 2026 and $70 against October. No foreign key points
     at it and nothing has read it since 2026-09-24.
 
-    Production therefore has **26 tables where `python -m app._database.schema`
-    builds 25**, and that is the part worth fixing. The schema module is the file
+    Production therefore has **one table more than `python -m app._database.schema`
+    builds** -- 26 against 25 when this was found, and 27 against 26 once
+    `account_month_values` shipped on 2026-10-01 -- and that drift is the part worth
+    fixing. The schema module is the file
     every other document treats as the description of this database; once it is
     not, the next person to compare the two has to work out which of them is
     wrong, with no record saying a rollback is the reason.
@@ -1171,6 +1182,25 @@ and you only see it by counting both.
     counting. `shipping.md` step 17 is where that belongs.
 
     Dropping it destroys two rows of real data, so it is the owner's call.
+
+67. **Low. Two dead utility rules are shipped in the stylesheet, written by prose.**
+    The built sheet contains `.visible{visibility:visible}` and
+    `.contents{display:contents}`. Neither class is used by any element in the app.
+    They exist because **Tailwind scans comments for class candidates**, so an
+    ordinary English sentence in a `.ts` or `.tsx` comment that happens to contain
+    a bare utility word emits a real rule for it.
+
+    Found by the selector-order diff while shipping investment returns, which
+    caught two *more* of them arriving the same way -- `.collapse` from "must not
+    collapse into one" and `.table` from "the table this feature copied" -- both
+    reworded before the change was committed. These two are older and were already
+    in production.
+
+    Harmless in weight, perhaps forty bytes. Worth recording for two reasons: it is
+    the third time this mechanism has produced a dead rule here, and a sheet with
+    unexplained selectors in it makes the order diff noisier, which is the check
+    that catches real cascade regressions. The fix is to reword the comments that
+    feed them, found by diffing emitted selectors against classes actually used.
 
 ---
 

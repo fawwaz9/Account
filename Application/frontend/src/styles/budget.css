@@ -145,6 +145,21 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* How far an investment is above or below what went into it, beside the balance.
+
+   Deliberately NOT coloured by its sign. The sign is already in the text, and
+   this card is the subject of audit #60 for conveying an overdraft by its minus
+   alone -- so a second meaning carried by colour here would deepen that fault
+   instead of leaving it where it is. Muted and small: a footnote to the balance,
+   not a competitor to it. */
+.sectorReturn {
+  margin-left: 6px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
 .sectorShare { margin-top: 2px; }
 
 /* A debt account reads red -- it is the one card where a bigger number is
@@ -1067,6 +1082,21 @@
 
 .netWorthDebtAmount {
   color: var(--debt);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Shares the debt line's shape, deliberately: both are footnotes qualifying the
+   headline above them. Not coloured by sign -- the words already say gain or
+   loss, and this block already uses colour for "in the red". */
+.netWorthGain {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+
+.netWorthGainAmount {
   font-variant-numeric: tabular-nums;
 }
 

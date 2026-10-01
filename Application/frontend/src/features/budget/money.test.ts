@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatMoney } from "./money";
+import { formatMoney, formatPercent } from "./money";
 
 /**
  * `formatMoney` renders through `toLocaleString` with no fixed locale, so it
@@ -72,5 +72,44 @@ describe("formatMoney", () => {
       expect(formatMoney(-1234.5, { compact: true })).toMatch(/^−\$1\D2k$/);
       expect(formatMoney(1234.5, { compact: true, signed: true })).toMatch(/^\+\$1\D2k$/);
     });
+  });
+});
+
+describe("formatPercent", () => {
+  it("renders a gain with an explicit plus when asked", () => {
+    expect(formatPercent(3.2, { signed: true })).toBe("+3.2%");
+  });
+
+  it("renders a loss with a minus, which is the case this exists for", () => {
+    // A percentage that can only come out positive is the bug a returns feature
+    // always ships with.
+    expect(formatPercent(-8.1, { signed: true })).toBe("−8.1%");
+  });
+
+  it("uses the same minus character as formatMoney, not a hyphen", () => {
+    // They sit next to each other on the account page. U+2212, both of them.
+    expect(formatPercent(-8.1)).toContain("−");
+    expect(formatPercent(-8.1)).not.toContain("-");
+    expect(formatMoney(-8.1)[0]).toBe(formatPercent(-8.1)[0]);
+  });
+
+  it("omits the plus unless asked, so a bare figure reads as a quantity", () => {
+    expect(formatPercent(3.2)).toBe("3.2%");
+  });
+
+  it("keeps one decimal, including on a whole number", () => {
+    expect(formatPercent(5)).toBe("5.0%");
+  });
+
+  it("rounds to one decimal rather than printing what it was given", () => {
+    expect(formatPercent(3.26)).toBe("3.3%");
+  });
+
+  it("treats zero the way formatMoney does, as non-negative", () => {
+    // Arguably zero is neither a gain nor a loss, but `formatMoney(0, {signed})`
+    // is "+$0.00", and the two appear side by side. Matching it beats being
+    // separately clever.
+    expect(formatPercent(0, { signed: true })).toBe("+0.0%");
+    expect(formatMoney(0, { signed: true })[0]).toBe(formatPercent(0, { signed: true })[0]);
   });
 });

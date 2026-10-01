@@ -30,3 +30,26 @@ function compactAmount(amount: number) {
 
   return amount.toLocaleString(undefined, { maximumFractionDigits: 0 });
 }
+
+/**
+ * A percentage, with the sign carried in the text rather than in a colour.
+ *
+ * Separate from `formatMoney` but deliberately beside it, because the two appear
+ * next to each other -- `−8.1%` beside `−$812.40` -- and the minus has to be the
+ * same character in both. It is U+2212, the real minus sign, not a hyphen.
+ *
+ * `signed` prints a `+` on a gain. That is not decoration: the account card shows
+ * this next to a balance, and a reader has to be able to tell a gain from a loss
+ * without relying on the colour it happens to be drawn in.
+ *
+ * Rounded to one decimal to match what the server already rounded to, rather than
+ * rounding again to something different.
+ */
+export function formatPercent(value: number, options: { signed?: boolean } = {}) {
+  const magnitude = Math.abs(value).toFixed(1);
+  if (options.signed) {
+    return `${value < 0 ? "−" : "+"}${magnitude}%`;
+  }
+
+  return `${value < 0 ? "−" : ""}${magnitude}%`;
+}

@@ -34,7 +34,7 @@ the watch actually showed.
 | Frontend URL | `https://account-2a7.pages.dev` — Cloudflare Pages, builds from `main` |
 | API URL | `https://account-api-210502804146.us-west1.run.app` |
 | Serving | revision `account-api-00018-2zp`, image `backend:8f73dca`, traffic on **LATEST** |
-| Database | Supabase `kujxxairehpwhxhnkbct`, `us-west-2`, Postgres 17.6. **26 tables live, 25 in the schema** — the 26th is `category_budgets`, left behind by a rollback; see `session-handoff.md` |
+| Database | Supabase `kujxxairehpwhxhnkbct`, `us-west-2`, Postgres 17.6. **27 tables live, 26 in the schema** — the extra one is `category_budgets`, left behind by a rollback; see `session-handoff.md`. `account_month_values` joined the schema on 2026-10-01 |
 | Size | 912 rows, 13 MB against a 500 MB cap — measured 2026-09-28 |
 | Backups | nightly GitHub Action, 09:00 UTC, 90-day artifacts — **restored once, for real** |
 | Monitoring | UptimeRobot on `/health` and on the frontend |
@@ -69,7 +69,7 @@ as non-root. It also found **B8** below, which nothing else would have.
 Cloudflare Pages serves the built JavaScript to the browser and holds no data and
 no secrets. The browser then calls Cloud Run, on a different origin, with a
 bearer token. Cloud Run holds all the logic and is the only thing that knows the
-database password. Supabase holds all 25 tables and is the only thing that
+database password. Supabase holds all 26 tables and is the only thing that
 remembers anything. **The browser never talks to Supabase** — this is deliberate,
 and `plan-a-decisions.md` D2.0 explains why using Supabase the usual way would be
 wrong here. A full trace of one request is in the "How Account Moves Data"

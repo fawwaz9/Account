@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
-import { Account } from "../types";
-import { formatMoney } from "../money";
+import { Account, InvestmentReturn } from "../types";
+import { formatMoney, formatPercent } from "../money";
+import { monthLabel } from "../../../shared/utils/dateUtils";
 
 interface SectorsProps {
   readonly accounts: readonly Account[];
@@ -17,6 +18,23 @@ const KIND_LABELS: Record<string, string> = {
   other: "Other",
   debt: "Debt",
 };
+
+/**
+ * The return, in words, for anyone who cannot see the figure beside the balance.
+ *
+ * Always dated. The card shows the latest reading there is, which may have been
+ * taken months ago, and "up 3.2%" with no date invites reading it as today's.
+ */
+function returnInWords(figure: InvestmentReturn, percent: number) {
+  const direction = percent < 0 ? "down" : "up";
+  // The magnitude, because "down" already carries the sign. Passing the signed
+  // value would read "down −8.1%", a double negative that says the opposite of
+  // what it means to anyone parsing it literally.
+  return (
+    `${direction} ${formatPercent(Math.abs(percent))} on what you put in, ` +
+    `as of ${monthLabel(figure.as_of)}`
+  );
+}
 
 export default function Sectors({ accounts, onEdit, onAdd }: SectorsProps) {
   return (
@@ -52,7 +70,35 @@ export default function Sectors({ accounts, onEdit, onAdd }: SectorsProps) {
                 {account.name}
                 <span className="sectorKindLabel">{KIND_LABELS[account.kind] ?? account.kind}</span>
               </span>
-              <span className="sectorBalance">{formatMoney(account.balance)}</span>
+              <span className="sectorBalance">
+                {formatMoney(account.balance)}
+                {/* What the holding is worth over what went into it, on
+                    investment accounts that have a reading. The balance alone
+                    cannot say it: it is the sum of the ledger, so a holding that
+                    doubled and one that halved read identically.
+
+                    The sign is in the text and not only in the colour. Audit #60
+                    is already open against this card for conveying an overdraft
+                    by its minus sign alone, and a second meaning carried by
+                    colour here would make that finding worse rather than better.
+
+                    No HelpTip: this sits inside the card's Link, and the tip is a
+                    button, so it would nest one interactive element in another.
+                    The explanation lives on the account page. */}
+                {account.investment_return?.return_percent != null && (
+                  <>
+                    <span className="sectorReturn" aria-hidden="true">
+                      ({formatPercent(account.investment_return.return_percent, { signed: true })})
+                    </span>
+                    <span className="srOnly">
+                      {returnInWords(
+                        account.investment_return,
+                        account.investment_return.return_percent,
+                      )}
+                    </span>
+                  </>
+                )}
+              </span>
               <span className="sectorShare small-text muted">
                 {account.income_share > 0
                   ? `${account.income_share}% of income`

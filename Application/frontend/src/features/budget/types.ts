@@ -16,6 +16,51 @@ export type AccountKind =
    */
   | "debt";
 
+/**
+ * What an investment account's holding is worth, over and above what went into it.
+ *
+ * Null on anything that is not an investment account, and on an investment nobody
+ * has recorded a reading for -- one nullable object rather than several nullable
+ * numbers, so "no reading yet" is a single check.
+ *
+ * `difference_amount` is a **level**, not a month's gain: how far above (positive)
+ * or below (negative) the ledger balance the holding sat, as of `as_of`. A list of
+ * these must never be summed; the newest one already describes the whole gain.
+ */
+export interface InvestmentReturn {
+  /** Positive is up on what you put in. */
+  difference_amount: number;
+  /**
+   * `difference_amount` over `ledger_balance`, already rounded to 1dp by the
+   * server. **Null when the balance is zero or negative**, where the division is
+   * undefined or flips the sign -- show the dollar figure and no percentage.
+   *
+   * Not recomputed in the client: the server rounds and we render, or the two
+   * disagree at the boundary. Same rule as `used_percent` on ProgressBar.
+   */
+  return_percent: number | null;
+  /** The month this reading was taken for, `YYYY-MM-01`. */
+  as_of: string;
+  /**
+   * True when nothing was recorded for the month being shown and the last known
+   * reading is standing in. The UI must date the figure when this is set, or a
+   * reading from March reads as today's.
+   */
+  is_carried_forward: boolean;
+  /** The denominator the percentage used, so the UI states what it measured against. */
+  ledger_balance: number;
+  /** What was originally typed, so a form can show it back unchanged. */
+  market_value: number | null;
+  /**
+   * How much the holding moved **during** the month asked for. Null in three
+   * cases that all mean "not knowable", and none of which is zero: no month was
+   * asked for (the account card), the month has no reading of its own and this
+   * figure was carried forward, or it is the first reading ever taken. Rendering
+   * a null as "$0.00" would claim the holding was flat.
+   */
+  month_gain: number | null;
+}
+
 export interface Account {
   id: string;
   name: string;
@@ -40,16 +85,29 @@ export interface Account {
    * along so the controls can say so before you click them.
    */
   role_locked: boolean;
+  /**
+   * Null unless this is an investment account with at least one reading. The
+   * latest reading overall, since a card is not scoped to a month.
+   */
+  investment_return: InvestmentReturn | null;
 }
 
 export interface NetWorth {
   /**
-   * The sum of the balances that count. Debt needs no arithmetic of its own:
-   * a debt account's balance is already negative, so it subtracts itself.
+   * The sum of the balances that count, **plus** the latest recorded gain on each
+   * investment account, so the figure reflects what the holdings are worth rather
+   * than only what was paid for them. Debt needs no arithmetic of its own: a debt
+   * account's balance is already negative, so it subtracts itself.
    */
   net_worth: number;
   /** The same money as a positive figure -- "Debt -1,000" reads as a double negative. */
   debt_total: number;
+  /**
+   * How much of `net_worth` is investment gain rather than money that has passed
+   * through the ledger. Sent separately so the headline can disclose it: a figure
+   * that moves with how recently a reading was recorded has to say so.
+   */
+  investment_gain: number;
 }
 
 export interface AccountCreate {
@@ -206,6 +264,12 @@ export interface AccountActivity {
   account_id: string;
   account_name: string;
   month: string;
+  /**
+   * Which pot this is. Carried so the page can tell an investment account from a
+   * spending one -- it could not before, which is why every account showed the
+   * same tiles whatever it was for.
+   */
+  kind: AccountKind;
   /** All-time, matching the account card */
   balance: number;
   total_in: number;
@@ -227,6 +291,18 @@ export interface AccountActivity {
   by_category: CategorySpend[];
   /** All time, one point per day that had movement */
   balance_history: BalancePoint[];
+  /**
+   * The investment reading that applies to the month being shown -- that month's
+   * own, or the last one taken before it with `is_carried_forward` set. Null for
+   * every non-investment account.
+   */
+  investment_return: InvestmentReturn | null;
+  /**
+   * What the ledger said at the end of the month shown, or today if the month has
+   * not ended. The figure a typed market value is subtracted from. Not `balance`,
+   * which is all-time and would be wrong for any past month.
+   */
+  ledger_balance_at_month: number;
 }
 
 /* ===== Standing instructions ===== */

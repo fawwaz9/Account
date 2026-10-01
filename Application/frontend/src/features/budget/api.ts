@@ -61,6 +61,39 @@ export async function deleteAccount(userId: string, accountId: string) {
 }
 
 /**
+ * Record what an investment account's holding is worth, for one month.
+ *
+ * Sends the market value -- the figure off a statement -- and the server stores
+ * how far that sits above the month's ledger balance. An upsert, so saving the
+ * same month twice corrects it instead of failing.
+ *
+ * Returns the whole account, so the card's figure comes back in this response
+ * rather than needing a second fetch.
+ */
+export async function setAccountMonthValue(
+  userId: string,
+  accountId: string,
+  month: string,
+  marketValue: number
+) {
+  return put<Account>(endpoints.finances.accountMonthValue(userId, accountId), {
+    month,
+    market_value: marketValue,
+  });
+}
+
+/** Forget one month's reading. The month is required, never defaulted. */
+export async function clearAccountMonthValue(
+  userId: string,
+  accountId: string,
+  month: string
+) {
+  return del<Account>(
+    `${endpoints.finances.accountMonthValue(userId, accountId)}?month=${month}`
+  );
+}
+
+/**
  * `start`/`end` bound occurred_on inclusively.
  *
  * Windowing on the server rather than filtering a fetched page matters: the

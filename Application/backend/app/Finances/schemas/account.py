@@ -78,6 +78,83 @@ class AccountUpdate(BaseModel):
     counts_toward_net_worth: bool | None = None
 
 
+class InvestmentReturn(BaseModel):
+    """What an investment account's holding is worth, over and above what went in.
+
+    Null on every account that is not an investment, and on an investment nobody
+    has recorded a reading for -- one nullable object rather than a handful of
+    nullable numbers, so "no reading" is one state the client checks once instead
+    of four fields it could check inconsistently.
+
+    `difference_amount` is a **level**: how far above (positive) or below
+    (negative) the ledger balance the holding sits, as of `as_of`. It is not a
+    month's gain and a column of them must never be summed -- see
+    `Finances/utils/returns.py`.
+    """
+
+    #: The reading itself. Positive is up on what you put in.
+    difference_amount: float
+    #: `difference_amount` over `ledger_balance`, rounded to 1dp. **None when the
+    #: balance is zero or negative**, where the division is either undefined or
+    #: flips the sign and would render a gain as a loss. The client shows the
+    #: dollar figure and no percentage.
+    return_percent: float | None = None
+    #: The month this reading was taken for. Never optional, because a carried
+    #: forward figure is only honest while it is dated -- undated, a reading from
+    #: March reads as today's.
+    as_of: date
+    #: True when `as_of` is earlier than the month asked for, i.e. nothing was
+    #: recorded for that month and the last known reading is standing in.
+    is_carried_forward: bool = False
+    #: The denominator the percentage used, sent so the client states what the
+    #: gain is measured against rather than guessing at a balance of its own.
+    ledger_balance: float = 0.0
+    #: What was actually typed, so the form shows back the number entered. Not
+    #: the basis of any arithmetic; after a later deposit this and
+    #: `difference_amount + ledger_balance` deliberately disagree.
+    market_value: float | None = None
+    #: How much the holding moved **during** the month that was asked for:
+    #: this month's level less the previous reading's. Null in three cases that
+    #: all mean "not knowable", none of which is zero -- no month was asked for
+    #: (the account card), the month has no reading of its own and this figure was
+    #: carried forward, or this is the first reading ever taken and there is
+    #: nothing to subtract from. Reporting 0 would assert the holding was flat.
+    month_gain: float | None = None
+
+
+class AccountMonthValueUpsert(BaseModel):
+    """One month's reading, on its way in.
+
+    Takes **exactly one of** the two. The client sends `market_value`, because
+    that is the number you can read straight off a statement, and the service
+    subtracts the month's ledger balance to get the level it stores. Accepting
+    `difference_amount` directly costs one validator and is what lets a figure be
+    set without a ledger lookup -- correcting an old month, or a restore.
+
+    Sending both would be two answers to one question, and whichever the service
+    happened to prefer would silently discard the other.
+    """
+
+    month: date
+    market_value: float | None = None
+    difference_amount: float | None = None
+
+    @model_validator(mode="after")
+    def exactly_one_figure(self):
+        given = [self.market_value is not None, self.difference_amount is not None]
+        if sum(given) != 1:
+            raise ValueError(
+                "Send either market_value or difference_amount, not both and not neither"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def normalize_month(self):
+        """A month is one value, or September is stored twenty-eight ways."""
+        self.month = self.month.replace(day=1)
+        return self
+
+
 class Account(AccountBase):
     id: UUID = Field(default_factory=uuid4)
     #: Sum of the account's transactions. Derived rather than stored: a balance
@@ -88,6 +165,9 @@ class Account(AccountBase):
     #: rule has one home; the client greys out the controls rather than
     #: deciding for itself which accounts are load-bearing.
     role_locked: bool = False
+    #: Null unless this is an investment account with at least one reading. The
+    #: latest reading overall, since the card is not scoped to a month.
+    investment_return: InvestmentReturn | None = None
 
     class Config:
         from_attributes = True
@@ -96,8 +176,10 @@ class Account(AccountBase):
 class NetWorth(BaseModel):
     """What you have, and what you owe, as two figures rather than one total.
 
-    `net_worth` is a plain sum of the balances that count, which is why debt
-    needs no special case: a debt account's balance is already negative.
+    `net_worth` is the sum of the balances that count, **plus** the latest
+    recorded gain on each investment account, so the figure reflects what the
+    holdings are worth rather than only what was paid for them. Debt needs no
+    special case either way: a debt account's balance is already negative.
     `debt_total` reports the same money as a positive magnitude, because "Debt
     -1,000" reads as a double negative on screen.
 
@@ -107,6 +189,11 @@ class NetWorth(BaseModel):
 
     net_worth: float = 0.0
     debt_total: float = 0.0
+    #: How much of `net_worth` is investment gain rather than money that has
+    #: actually passed through the ledger. Reported separately because a headline
+    #: that moves with how recently someone remembered to record a reading has to
+    #: be able to say so on its face.
+    investment_gain: float = 0.0
 
 
 # ------------------------------------------------------------------ activity --
@@ -142,6 +229,10 @@ class AccountActivity(BaseModel):
     account_id: UUID
     account_name: str
     month: date
+    #: Which pot this is. Carried so the page can tell an investment account from
+    #: a spending one -- it could not before, which is why every account showed
+    #: the same tiles regardless of what it was for.
+    kind: AccountKind = AccountKind.SPENDING
 
     #: All-time, matching what the account card shows.
     balance: float = 0.0
@@ -166,3 +257,14 @@ class AccountActivity(BaseModel):
     daily: list[DayFlow] = []
     by_category: list[CategorySpend] = []
     balance_history: list[BalancePoint] = []
+
+    #: The investment reading that applies to the selected month -- that month's
+    #: own, or the last one taken before it, flagged as carried forward. Null for
+    #: every non-investment account.
+    investment_return: InvestmentReturn | None = None
+    #: What the ledger said at the **end of the selected month, or today if the
+    #: month has not ended**. The figure the entry form subtracts a typed market
+    #: value from, sent so the form shows what it is subtracting instead of
+    #: reaching for `balance`, which is all-time and would be wrong for any past
+    #: month.
+    ledger_balance_at_month: float = 0.0

@@ -94,6 +94,8 @@ export const endpoints = {
     account: (userId: string, accountId: string) => `finances/${userId}/accounts/${accountId}`,
     accountActivity: (userId: string, accountId: string) =>
       `finances/${userId}/accounts/${accountId}/activity`,
+    accountMonthValue: (userId: string, accountId: string) =>
+      `finances/${userId}/accounts/${accountId}/month-value`,
     transactions: (userId: string) => `finances/${userId}/transactions`,
     transaction: (userId: string, transactionId: string) =>
       `finances/${userId}/transactions/${transactionId}`,

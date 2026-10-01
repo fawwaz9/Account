@@ -1443,7 +1443,52 @@ The production database, measured 2026-09-28
 - The per-user split was not re-measured. Accounts rising by 12 is consistent
   with two more people signing in and having six each seeded on first read.
 
-Investment returns, asked for 2026-09-30
+Investment returns, asked for 2026-09-30 -- SHIPPED 2026-10-01
+Built as designed below, with three decisions taken at the start of the build and
+one scope cut. WHAT WAS BUILT: a new table `account_month_values`, one row per
+(user, account, month), holding `difference_amount` (the level) and `market_value`
+(what was typed, for showing back only). The rule is a pure function in
+`Finances/utils/returns.py`. The card carries `(+3.2%)` beside the balance via
+`Account.investment_return`; the account page replaces Movements with a return
+tile and gains a "What it is worth" section that is where a reading is typed.
+
+THE THREE DECISIONS, all asked and answered before building:
+- YOU TYPE WHAT IT IS WORTH, not the difference. The market value is the figure on
+  a statement; the subtraction is the app's job. The stored figure is still the
+  difference, so none of the arithmetic below changes. Note the design note below
+  overstates its case: storing the market value would need a dated ledger query,
+  not time-weighting -- but it is still wrong, because a deposit made after a
+  reading would make a derived difference report a gain as a loss. The level is
+  stored because it is the only form that survives a later deposit.
+- A MONTH WITH NO READING CARRIES THE LAST ONE FORWARD, dated on screen. It is
+  never carried backwards: viewing July when only September is recorded shows
+  nothing, because a figure from the future is not stale, it is wrong.
+- THE GAIN COUNTS TOWARD NET WORTH, which was not in the original ask. `net_worth`
+  adds each counting, non-archived investment account's latest difference, and
+  `NetWorth.tsx` discloses it on its own line -- a headline that moves because
+  someone remembered to record a reading has to say so on its face.
+
+CUT, deliberately, and easy to add: THE MONTH'S PERCENTAGE. The tile shows the
+month's gain in dollars only. A month percentage needs a second dated-balance
+query and a denominator the reader cannot check against anything on screen,
+whereas the card's percentage divides by the balance printed next to it.
+
+TWO DENOMINATORS EXIST and mixing them up is the easiest mistake here. The level
+is fixed against the ledger at the end of the month it was recorded for. The
+percentage on the card divides by the balance standing TODAY, so the same $500
+level reads 5.0% at $10,000 in and 3.3% once $15,000 is in -- and 3.3% is the
+truth about what is now held. There is a test named after this.
+
+VERIFIED: 1016 backend tests pass against Postgres as well as SQLite; nine
+mutations of the guards were each confirmed to fail a test. The migration was
+rehearsed on a throwaway Postgres by dropping the table and reapplying. Against a
+VACUUM INTO copy of real data, recording a reading on the real Investments
+account moved net worth by exactly the gain and left all 145 transactions alone.
+
+The original design note follows, kept because its reasoning is still the reason
+the feature is this small.
+
+Investment returns, as designed 2026-09-30
 An investment account's balance is the sum of its ledger -- what you put in. It
 says nothing about what the holding is now worth, so an account that has doubled
 and one that has halved read identically. This closes that.

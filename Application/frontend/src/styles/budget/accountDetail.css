@@ -138,6 +138,82 @@
 .accountTarget .sectionHeading h2 { font-size: 1.3rem; }
 .accountTarget .progressTrack { margin-bottom: 6px; }
 
+/* ----- What an investment is worth ----- */
+/* Matches .accountTarget above rather than inventing a second section style:
+   both are a titled block under the tiles, and two near-identical panels drifting
+   apart is how a page stops looking designed. */
+.accountReturn { margin-bottom: 28px; }
+.accountReturn .sectionHeading h2 { font-size: 1.3rem; }
+
+.accountReturnFigure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 12px;
+}
+
+.accountReturnAmount {
+  font-size: 1.6rem;
+  font-weight: 600;
+  color: var(--flow-in);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The sign is already in the text via formatMoney's signed form, so this is
+   reinforcement and never the only carrier of the meaning. */
+.accountReturnAmount--down { color: var(--flow-out); }
+
+.accountReturnPercent {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.accountReturnNote { display: block; }
+
+.accountReturnForm {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Wraps rather than shrinking: at phone width the three controls stack instead
+   of squeezing the field down to something you cannot read a figure in. */
+.accountReturnRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.accountReturnInput {
+  width: auto;
+  max-width: 180px;
+  padding: 6px 10px;
+}
+
+.accountReturnClear {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.accountReturnClear:hover:not(:disabled) {
+  border-color: var(--debt);
+  color: var(--debt);
+}
+
+.accountReturnClear:disabled { opacity: 0.5; cursor: default; }
+
+.accountReturnPreview { margin: 2px 0 0; color: var(--muted); }
+.accountReturnError { margin: 2px 0 0; color: var(--debt); }
+
 /* ----- Charts ----- */
 /* Deliberately its own rules rather than borrowing the grade trend's, so a
    later tweak to the grade axis never restyles money. */

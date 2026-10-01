@@ -381,7 +381,7 @@ Check it while the code is in front of you and record the answer.
 > tables, not by anything failing, because nothing fails: no code selects from
 > it and no foreign key points at it.
 >
-> The cost is that production now has **26 tables where the schema builds 25**,
+> The cost is that production now has **one table more than the schema builds**,
 > so the file every other document treats as the description of this database has
 > quietly stopped being it.
 >

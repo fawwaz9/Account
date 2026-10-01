@@ -34,10 +34,18 @@ what money went *on* (category) is separate from which pot it came *from*
 `accounts` — name, `kind`, `income_share`, `archived`, `position`. User-defined,
 because one student's "Savings" is another's "Tuition fund".
 
-`kind` is mostly styling and sensible defaults, with **two** exceptions now:
-safe-to-spend counts `spending` accounts only, and `debt` marks money owed. The
-column's own comment warns against loading a third meaning onto it — the next
-per-account rule wants its own column.
+`kind` is mostly styling and sensible defaults, with **three** exceptions now:
+safe-to-spend counts `spending` accounts only, `debt` marks money owed, and
+`investment` is the only kind that can hold a recorded market value.
+
+The column's own comment warns against loading more meaning onto it, and the third
+one is worth justifying rather than just counting. The warning is about per-account
+*control* — "does this count as spendable" is a preference the owner should set,
+not something inferred from which pot it is. Whether an account has a market value
+distinct from its ledger is not a preference; it is what the kind *means*. Savings
+would take the same mechanism and is deliberately left out for now, which is a kind
+check and not a redesign. A fourth rule that is really a per-account choice still
+wants its own column.
 
 **A `debt` account is not a special case, and that is the design.** Its balance
 is the ordinary signed sum of its rows, so it reads negative: buying with the
@@ -105,6 +113,34 @@ the rate twice. `credits_counted` is stored rather than recomputed because it is
 what the bill was for: recomputing it later would rewrite history when a course
 is added or dropped.
 
+`account_month_values` — one row per (user, account, month), added 2026-10-01.
+What an **investment** account's holding is worth, over and above what was paid
+into it.
+
+`difference_amount` is a **level**: market value minus the ledger balance, as of
+that month. It is not a month's gain and a column of them must never be summed —
+all-time gain is the latest row. The column is named `difference_amount` and not
+`gain_amount` precisely because "gain" invites a `SUM()`.
+
+**The level is stored rather than the market value, and that is not a preference.**
+The difference is contribution-neutral: a deposit raises plain value and market
+value together, so it does not move. Store the market value instead and the
+difference has to be derived against a dated ledger — record $10,543 on the 15th,
+deposit $1,000 on the 20th, and the month-end ledger is $11,000, so the derived
+difference reads **−$457** and a gain is reported as a loss. `market_value` *is*
+kept alongside, nullable, but only so the form shows back the number that was
+typed; after a later deposit the two deliberately disagree and nothing computes
+from it.
+
+The rule lives in `Finances/utils/returns.py` as three pure functions, because
+three screens read it — the account card, the account page's tile, and the
+net-worth headline — and a rule several callers share belongs in `utils`.
+
+Rows survive an account changing kind away from `investment`. Every path that
+reads them gates on kind, so they simply stop being read, and changing the kind
+back restores them — where deleting recorded data on a dropdown change could not
+be undone.
+
 ## Net worth, and why debt needs no arithmetic
 
 The page used to show `Total:` — a plain client-side sum of every balance. It
@@ -117,10 +153,27 @@ net_worth  = sum(balance for a in accounts if a.counts_toward_net_worth)
 debt_total = abs(sum(balance for a in accounts if a.kind == "debt"))
 ```
 
-**`net_worth` is a plain sum, and that is the whole point.** A debt account's
-balance is already negative, so it subtracts itself. Subtracting `debt_total`
-as well is the one mistake this design invites, and it reports someone 500 in
-the black as 500 in the red — there is a test named for it.
+**`net_worth` needs no arithmetic for debt, and that is the whole point.** A debt
+account's balance is already negative, so it subtracts itself. Subtracting
+`debt_total` as well is the one mistake this design invites, and it reports
+someone 500 in the black as 500 in the red — there is a test named for it.
+
+**One addition, from 2026-10-01: recorded investment gain.**
+
+```
+investment_gain = sum(latest recorded difference
+                      for a in accounts
+                      if a.kind == "investment" and a.counts_toward_net_worth)
+net_worth       = sum(balance for a in accounts if a.counts_toward_net_worth)
+                  + investment_gain
+```
+
+The ledger only knows what went in, so a portfolio that had doubled left the
+headline unmoved. The **latest** reading per account and never a sum of them —
+those figures are levels, so adding a column of them inflates the total further
+with every month recorded. `investment_gain` is returned as its own field and
+`NetWorth.tsx` prints it on its own line, because a headline that moves when
+somebody remembers to record a reading has to say so on its face.
 
 `debt_total` reports the same money as a positive magnitude, because "Debt
 −1,000" reads as a double negative on screen. It is a component of the figure
@@ -292,6 +345,15 @@ time, and finally the rows themselves.** The ledger is last because it is the
 thing you scroll to when a figure above it surprised you; leading with it makes
 the page a list with some summaries attached, which is the wrong shape for a page
 you open to check on an account rather than to audit it.
+
+On an **investment** account the fourth tile is its return rather than its
+movement count (2026-10-01), and a "What it is worth" section sits under the tile
+row. Counting deposits says nothing about whether the holding grew, which is the
+one question an investment account exists to answer. Every other kind keeps
+Movements. The section is titled and visible rather than hidden behind a
+click-to-edit, deliberately: the per-month category override that shipped on
+2026-09-25 is reached only by noticing a figure is clickable, and it has never
+been used once — and this feature shows nothing at all until a reading is typed.
 
 The tiles are one full-width `.tileRow` rather than a cell in the split, so
 `auto-fit` lays all four across instead of the 2x2 an earlier override forced.

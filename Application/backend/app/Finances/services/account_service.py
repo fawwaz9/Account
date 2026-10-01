@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -7,6 +8,7 @@ from app._database.models import (
     AccountCategoryLimitModel,
     AccountCategoryMonthLimitModel,
     AccountModel,
+    AccountMonthValueModel,
     BudgetTargetModel,
     RecurringTransactionModel,
     SinkingFundModel,
@@ -18,9 +20,13 @@ from app.Finances.schemas.account import (
     PROTECTED_KINDS,
     AccountCreate,
     AccountKind,
+    AccountMonthValueUpsert,
     AccountUpdate,
+    InvestmentReturn,
     NetWorth,
 )
+from app.Finances.services.budget_service import month_bounds
+from app.Finances.utils.returns import latest_reading, month_gain, return_percent
 
 
 def seed_default_accounts(db: Session, user_id: uuid.UUID) -> list[AccountModel]:
@@ -141,6 +147,157 @@ def attach_balances(accounts: list[AccountModel], balances: dict[uuid.UUID, floa
     return accounts
 
 
+# ------------------------------------------------- what an investment is worth --
+
+#: One stored reading, as the helpers below pass them around: the month, the
+#: level above or below the ledger, and what was typed to produce it.
+StoredReading = tuple["date", float, float | None]
+
+
+def ledger_balance_as_of(
+    db: Session, user_id: uuid.UUID, account_id: uuid.UUID, on_date
+) -> float:
+    """What the ledger said on a given day. `balance_of` with one extra filter.
+
+    Needed because a reading recorded against August must be measured against
+    August's balance, not today's. Using the all-time balance for a past month
+    would subtract a figure that includes every deposit made since, turning a
+    recorded gain into an invented loss.
+    """
+    total = (
+        db.query(func.sum(TransactionModel.amount))
+        .filter(
+            TransactionModel.user_id == user_id,
+            TransactionModel.account_id == account_id,
+            TransactionModel.occurred_on <= on_date,
+        )
+        .scalar()
+    )
+    return round(total or 0.0, 2)
+
+
+def measured_on(month) -> "date":
+    """The day a month's reading is measured against.
+
+    The last day of the month, or today if the month has not finished -- you
+    cannot measure August against the 31st on the 14th, and reaching for the end
+    of an unfinished month would count deposits that have not happened.
+    """
+    _, month_end = month_bounds(month)
+    return min(month_end, date.today())
+
+
+def readings_by_account(
+    db: Session, user_id: uuid.UUID
+) -> dict[uuid.UUID, list[StoredReading]]:
+    """Every reading the user has recorded, grouped by account in one query.
+
+    One query rather than one per account: the account list shows a figure on
+    every card, and asking per row is the N+1 the performance pass removed from
+    the dashboard. A year of monthly readings on a handful of accounts is a few
+    dozen rows, so grouping in Python costs nothing.
+    """
+    rows = (
+        db.query(
+            AccountMonthValueModel.account_id,
+            AccountMonthValueModel.month,
+            AccountMonthValueModel.difference_amount,
+            AccountMonthValueModel.market_value,
+        )
+        .filter(AccountMonthValueModel.user_id == user_id)
+        .all()
+    )
+
+    grouped: dict[uuid.UUID, list[StoredReading]] = {}
+    for account_id, month, difference, market in rows:
+        grouped.setdefault(account_id, []).append((month, difference, market))
+    return grouped
+
+
+def readings_for_account(
+    db: Session, user_id: uuid.UUID, account_id: uuid.UUID
+) -> list[StoredReading]:
+    """One account's readings, when the whole ledger of them is not wanted."""
+    rows = (
+        db.query(
+            AccountMonthValueModel.month,
+            AccountMonthValueModel.difference_amount,
+            AccountMonthValueModel.market_value,
+        )
+        .filter(
+            AccountMonthValueModel.user_id == user_id,
+            AccountMonthValueModel.account_id == account_id,
+        )
+        .all()
+    )
+    return [(month, difference, market) for month, difference, market in rows]
+
+
+def build_investment_return(
+    readings: list[StoredReading], ledger_balance: float, for_month=None
+) -> InvestmentReturn | None:
+    """The reading that applies, as the client receives it. None if there is none.
+
+    `for_month` is what carries a figure forward: the month's own reading, or the
+    last one taken before it. Omitted -- which is what the account card does --
+    it means the latest reading overall, since a card is not scoped to a month.
+
+    The percentage is computed here and not in the client, following the rule
+    recorded on `ProgressBar`: the server rounds and the client renders, or two
+    opinions on the same division disagree at the boundary.
+    """
+    found = latest_reading(
+        [(month, difference) for month, difference, _ in readings],
+        on_or_before=for_month,
+    )
+    if found is None:
+        return None
+
+    as_of, difference = found
+    return InvestmentReturn(
+        difference_amount=difference,
+        return_percent=return_percent(difference, ledger_balance),
+        as_of=as_of,
+        is_carried_forward=for_month is not None and as_of < for_month,
+        ledger_balance=ledger_balance,
+        market_value=next(
+            (market for month, _, market in readings if month == as_of), None
+        ),
+        # Only meaningful for a month-scoped request. The card asks for no month,
+        # so it gets None rather than a movement figure it has no month to apply
+        # to -- and the pure rule returns None for a carried month anyway.
+        month_gain=(
+            month_gain(
+                [(month, amount) for month, amount, _ in readings], for_month
+            )
+            if for_month is not None
+            else None
+        ),
+    )
+
+
+def attach_investment_returns(
+    accounts: list[AccountModel],
+    readings: dict[uuid.UUID, list[StoredReading]],
+    balances: dict[uuid.UUID, float],
+):
+    """Graft each investment account's figure on, the way `attach_balances` does.
+
+    **Gated on kind, every time.** Rows are deliberately left behind when an
+    account stops being an investment, so the kind check is what stops a Savings
+    account that used to be an Investments account reporting a return.
+    """
+    for account in accounts:
+        account.investment_return = (
+            build_investment_return(
+                readings.get(account.id, []), balances.get(account.id, 0.0)
+            )
+            if account.kind == AccountKind.INVESTMENT.value
+            else None
+        )
+    return accounts
+
+
 def active_counts_by_kind(db: Session, user_id: uuid.UUID) -> dict[str, int]:
     """How many non-archived accounts the user holds of each kind, in one query.
 
@@ -222,7 +379,33 @@ def net_worth(db: Session, user_id: uuid.UUID) -> NetWorth | None:
         if account.kind in DEBT_KINDS and account.counts_toward_net_worth
     )
 
-    return NetWorth(net_worth=round(counted, 2), debt_total=round(abs(owed), 2))
+    # What the holdings are worth, over what was paid for them. Added because the
+    # ledger only knows what went in, so a portfolio that had doubled left the
+    # headline unmoved. The *latest* reading per account and never a sum of them:
+    # these are levels, so adding a column of them inflates the figure further
+    # with every month recorded. See Finances/utils/returns.py.
+    #
+    # Gated on both kind and the count-toward flag, so an account deliberately
+    # excluded from the total cannot smuggle its gain into it.
+    readings = readings_by_account(db, user_id)
+    gain = 0.0
+    for account in accounts:
+        if not account.counts_toward_net_worth:
+            continue
+        if account.kind != AccountKind.INVESTMENT.value:
+            continue
+        found = latest_reading(
+            [(month, difference) for month, difference, _ in readings.get(account.id, [])]
+        )
+        if found is not None:
+            gain += found[1]
+    gain = round(gain, 2)
+
+    return NetWorth(
+        net_worth=round(counted + gain, 2),
+        debt_total=round(abs(owed), 2),
+        investment_gain=gain,
+    )
 
 
 def get_accounts(db: Session, user_id: uuid.UUID, include_archived: bool = False):
@@ -239,7 +422,9 @@ def get_accounts(db: Session, user_id: uuid.UUID, include_archived: bool = False
 
     accounts.sort(key=lambda account: (account.position, account.name))
     attach_role_locks(accounts, active_counts_by_kind(db, user_id))
-    return attach_balances(accounts, balances_by_account(db, user_id))
+    balances = balances_by_account(db, user_id)
+    attach_investment_returns(accounts, readings_by_account(db, user_id), balances)
+    return attach_balances(accounts, balances)
 
 
 def get_account(db: Session, user_id: uuid.UUID, account_id: uuid.UUID):
@@ -252,6 +437,10 @@ def get_account(db: Session, user_id: uuid.UUID, account_id: uuid.UUID):
         return None
 
     account.balance = balance_of(db, user_id, account_id)
+    attach_investment_returns(
+        [account], {account.id: readings_for_account(db, user_id, account_id)},
+        {account.id: account.balance},
+    )
     attach_role_locks([account], active_counts_by_kind(db, user_id))
     return account
 
@@ -283,6 +472,7 @@ def create_account(db: Session, user_id: uuid.UUID, data: AccountCreate):
     db.commit()
     db.refresh(account)
     account.balance = 0.0
+    account.investment_return = None
     attach_role_locks([account], active_counts_by_kind(db, user_id))
     return account
 
@@ -333,6 +523,13 @@ def update_account(db: Session, user_id: uuid.UUID, account_id: uuid.UUID, data:
     db.commit()
     db.refresh(account)
     account.balance = balance_of(db, user_id, account_id)
+    # Recomputed rather than carried over: this request may have just changed the
+    # kind, and an account that has stopped being an investment must stop
+    # reporting a return in the very response that changed it.
+    attach_investment_returns(
+        [account], {account.id: readings_for_account(db, user_id, account_id)},
+        {account.id: account.balance},
+    )
     attach_role_locks([account], active_counts_by_kind(db, user_id))
     return account
 
@@ -428,6 +625,116 @@ def delete_account(db: Session, user_id: uuid.UUID, account_id: uuid.UUID):
         AccountCategoryMonthLimitModel.account_id == account_id,
     ).delete(synchronize_session=False)
 
+    # The recorded investment readings go too -- same reason as the limits above:
+    # a foreign key, so leaving them is an integrity error on the delete rather
+    # than untidiness. Written out literally for this one model, like its
+    # neighbours: a loop over models with a computed filter once compiled to an
+    # unfiltered DELETE and emptied a table.
+    db.query(AccountMonthValueModel).filter(
+        AccountMonthValueModel.user_id == user_id,
+        AccountMonthValueModel.account_id == account_id,
+    ).delete(synchronize_session=False)
+
     db.delete(account)
     db.commit()
     return account
+
+
+# ------------------------------------------- recording what a holding is worth --
+
+def set_month_value(
+    db: Session,
+    user_id: uuid.UUID,
+    account_id: uuid.UUID,
+    data: AccountMonthValueUpsert,
+):
+    """Record, or replace, one month's reading for an investment account.
+
+    The client sends `market_value` -- the number you can read straight off a
+    statement -- and the **level is what gets stored**, derived by subtracting
+    what the ledger said at the end of that month. Storing the level rather than
+    the market value is what makes the figure survive a later deposit: a deposit
+    raises plain value and market value together, so the level does not move,
+    where a stored market value would be measured against a bigger ledger and
+    report the gain as a loss.
+
+    An upsert rather than an insert, so correcting a month you fat-fingered is
+    the same gesture as recording it. The unique index would refuse a second row
+    anyway; this is what makes refusing unnecessary.
+
+    Refuses a non-investment account outright. Every read path gates on kind, so
+    storing a reading against a Savings account would be a write that silently
+    does nothing -- the worst kind of accepted request.
+    """
+    account = (
+        db.query(AccountModel)
+        .filter(AccountModel.id == account_id, AccountModel.user_id == user_id)
+        .first()
+    )
+    if account is None:
+        return None
+
+    if account.kind != AccountKind.INVESTMENT.value:
+        raise ValueError(
+            f"{account.name} is not an investment account, so it has no market "
+            "value to record."
+        )
+
+    month = data.month.replace(day=1)
+
+    if data.difference_amount is not None:
+        difference = round(data.difference_amount, 2)
+        market = None
+    else:
+        ledger = ledger_balance_as_of(db, user_id, account_id, measured_on(month))
+        difference = round(data.market_value - ledger, 2)
+        market = round(data.market_value, 2)
+
+    existing = (
+        db.query(AccountMonthValueModel)
+        .filter(
+            AccountMonthValueModel.user_id == user_id,
+            AccountMonthValueModel.account_id == account_id,
+            AccountMonthValueModel.month == month,
+        )
+        .first()
+    )
+
+    if existing is None:
+        db.add(
+            AccountMonthValueModel(
+                id=uuid.uuid4(),
+                user_id=user_id,
+                account_id=account_id,
+                month=month,
+                difference_amount=difference,
+                market_value=market,
+            )
+        )
+    else:
+        existing.difference_amount = difference
+        existing.market_value = market
+
+    db.commit()
+    return get_account(db, user_id, account_id)
+
+
+def clear_month_value(
+    db: Session, user_id: uuid.UUID, account_id: uuid.UUID, month
+):
+    """Forget one month's reading.
+
+    Returns the account either way: clearing a month that holds no reading is
+    already the state being asked for, so it is not an error.
+
+    The filter is written out for the one model against the three literal
+    columns. Nothing here is computed, and that is deliberate -- a delete whose
+    conditions are assembled rather than written cannot be checked by reading it.
+    """
+    db.query(AccountMonthValueModel).filter(
+        AccountMonthValueModel.user_id == user_id,
+        AccountMonthValueModel.account_id == account_id,
+        AccountMonthValueModel.month == month.replace(day=1),
+    ).delete(synchronize_session=False)
+    db.commit()
+    return get_account(db, user_id, account_id)

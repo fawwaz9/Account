@@ -17,7 +17,7 @@ The two need different isolation, and the difference is worth understanding:
 * **SQLite in memory** is free to throw away. Each test builds the whole schema
   into a private database and drops it with the engine, so isolation is total
   and costs nothing.
-* **Postgres is not.** Building 23 tables and 49 indexes per test, over a
+* **Postgres is not.** Building 26 tables and 57 indexes per test, over a
   network, would take longer than the suite is worth. So the schema is created
   once, and each test runs inside a transaction that is rolled back afterwards.
   ``join_transaction_mode="create_savepoint"`` is what makes that survive the
