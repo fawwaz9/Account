@@ -1,8 +1,18 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../app/auth/AuthContext";
 import { setPassword } from "../services/authClient";
 import { updateAcademicStatus, updatePreferences } from "../services/currentUserClient";
+import { fetchAccounts, fetchCategories } from "../features/budget/api";
+import { Account, SpendCategory } from "../features/budget/types";
+import IncomeSplitModal from "../features/budget/components/IncomeSplitModal";
+import CategoriesModal from "../features/budget/components/CategoriesModal";
 import "../styles/login.css";
+// The two budget modals reached from the Financial tab style their rows from
+// budget.css, and nothing else here imports it. In a production build this would
+// not matter -- `cssCodeSplit: false` concatenates every stylesheet into one --
+// but the dev server injects CSS per imported module, so without this those rows
+// render unstyled on /settings until /budget has been visited.
+import "../styles/budget.css";
 
 /**
  * "08:00:00" from the API, "08:00" for an <input type="time">.
@@ -13,6 +23,20 @@ import "../styles/login.css";
 function clockValue(value: unknown, fallback: string): string {
   return typeof value === "string" ? value.slice(0, 5) : fallback;
 }
+
+/**
+ * The three groups, in the order they are read.
+ *
+ * Academic leads because it is the one most often wrong at the start of a term,
+ * and it is the default for the same reason.
+ */
+const TABS = [
+  { id: "academic", label: "Academic" },
+  { id: "calendar", label: "Calendar" },
+  { id: "financial", label: "Financial" },
+] as const;
+
+type TabId = (typeof TABS)[number]["id"];
 
 export default function SettingsPage() {
   const { user, login, refreshUser } = useAuth();
@@ -42,6 +66,42 @@ export default function SettingsPage() {
   const [academicSaved, setAcademicSaved] = useState(false);
   const [savingAcademic, setSavingAcademic] = useState(false);
 
+  // The calendar group saves on its own, so it needs its own trio rather than
+  // sharing the academic one -- a "Saved." under one form while the other failed
+  // is worse than no message.
+  const [calendarError, setCalendarError] = useState<string | null>(null);
+  const [calendarSaved, setCalendarSaved] = useState(false);
+  const [savingCalendar, setSavingCalendar] = useState(false);
+
+  /**
+   * Which group is on screen.
+   *
+   * Only this one value. Every field's state is already held here at page level,
+   * so a hidden panel unmounts nothing that holds a value and unsaved typing
+   * survives a tab switch for free -- which is the agreed behaviour, not a
+   * happy accident, so there is a test for it.
+   */
+  const [active, setActive] = useState<TabId>("academic");
+  const tablistRef = useRef<HTMLDivElement>(null);
+
+  // What the Financial tab's two modals need. Two GETs rather than `useBudget`,
+  // which returns these alongside six other reads and a `runRecurring` write --
+  // a cost the budget page is right to pay and a settings page is not.
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [categories, setCategories] = useState<SpendCategory[]>([]);
+  const [splitOpen, setSplitOpen] = useState(false);
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
+
+  const loadMoneyBits = useCallback(async () => {
+    if (!user) return;
+    const [nextAccounts, nextCategories] = await Promise.all([
+      fetchAccounts(user.id).catch(() => [] as Account[]),
+      fetchCategories(user.id).catch(() => [] as SpendCategory[]),
+    ]);
+    setAccounts(nextAccounts);
+    setCategories(nextCategories);
+  }, [user]);
+
   // user is null on the first render and arrives once /me resolves, so the
   // initial useState values would otherwise stay blank forever.
   useEffect(() => {
@@ -61,6 +121,49 @@ export default function SettingsPage() {
     setMinBlock(String(user.preferences?.min_free_block_minutes ?? 30));
   }, [user]);
 
+  // Fetched once, not per tab open: two GETs on a page you visit to change one
+  // thing, and the Financial tab is one click away whichever tab you land on.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      if (!user) return;
+      const [nextAccounts, nextCategories] = await Promise.all([
+        fetchAccounts(user.id).catch(() => [] as Account[]),
+        fetchCategories(user.id).catch(() => [] as SpendCategory[]),
+      ]);
+      if (cancelled) return;
+      setAccounts(nextAccounts);
+      setCategories(nextCategories);
+    })();
+    return () => { cancelled = true; };
+  }, [user]);
+
+  /**
+   * Arrow keys move between tabs, which is what makes one tab stop honest.
+   *
+   * A tablist takes a single Tab stop -- the inactive tabs are `tabIndex={-1}` --
+   * so without this a keyboard user could reach the strip and then never change
+   * what it shows. Selection follows focus, so there is nothing to press.
+   */
+  function handleTabKeys(event: React.KeyboardEvent) {
+    const order: readonly TabId[] = TABS.map((tab) => tab.id);
+    const at = order.indexOf(active);
+
+    let next: number | null = null;
+    if (event.key === "ArrowRight") next = (at + 1) % order.length;
+    else if (event.key === "ArrowLeft") next = (at - 1 + order.length) % order.length;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = order.length - 1;
+    if (next === null) return;
+
+    event.preventDefault();
+    setActive(order[next]);
+    // Focus has to follow, or the arrow keys move a selection the user's focus
+    // has been left behind by and the next arrow press starts from the old place.
+    const buttons = tablistRef.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+    buttons?.[next]?.focus();
+  }
+
   async function handleAcademicSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!user) return;
@@ -79,13 +182,13 @@ export default function SettingsPage() {
         // besides -- blank means "not set", and terms then have no dates.
         first_year_calendar_year: firstYear === "" ? null : Number(firstYear),
       });
+      // Only this tab's three keys. Sending the study window from here too would
+      // mean two forms claiming the same preferences, and whichever saved last
+      // would win with whatever was on screen when it did.
       await updatePreferences(user.id, {
         credit_target: Number(creditTarget),
         gpa_scale_enabled: gpaEnabled,
         default_target_grade: Number(defaultTarget),
-        study_day_start: studyStart,
-        study_day_end: studyEnd,
-        min_free_block_minutes: Number(minBlock),
       });
       await refreshUser();
       setAcademicSaved(true);
@@ -93,6 +196,39 @@ export default function SettingsPage() {
       setAcademicError(err instanceof Error ? err.message : "Could not save your settings");
     } finally {
       setSavingAcademic(false);
+    }
+  }
+
+  /**
+   * The calendar group: the study window, and nothing else.
+   *
+   * **This is only safe because the API takes a real partial patch.** Until
+   * `UserUpdate` took `UserPreferencesPatch`, a request naming three preferences
+   * was parsed into all fourteen and the merge wrote defaults over the rest -- so
+   * saving here would have reset the credit target and the default grade, and
+   * saving those would have reset the study window. Per-tab saves are what that
+   * fix bought.
+   */
+  async function handleCalendarSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!user) return;
+
+    setCalendarError(null);
+    setCalendarSaved(false);
+    setSavingCalendar(true);
+
+    try {
+      await updatePreferences(user.id, {
+        study_day_start: studyStart,
+        study_day_end: studyEnd,
+        min_free_block_minutes: Number(minBlock),
+      });
+      await refreshUser();
+      setCalendarSaved(true);
+    } catch (err) {
+      setCalendarError(err instanceof Error ? err.message : "Could not save your settings");
+    } finally {
+      setSavingCalendar(false);
     }
   }
 
@@ -207,7 +343,50 @@ export default function SettingsPage() {
         </div>
 
         <div className="settingsPanels">
-          <div className="settingsCard">
+          {/* A real tablist, not a row of toggle buttons: one Tab stop, arrow
+              keys inside it, `aria-selected` on the chosen one and a panel that
+              names the tab controlling it. The calendar page's view switch next
+              door is an `aria-pressed` group, which is a different control for a
+              different job -- two buttons that each do something, rather than
+              three labels for one region. */}
+          <div
+            className="settingsTabs"
+            role="tablist"
+            aria-label="Settings sections"
+            ref={tablistRef}
+          >
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                id={`settings-tab-${tab.id}`}
+                aria-selected={active === tab.id}
+                aria-controls={`settings-panel-${tab.id}`}
+                // One stop for the whole strip. Arrow keys do the rest.
+                tabIndex={active === tab.id ? 0 : -1}
+                className={active === tab.id ? "settingsTab settingsTabActive" : "settingsTab"}
+                onClick={() => setActive(tab.id)}
+                // On the tab rather than on the tablist. The container is a
+                // grouping role and should not be focusable or handle keys
+                // (S6852); the key always arrives at whichever tab has focus,
+                // which is the element that should answer for it.
+                onKeyDown={handleTabKeys}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* `hidden` rather than `&&`, so each panel keeps its DOM node and the
+              tab pointing at it always has something to control. */}
+          <div
+            className="settingsCard"
+            role="tabpanel"
+            id="settings-panel-academic"
+            aria-labelledby="settings-tab-academic"
+            hidden={active !== "academic"}
+          >
             <h2>Academic</h2>
             <p className="muted small-text">
               Your current term decides which courses count as past, current, or future.
@@ -308,6 +487,44 @@ export default function SettingsPage() {
                 </span>
               </div>
 
+              <div className="settingsToggle">
+                <input
+                  id="gpa-enabled"
+                  type="checkbox"
+                  checked={gpaEnabled}
+                  onChange={(event) => setGpaEnabled(event.target.checked)}
+                />
+                <label htmlFor="gpa-enabled">
+                  Show CGPA
+                  <span className="small-text muted">
+                    {" "}&mdash; UBC doesn&apos;t put a GPA on transcripts, so this is optional.
+                  </span>
+                </label>
+              </div>
+
+              {academicError && <p className="loginError">{academicError}</p>}
+              {academicSaved && <p className="loginSuccess">Saved.</p>}
+
+              <button type="submit" className="loginSubmit" disabled={savingAcademic}>
+                {savingAcademic ? "Saving..." : "Save"}
+              </button>
+            </form>
+          </div>
+
+          <div
+            className="settingsCard"
+            role="tabpanel"
+            id="settings-panel-calendar"
+            aria-labelledby="settings-tab-calendar"
+            hidden={active !== "calendar"}
+          >
+            <h2>Calendar</h2>
+            <p className="muted small-text">
+              These decide which gaps between your classes are worth offering as
+              study time. They were under Academic until the groups existed.
+            </p>
+
+            <form className="loginForm" onSubmit={handleCalendarSubmit}>
               {/* What counts as usable study time. 03:00 is technically free and
                   is not it, so the gaps between classes are only offered inside
                   these hours. */}
@@ -355,31 +572,77 @@ export default function SettingsPage() {
                 </span>
               </div>
 
-              <div className="settingsToggle">
-                <input
-                  id="gpa-enabled"
-                  type="checkbox"
-                  checked={gpaEnabled}
-                  onChange={(event) => setGpaEnabled(event.target.checked)}
-                />
-                <label htmlFor="gpa-enabled">
-                  Show CGPA
-                  <span className="small-text muted">
-                    {" "}&mdash; UBC doesn&apos;t put a GPA on transcripts, so this is optional.
-                  </span>
-                </label>
-              </div>
+              {calendarError && <p className="loginError">{calendarError}</p>}
+              {calendarSaved && <p className="loginSuccess">Saved.</p>}
 
-              {academicError && <p className="loginError">{academicError}</p>}
-              {academicSaved && <p className="loginSuccess">Saved.</p>}
-
-              <button type="submit" className="loginSubmit" disabled={savingAcademic}>
-                {savingAcademic ? "Saving..." : "Save"}
+              <button type="submit" className="loginSubmit" disabled={savingCalendar}>
+                {savingCalendar ? "Saving..." : "Save"}
               </button>
             </form>
           </div>
+
+          {/* No form and no Save: both of these are their own dialogs that write
+              for themselves. The same two are still reachable from the budget
+              page, where you notice a category is wrong -- one setting with two
+              doors, and one implementation behind both. */}
+          <div
+            className="settingsCard"
+            role="tabpanel"
+            id="settings-panel-financial"
+            aria-labelledby="settings-tab-financial"
+            hidden={active !== "financial"}
+          >
+            <h2>Financial</h2>
+            <p className="muted small-text">
+              How income divides between your accounts, and what you can file
+              spending under.
+            </p>
+
+            <div className="settingsActions">
+              <button
+                type="button"
+                className="calButton"
+                onClick={() => setSplitOpen(true)}
+                disabled={accounts.length === 0}
+              >
+                Income split
+              </button>
+              <button
+                type="button"
+                className="calButton"
+                onClick={() => setCategoriesOpen(true)}
+              >
+                Edit categories
+              </button>
+            </div>
+
+            {accounts.length === 0 && (
+              <p className="muted small-text">
+                The income split needs accounts to divide between. Add one on the
+                Budget page and it appears here.
+              </p>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* `onSaved` is a real refetch, never a no-op. CategoriesModal fires it
+          once per operation and stays open, reading every row from the prop it
+          was handed -- so without this a deleted category would sit on screen
+          and a rename would keep showing the old name. */}
+      <IncomeSplitModal
+        open={splitOpen}
+        accounts={accounts}
+        onClose={() => setSplitOpen(false)}
+        onSaved={() => void loadMoneyBits()}
+      />
+
+      <CategoriesModal
+        open={categoriesOpen}
+        categories={categories}
+        onClose={() => setCategoriesOpen(false)}
+        onSaved={() => void loadMoneyBits()}
+      />
     </div>
   );
 }

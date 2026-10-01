@@ -246,3 +246,50 @@ def test_a_valid_timezone_can_actually_be_saved(db, user, client):
 
     db.refresh(user)
     assert user.preferences["timezone"] == "America/Vancouver"
+
+
+def test_the_two_settings_tabs_do_not_overwrite_each_other(db, user, client):
+    """The payloads the tabbed Settings page actually sends, in both directions.
+
+    The route tests above cover the mechanism. This covers the feature built on
+    it: Academic and Calendar are separate forms with separate Save buttons, each
+    sending only its own three preference keys. That is safe only because the
+    patch is a real patch -- before it, whichever tab you saved last would have
+    reset the other one's fields to model defaults.
+
+    Both directions, because a merge that works one way round and not the other
+    is a thing that happens.
+    """
+    academic = {
+        "credit_target": 150,
+        "gpa_scale_enabled": False,
+        "default_target_grade": 92.0,
+    }
+    calendar = {
+        "study_day_start": "06:30",
+        "study_day_end": "23:00",
+        "min_free_block_minutes": 45,
+    }
+
+    assert client.patch(
+        f"/api/users/{user.id}", json={"preferences": academic}
+    ).status_code == 200
+    assert client.patch(
+        f"/api/users/{user.id}", json={"preferences": calendar}
+    ).status_code == 200
+
+    db.refresh(user)
+    # Saving Calendar second must not have reverted Academic.
+    assert user.preferences["credit_target"] == 150
+    assert user.preferences["gpa_scale_enabled"] is False
+    assert user.preferences["default_target_grade"] == 92.0
+    assert user.preferences["min_free_block_minutes"] == 45
+
+    # And the other way round.
+    assert client.patch(
+        f"/api/users/{user.id}", json={"preferences": academic}
+    ).status_code == 200
+
+    db.refresh(user)
+    assert user.preferences["min_free_block_minutes"] == 45
+    assert user.preferences["study_day_start"] == "06:30:00"

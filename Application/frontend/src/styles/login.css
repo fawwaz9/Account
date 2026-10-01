@@ -241,6 +241,66 @@
   margin-top: 0;
 }
 
+/* The tab strip. One row of labels for one region below it. */
+.settingsTabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  /* The active tab's border has to sit on the strip's own line rather than
+     under it, or the two draw as a double rule. */
+  margin-bottom: -1px;
+  overflow-x: auto;
+}
+
+.settingsTab {
+  background: none;
+  border: none;
+  /* Transparent, not absent: an inactive tab reserves the two pixels the active
+     one paints, so selecting a tab does not shift the whole row. */
+  border-bottom: 2px solid transparent;
+  padding: 10px 14px;
+  font-size: 0.92rem;
+  font-weight: 400;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.settingsTab:hover {
+  color: var(--text);
+}
+
+.settingsTab:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: -2px;
+}
+
+/* The gold rule beneath the selected tab -- and deliberately not only that.
+   Colour alone has been a finding on this project twice, account kind as a
+   stripe and an overdrawn balance as a minus sign, so the selected tab is also
+   brighter and heavier. `aria-selected` is what a screen reader reads; these two
+   are for everyone who cannot pick gold out of grey.
+
+   Called a "rule" rather than by the name of the Tailwind utility that draws
+   one, on purpose. Tailwind scans these comments for candidate class names and
+   emits a real declaration for any bare word matching a utility, so naming it
+   here put a dead one into the shipped stylesheet -- caught by diffing the built
+   CSS, and the second time a comment on this project has done it. The first was
+   the word for text-transform, in a comment explaining a different rule. */
+.settingsTabActive {
+  color: var(--text);
+  font-weight: 600;
+  border-bottom-color: var(--gold);
+}
+
+/* Two dialog buttons, not a form. */
+.settingsActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 4px 0 10px;
+}
+
 @media (max-width: 900px) {
   .settingsTop {
     grid-template-columns: 1fr;
