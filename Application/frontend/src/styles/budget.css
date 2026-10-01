@@ -76,9 +76,24 @@
   cursor: pointer;
 }
 
+/* At most five across, however wide the screen, and never narrower than 200px.
+ *
+ * `auto-fit` on its own only sets a floor, so a 170px minimum put seven or eight
+ * cards on a laptop and more on a desktop -- each one too small for a name, a
+ * kind and a balance, on a page that is full width by design.
+ *
+ * The track minimum is therefore whichever is LARGER: 200px, or the share one of
+ * five would get after the gaps are taken out. Above about 1300px the share wins
+ * and five is all that fit; below it the 200px floor wins and the row drops to
+ * four, then three, then one, which is what a tablet and a phone want anyway.
+ * One expression, no breakpoints to keep in step with the card's contents.
+ *
+ * Keep the two 5s and the gap in agreement. If the gap changes, the `4 * 12px`
+ * does too -- four gaps between five cards.
+ */
 .sectorGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(max(200px, (100% - 4 * 12px) / 5), 1fr));
   gap: 12px;
 }
 
