@@ -236,15 +236,18 @@ def test_saving_preferences_survives_the_json_column(db, user):
     pinned at the place they share: anything stored as JSON is serialised on the
     way in.
     """
-    from app.Users.schemas.user import UserPreferences, UserUpdate
+    from app.Users.schemas.user import UserUpdate
     from app.Users.services.user_service import get_preferences, update_user
 
+    # A dict, which is what the browser actually sends -- not a UserPreferences
+    # instance. These tests passed instances until the patch type landed, which
+    # meant nothing exercised the shape production uses.
     updated = update_user(db, user.id, UserUpdate(
-        preferences=UserPreferences(
-            study_day_start=datetime.time(6, 30),
-            study_day_end=datetime.time(23, 0),
-            min_free_block_minutes=45,
-        )
+        preferences={
+            "study_day_start": datetime.time(6, 30),
+            "study_day_end": datetime.time(23, 0),
+            "min_free_block_minutes": 45,
+        }
     ))
 
     assert updated is not None
@@ -259,34 +262,45 @@ def test_saving_preferences_survives_the_json_column(db, user):
 
 def test_a_saved_study_window_reaches_the_free_block_maths(db, user):
     """The round trip, not just the write: stored strings must drive the gaps."""
-    from app.Users.schemas.user import UserPreferences, UserUpdate
+    from app.Users.schemas.user import UserUpdate
     from app.Users.services.user_service import update_user
 
-    update_user(db, user.id, UserUpdate(preferences=UserPreferences(
-        study_day_start=datetime.time(9, 0),
-        study_day_end=datetime.time(17, 0),
-    )))
+    update_user(db, user.id, UserUpdate(preferences={
+        "study_day_start": datetime.time(9, 0),
+        "study_day_end": datetime.time(17, 0),
+    }))
     db.refresh(user)
 
     assert blocks_on(db, user, MON) == [(at(9), at(17), 8 * 60)]
 
 
 def test_saving_one_preference_keeps_the_others(db, user):
-    """A JSON column patched wholesale would silently clear everything else."""
-    from app.Users.schemas.user import UserPreferences, UserUpdate
+    """A JSON column patched wholesale would silently clear everything else.
+
+    This test existed before the bug was fixed and did not catch it, which is
+    worth keeping in view. It asserted `"credit_target" in updated.preferences`
+    -- key *presence* -- and carried a comment conceding that the model's default
+    overwrote the stored value, as though that were the intended behaviour. The
+    key did survive. Its value did not, and the value is the whole point.
+
+    Asserting 150 rather than presence is what makes this a regression test:
+    remove `exclude_unset=True` from the merge and it fails.
+    """
+    from app.Users.schemas.user import UserUpdate
     from app.Users.services.user_service import update_user
 
     user.preferences = {"credit_target": 150, "gpa_scale_enabled": False}
     db.commit()
 
     updated = update_user(db, user.id, UserUpdate(
-        preferences=UserPreferences(min_free_block_minutes=45)
+        preferences={"min_free_block_minutes": 45}
     ))
 
     assert updated.preferences["min_free_block_minutes"] == 45
-    # Defaults from the model win over the stored value here, which is the
-    # existing merge behaviour -- the point is that the key survives at all.
-    assert "credit_target" in updated.preferences
+    # The stored values, not the model's defaults. 150 would be 120 and False
+    # would be True if the patch were being dumped whole.
+    assert updated.preferences["credit_target"] == 150
+    assert updated.preferences["gpa_scale_enabled"] is False
 
 
 # ---------------------------------------------------------- time already gone --

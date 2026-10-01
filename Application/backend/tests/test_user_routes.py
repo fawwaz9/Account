@@ -129,3 +129,120 @@ def test_a_course_with_links_round_trips_through_the_api(db, user, client):
     body = client.get(f"/api/grades/{user.id}/courses/{course.id}").json()
     assert body["links"] == [{"title": "Canvas", "url": "https://canvas.ubc.ca"}], \
         "and the refusal must not have changed what was stored"
+
+
+# ------------------------------------------------------- preferences, patched --
+#
+# None of this was covered before. `update_user` had three service-level tests
+# for preferences and all three passed a `UserPreferences` *instance*, so the
+# shape the browser actually sends -- a JSON object naming a few keys -- reached
+# the code only in production. The bug that followed is the one below.
+
+
+def test_patching_one_preference_leaves_the_others_alone(db, user, client):
+    """The live bug, at the edge: Settings reset what it did not mention.
+
+    `UserUpdate.preferences` was typed `UserPreferences`, where every field has a
+    default, so this request -- which names one key -- was parsed into a complete
+    fourteen-field model and the merge wrote all fourteen. The eight the client
+    never sends went back to their defaults on every save.
+
+    Asserted on the stored column, not the response. `UserDetail.preferences` is
+    a `UserPreferences`, so the response is re-validated on the way out with
+    every default filled in -- it cannot show an absent key, and a test that read
+    it would pass against the bug.
+    """
+    user.preferences = {"timezone": "America/Vancouver", "credit_target": 150}
+    db.commit()
+
+    response = client.patch(
+        f"/api/users/{user.id}", json={"preferences": {"credit_target": 160}}
+    )
+    assert response.status_code == 200
+
+    db.refresh(user)
+    assert user.preferences["credit_target"] == 160
+    assert user.preferences["timezone"] == "America/Vancouver", \
+        "the key the request never mentioned must not have moved"
+
+
+def test_saving_the_academic_form_does_not_reset_the_timezone(db, user, client):
+    """Named for what actually happened, with the real payload.
+
+    These six keys are exactly what SettingsPage sends. `timezone` is not among
+    them, and it is the one preference in the model that changes behaviour --
+    reminder firing times and the early/late figures both resolve through it.
+    Before the fix this request moved America/Vancouver to America/Regina.
+    """
+    user.preferences = {"timezone": "America/Vancouver"}
+    db.commit()
+
+    response = client.patch(f"/api/users/{user.id}", json={"preferences": {
+        "credit_target": 120,
+        "gpa_scale_enabled": True,
+        "default_target_grade": 85,
+        "study_day_start": "08:00",
+        "study_day_end": "22:00",
+        "min_free_block_minutes": 30,
+    }})
+    assert response.status_code == 200
+
+    db.refresh(user)
+    assert user.preferences["timezone"] == "America/Vancouver"
+
+
+def test_patching_no_preferences_changes_nothing(db, user, client):
+    """An empty object is a request to change nothing, not to reset everything."""
+    user.preferences = {"timezone": "America/Vancouver", "credit_target": 150}
+    db.commit()
+    before = dict(user.preferences)
+
+    assert client.patch(
+        f"/api/users/{user.id}", json={"preferences": {}}
+    ).status_code == 200
+
+    db.refresh(user)
+    assert user.preferences == before
+
+
+def test_an_invalid_timezone_is_refused_at_the_edge(db, user, client):
+    """422, not 400, and the difference is where the check runs.
+
+    The validator lives on the preferences model, so FastAPI runs it while
+    parsing the body -- before `edit_user` is entered and therefore before its
+    `except ValueError` can map anything to 400. That is the right answer for a
+    malformed body; it is recorded here because the route documents 400 and 404
+    and not this.
+
+    The control matters more than the status: a patch type that dropped the
+    validator would store the bad value, and `get_preferences` re-validates on
+    *read* from six call sites that catch nothing. A bad write would surface as a
+    500 on every page that reads a preference.
+    """
+    user.preferences = {"timezone": "America/Vancouver"}
+    db.commit()
+
+    response = client.patch(
+        f"/api/users/{user.id}", json={"preferences": {"timezone": "Mars/Olympus"}}
+    )
+
+    assert response.status_code == 422
+    db.refresh(user)
+    assert user.preferences["timezone"] == "America/Vancouver", \
+        "a refused request must not have written anything"
+
+
+def test_a_valid_timezone_can_actually_be_saved(db, user, client):
+    """The control for the test above.
+
+    Without this, "invalid is refused" could be passing because *every* timezone
+    is refused -- which is exactly what a validator that forgot to pass `None`
+    through, or a field left off the patch model, would do.
+    """
+    assert client.patch(
+        f"/api/users/{user.id}",
+        json={"preferences": {"timezone": "America/Vancouver"}},
+    ).status_code == 200
+
+    db.refresh(user)
+    assert user.preferences["timezone"] == "America/Vancouver"

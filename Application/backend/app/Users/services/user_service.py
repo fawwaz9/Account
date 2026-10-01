@@ -206,6 +206,21 @@ def update_user(db: Session, user_id: UUID, data: UserUpdate):
     # Preferences are a JSON column, so a partial patch must merge rather than
     # replace -- otherwise setting one preference silently clears the rest.
     #
+    # `exclude_unset=True` is what makes that true, and for a year it was
+    # missing. The incoming model was `UserPreferences`, where every field has a
+    # default, so a patch naming six keys dumped all fourteen and this merge
+    # wrote defaults over the eight it had not been asked about. Settings reset
+    # `timezone` on every save. The fix is in the schema -- `UserUpdate` now
+    # takes `UserPreferencesPatch`, whose fields are genuinely optional -- and
+    # this flag is the half that makes the schema matter.
+    #
+    # Removing it now fails seven tests, and fails them loudly rather than
+    # quietly: with the patch type in place an unset field dumps as `None`, so
+    # the merge writes nulls into the column and `get_preferences` refuses them
+    # on the next read. The old shape wrote plausible defaults instead, which is
+    # why it survived a year. Mutation-verified either way -- the flag is
+    # load-bearing, not decoration.
+    #
     # Dumped in JSON mode, not Python mode. model_dump() keeps real Python
     # objects, so study_day_start arrived as a datetime.time and the column
     # refused it: "Object of type time is not JSON serializable", which made
@@ -215,7 +230,7 @@ def update_user(db: Session, user_id: UUID, data: UserUpdate):
     if data.preferences is not None:
         merged = {
             **(user.preferences or {}),
-            **data.preferences.model_dump(mode="json"),
+            **data.preferences.model_dump(mode="json", exclude_unset=True),
         }
         user.preferences = merged
 

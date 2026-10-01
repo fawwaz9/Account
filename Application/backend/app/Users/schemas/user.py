@@ -96,6 +96,69 @@ class UserPreferences(BaseModel):
         return v
 
 
+class UserPreferencesPatch(BaseModel):
+    """The same preferences, for *changing* some of them.
+
+    Deliberately a separate model rather than a subclass either way round,
+    because this one and `UserPreferences` have opposite jobs. `UserPreferences`
+    fills every default in, so a reader never meets a missing key.
+    This one leaves an unmentioned field unset, so a writer never touches a
+    preference the caller did not name.
+
+    **One model cannot do both, and the attempt was a live bug.** `UserUpdate`
+    used to declare `preferences: UserPreferences`, so a patch naming six fields
+    was parsed into a complete fourteen-field model and `model_dump` emitted all
+    fourteen -- which the merge in `update_user` then wrote over the top of what
+    was stored. Every save in Settings reset `timezone` to `America/Regina`,
+    silently, and `timezone` decides when reminders fire and whether a task
+    counts as finished early or late. The merge was already written to avoid
+    exactly this and could not, because what reached it was never partial.
+
+    So the bounds and the validators are duplicated here on purpose. Dropping a
+    validator would be worse than the bug it replaced: an invalid value would be
+    stored, and `get_preferences` re-validates on *read* through
+    `UserPreferences`, from six call sites that do not catch anything. A bad
+    write would become a 500 on every page that reads a preference.
+    """
+
+    timezone: str | None = None
+    currency: str | None = Field(default=None, min_length=3, max_length=3)
+    week_start: WeekStart | None = None
+    theme: ThemePreference | None = None
+    date_format: DateFormat | None = None
+    time_format: TimeFormat | None = None
+    default_reminder_minutes_before: int | None = Field(default=None, ge=0, le=10080)
+    credit_target: int | None = Field(default=None, ge=1, le=400)
+    gpa_scale_enabled: bool | None = None
+    default_target_grade: float | None = Field(default=None, ge=0, le=100)
+    study_day_start: time | None = None
+    study_day_end: time | None = None
+    min_free_block_minutes: int | None = Field(default=None, ge=5, le=240)
+
+    # Both validators pass `None` straight through. An explicit null means "no
+    # opinion" here, and running the check on it would reject the one value that
+    # is always allowed.
+    @field_validator("currency")
+    @classmethod
+    def validate_currency(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        if not v.isalpha():
+            raise ValueError("Currency must be a 3-letter ISO 4217 code")
+        return v.upper()
+
+    @field_validator("timezone")
+    @classmethod
+    def validate_timezone(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        try:
+            ZoneInfo(v)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError(f"Invalid IANA timezone: {v}") from exc
+        return v
+
+
 class UserBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     email: str = Field(..., min_length=3, max_length=255)
@@ -126,7 +189,10 @@ class UserCreate(UserBase):
 class UserUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=100)
     email: str | None = Field(default=None, min_length=3, max_length=255)
-    preferences: UserPreferences | None = None
+    #: A patch, not a whole object -- see `UserPreferencesPatch`. Typing this as
+    #: `UserPreferences` is what made every Settings save reset the preferences
+    #: it did not mention.
+    preferences: UserPreferencesPatch | None = None
 
     @field_validator("email")
     @classmethod
