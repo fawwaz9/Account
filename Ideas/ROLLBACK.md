@@ -229,6 +229,21 @@ broke.
 > `completed_at` and un-archives, and a row in that state cannot be told from
 > one never completed. Roll back for something else, not for this.
 
+> ### `ca4752e` is FRONTEND ONLY — no image, no revision, nothing on Cloud Run
+>
+> Deployed 2026-10-01. The API is still serving `147d08b`, and that gap is
+> expected rather than a deploy someone forgot: nothing under
+> `Application/backend/app/` changed. Roll it back from the Pages dashboard alone
+> (*Deployments* → the previous one → **Rollback**).
+>
+> It adds the time-zone control to Settings and a shared `HelpTip`. **No API
+> contract changed and no request was added** — `timezone` joins a
+> `updatePreferences` payload the Calendar tab was already sending, and the API has
+> accepted that key since the schema was written. So rolling back removes the only
+> way to set a zone; it does not break anything, and a zone already saved stays
+> saved and keeps working, because the services that read it never needed the
+> control to exist.
+
 > ### `147d08b` — the API rolls back alone. The FRONTEND does not.
 >
 > Asymmetric, and the asymmetry is the whole note. Deployed 2026-10-01 with the
