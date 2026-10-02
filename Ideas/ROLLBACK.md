@@ -18,7 +18,7 @@ deployment on **2026-09-28**, including that traffic is on `LATEST`.
 | Database | Supabase project `kujxxairehpwhxhnkbct`, region `us-west-2`, Postgres 17.6 |
 | Backups | GitHub Actions artifacts, `Backup database` workflow, 90-day retention |
 | Secrets | Google Secret Manager: `jwt-secret`, `database-url` |
-| Current image | `…/backend:6b3dcce` — revision `account-api-00022-vmx`, serving 100% |
+| Current image | `…/backend:6b3dcce` — revision `account-api-00023-jzr`, serving 100%. `00022` ran the same image; `00023` only added an address to `ALLOWED_SIGNUP_EMAILS` |
 | Previous image | `…/backend:88500e6` — revision `account-api-00021-z29` |
 | GCP project | `account-504419`, registry `us-west1-docker.pkg.dev/account-504419/account` |
 | Repo | `fawwaz9/Account` — a push to `main` rebuilds the **frontend** only |

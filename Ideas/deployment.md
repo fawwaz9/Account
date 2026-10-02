@@ -33,7 +33,7 @@ the watch actually showed.
 | Frontend | `tsc --noEmit` and `vite build` clean, **142 vitest cases in 17 files** |
 | Frontend URL | `https://account-2a7.pages.dev` — Cloudflare Pages, builds from `main` |
 | API URL | `https://account-api-210502804146.us-west1.run.app` |
-| Serving | revision `account-api-00022-vmx`, image `backend:6b3dcce`, traffic on **LATEST** |
+| Serving | revision `account-api-00023-jzr`, image `backend:6b3dcce`, traffic on **LATEST** — the revision past `00022` is an allowlist change, same image |
 | Database | Supabase `kujxxairehpwhxhnkbct`, `us-west-2`, Postgres 17.6. **27 tables live, 26 in the schema** — the extra one is `category_budgets`, left behind by a rollback; see `session-handoff.md`. `account_month_values` joined the schema on 2026-10-01 |
 | Size | 912 rows, 13 MB against a 500 MB cap — measured 2026-09-28 |
 | Backups | nightly GitHub Action, 09:00 UTC, 90-day artifacts — **restored once, for real** |
@@ -1176,10 +1176,16 @@ is the worst time to work it out. Keep it next to this file.
 
 ### 37. Add yourself and two friends — **DONE**
 
-`ALLOWED_SIGNUP_EMAILS` holds **four** addresses as of revision
-`account-api-00006-rtl` — the original three plus `david.ibie23@gmail.com`. The
-second person has signed in and their accounts seeded, which is the first time
-any of this ran for someone who did not build it.
+`ALLOWED_SIGNUP_EMAILS` holds **five** addresses as of revision
+`account-api-00023-jzr` — the original three, then `david.ibie23@gmail.com`, then
+`dereklee1267@gmail.com` added 2026-10-02. The second person has signed in and
+their accounts seeded, which was the first time any of this ran for someone who
+did not build it.
+
+> **The delimiter cannot be `@`.** gcloud's `^x^` custom-delimiter form is what
+> stops the commas inside the list being read as separators between variables —
+> but every address contains an `@`, so `^@^` splits the value into nonsense. Use
+> `^|^` or `^##^`.
 
 **Do:** put three addresses in `ALLOWED_SIGNUP_EMAILS`. Not twenty.
 
