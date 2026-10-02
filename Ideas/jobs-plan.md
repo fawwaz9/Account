@@ -191,7 +191,8 @@ separately, so every total can say how much of itself is assumed.
   box-sizing:border-box` or it inherits `padding: 7px 14px` from the base rule.
 - Never run a verification script against the real `data/app.db`, and never
   compute a delete filter.
-- Update `Ideas/whats_next.txt` as part of landing each stage.
+- Update `Ideas/shipped.md` as part of landing each stage, and close the entry in
+  `Ideas/next.md`.
 
 ---
 

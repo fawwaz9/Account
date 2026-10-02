@@ -79,11 +79,11 @@ Three things, in order of how soon they matter:
    stored preferences have no control in Settings, and `timezone` is one of
    them, so the completion-timing figures are computed against the wrong day
    boundary for anyone outside `America/Regina`.
-4. **The three interface-quality asks** in `whats_next.txt` — confirm every
+4. **The three interface-quality asks** in `next.md` — confirm every
    delete (nine do not), make a click feel like a click (`:active` appears zero
    times in the whole stylesheet), and move ambient muted explanations behind a
    `(?)` affordance.
-5. **Everything in `whats_next.txt`** under *What is left, by module*.
+5. **Everything in `next.md`** under *What is left, by module*.
 
 Deployment leftovers, none urgent, all written up in `deployment.md`:
 the Dockerfile ignores `$PORT` (hence `--port=8000` on every deploy); backups
@@ -132,7 +132,7 @@ SQLAlchemy's inspector, and the two numbers are not counting the same thing.
 > It is harmless, and it is not nothing: production's schema disagrees with what
 > `python -m app._database.schema` builds, which is the file everyone trusts to
 > describe this database. **Dropping it destroys two rows**, so it is a decision
-> rather than a tidy-up — recorded in `whats_next.txt`.
+> rather than a tidy-up — recorded in `next.md`.
 
 The **per-user split was not re-measured** — that query was refused as a
 production read, so the 2026-09-14 reading stands: the owner held essentially all

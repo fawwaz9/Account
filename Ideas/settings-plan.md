@@ -9,7 +9,7 @@
 
 ## What was asked
 
-Verbatim, from `whats_next.txt`:
+Verbatim, from `whats_next.txt` (split into `next.md` and `shipped.md` on 2026-10-02):
 
 > Make the whole password section side to side with the account section. There
 > should be academic, calender and financial settings. They should only show up

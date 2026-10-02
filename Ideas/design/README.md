@@ -10,7 +10,7 @@ to study.
 - [grades.md](grades.md) · [finances.md](finances.md) · [calendar.md](calendar.md) ·
   [tasks.md](tasks.md) · [jobs.md](jobs.md) · [users-and-auth.md](users-and-auth.md)
 - [../jobs-plan.md](../jobs-plan.md) — the worked example, with its build log
-- [../whats_next.txt](../whats_next.txt) — what is shipped, what is next, and the
+- [../next.md](../next.md) and [../shipped.md](../shipped.md) — what is next, what is shipped, and the
   accumulated notes
 - [../session-handoff.md](../session-handoff.md) — where the project is right now
 - [../deployment.md](../deployment.md) — how it got on the web, and
@@ -260,4 +260,4 @@ The joins are the reason the app exists, so they are worth naming.
 5. `src/features/<module>/` with `api.ts`, `types.ts`, `components/`, `hooks/`;
    a page; a stylesheet; a nav entry.
 6. Tests as you go, and mutation-test every guard.
-7. Update `whats_next.txt` as part of landing it, not afterwards.
+7. Update `shipped.md` as part of landing it, not afterwards.

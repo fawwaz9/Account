@@ -91,7 +91,8 @@ decoration, and this has caught real nothing-burgers:
 
 ### 5. Update the docs as part of the change, not after
 
-`Ideas/design/*.md` and `Ideas/whats_next.txt`, in the same commit. A design doc
+`Ideas/design/*.md` and `Ideas/shipped.md` — plus `next.md` if this closes an entry
+there — in the same commit. A design doc
 describing the rule you just replaced is worse than no doc — two design docs
 were found stale only because a deploy went looking.
 
@@ -357,7 +358,7 @@ curl -s -D- -o /dev/null -X OPTIONS \
 - **`ROLLBACK.md`** — the current and previous image tags and revision names.
   It went two deploys stale once and would have sent someone rolling back to
   the wrong thing during an outage.
-- **`whats_next.txt`** — what shipped, and anything the feature needs from the
+- **`shipped.md`** — what shipped, and anything the feature needs from the
   user before it does anything (a setting to fill in, estimates to add).
 
 ### 17. Say whether the API can be rolled back on its own
@@ -395,7 +396,7 @@ Check it while the code is in front of you and record the answer.
 > WHERE table_schema='public' AND table_type='BASE TABLE' ORDER BY table_name;
 > ```
 >
-> Name the orphaned table in `whats_next.txt` with its row count, and say whether
+> Name the orphaned table in `next.md` with its row count, and say whether
 > it is kept for the data or waiting to be dropped. Either is fine; not knowing
 > which is not.
 
@@ -441,6 +442,6 @@ reasoning and the measurements are in `deployment.md` under *Housekeeping*.
 10. `gcloud run deploy --port=8000`, confirm `latestRevision: True`.
 11. Push `main`, verify the frontend **by content**, and by chunk — the bundle is
     split, and a 200 on a missing asset is Pages serving `index.html`.
-12. Update `ROLLBACK.md` and `whats_next.txt`.
+12. Update `ROLLBACK.md` and `shipped.md` (and `next.md`, if an entry is now closed).
 13. If you removed a feature, name the table it orphaned and say what happens to it.
 14. `docker builder prune -f` — **local only**, never the registry. (`image prune` is a no-op here.)

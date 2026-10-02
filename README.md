@@ -19,7 +19,7 @@ The aim is a tool good enough to live in every day, not one to demonstrate — b
 > **`Ideas/` is the live record, and it is what to read rather than this file.**
 > [`Ideas/design/`](Ideas/design/README.md) carries how each module works and *why*,
 > which is what stops a settled decision being reversed for looking inconvenient;
-> [`whats_next.txt`](Ideas/whats_next.txt) holds what has shipped and what is next;
+> [`shipped.md`](Ideas/shipped.md) holds what has shipped and [`next.md`](Ideas/next.md) what is next;
 > [`shipping.md`](Ideas/shipping.md) is the loop for building and deploying a change;
 > [`ROLLBACK.md`](Ideas/ROLLBACK.md) is for when something is broken; and
 > [`audit.md`](Ideas/audit.md) is the defect record — 56 findings, one still open.
@@ -676,7 +676,8 @@ and deleted:
 |---|---|
 | `Ideas/design/` | **Start here.** One note per module plus an overview: how each works and why |
 | `Ideas/session-handoff.md` | Where the project is right now — branch, live URLs, data, what is left |
-| `Ideas/whats_next.txt` | The feature backlog per module, and the order to build it in |
+| `Ideas/next.md` | The feature backlog per module, and the order to build it in |
+| `Ideas/shipped.md` | What is already built and deployed — check before proposing anything |
 | `Ideas/audit.md` | Every known defect, tiered by severity, with what was verified how |
 | `Ideas/deployment.md` | The 39-step deploy runbook, all of it done bar the last two |
 | `Ideas/plan-a-decisions.md` | Why each deployment choice was made, and what would change its mind |

@@ -14,7 +14,8 @@ record rather than live work, it says so in its own first lines.
 |---|---|
 | Pick the project up cold | [session-handoff.md](session-handoff.md) |
 | Understand how a module works, and why | [design/](design/README.md) |
-| Know what to build next | [whats_next.txt](whats_next.txt) |
+| Know what to build next | [next.md](next.md) |
+| Check whether something is already built | [shipped.md](shipped.md) |
 | **Build a feature and put it live** | **[shipping.md](shipping.md)** |
 | Fix something that is broken **right now** | [ROLLBACK.md](ROLLBACK.md) |
 
@@ -33,7 +34,7 @@ change, not afterwards.**
 branch, live URLs, production row counts, and the three things genuinely left.
 State only; the reasoning lives in `design/`.
 
-**[whats_next.txt](whats_next.txt)** — what has shipped (do not re-propose it),
+**[next.md](next.md)** / **[shipped.md](shipped.md)** — what has shipped (do not re-propose it),
 what is left per module, and the accumulated hard-won notes. The longest file
 here and the one that grows.
 
@@ -70,10 +71,12 @@ words. Six lines written before any of this existed. Kept exactly as it was.
 `to_do.txt`, `fix.txt` and `features.txt` are gone. Each was superseded rather
 than abandoned: `fix.txt`'s findings were re-verified into `audit.md` (including
 seven that did not survive checking, recorded so they are not raised again),
-`to_do.txt` became `whats_next.txt`, and `features.txt` was a day-one module tree
+`to_do.txt` became `whats_next.txt` and then split into `next.md` and
+`shipped.md` on 2026-10-02, once the shipped half had grown past the open half
+and was being scrolled through to reach it. `features.txt` was a day-one module tree
 that had stopped being true — it never listed Jobs, a whole shipped module. Its
 one surviving idea, the unbuilt Notes / Goals / Study Analytics, is recorded at
-the end of `whats_next.txt`, and the tree itself is still quoted in the root
+the end of `next.md`, and the tree itself is still quoted in the root
 `README.md`.
 
 A superseded document is worse than no document: it is read with the same trust

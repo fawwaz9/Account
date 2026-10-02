@@ -1081,7 +1081,7 @@ decided in the client or in a schema. Severity is Low unless it says otherwise.
     >   with the app. Each needs its consumer built first, and three of them —
     >   `week_start`, `date_format`, `time_format` — mean changing shared date
     >   utilities the recurrence engine depends on. `theme` needs a light palette
-    >   that does not exist; see `whats_next.txt` for what that actually costs.
+    >   that does not exist; see `next.md` for what that actually costs.
     >
     > So nothing here is pending. If one of those five is wanted, it is a feature
     > with a consumer to build, not a field to add to a form.
