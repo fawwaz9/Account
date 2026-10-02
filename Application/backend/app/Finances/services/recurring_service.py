@@ -55,7 +55,7 @@ from app.Finances.services.transaction_service import (
     owned_account,
     owned_category,
 )
-from app.shared.dates import today
+from app.shared.dates import user_today
 
 #: How far past a missed payment the catch-up still reaches. A rule left alone
 #: over a summer should not write four months of rent the moment the app opens
@@ -80,7 +80,9 @@ def attach_rule(db: Session, instruction: RecurringTransactionModel) -> Recurrin
     # so Pydantic does the conversion on the way out.
     written = written_dates(db, instruction.id)
     instruction.last_run_on = max(written) if written else None
-    instruction.next_due_on = next_due(instruction, written)
+    instruction.next_due_on = next_due(
+        instruction, written, user_today(db, instruction.user_id)
+    )
     return instruction
 
 
@@ -100,9 +102,15 @@ def written_dates(db: Session, recurring_id: uuid.UUID) -> set[date]:
     return {row.occurred_on for row in rows}
 
 
-def next_due(instruction: RecurringTransactionModel, written: set[date]) -> date | None:
-    """The first date on or after today that has not been charged yet."""
-    horizon = today()
+def next_due(
+    instruction: RecurringTransactionModel, written: set[date], horizon: date
+) -> date | None:
+    """The first date on or after `horizon` that has not been charged yet.
+
+    Told the day rather than asking for it, because this holds no session: the
+    caller has the owner and resolves their local today. It used to call a
+    server-clock `today()`, which put the horizon a day out for part of every day.
+    """
     upcoming = occurrences(
         rule_of(instruction),
         instruction.starts_on,
@@ -352,7 +360,7 @@ def run_due(db: Session, user_id: uuid.UUID, through: date | None = None) -> Rec
     if not user_exists(db, user_id):
         return None
 
-    horizon = through or today()
+    horizon = through or user_today(db, user_id)
     rules = (
         db.query(RecurringTransactionModel)
         .filter(

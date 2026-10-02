@@ -27,6 +27,7 @@ from app.Finances.schemas.account import (
 )
 from app.Finances.services.budget_service import month_bounds
 from app.Finances.utils.returns import latest_reading, month_gain, return_percent
+from app.shared.dates import user_today
 
 
 def seed_default_accounts(db: Session, user_id: uuid.UUID) -> list[AccountModel]:
@@ -176,15 +177,20 @@ def ledger_balance_as_of(
     return round(total or 0.0, 2)
 
 
-def measured_on(month) -> "date":
+def measured_on(month, today: date) -> date:
     """The day a month's reading is measured against.
 
-    The last day of the month, or today if the month has not finished -- you
+    The last day of the month, or `today` if the month has not finished -- you
     cannot measure August against the 31st on the 14th, and reaching for the end
     of an unfinished month would count deposits that have not happened.
+
+    Told the day rather than asking for it. It used to call `date.today()`, which
+    is the server's clock: between six in the evening and midnight in Regina that
+    is already tomorrow, so a reading recorded for the current month was measured
+    against a ledger that included one more day than the student had lived.
     """
     _, month_end = month_bounds(month)
-    return min(month_end, date.today())
+    return min(month_end, today)
 
 
 def readings_by_account(
@@ -686,7 +692,9 @@ def set_month_value(
         difference = round(data.difference_amount, 2)
         market = None
     else:
-        ledger = ledger_balance_as_of(db, user_id, account_id, measured_on(month))
+        ledger = ledger_balance_as_of(
+            db, user_id, account_id, measured_on(month, user_today(db, user_id))
+        )
         difference = round(data.market_value - ledger, 2)
         market = round(data.market_value, 2)
 

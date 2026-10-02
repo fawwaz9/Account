@@ -357,13 +357,26 @@ def test_an_unknown_account_is_not_found_rather_than_an_error(db, user):
 # --- what the month is measured against --------------------------------------
 
 def test_a_past_month_is_measured_against_its_own_last_day():
-    assert measured_on(MARCH) == date(2026, 3, 31)
+    assert measured_on(MARCH, today=date(2026, 10, 2)) == date(2026, 3, 31)
 
 
 def test_an_unfinished_month_is_measured_against_today():
     """You cannot measure a month against its 31st on the 14th, and reaching for
     the end of an unfinished month would count deposits that have not happened."""
-    assert measured_on(date(2099, 1, 1)) == date.today()
+    assert measured_on(date(2026, 10, 1), today=date(2026, 10, 14)) == date(2026, 10, 14)
+
+
+def test_the_day_is_passed_in_rather_than_read_from_the_server_clock():
+    """It used to call `date.today()`, which is UTC in production -- so between
+    six in the evening and midnight in Regina a reading for the current month was
+    measured against a ledger holding one more day than the student had lived.
+
+    Passing the day is what makes that the caller's problem, and the callers
+    resolve it through the timezone preference.
+    """
+    # The student's 1st, while UTC has already rolled to the 2nd.
+    assert measured_on(date(2026, 10, 1), today=date(2026, 10, 1)) == date(2026, 10, 1)
+    assert measured_on(date(2026, 10, 1), today=date(2026, 10, 2)) == date(2026, 10, 2)
 
 
 def test_a_past_month_ignores_deposits_made_after_it(db, user):

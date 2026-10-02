@@ -57,7 +57,7 @@ from app.Jobs.schemas.job import (
     ShiftScheduleCreate,
 )
 from app.Tasks.services.task_service import user_exists
-from app.shared.dates import today
+from app.shared.dates import user_today
 
 SHIFT = EventKind.SHIFT.value
 INCOME = TransactionKind.INCOME.value
@@ -82,7 +82,7 @@ def owned_job(db: Session, user_id: uuid.UUID, job_id: uuid.UUID) -> JobModel | 
     )
 
 
-def next_pay_on(job: JobModel, on_day: date | None = None) -> date | None:
+def next_pay_on(job: JobModel, on_day: date) -> date | None:
     """The next date this job's pay rule produces, or None without a rule.
 
     Read from the rule rather than stored, like every other repeat in the app.
@@ -92,7 +92,7 @@ def next_pay_on(job: JobModel, on_day: date | None = None) -> date | None:
     if job.pay_starts_on is None or not job.recur_freq:
         return None
 
-    anchor = on_day or today()
+    anchor = on_day
     rule = Rule(
         freq=job.recur_freq,
         interval=job.recur_interval or 1,
@@ -106,7 +106,7 @@ def next_pay_on(job: JobModel, on_day: date | None = None) -> date | None:
     return ahead[0] if ahead else None
 
 
-def as_schema(job: JobModel, on_day: date | None = None) -> Job:
+def as_schema(job: JobModel, on_day: date) -> Job:
     return Job(
         id=job.id,
         name=job.name,
@@ -138,12 +138,15 @@ def list_jobs(db: Session, user_id: uuid.UUID, include_archived: bool = False):
     # Current jobs first, then by the order the student put them in: a job you
     # have left is history and should not sit above one you turn up to.
     jobs.sort(key=lambda job: (job.ended_on is not None, job.position, job.name))
-    return [as_schema(job) for job in jobs]
+    # Resolved once, not per row: this is a primary-key lookup and a
+    # comprehension over it would be an N+1.
+    on_day = user_today(db, user_id)
+    return [as_schema(job, on_day) for job in jobs]
 
 
 def get_job(db: Session, user_id: uuid.UUID, job_id: uuid.UUID):
     job = owned_job(db, user_id, job_id)
-    return None if job is None else as_schema(job)
+    return None if job is None else as_schema(job, user_today(db, user_id))
 
 
 def create_job(db: Session, user_id: uuid.UUID, data: JobCreate):
@@ -176,7 +179,7 @@ def create_job(db: Session, user_id: uuid.UUID, data: JobCreate):
     db.add(job)
     db.commit()
     db.refresh(job)
-    return as_schema(job)
+    return as_schema(job, user_today(db, user_id))
 
 
 def check_pay_fields(job: JobModel) -> None:
@@ -222,7 +225,7 @@ def update_job(db: Session, user_id: uuid.UUID, job_id: uuid.UUID, data: JobUpda
 
     db.commit()
     db.refresh(job)
-    return as_schema(job)
+    return as_schema(job, user_today(db, user_id))
 
 
 def delete_job(db: Session, user_id: uuid.UUID, job_id: uuid.UUID):
@@ -236,7 +239,7 @@ def delete_job(db: Session, user_id: uuid.UUID, job_id: uuid.UUID):
     if job is None:
         return None
 
-    removed = as_schema(job)
+    removed = as_schema(job, user_today(db, user_id))
 
     db.query(EventModel).filter(
         EventModel.user_id == user_id, EventModel.job_id == job_id
@@ -477,7 +480,7 @@ def list_shifts(
 
     jobs = {job.id: job for job in db.query(JobModel).filter(JobModel.user_id == user_id)}
     records = records_by_date(db, user_id, start, end)
-    anchor = on_day or today()
+    anchor = on_day or user_today(db, user_id)
 
     shifts: list[ShiftOccurrence] = []
     for item in expanded:

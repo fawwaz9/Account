@@ -364,3 +364,70 @@ def test_future_days_are_untouched_by_the_clock(db, user):
     on_tomorrow = [b for b in found if b.on_date == tomorrow]
 
     assert [(b.starts_at, b.ends_at) for b in on_tomorrow] == [(at(8), at(22))]
+
+
+# ------------------------------------------- the clock the default actually uses --
+
+#: Every test above injects `now=`, which is precisely why the UTC bug survived to
+#: production: the default was the broken line and nothing exercised it. These do.
+
+def test_free_blocks_defaults_to_the_students_clock_not_the_servers(db, user, monkeypatch):
+    """`now` unset must resolve through the timezone preference.
+
+    It used to be `datetime.now()`, and on Cloud Run that is UTC -- the container
+    sets no TZ. The window's hours came from the student's preferences all along,
+    so only "now" was the server's, which is what made the result read as
+    inconsistent rather than simply wrong.
+    """
+    asked = {}
+
+    def fake_user_now(session, user_id, at=None):
+        asked["user_id"] = user_id
+        return BEFORE
+
+    monkeypatch.setattr(
+        "app.Calendar.services.load_service.user_now", fake_user_now
+    )
+
+    free_blocks(db, user.id, MON, MON)
+
+    assert asked.get("user_id") == user.id, "the default did not ask for this student's clock"
+
+
+def test_crunch_defaults_to_the_students_day(db, user, monkeypatch):
+    """Same fault, same file: `date.today()` decided which week was current, so a
+    Saturday evening in Regina marked next week as current."""
+    asked = {}
+
+    def fake_user_today(session, user_id, at=None):
+        asked["user_id"] = user_id
+        return MON
+
+    monkeypatch.setattr(
+        "app.Calendar.services.load_service.user_today", fake_user_today
+    )
+
+    crunch(db, user.id, MON, MON)
+
+    assert asked.get("user_id") == user.id
+
+
+def test_the_evening_rollover_that_hid_free_time_every_evening(db, user):
+    """The bug as the owner met it, written as the two answers side by side.
+
+    At 21:00 on Monday in Regina it is already 03:00 on TUESDAY in UTC. The client
+    asks about Monday, so with a UTC clock `day < today` is true and Monday is
+    skipped entirely as already past -- no free time for the rest of the evening,
+    every evening after six.
+
+    With the student's own clock Monday is still today, and what is left of it is
+    offered. The study window ends at 22:00, so there is an hour.
+    """
+    local_evening = datetime.datetime(2026, 9, 14, 21, 0)   # Monday, in Regina
+    utc_equivalent = datetime.datetime(2026, 9, 15, 3, 0)   # the same instant, UTC
+
+    on_their_clock = blocks_on(db, user, MON, now=local_evening)
+    on_the_servers = blocks_on(db, user, MON, now=utc_equivalent)
+
+    assert on_their_clock == [(at(21, 0), at(22, 0), 60)]
+    assert on_the_servers == [], "the UTC answer: Monday read as already gone"

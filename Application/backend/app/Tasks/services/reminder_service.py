@@ -25,19 +25,9 @@ from sqlalchemy.orm import Session
 
 from app._database.models import CourseModel, ReminderModel, UserModel, utc_now
 from app.Tasks.schemas.reminder import Reminder, ReminderCreate, ReminderUpdate
-from app.Tasks.services.timing_service import zone_of
-
-
-def local_now(user: UserModel, at: datetime | None = None) -> datetime:
-    """Now, on the student's own clock, naive so it compares with `remind_at`.
-
-    `at` is an offset-aware instant to resolve instead of the real now, and
-    exists so this is testable at a fixed moment. Without it a test can only
-    express times relative to the same function it is checking, which makes it
-    agree with any clock the function chooses -- including a wrong one.
-    """
-    moment = at or datetime.now(timezone.utc)
-    return moment.astimezone(zone_of(user)).replace(tzinfo=None)
+# Both live in `shared.dates` now: the same rule anchors free time, the
+# finance months and the jobs figures, and three copies would drift.
+from app.shared.dates import local_now, zone_of
 
 
 def owned_user(db: Session, user_id: uuid.UUID) -> UserModel | None:

@@ -32,6 +32,7 @@ from app.Finances.services.account_service import (
     readings_for_account,
 )
 from app.Finances.services.budget_service import month_bounds
+from app.shared.dates import user_today
 from app.Finances.utils.limits import effective_category_limit, planned_for_account
 from app.Finances.schemas.transaction import TransactionKind
 
@@ -234,7 +235,7 @@ def get_account_activity(
         # subtracts a typed market value from this, and using today's balance for
         # a past month would subtract every deposit made since.
         ledger_at_month = ledger_balance_as_of(
-            db, user_id, account_id, measured_on(start)
+            db, user_id, account_id, measured_on(start, user_today(db, user_id))
         )
         investment_return = build_investment_return(
             readings, ledger_at_month, for_month=start

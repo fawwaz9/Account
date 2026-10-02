@@ -33,7 +33,7 @@ from app.Finances.services.sinking_service import unfunded_total
 from app.Jobs.services.earnings_service import upcoming_pay
 from app.Jobs.services.job_service import next_pay_on
 from app.Tasks.services.task_service import user_exists
-from app.shared.dates import today
+from app.shared.dates import user_today
 from app.shared.money import money
 
 #: Account kinds whose balance is money you can spend.
@@ -117,7 +117,7 @@ def safe_to_spend(db: Session, user_id: uuid.UUID, on_day: date | None = None):
     if not user_exists(db, user_id):
         return None
 
-    anchor = on_day or today()
+    anchor = on_day or user_today(db, user_id)
     ends_on, until_payday = window(db, user_id, anchor)
     days = max(1, (ends_on - anchor).days + 1)
 

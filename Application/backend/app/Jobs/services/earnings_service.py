@@ -34,7 +34,7 @@ from app.Jobs.schemas.earnings import (
 )
 from app.Jobs.schemas.job import JobKind
 from app.Jobs.services.job_service import list_shifts, next_pay_on
-from app.shared.dates import today
+from app.shared.dates import user_today
 from app.shared.money import money
 
 
@@ -296,7 +296,7 @@ def earnings_summary(db: Session, user_id: uuid.UUID, on_day: date | None = None
     if user is None:
         return None
 
-    anchor = on_day or today()
+    anchor = on_day or user_today(db, user_id)
     jobs = db.query(JobModel).filter(JobModel.user_id == user_id).all()
 
     week_start = anchor - timedelta(days=6)

@@ -39,7 +39,7 @@ from app.Tasks.schemas.recurring_task import (
     RecurringTaskRun,
     RecurringTaskUpdate,
 )
-from app.shared.dates import today
+from app.shared.dates import user_today
 
 #: How far ahead occurrences are written. Wide enough to fill the calendar's
 #: month view and the task page's fortnight, so neither has to ask for more;
@@ -109,7 +109,8 @@ def attach_rule(db: Session, rule: RecurringTaskModel, codes: dict[uuid.UUID, st
 
 def next_due(db: Session, rule: RecurringTaskModel) -> date | None:
     """The first occurrence from today on that is not already done."""
-    horizon = today()
+    # The rule carries its owner, so the horizon is that student's today.
+    horizon = user_today(db, rule.user_id)
     done = {
         row.due_date
         for row in db.query(TaskModel.due_date)
@@ -213,7 +214,7 @@ def update_rule(db: Session, user_id: uuid.UUID, rule_id: uuid.UUID, data: Recur
     db.commit()
     db.refresh(rule)
     resync_occurrences(db, rule)
-    materialise(db, user_id, rule, since=today())
+    materialise(db, user_id, rule, since=user_today(db, user_id))
     db.commit()
     db.refresh(rule)
     return attach_rule(db, rule)
@@ -247,7 +248,7 @@ def resync_occurrences(db: Session, rule: RecurringTaskModel) -> None:
     a tweak to a future one is overwritten here. That is the better trade
     against every edit appearing to do nothing.
     """
-    horizon = today()
+    horizon = user_today(db, rule.user_id)
     window_end = horizon + timedelta(days=MATERIALISE_AHEAD_DAYS)
     wanted = set(
         occurrences(
@@ -374,7 +375,7 @@ def materialise(
     if not rule.active:
         return []
 
-    horizon = today()
+    horizon = user_today(db, user_id)
     window_start = max(rule.starts_on, horizon - timedelta(days=MATERIALISE_BEHIND_DAYS))
     if since is not None:
         window_start = max(window_start, since)

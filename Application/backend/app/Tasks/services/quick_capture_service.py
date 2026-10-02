@@ -15,13 +15,14 @@ from app.Tasks.schemas.quick_capture import QuickCapturePreview
 from app.Tasks.schemas.task import MAX_ESTIMATED_MINUTES, TaskCreate
 from app.Tasks.services.task_service import create_task, user_exists
 from app.shared.tokenizer import parse
+from app.shared.dates import user_today
 
 def build_preview(db: Session, user_id: uuid.UUID, text: str) -> QuickCapturePreview | None:
     """Read one line and say what it would create."""
     if not user_exists(db, user_id):
         return None
 
-    parsed = parse(text)
+    parsed = parse(text, user_today(db, user_id))
     title = parsed.title
     course = None
     unmatched = None

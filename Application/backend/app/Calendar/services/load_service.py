@@ -21,6 +21,7 @@ from app.Calendar.schemas.load import CrunchStrip, CrunchWeek, FreeBlock, WeekLo
 from app.Calendar.services.event_service import list_occurrences
 from app.Tasks.services.task_service import list_tasks
 from app.Users.services.user_service import get_preferences
+from app.shared.dates import user_now, user_today
 
 #: How heavily each kind of dated thing lands on a week.
 #:
@@ -106,7 +107,13 @@ def free_blocks(
     if occurrences is None:
         return None
 
-    now = now or datetime.now()
+    # The student's clock, not the server's. This line was `datetime.now()`,
+    # which on Cloud Run is UTC -- so after 18:00 in Regina `today` was
+    # already tomorrow and the day the client asked about was skipped as past,
+    # leaving no free time for the rest of every evening. The window's hours
+    # came from preferences all along, which is what made it read as
+    # inconsistent rather than simply wrong.
+    now = now or user_now(db, user_id)
     today = now.date()
     day_start, day_end, floor = study_window(db, user_id)
     blocks: list[FreeBlock] = []
@@ -210,7 +217,7 @@ def crunch(
     if occurrences is None:
         return None
 
-    today = today or date.today()
+    today = today or user_today(db, user_id)
     weeks: dict[date, CrunchWeek] = {}
 
     cursor = week_of(window_start)

@@ -110,9 +110,15 @@ class Parsed:
         return bool(self.matched)
 
 
-def parse(text: str, today: date | None = None) -> Parsed:
-    """Pull every token out of one line, most specific first."""
-    now = today or date.today()
+def parse(text: str, today: date) -> Parsed:
+    """Pull every token out of one line, most specific first.
+
+    Told the day rather than asking for it. Every relative word here -- "today",
+    "tomorrow", "friday" -- is resolved against it, and the server's clock is UTC,
+    so typing "tomorrow" at nine in the evening in Regina used to land two days
+    out. The caller holds the student and resolves their local today.
+    """
+    now = today
     result = Parsed(text=text)
 
     # Spans already claimed. A later, looser pattern must not re-read digits a

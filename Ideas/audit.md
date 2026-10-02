@@ -493,6 +493,7 @@ Everything else in this document is closed.
 | 65 | Low | A11y | The study-hours start input is labelled "Study hours", the end one "Study hours end" |
 | 66 | Medium | Database | A rolled-back feature left `category_budgets`, and two rows, in production |
 | 67 | Low | CSS | Two dead Tailwind utility rules are emitted from English in code comments |
+| 68 | **High** | Correctness | Every figure anchored to "today" used the server's UTC clock, not the student's |
 
 Nothing in this list is a style opinion. Items I checked and found **healthy** are
 recorded at the end so we don't re-audit them.
@@ -1201,6 +1202,42 @@ and you only see it by counting both.
     unexplained selectors in it makes the order diff noisier, which is the check
     that catches real cascade regressions. The fix is to reword the comments that
     feed them, found by diffing emitted selectors against classes actually used.
+
+68. **High. "Today" meant UTC, not the student's day — CLOSED 2026-10-02.**
+    Reported by the owner, who noticed free time was wrong and guessed the cause
+    exactly: *"I think it is using utc"*.
+
+    `free_blocks` called `datetime.now()` and `crunch` called `date.today()`. The
+    Cloud Run container sets no `TZ`, so both were UTC — verified by running the
+    deployed image, where `time.tzname` is `('UTC', 'UTC')` and `datetime.now()`
+    equals `utcnow()`. The *study window's hours* came from
+    `preferences.study_day_start`/`_end` all along, so only "now" was the server's,
+    which is what made the output read as inconsistent rather than simply wrong.
+
+    **For `America/Regina` (UTC−6, no DST) the effect was severe.** At 14:00 local
+    the server thought 20:00 and clipped the afternoon away. From **18:00 local
+    onward UTC had already rolled to tomorrow**, so the day the client asked about
+    failed the `if day < today` test and was skipped entirely — no free time for
+    the rest of every evening, every evening.
+
+    **Twenty-five call sites, not two.** A scan found the same naive clock
+    throughout: `shared/dates.today()` itself and its nineteen callers across
+    Tasks, Finances and Jobs, plus the omnibox, the quick-capture parser (so typing
+    "tomorrow" at 9pm landed two days out), tuition, the two finance route month
+    defaults, and `measured_on`, which had been added the previous day by this same
+    work. All were converted.
+
+    **Why the tests did not catch it, which is the transferable part.** Every test
+    in `test_week_load.py` passes `now=` explicitly, so the injected path was
+    thoroughly covered and *the default — the broken line — had no test at all*. A
+    seam added for testability became the reason the production path went
+    unexercised. There are now tests that call the default and assert it resolves
+    through the preference, plus one that states the two answers side by side at
+    the rollover instant.
+
+    Closed by making `shared/dates` the one timezone-aware clock and **deleting**
+    the naive `today()` rather than deprecating it, so the mistake is no longer one
+    import away. Four mutations confirmed the guards fail.
 
 ---
 

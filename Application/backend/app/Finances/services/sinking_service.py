@@ -42,7 +42,7 @@ from app.Finances.schemas.sinking import (
 )
 from app.Finances.schemas.transaction import TransactionKind
 from app.Tasks.services.task_service import user_exists
-from app.shared.dates import today
+from app.shared.dates import user_today
 from app.shared.money import money
 
 
@@ -127,7 +127,7 @@ def list_funds(
     if not include_archived:
         query = query.filter(SinkingFundModel.archived.is_(False))
 
-    anchor = on_day or today()
+    anchor = on_day or user_today(db, user_id)
     funds = query.order_by(SinkingFundModel.due_on).all()
     return [as_schema(fund, anchor) for fund in funds]
 
@@ -171,7 +171,7 @@ def create_fund(
     db.add(fund)
     db.commit()
     db.refresh(fund)
-    return as_schema(fund, on_day or today())
+    return as_schema(fund, on_day or user_today(db, user_id))
 
 
 def update_fund(
@@ -194,7 +194,7 @@ def update_fund(
     db.refresh(fund)
     # Nothing recalculates here: raising the target or moving the date changes
     # per_month on the next read, which is the whole point of not storing it.
-    return as_schema(fund, on_day or today())
+    return as_schema(fund, on_day or user_today(db, user_id))
 
 
 def transfer_rows(
@@ -239,7 +239,7 @@ def contribute(
     if fund is None:
         return None
 
-    anchor = data.occurred_on or today()
+    anchor = data.occurred_on or user_today(db, user_id)
     for_month = first_of(anchor)
 
     already = (
@@ -319,7 +319,7 @@ def undo_contribution(
     db.delete(row)
     db.commit()
     db.refresh(fund)
-    return as_schema(fund, on_day or today())
+    return as_schema(fund, on_day or user_today(db, user_id))
 
 
 def delete_fund(
@@ -335,7 +335,7 @@ def delete_fund(
     if fund is None:
         return None
 
-    removed = as_schema(fund, on_day or today())
+    removed = as_schema(fund, on_day or user_today(db, user_id))
     for contribution in list(fund.contributions or []):
         clear_transfer(db, user_id, contribution.group_id)
 

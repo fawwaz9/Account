@@ -41,6 +41,7 @@ from app.Finances.services.transaction_service import (
     owned_account,
 )
 from app.Grades.utils.terms import CURRENT, calendar_year_of, term_bucket, term_dates
+from app.shared.dates import user_today
 
 
 def current_term(db: Session, user_id: uuid.UUID) -> tuple[int | None, str | None]:
@@ -443,7 +444,7 @@ def term_budget(db: Session, user_id: uuid.UUID, today: date | None = None) -> T
     A calendar month is the wrong unit for a student: tuition lands once,
     textbooks land in the first fortnight, and neither is a monthly rhythm.
     """
-    today = today or date.today()
+    today = today or user_today(db, user_id)
     courses = billable_courses(db, user_id)
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
     first_year = user.first_year_calendar_year if user else None

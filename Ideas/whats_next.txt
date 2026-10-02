@@ -1443,6 +1443,36 @@ The production database, measured 2026-09-28
 - The per-user split was not re-measured. Accounts rising by 12 is consistent
   with two more people signing in and having six each seeded on first read.
 
+"Today" meant UTC, not the student's day -- FIXED 2026-10-02
+The owner noticed free time was wrong and named the cause: "I think it is using
+utc". It was. `free_blocks` used `datetime.now()` and `crunch` used
+`date.today()`, and the Cloud Run container sets no TZ -- confirmed by running the
+deployed image, where datetime.now() == utcnow().
+
+For America/Regina (UTC-6) that meant: at 14:00 local the server thought 20:00 and
+clipped the afternoon off; from 18:00 local UTC was already tomorrow, so the day
+the client asked about was skipped as past and there was NO free time after six in
+the evening, ever. The study window's hours came from preferences the whole time,
+which is why it looked inconsistent rather than broken.
+
+The scan found 25 naive clocks, not 2 -- `shared/dates.today()` and its nineteen
+callers across Tasks, Finances and Jobs, the omnibox, the quick-capture parser,
+tuition, two finance route defaults, and `measured_on` from the day before. All
+converted. `shared/dates` is now the single timezone-aware clock and the naive
+`today()` was DELETED rather than deprecated, so the mistake is not one import
+away. Its own docstring had said "anything that starts needing a timezone comes
+through here", which turned out to be the right place all along.
+
+Five call sites held no user, so they are told the day as an argument -- the idiom
+the module already described. `measured_on`, `next_pay_on`, the tokenizer's
+`parse`, and the two rule-scoped ones read `rule.user_id`.
+
+THE LESSON WORTH KEEPING: every test in test_week_load.py injects `now=`, so the
+injected path was well covered and the DEFAULT -- the broken line -- had no test
+at all. A seam added for testability is why the production path went unexercised.
+There are now tests that call the default and assert it goes through the
+preference. Audit #68.
+
 Investment returns, asked for 2026-09-30 -- SHIPPED 2026-10-01
 Built as designed below, with three decisions taken at the start of the build and
 one scope cut. WHAT WAS BUILT: a new table `account_month_values`, one row per

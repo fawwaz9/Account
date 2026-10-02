@@ -32,7 +32,7 @@ from app.Tasks.schemas.task import (
     TaskUpdate,
 )
 from app.Users.services.user_service import get_preferences
-from app.shared.dates import today
+from app.shared.dates import user_today
 
 #: How far below target a course has to be for each band, in percentage points.
 #: Two thresholds rather than one, because "below target" covers both a course
@@ -176,10 +176,13 @@ def list_tasks(
     if not include_snoozed:
         # A snooze that has run out is simply gone: the task comes back on its
         # own, in the position its untouched due date puts it in.
+        # Resolved once, before the filter: the student's own day, so a snooze
+        # set for "tomorrow" does not expire six hours early in UTC.
+        on_day = user_today(db, user_id)
         query = query.filter(
             or_(
                 TaskModel.snoozed_until.is_(None),
-                TaskModel.snoozed_until <= today(),
+                TaskModel.snoozed_until <= on_day,
             )
         )
     if course_id is not None:
@@ -299,7 +302,7 @@ def snooze_task(
     if task is None:
         return None
 
-    if data.until <= today():
+    if data.until <= user_today(db, user_id):
         raise ValueError("Snooze until a date in the future")
     if task.done:
         raise ValueError("That task is already done")

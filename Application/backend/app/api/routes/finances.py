@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query
 
 from app._database.dependencies import DBSession
+from app.shared.dates import user_today
 from app.Auth.services.access import VerifiedUserId
 from app.Finances.schemas.account import (
     Account,
@@ -352,7 +353,9 @@ def account_activity(
     counts as money leaving an account is stated once, here and in the budget
     summary, and cannot drift between the two pages.
     """
-    activity = get_account_activity(db, user_id, account_id, month or date.today())
+    activity = get_account_activity(
+        db, user_id, account_id, month or user_today(db, user_id)
+    )
     if activity is None:
         raise HTTPException(status_code=404, detail="Account not found")
 
@@ -631,7 +634,7 @@ def upsert_account_category_limit(
 @router.get("/{user_id}/budget-summary", response_model=BudgetSummary, responses=responses["user_404"])
 def budget_summary(user_id: VerifiedUserId, db: DBSession, month: date | None = None):
     """Planned against actual for a month, per account and per category."""
-    summary = get_budget_summary(db, user_id, month or date.today())
+    summary = get_budget_summary(db, user_id, month or user_today(db, user_id))
     if summary is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
 

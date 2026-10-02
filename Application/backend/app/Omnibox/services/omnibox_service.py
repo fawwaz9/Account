@@ -33,6 +33,7 @@ from app.Tasks.schemas.task import MAX_ESTIMATED_MINUTES, TaskCreate
 from app.Grades.services.course_lookup import resolve_course
 from app.Tasks.services.task_service import create_task, user_exists
 from app.shared.tokenizer import Parsed, parse
+from app.shared.dates import user_today
 
 #: A word in the title that names the category, so "cosc121 midterm 78/100"
 #: files under Midterm rather than Other. Longest first, so "final project"
@@ -116,7 +117,7 @@ def build_preview(db: Session, user_id: uuid.UUID, text: str) -> OmniboxPreview 
     if not user_exists(db, user_id):
         return None
 
-    parsed = parse(text)
+    parsed = parse(text, user_today(db, user_id))
     kind = route(parsed)
     title = parsed.title
 
@@ -201,7 +202,7 @@ def _expense_preview(db: Session, user_id: uuid.UUID, parsed: Parsed, title: str
             reason="Add an account on the Budget page first.",
         )
 
-    when = parsed.on_date or date.today()
+    when = parsed.on_date or user_today(db, user_id)
     label = f"${parsed.amount:.2f} from {account.name}"
     if named_category:
         label += f" · {named_category.name}"
@@ -280,7 +281,7 @@ def file_it(db: Session, user_id: uuid.UUID, text: str):
             account_id=preview.account_id,
             amount=preview.amount,
             description=preview.title,
-            occurred_on=preview.on_date or date.today(),
+            occurred_on=preview.on_date or user_today(db, user_id),
             category_id=preview.category_id,
             # The course was already resolved for the preview and then thrown
             # away here, so "textbook cpsc 210 $80" filed the money but lost

@@ -11,29 +11,19 @@ See `local_completion_date`.
 
 import uuid
 from datetime import date, datetime, timedelta, timezone
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 
 from app._database.models import TaskModel, UserModel
 from app.Tasks.schemas.timing import CompletionTiming, TimingWindow
-from app.Users.services.user_service import get_preferences
-from app.shared.dates import today
+# `zone_of` lived here and now lives in `shared.dates`, because the free-time,
+# finance and jobs services all needed the same rule. Re-exported from this
+# module's name so existing importers keep working.
+from app.shared.dates import local_today, zone_of
 
 #: Length of the rolling window, in days, counting today.
 PAST_WEEK_DAYS = 7
-
-
-def zone_of(user: UserModel) -> ZoneInfo:
-    """The student's own time zone, falling back to UTC if it is unreadable.
-
-    A stored zone is validated on the way in, so a bad one here means the row
-    predates that validation. Falling back beats failing the whole page.
-    """
-    try:
-        return ZoneInfo(get_preferences(user).timezone)
-    except (ZoneInfoNotFoundError, ValueError):
-        return ZoneInfo("UTC")
 
 
 def local_completion_date(completed_at: datetime, zone: ZoneInfo) -> date:
@@ -85,7 +75,7 @@ def completion_timing(db: Session, user_id: uuid.UUID, on_day: date | None = Non
         return None
 
     zone = zone_of(user)
-    anchor = on_day or today()
+    anchor = on_day or local_today(user)
     week_start = anchor - timedelta(days=PAST_WEEK_DAYS - 1)
     month_start = anchor.replace(day=1)
     earliest = min(week_start, month_start)
