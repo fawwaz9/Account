@@ -189,3 +189,32 @@ describe("the headline figure", () => {
     expect(screen.queryByText(/paid in/)).toBeNull();
   });
 });
+
+describe("the income share line", () => {
+  it("names the share when there is one", () => {
+    show([account({ income_share: 20 })]);
+
+    expect(screen.getByText("20% of income")).toBeTruthy();
+  });
+
+  it("is absent entirely when there is no share", () => {
+    // It used to say "no income share" on every card without one, which states the
+    // absence of a setting rather than telling you anything.
+    show([account({ income_share: 0 })]);
+
+    expect(screen.queryByText(/income/)).toBeNull();
+  });
+
+  it("is absent at zero rather than rendering an empty line", () => {
+    const { container } = show([account({ income_share: 0 })]);
+
+    expect(container.querySelector(".sectorShare")).toBeNull();
+  });
+
+  it("still shows a fractional share", () => {
+    // The guard is `> 0`, not truthiness on a rounded value.
+    show([account({ income_share: 2.5 })]);
+
+    expect(screen.getByText("2.5% of income")).toBeTruthy();
+  });
+});

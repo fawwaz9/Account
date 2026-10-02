@@ -126,11 +126,15 @@ export default function Sectors({ accounts, onEdit, onAdd }: SectorsProps) {
                   {formatMoney(account.balance)} paid in
                 </span>
               )}
-              <span className="sectorShare small-text muted">
-                {account.income_share > 0
-                  ? `${account.income_share}% of income`
-                  : "no income share"}
-              </span>
+              {/* Only when there is one. "no income share" stated the absence of
+                  a setting, which is not information -- it filled a line on every
+                  card that had nothing to say, and the eye learns to skip the
+                  whole area. A card with no share simply does not mention shares. */}
+              {account.income_share > 0 && (
+                <span className="sectorShare small-text muted">
+                  {account.income_share}% of income
+                </span>
+              )}
             </Link>
 
             <button
