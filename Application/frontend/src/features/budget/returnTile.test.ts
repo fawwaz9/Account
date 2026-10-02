@@ -42,6 +42,7 @@ function activity(figure: InvestmentReturn | null): AccountActivity {
     by_category: [],
     balance_history: [],
     investment_return: figure,
+    all_time_return: figure,
     ledger_balance_at_month: 10_000,
   };
 }

@@ -262,6 +262,14 @@ class AccountActivity(BaseModel):
     #: own, or the last one taken before it, flagged as carried forward. Null for
     #: every non-investment account.
     investment_return: InvestmentReturn | None = None
+    #: The latest reading overall, measured against the **all-time** balance --
+    #: the same figure the account card shows.
+    #:
+    #: Separate from `investment_return` above because the two answer different
+    #: questions and must not be mixed. The header on this page is an all-time
+    #: figure, so deriving it from the month-scoped reading would add March's gain
+    #: to today's balance whenever someone browsed back to March.
+    all_time_return: InvestmentReturn | None = None
     #: What the ledger said at the **end of the selected month, or today if the
     #: month has not ended**. The figure the entry form subtracts a typed market
     #: value from, sent so the form shows what it is subtracting instead of

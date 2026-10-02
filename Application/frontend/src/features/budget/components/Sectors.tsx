@@ -36,6 +36,24 @@ function returnInWords(figure: InvestmentReturn, percent: number) {
   );
 }
 
+/**
+ * What the card's headline figure is: for an investment account with a reading,
+ * what the holding is worth; for everything else, the ledger balance.
+ *
+ * The ledger balance alone could not be the headline once recorded gain reached
+ * net worth, because then adding up the cards would never reach the total above
+ * them -- and this component's own comment warns that two totals on one page
+ * will sooner or later disagree in front of you. It did. This closes it.
+ *
+ * `balance` plus the level, because the level is market minus ledger by
+ * definition. There is a backend test asserting those two stay addable.
+ */
+function worthOf(account: Account) {
+  return account.investment_return
+    ? account.balance + account.investment_return.difference_amount
+    : account.balance;
+}
+
 export default function Sectors({ accounts, onEdit, onAdd }: SectorsProps) {
   return (
     <section className="sectors">
@@ -71,7 +89,7 @@ export default function Sectors({ accounts, onEdit, onAdd }: SectorsProps) {
                 <span className="sectorKindLabel">{KIND_LABELS[account.kind] ?? account.kind}</span>
               </span>
               <span className="sectorBalance">
-                {formatMoney(account.balance)}
+                {formatMoney(worthOf(account))}
                 {/* What the holding is worth over what went into it, on
                     investment accounts that have a reading. The balance alone
                     cannot say it: it is the sum of the ledger, so a holding that
@@ -99,6 +117,15 @@ export default function Sectors({ accounts, onEdit, onAdd }: SectorsProps) {
                   </>
                 )}
               </span>
+              {/* What went in, under what it is worth. Not decoration: the
+                  percentage above divides by this figure, so printing it is what
+                  lets a reader check the two against each other. Only on accounts
+                  whose headline is no longer their ledger balance. */}
+              {account.investment_return && (
+                <span className="sectorPaidIn small-text muted">
+                  {formatMoney(account.balance)} paid in
+                </span>
+              )}
               <span className="sectorShare small-text muted">
                 {account.income_share > 0
                   ? `${account.income_share}% of income`

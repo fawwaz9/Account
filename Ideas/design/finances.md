@@ -175,6 +175,20 @@ with every month recorded. `investment_gain` is returned as its own field and
 `NetWorth.tsx` prints it on its own line, because a headline that moves when
 somebody remembers to record a reading has to say so on its face.
 
+**And once the gain is in net worth, the cards have to show it too.** For one day
+they did not: the card headline stayed the ledger balance, so adding up the cards
+could not reach the total above them — the exact fault `Sectors` already carried a
+comment against. An investment card's headline is now `balance +
+difference_amount`, with the ledger figure on a `.sectorPaidIn` line beneath it,
+which is also what keeps the percentage checkable since it divides by that number.
+There is a test asserting the two stay addable and that the cards sum to net worth.
+
+The account page header matches, and takes its figure from
+`AccountActivity.all_time_return` rather than the month-scoped `investment_return`.
+That distinction is load-bearing: the header is an all-time number, so deriving it
+from the month's reading would add March's gain to today's balance as soon as the
+month picker stepped back.
+
 `debt_total` reports the same money as a positive magnitude, because "Debt
 −1,000" reads as a double negative on screen. It is a component of the figure
 above it, not a second answer, so it is rendered smaller.

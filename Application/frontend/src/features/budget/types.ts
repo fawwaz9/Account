@@ -298,6 +298,16 @@ export interface AccountActivity {
    */
   investment_return: InvestmentReturn | null;
   /**
+   * The latest reading overall, measured against the **all-time** balance -- the
+   * same figure the account card shows.
+   *
+   * Separate from `investment_return` above on purpose: this page's header is an
+   * all-time figure, and deriving it from the month-scoped reading would add
+   * March's gain to today's balance the moment anyone stepped the month picker
+   * back. Use this for the header, that one for the month's panel.
+   */
+  all_time_return: InvestmentReturn | null;
+  /**
    * What the ledger said at the end of the month shown, or today if the month has
    * not ended. The figure a typed market value is subtracted from. Not `balance`,
    * which is all-time and would be wrong for any past month.

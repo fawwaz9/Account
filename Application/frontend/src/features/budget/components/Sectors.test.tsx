@@ -116,9 +116,11 @@ describe("the return beside the balance", () => {
     expect(screen.queryByText(/on what you put in/)).toBeNull();
   });
 
-  it("shows the balance with no percentage when there is nothing to divide by", () => {
-    // Everything withdrawn after a reading: the dollar level still exists but the
-    // percentage does not, and the card must not invent one.
+  it("still shows the gain when there is no percentage to divide out", () => {
+    // Nothing paid in, but a recorded gain. The percentage is genuinely
+    // uncomputable, and an earlier version of this card gated the WHOLE figure on
+    // the percentage -- so an account up $320 showed nothing at all. The headline
+    // carries it now and the percentage is simply absent.
     show([
       account({
         balance: 0,
@@ -127,14 +129,63 @@ describe("the return beside the balance", () => {
     ]);
 
     expect(screen.queryByText(/%\)/)).toBeNull();
-    expect(screen.getByText("$0.00")).toBeTruthy();
+    expect(screen.getByText("$320.00")).toBeTruthy();
+    expect(screen.getByText("$0.00 paid in")).toBeTruthy();
   });
 
-  it("still shows the balance and the kind alongside it", () => {
-    // The figure is an addition to the card, not a replacement for anything.
+  it("still shows the kind alongside the figure", () => {
     show([account()]);
 
-    expect(screen.getByText("$10,000.00")).toBeTruthy();
     expect(screen.getByText("Investment")).toBeTruthy();
+  });
+});
+
+describe("the headline figure", () => {
+  it("is what the holding is worth, not what was paid into it", () => {
+    // $10,000 in, up $320, so the card leads with $10,320. Before this the
+    // headline was the ledger balance, which meant adding up the cards could
+    // never reach the net-worth total above them -- net worth includes the gain.
+    show([account()]);
+
+    expect(screen.getByText("$10,320.00")).toBeTruthy();
+  });
+
+  it("says what was paid in underneath, so the percentage can be checked", () => {
+    // (+3.2%) is 320/10000. Without this line there is no number on the card the
+    // reader could divide to get it.
+    show([account()]);
+
+    expect(screen.getByText("$10,000.00 paid in")).toBeTruthy();
+  });
+
+  it("is lower than what was paid in when the holding is down", () => {
+    show([
+      account({
+        balance: 10_000,
+        investment_return: {
+          ...account().investment_return!,
+          difference_amount: -810,
+          return_percent: -8.1,
+        },
+      }),
+    ]);
+
+    expect(screen.getByText("$9,190.00")).toBeTruthy();
+    expect(screen.getByText("$10,000.00 paid in")).toBeTruthy();
+  });
+
+  it("is the plain balance on an account with no reading", () => {
+    show([account({ investment_return: null })]);
+
+    expect(screen.getByText("$10,000.00")).toBeTruthy();
+    expect(screen.queryByText(/paid in/)).toBeNull();
+  });
+
+  it("is the plain balance on a spending account, with no paid-in line", () => {
+    // The change must not reach accounts that have no market value at all.
+    show([account({ kind: "spending", name: "Chequing", investment_return: null })]);
+
+    expect(screen.getByText("$10,000.00")).toBeTruthy();
+    expect(screen.queryByText(/paid in/)).toBeNull();
   });
 });

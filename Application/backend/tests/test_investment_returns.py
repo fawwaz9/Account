@@ -201,6 +201,7 @@ from app.Finances.services.account_service import (
     clear_month_value,
     delete_account,
     get_account,
+    get_accounts,
     measured_on,
     net_worth,
     set_month_value,
@@ -716,3 +717,104 @@ def test_the_card_reports_no_month_movement_because_it_asked_for_no_month(db, us
     record(db, user, account, APRIL, difference_amount=625.0)
 
     assert get_account(db, user.id, account.id).investment_return.month_gain is None
+
+
+# --- the all-time figure the page header shows -------------------------------
+
+def test_the_page_carries_an_all_time_figure_matching_the_card(db, user):
+    """The header is an all-time number, so it needs the latest reading against
+    the all-time balance -- exactly what the card computes."""
+    account = invested(db, user)
+    deposit(db, user, account, 10_000.0)
+    record(db, user, account, MARCH, difference_amount=100.0)
+    record(db, user, account, MAY, difference_amount=500.0)
+
+    activity = get_account_activity(db, user.id, account.id, MAY)
+    card = get_account(db, user.id, account.id)
+
+    assert activity.all_time_return.difference_amount == card.investment_return.difference_amount
+    assert activity.all_time_return.return_percent == card.investment_return.return_percent
+    assert activity.all_time_return.as_of == card.investment_return.as_of
+
+
+def test_the_all_time_figure_does_not_move_with_the_month_picker(db, user):
+    """The bug this field exists to prevent.
+
+    Browsing back to March must not restate what the holding is worth today. The
+    month-scoped figure changes; the all-time one does not.
+    """
+    account = invested(db, user)
+    deposit(db, user, account, 10_000.0)
+    record(db, user, account, MARCH, difference_amount=100.0)
+    record(db, user, account, MAY, difference_amount=500.0)
+
+    march = get_account_activity(db, user.id, account.id, MARCH)
+    may = get_account_activity(db, user.id, account.id, MAY)
+
+    assert march.investment_return.difference_amount == 100.0, "March's own reading"
+    assert may.investment_return.difference_amount == 500.0, "May's own reading"
+    # The all-time figure is the same from either month.
+    assert march.all_time_return.difference_amount == 500.0
+    assert may.all_time_return.difference_amount == 500.0
+
+
+def test_the_all_time_figure_uses_the_all_time_balance(db, user):
+    """Not the month's. $15,000 is in by today, so the percentage is 500/15000."""
+    account = invested(db, user)
+    deposit(db, user, account, 10_000.0, on_date=date(2026, 1, 15))
+    deposit(db, user, account, 5_000.0, on_date=date(2026, 4, 20))
+    record(db, user, account, MARCH, difference_amount=500.0)
+
+    activity = get_account_activity(db, user.id, account.id, MARCH)
+
+    assert activity.ledger_balance_at_month == 10_000.0, "the form's denominator"
+    assert activity.all_time_return.ledger_balance == 15_000.0, "the header's denominator"
+    assert activity.all_time_return.return_percent == 3.3
+
+
+def test_market_value_is_the_balance_plus_the_all_time_level(db, user):
+    """What the card and the header now print as the headline figure. Stated as a
+    test because the client adds these two, and if they ever stopped being
+    addable the cards would silently stop summing to net worth."""
+    account = invested(db, user)
+    deposit(db, user, account, 6_893.93)
+    record(db, user, account, MARCH, market_value=7_268.27)
+
+    activity = get_account_activity(db, user.id, account.id, MARCH)
+    worth = activity.balance + activity.all_time_return.difference_amount
+
+    assert round(worth, 2) == 7_268.27
+
+
+def test_a_non_investment_account_has_no_all_time_figure(db, user):
+    spending = make_account(db, user.id, "Chequing")
+    deposit(db, user, spending, 500.0)
+
+    assert get_account_activity(db, user.id, spending.id, MARCH).all_time_return is None
+
+
+def test_the_sum_of_what_the_cards_show_equals_net_worth(db, user):
+    """The incoherence this whole change exists to close.
+
+    Net worth adds each investment account's latest gain, so the cards have to
+    show market value or the headline can never be reached by adding up what is
+    on screen -- and `Sectors` carries a comment warning about exactly that.
+    """
+    tfsa = invested(db, user, name="TFSA")
+    rrsp = invested(db, user, name="RRSP")
+    chequing = make_account(db, user.id, "Chequing")
+    deposit(db, user, tfsa, 6_000.0)
+    deposit(db, user, rrsp, 4_000.0)
+    deposit(db, user, chequing, 1_200.0)
+    record(db, user, tfsa, MARCH, difference_amount=400.0)
+    record(db, user, rrsp, MARCH, difference_amount=-150.0)
+
+    cards = get_accounts(db, user.id)
+    on_screen = sum(
+        card.balance + (card.investment_return.difference_amount
+                        if card.investment_return else 0.0)
+        for card in cards
+        if card.counts_toward_net_worth
+    )
+
+    assert round(on_screen, 2) == net_worth(db, user.id).net_worth

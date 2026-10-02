@@ -97,8 +97,27 @@ export default function AccountDetailPage() {
           <div className="accountHeader">
             <div>
               <h1 className="accountName">{activity.account_name}</h1>
-              <span className="accountBalance">{formatMoney(activity.balance)}</span>
-              <span className="small-text muted accountBalanceNote">balance today</span>
+              {/* On an investment account the headline is what the holding is
+                  worth, matching its card. The ledger balance moves to the note
+                  under it rather than disappearing -- it is what the percentage
+                  is measured against, and it is still the honest answer to "how
+                  much have I put in".
+
+                  Built from `all_time_return`, never the month's reading: this
+                  figure is all-time, and using the month's would add March's gain
+                  to today's balance as soon as the month picker stepped back. */}
+              <span className="accountBalance">
+                {formatMoney(
+                  activity.all_time_return
+                    ? activity.balance + activity.all_time_return.difference_amount
+                    : activity.balance,
+                )}
+              </span>
+              <span className="small-text muted accountBalanceNote">
+                {activity.all_time_return
+                  ? `worth today · ${formatMoney(activity.balance)} paid in`
+                  : "balance today"}
+              </span>
             </div>
 
             {/* Next to the month rather than down with the ledger: this is the

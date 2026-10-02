@@ -1468,6 +1468,27 @@ THE THREE DECISIONS, all asked and answered before building:
   `NetWorth.tsx` discloses it on its own line -- a headline that moves because
   someone remembered to record a reading has to say so on its face.
 
+AMENDED SAME DAY, and the reason is worth keeping. As first shipped, the card's
+headline stayed the LEDGER balance and the gain appeared only as the (+3.2%). The
+owner spotted within the hour that net worth had moved but the card had not --
+which meant adding up the cards could no longer reach the headline above them. That
+is precisely the fault `Sectors` already carried a comment warning about: "two
+totals on one page would sooner or later disagree in front of you". Mine did.
+
+So the headline is now what the holding is WORTH (`balance + difference_amount`),
+with a `.sectorPaidIn` line under it giving the ledger figure -- which is also what
+keeps the percentage checkable, since it divides by exactly that. The account page
+header matches, built from a new `AccountActivity.all_time_return` rather than the
+month-scoped reading: using the month's would have added March's gain to today's
+balance the moment anyone stepped the month picker back. A backend test now asserts
+the sum of what the cards show equals net worth.
+
+This also closed a flaw found while diagnosing it: the card had gated the whole
+figure on `return_percent`, so an account with nothing paid in showed a recorded
+gain of +$320 as NOTHING AT ALL -- the percentage being uncomputable took the
+dollar figure down with it. The headline now carries it and only the percentage is
+absent.
+
 CUT, deliberately, and easy to add: THE MONTH'S PERCENTAGE. The tile shows the
 month's gain in dollars only. A month percentage needs a second dated-balance
 query and a denominator the reader cannot check against anything on screen,

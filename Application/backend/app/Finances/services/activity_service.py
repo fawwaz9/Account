@@ -226,8 +226,10 @@ def get_account_activity(
     # an account stops being an investment, and the dated balance below is a
     # query no other kind of account has any use for.
     investment_return = None
+    all_time_return = None
     ledger_at_month = 0.0
     if account.kind == AccountKind.INVESTMENT.value:
+        readings = readings_for_account(db, user_id, account_id)
         # The month's own balance, not the all-time one above. The entry form
         # subtracts a typed market value from this, and using today's balance for
         # a past month would subtract every deposit made since.
@@ -235,10 +237,14 @@ def get_account_activity(
             db, user_id, account_id, measured_on(start)
         )
         investment_return = build_investment_return(
-            readings_for_account(db, user_id, account_id),
-            ledger_at_month,
-            for_month=start,
+            readings, ledger_at_month, for_month=start
         )
+        # The same figure the card shows: latest reading, all-time balance. Built
+        # from the readings already loaded, so it costs no extra query. Kept apart
+        # from the month's figure above because the page header is an all-time
+        # number -- deriving it from the month's reading would add March's gain to
+        # today's balance the moment anyone stepped the month picker back.
+        all_time_return = build_investment_return(readings, round(balance or 0.0, 2))
 
     return AccountActivity(
         account_id=account.id,
@@ -258,5 +264,6 @@ def get_account_activity(
         by_category=by_category,
         balance_history=running_balance(db, account_id),
         investment_return=investment_return,
+        all_time_return=all_time_return,
         ledger_balance_at_month=ledger_at_month,
     )

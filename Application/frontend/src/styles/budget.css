@@ -160,6 +160,10 @@
   white-space: nowrap;
 }
 
+/* Sits directly under the headline, tighter than .sectorShare below it, so the
+   pair reads as one figure and its basis rather than two separate facts. */
+.sectorPaidIn { margin-top: -2px; }
+
 .sectorShare { margin-top: 2px; }
 
 /* A debt account reads red -- it is the one card where a bigger number is
