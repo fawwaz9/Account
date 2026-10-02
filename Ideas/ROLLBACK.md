@@ -18,8 +18,8 @@ deployment on **2026-09-28**, including that traffic is on `LATEST`.
 | Database | Supabase project `kujxxairehpwhxhnkbct`, region `us-west-2`, Postgres 17.6 |
 | Backups | GitHub Actions artifacts, `Backup database` workflow, 90-day retention |
 | Secrets | Google Secret Manager: `jwt-secret`, `database-url` |
-| Current image | `…/backend:6b3dcce` — revision `account-api-00023-jzr`, serving 100%. `00022` ran the same image; `00023` only added an address to `ALLOWED_SIGNUP_EMAILS` |
-| Previous image | `…/backend:88500e6` — revision `account-api-00021-z29` |
+| Current image | `…/backend:2ee1e0e` — revision `account-api-00024-hj7`, serving 100% |
+| Previous image | `…/backend:6b3dcce` — revisions `account-api-00022-vmx` and `00023-jzr`, the latter an allowlist change on the same image |
 | GCP project | `account-504419`, registry `us-west1-docker.pkg.dev/account-504419/account` |
 | Repo | `fawwaz9/Account` — a push to `main` rebuilds the **frontend** only |
 
@@ -82,17 +82,17 @@ reference, a concurrency setting.
 > ```
 > `LATEST (currently …)` is healthy. A bare revision name means you are pinned.
 
-**It now fixes bad code too.** Nineteen image tags exist, newest first:
-`6b3dcce` (current), `88500e6`, `df1d9bd`, `147d08b`, `8f73dca`, `da6ac93`, `394cb7c`, `93c9d73`,
+**It now fixes bad code too.** Twenty image tags exist, newest first:
+`2ee1e0e` (current), `6b3dcce`, `88500e6`, `df1d9bd`, `147d08b`, `8f73dca`, `da6ac93`, `394cb7c`, `93c9d73`,
 `d635bf5`, `0224d31`, `ca86a3e`, `1ceb30f`, `e494729`, `89a7c22`, `18e3376`,
 `7c1531a`, `18205eb`, `f6f7c32` and `26e249f`. Keep at least two — do not delete the
 older tags, and do not rely on `latest`, which by definition points at whatever just
 broke.
 
-> **Only the current and previous exist locally** — `6b3dcce` and `latest` (the
-> same digest) plus `88500e6`. Everything older is cleared after each deploy, which
+> **Only the current and previous exist locally** — `2ee1e0e` and `latest` (the
+> same digest) plus `6b3dcce`. Everything older is cleared after each deploy, which
 > is the standing housekeeping rule; the registry is the rollback source and holds
-> all nineteen. `docker pull` first if you need to inspect an older one.
+> all twenty. `docker pull` first if you need to inspect an older one.
 
 > ### Rolling the API back alone now breaks the frontend
 >
@@ -228,6 +228,23 @@ broke.
 > the student ticked off, and that bug **destroys data**: it nulls
 > `completed_at` and un-archives, and a row in that state cannot be told from
 > one never completed. Roll back for something else, not for this.
+
+> ### `2ee1e0e` rolls back cleanly, and rolling back brings a real bug with it
+>
+> Deployed 2026-10-02. Every figure anchored to "today" now resolves through the
+> student's `timezone` preference instead of the server's clock, which on Cloud Run
+> is UTC. Twenty-five call sites; the naive `shared/dates.today()` was deleted.
+>
+> **No schema change, no stored data, no contract change.** Every field keeps its
+> shape; only which calendar day a figure is anchored to differs. Safe in both
+> directions against any frontend, which sends browser-local dates either way.
+>
+> **But `6b3dcce` has the bug.** Roll back and free time disappears after 18:00 in
+> Regina again, because UTC has rolled over and the day the client asked about
+> reads as already past. The quick-capture parser mis-resolves "tomorrow" in the
+> evening, and the finance month defaults can land a month early on the 1st. So
+> this is one to roll *forward* out of, not back into: if someone reports an
+> off-by-one-day figure, check which revision is serving first.
 
 > ### `6b3dcce` rolls back cleanly, but takes a figure's MEANING with it
 >
