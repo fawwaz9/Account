@@ -18,8 +18,8 @@ deployment on **2026-09-28**, including that traffic is on `LATEST`.
 | Database | Supabase project `kujxxairehpwhxhnkbct`, region `us-west-2`, Postgres 17.6 |
 | Backups | GitHub Actions artifacts, `Backup database` workflow, 90-day retention |
 | Secrets | Google Secret Manager: `jwt-secret`, `database-url` |
-| Current image | `…/backend:88500e6` — revision `account-api-00021-z29`, serving 100% |
-| Previous image | `…/backend:df1d9bd` — revision `account-api-00020-pb7` |
+| Current image | `…/backend:6b3dcce` — revision `account-api-00022-vmx`, serving 100% |
+| Previous image | `…/backend:88500e6` — revision `account-api-00021-z29` |
 | GCP project | `account-504419`, registry `us-west1-docker.pkg.dev/account-504419/account` |
 | Repo | `fawwaz9/Account` — a push to `main` rebuilds the **frontend** only |
 
@@ -82,17 +82,17 @@ reference, a concurrency setting.
 > ```
 > `LATEST (currently …)` is healthy. A bare revision name means you are pinned.
 
-**It now fixes bad code too.** Eighteen image tags exist, newest first:
-`88500e6` (current), `df1d9bd`, `147d08b`, `8f73dca`, `da6ac93`, `394cb7c`, `93c9d73`,
+**It now fixes bad code too.** Nineteen image tags exist, newest first:
+`6b3dcce` (current), `88500e6`, `df1d9bd`, `147d08b`, `8f73dca`, `da6ac93`, `394cb7c`, `93c9d73`,
 `d635bf5`, `0224d31`, `ca86a3e`, `1ceb30f`, `e494729`, `89a7c22`, `18e3376`,
 `7c1531a`, `18205eb`, `f6f7c32` and `26e249f`. Keep at least two — do not delete the
 older tags, and do not rely on `latest`, which by definition points at whatever just
 broke.
 
-> **Only the current and previous exist locally** — `88500e6` and `latest` (the
-> same digest) plus `df1d9bd`. Everything older is cleared after each deploy, which
+> **Only the current and previous exist locally** — `6b3dcce` and `latest` (the
+> same digest) plus `88500e6`. Everything older is cleared after each deploy, which
 > is the standing housekeeping rule; the registry is the rollback source and holds
-> all eighteen. `docker pull` first if you need to inspect an older one.
+> all nineteen. `docker pull` first if you need to inspect an older one.
 
 > ### Rolling the API back alone now breaks the frontend
 >
@@ -228,6 +228,30 @@ broke.
 > the student ticked off, and that bug **destroys data**: it nulls
 > `completed_at` and un-archives, and a row in that state cannot be told from
 > one never completed. Roll back for something else, not for this.
+
+> ### `6b3dcce` rolls back cleanly, but takes a figure's MEANING with it
+>
+> Deployed 2026-10-02. An investment card's headline became what the holding is
+> worth (`balance + difference_amount`) instead of the ledger balance, with the
+> ledger figure on a `.sectorPaidIn` line beneath it. The account page header
+> matches, from a new `AccountActivity.all_time_return`.
+>
+> **No schema change and no stored data involved** — both figures are derived on
+> every read from rows that already existed under `88500e6`. Roll the API and the
+> frontend back together and everything still works.
+>
+> **What changes is what "balance" means on that card.** Under `6b3dcce` the cards
+> sum to net worth. Under `88500e6` they do not, because net worth included the
+> gain and the cards did not — which is the bug `6b3dcce` exists to fix, reported
+> within an hour of `88500e6` going live. So rolling back reintroduces it. If
+> someone says the numbers do not add up, check which of these is serving before
+> looking for anything else.
+>
+> **A mixed pair degrades rather than breaks.** A new frontend against `88500e6`
+> finds no `all_time_return`, so the account page header falls back to the plain
+> ledger balance and says "balance today" — the card still shows market value
+> because it builds that from `Account.investment_return`, which `88500e6` does
+> send. The two would disagree for one account, which is ugly and not broken.
 
 > ### `88500e6` — the CODE rolls back. The TABLE and NET WORTH do not.
 >
@@ -456,7 +480,8 @@ browser console shows everything.
 > stays here is only what the top table cannot hold: the per-image notes on what
 > can and cannot be rolled back alone.
 >
-> Most recent schema change: `account_month_values`, applied 2026-10-01.
+> Most recent schema change: `account_month_values`, applied 2026-10-01. `6b3dcce`
+> added no schema of its own.
 
 ### `da6ac93` cannot have its API rolled back on its own
 
