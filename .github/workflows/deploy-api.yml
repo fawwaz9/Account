@@ -1,0 +1,258 @@
+# Deploy the API to Cloud Run, from the `ship` branch.
+#
+#   git push origin HEAD:ship    # this workflow: backup, schema gate, build, deploy, verify
+#   git push origin main         # unchanged: Cloudflare Pages builds the frontend
+#
+# Why a separate branch: the deploy order is schema -> API -> main, and pushing
+# main IS the frontend deploy. Anything triggered by that push would deploy the
+# API minutes after the new frontend is already live and calling it. Pushing
+# `ship` first deploys the API on its own, and leaves the decision to push main
+# -- the last reversible moment -- in front of a person.
+#
+# What this does NOT do, on purpose:
+#   - Apply the schema. It is DDL against production and `ensure_schema` commits
+#     table by table, so a failure needs a person reading columns back. Instead the
+#     schema gate refuses to deploy code that needs a column production lacks.
+#   - Roll back, push main, or edit ROLLBACK.md. Whether an API can roll back on
+#     its own differs per release (ROLLBACK.md); a button cannot know which.
+#
+# Auth is Workload Identity Federation: no key file exists anywhere. The deployer
+# identity accepts tokens only from refs/heads/ship of this repository.
+
+name: Deploy API
+
+on:
+  push:
+    branches: [ship]
+  workflow_dispatch:     # redeploy without a push, e.g. after a half-finished run
+
+# One deploy at a time, and never cancel one halfway through a rollout.
+concurrency:
+  group: deploy-api
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  PROJECT_ID: account-504419
+  REGION: us-west1
+  SERVICE: account-api
+  IMG: us-west1-docker.pkg.dev/account-504419/account/backend
+  API: https://account-api-210502804146.us-west1.run.app
+  FRONTEND_ORIGIN: https://account-2a7.pages.dev
+
+jobs:
+  # Read-only. Fails the deploy when this commit's models need a table or column
+  # production does not have -- the 500 the deploy order exists to prevent.
+  schema-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: Application/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: Application/backend/requirements.txt
+      - run: pip install -r requirements.txt
+      - name: Does production already have the shape this code expects
+        env:
+          # A CONNECT-only role on the SESSION pooler (5432). It can see the schema
+          # through pg_catalog and is refused every row of data. Rule with no
+          # exceptions: the app uses 6543; anything in CI uses 5432.
+          SCHEMA_CHECK_URL: ${{ secrets.SUPABASE_DB_URL_RO }}
+        run: python scripts/check_schema_conformance.py
+
+  # The nightly backup, run now. Its own plausibility gate (size, tables, rows)
+  # becomes a precondition of every deploy.
+  backup:
+    uses: ./.github/workflows/backup.yml
+    secrets:
+      SUPABASE_DB_URL_SESSION: ${{ secrets.SUPABASE_DB_URL_SESSION }}
+
+  deploy:
+    needs: [schema-gate, backup]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      id-token: write          # this job only: it is what WIF exchanges
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Commit being shipped
+        run: echo "SHA=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/210502804146/locations/global/workloadIdentityPools/github/providers/github
+          service_account: github-deployer@account-504419.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - run: gcloud auth configure-docker us-west1-docker.pkg.dev --quiet
+
+      # Before anything changes. A service pinned to a named revision reports every
+      # later deploy as a success and serves none of them (ROLLBACK.md). Positive
+      # equality on purpose: a mistyped field prints "" and exits 0.
+      - name: Traffic follows the latest revision, and what is live now
+        run: |
+          set -euo pipefail
+          LATEST=$(gcloud run services describe "$SERVICE" --region="$REGION" \
+            --format='value(spec.traffic[0].latestRevision)')
+          if [ "$LATEST" != "True" ]; then
+            echo "Traffic is pinned to a named revision; deploys would change nothing." >&2
+            echo "Fix: gcloud run services update-traffic $SERVICE --region=$REGION --to-latest" >&2
+            exit 1
+          fi
+          PREV_REV=$(gcloud run services describe "$SERVICE" --region="$REGION" \
+            --format='value(status.traffic[0].revisionName)')
+          PREV_IMG=$(gcloud run revisions describe "$PREV_REV" --region="$REGION" \
+            --format='value(spec.containers[0].image)')
+          echo "PREV_REV=$PREV_REV" >> "$GITHUB_ENV"
+          echo "PREV_IMG=$PREV_IMG" >> "$GITHUB_ENV"
+          echo "live now: $PREV_REV  $PREV_IMG"
+
+      # --platform: Cloud Run is amd64. --provenance=false: otherwise one push is
+      # an index plus attestations, and registry cleanup can delete what the tag
+      # needs. ${IMG} braced, always.
+      - name: Build
+        working-directory: Application/backend
+        run: |
+          docker build --platform linux/amd64 --provenance=false \
+            -t "${IMG}:${SHA}" -t "${IMG}:latest" .
+
+      # A build proves the layers assembled, not that the process starts.
+      # GOOGLE_CLIENT_ID has no default; without it the container exits before
+      # listening, which Cloud Run reports only as "failed to listen on the port".
+      - name: Smoke-test the container
+        run: |
+          set -euo pipefail
+          docker run -d --name api-smoke --platform linux/amd64 -p 127.0.0.1:8302:8000 \
+            -e DATABASE_URL="sqlite:////app/data/app.db" \
+            -e JWT_SECRET="$(python3 -c 'import secrets;print(secrets.token_hex(32))')" \
+            -e GOOGLE_CLIENT_ID="placeholder.apps.googleusercontent.com" \
+            -e RUN_SCHEMA_ON_STARTUP=1 "${IMG}:${SHA}"
+          body=""
+          for i in $(seq 1 30); do
+            body=$(curl -fsS http://127.0.0.1:8302/health 2>/dev/null) && break
+            sleep 1
+          done
+          # Parsed, not grepped: an unhealthy answer contains the letters "ok" too.
+          if ! echo "$body" | jq -e '.status=="ok" and .database=="ok"' >/dev/null; then
+            echo "health: ${body:-<no answer>}" >&2
+            docker logs api-smoke >&2
+            exit 1
+          fi
+          echo "health: $body"
+
+      # The image carries exactly this commit's backend source -- not a stale layer,
+      # not a .dockerignore change quietly excluding code.
+      - name: Image matches the commit
+        run: |
+          set -euo pipefail
+          IN_IMAGE=$(docker exec api-smoke sh -c \
+            "cd /app && find app -name '*.py' -type f -not -path '*/__pycache__/*' | LC_ALL=C sort | xargs sha256sum | sha256sum")
+          ON_DISK=$(cd Application/backend && \
+            find app -name '*.py' -type f -not -path '*/__pycache__/*' | LC_ALL=C sort | xargs sha256sum | sha256sum)
+          echo "image: $IN_IMAGE"
+          echo "disk:  $ON_DISK"
+          [ "$IN_IMAGE" = "$ON_DISK" ] || { echo "the image does not carry this commit's backend" >&2; exit 1; }
+          docker rm -f api-smoke >/dev/null
+
+      - name: Push
+        run: |
+          set -euo pipefail
+          docker push "${IMG}:${SHA}"
+          docker push "${IMG}:latest"
+          # The registry's copy, not the local one: a local image reads right even
+          # when what was pushed is an index.
+          MT=$(docker manifest inspect "${IMG}:${SHA}" | jq -r '.mediaType')
+          echo "pushed mediaType: $MT"
+          case "$MT" in
+            *manifest.v2+json|*image.manifest.v1+json) ;;
+            *) echo "pushed an index, not a single image manifest" >&2; exit 1 ;;
+          esac
+
+      # --image alone: env vars and secrets are preserved. --port every time: the
+      # image listens on 8000 and Cloud Run assumes 8080.
+      - name: Deploy
+        run: |
+          gcloud run deploy "$SERVICE" --region="$REGION" --port=8000 \
+            --image="${IMG}:${SHA}" --quiet
+
+      # "Deployed" and "reported deployed" are different claims. This checks the
+      # revision taking traffic is running the tag just pushed.
+      - name: The new image is what is serving
+        run: |
+          set -euo pipefail
+          LATEST=$(gcloud run services describe "$SERVICE" --region="$REGION" \
+            --format='value(spec.traffic[0].latestRevision)')
+          [ "$LATEST" = "True" ] || { echo "traffic is not following latest" >&2; exit 1; }
+          REV=$(gcloud run services describe "$SERVICE" --region="$REGION" \
+            --format='value(status.traffic[0].revisionName)')
+          PCT=$(gcloud run services describe "$SERVICE" --region="$REGION" \
+            --format='value(status.traffic[0].percent)')
+          IMG_LIVE=$(gcloud run revisions describe "$REV" --region="$REGION" \
+            --format='value(spec.containers[0].image)')
+          echo "serving: $REV ($PCT%)  $IMG_LIVE"
+          [ "$PCT" = "100" ] || { echo "new revision is not taking all traffic" >&2; exit 1; }
+          case "$IMG_LIVE" in
+            *":${SHA}"|*":${SHA}@"*) ;;
+            *) echo "serving $IMG_LIVE, expected :${SHA}" >&2; exit 1 ;;
+          esac
+          [ "$REV" != "$PREV_REV" ] || { echo "no new revision was created" >&2; exit 1; }
+          echo "NEW_REV=$REV" >> "$GITHUB_ENV"
+
+      # min-instances=0, so the first request may be a cold start.
+      - name: Live health
+        run: |
+          set -euo pipefail
+          body=""
+          for i in $(seq 1 12); do
+            body=$(curl -fsS "$API/health" 2>/dev/null) && \
+              echo "$body" | jq -e '.status=="ok" and .database=="ok"' >/dev/null && break
+            body=""
+            sleep 5
+          done
+          [ -n "$body" ] || { echo "live /health never reported ok" >&2; exit 1; }
+          echo "health: $body"
+
+      # With a negative control: without one, a mis-parsed header passes for the
+      # wrong reason, and a widened ALLOWED_ORIGINS goes unseen.
+      - name: CORS accepts the frontend and refuses a stranger
+        run: |
+          set -euo pipefail
+          allow() {
+            curl -sS -o /dev/null -D- -X OPTIONS "$API/api/users/me" \
+              -H "Origin: $1" -H "Access-Control-Request-Method: GET" \
+              | tr -d '\r' | awk 'tolower($1)=="access-control-allow-origin:"{print $2}'
+          }
+          GOOD=$(allow "$FRONTEND_ORIGIN")
+          BAD=$(allow "https://account-frontend.pages.dev")
+          echo "frontend origin -> '${GOOD}'"
+          echo "stranger origin -> '${BAD}'"
+          [ "$GOOD" = "$FRONTEND_ORIGIN" ] || { echo "CORS refuses the frontend" >&2; exit 1; }
+          [ -z "$BAD" ] || { echo "CORS allowed a foreign origin" >&2; exit 1; }
+
+      # For ROLLBACK.md's "What is where" table. Printed, not committed: whether
+      # this release can roll back on its own is a judgement a person writes.
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Deploy API: \`${SHA:-?}\`"
+            echo ""
+            echo "| | image | revision |"
+            echo "|---|---|---|"
+            echo "| now | \`backend:${SHA:-?}\` | \`${NEW_REV:-not deployed}\` |"
+            echo "| previous | \`${PREV_IMG##*/}\` | \`${PREV_REV:-?}\` |"
+            echo ""
+            echo "Next: \`git push origin main\` builds the frontend. Then update ROLLBACK.md."
+          } >> "$GITHUB_STEP_SUMMARY"

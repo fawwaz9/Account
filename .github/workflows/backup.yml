@@ -18,6 +18,13 @@ on:
     # starts first.
     - cron: "0 9 * * *"
   workflow_dispatch:        # so a backup can be taken before anything risky
+  # Called by deploy-api.yml, so every deploy is preceded by a backup that has
+  # passed the plausibility gate below. The secret is declared, so a caller that
+  # forgets to pass it fails at the call rather than dumping nothing.
+  workflow_call:
+    secrets:
+      SUPABASE_DB_URL_SESSION:
+        required: true
 
 permissions:
   contents: read
