@@ -7,6 +7,7 @@ import ConfirmShiftModal from "../features/jobs/components/ConfirmShiftModal";
 import Earnings from "../features/jobs/components/Earnings";
 import PaychequeList from "../features/jobs/components/PaychequeList";
 import PaychequeModal from "../features/jobs/components/PaychequeModal";
+import DeleteConfirmModal from "../features/grades/components/DeleteConfirmModal";
 import { useJobs } from "../features/jobs/hooks/useJobs";
 import { deleteShift } from "../features/jobs/api";
 import { Job, Paycheque, ShiftOccurrence } from "../features/jobs/types";
@@ -36,9 +37,13 @@ export default function JobsPage() {
   const [payingCheque, setPayingCheque] = useState<Paycheque | null>(null);
   const [recordingPay, setRecordingPay] = useState(false);
   const [removingShift, setRemovingShift] = useState(false);
+  // The tenth unconfirmed delete, missed by the audit of nine: removing a shift
+  // is permanent, and the hours it carried leave the earnings figures with it.
+  const [removingTarget, setRemovingTarget] = useState<ShiftOccurrence | null>(null);
   const [shiftError, setShiftError] = useState<string | null>(null);
 
   async function handleRemoveShift(shift: ShiftOccurrence) {
+    setRemovingTarget(null);
     if (!user) return;
     // A confirmed shift can carry a cash tip already in the ledger, so removing
     // one is worth a beat of friction rather than a single unprotected click.
@@ -132,7 +137,7 @@ export default function JobsPage() {
             <ShiftList
               shifts={shifts}
               onConfirm={setConfirming}
-              onRemove={handleRemoveShift}
+              onRemove={setRemovingTarget}
               busy={loading || removingShift}
             />
           </div>
@@ -171,6 +176,23 @@ export default function JobsPage() {
         paycheque={payingCheque}
         onClose={() => { setRecordingPay(false); setPayingCheque(null); }}
         onSaved={reload}
+      />
+
+      <DeleteConfirmModal
+        open={removingTarget !== null}
+        title="Remove this shift?"
+        message={
+          removingTarget
+            ? `The shift on ${removingTarget.on_date} will be removed, and the hours ` +
+              `it carried will leave your earnings figures with it. A paycheque ` +
+              `already recorded stays — that money moved.`
+            : ""
+        }
+        confirmLabel="Remove the shift"
+        submitting={removingShift}
+        error={shiftError}
+        onCancel={() => setRemovingTarget(null)}
+        onConfirm={() => { if (removingTarget) void handleRemoveShift(removingTarget); }}
       />
     </div>
   );

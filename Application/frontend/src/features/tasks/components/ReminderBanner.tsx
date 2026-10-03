@@ -1,4 +1,5 @@
 import { Reminder } from "../types";
+import HelpTip from "../../../shared/components/HelpTip";
 import { clockTime, dueLabel } from "../../../shared/utils/dateUtils";
 
 interface ReminderBannerProps {
@@ -26,7 +27,10 @@ export default function ReminderBanner({ due, onDismiss }: ReminderBannerProps) 
         <h2 className="remBannerTitle">
           {due.length} {due.length === 1 ? "reminder" : "reminders"}
         </h2>
-        <span className="small-text muted">These only fire while the app is open</span>
+        <HelpTip label="When reminders fire">
+          Only while the app is open. There is no background delivery, so treat these
+          as a nudge when you visit rather than something that will reach you.
+        </HelpTip>
       </div>
 
       <ul className="remList">

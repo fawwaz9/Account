@@ -293,72 +293,7 @@
   border-bottom-color: var(--gold);
 }
 
-/* ===== HelpTip =====
- *
- * The mark sits inline beside a label; its panel is a block in normal flow
- * underneath, so it can never run off the edge of a narrow screen. Shared, not
- * settings-specific -- the component lives in shared/components and these rules
- * are here only because adding a stylesheet would reorder the emitted CSS. */
-.helpTip {
-  display: inline;
-}
 
-/* A label with a mark beside it, on one line. The mark stays out of the <label>
-   itself so it cannot end up in the control's accessible name. */
-.settingsLabelRow {
-  display: block;
-}
-
-.settingsLabelRow > label {
-  display: inline;
-}
-
-/* White as asked, and round, so it reads as a question rather than a control
-   that does something. Small enough to sit in a label without changing its
-   line height. */
-.helpTipMark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 15px;
-  height: 15px;
-  margin-left: 6px;
-  padding: 0;
-  border: 1px solid var(--muted);
-  border-radius: 50%;
-  background: none;
-  color: #fff;
-  font-size: 0.68rem;
-  font-family: inherit;
-  line-height: 1;
-  cursor: pointer;
-  vertical-align: middle;
-}
-
-.helpTipMark:hover,
-.helpTipMark[aria-expanded="true"] {
-  border-color: var(--gold);
-  color: var(--gold);
-}
-
-.helpTipMark:focus-visible {
-  outline: 2px solid var(--gold);
-  outline-offset: 2px;
-}
-
-.helpTipPanel {
-  display: block;
-  margin: 8px 0 2px;
-  padding: 9px 11px;
-  border: 1px solid var(--border);
-  border-left: 2px solid var(--gold);
-  border-radius: 6px;
-  background: var(--panel-2);
-  color: var(--text);
-  font-size: 0.78rem;
-  font-weight: 400;
-  line-height: 1.5;
-}
 
 /* Two dialog buttons, not a form. */
 .settingsActions {

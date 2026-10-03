@@ -10,6 +10,13 @@ import SnoozeModal from "../features/tasks/components/SnoozeModal";
 import EditTaskModal from "../features/tasks/components/EditTaskModal";
 import ReminderBanner from "../features/tasks/components/ReminderBanner";
 import ReminderModal from "../features/tasks/components/ReminderModal";
+import DeleteConfirmModal from "../features/grades/components/DeleteConfirmModal";
+import {
+  ASSIGNMENT_HORIZON,
+  DONE_LINGER_MS,
+  groupByHorizon,
+  withoutId,
+} from "../features/tasks/horizon";
 import { useTasks } from "../features/tasks/hooks/useTasks";
 import { useReminders } from "../features/tasks/hooks/useReminders";
 import {
@@ -46,7 +53,6 @@ import "../styles/tasks.css";
  * (ExamStrip), on a thirty-day horizon: revision is what fills the fortnight,
  * so knowing what it is for has to reach further out than the work itself.
  */
-const ASSIGNMENT_HORIZON = 14;
 
 export default function TasksPage() {
   const { user } = useAuth();
@@ -94,7 +100,15 @@ export default function TasksPage() {
 
   // Grouped by how soon, not by course: the question this page answers is
   // "what now", and a course grouping answers "what eventually".
-  const groups = useMemo(() => groupByHorizon(tasks), [tasks]);
+  // Ids ticked off but deliberately still shown, crossed out, in the group they
+  // were already in. Without this a completed task leaves the fortnight in the
+  // same frame the server answers in, so the tick never appears on screen at all.
+  const [justChecked, setJustChecked] = useState<ReadonlySet<string>>(new Set());
+  // Both deletes here are permanent and neither asked before. A task has no
+  // restore path, and "Stop" on a repeat calls deleteRepeating despite the word.
+  const [deletingTask, setDeletingTask] = useState<Task | null>(null);
+  const [stoppingRule, setStoppingRule] = useState<RecurringTask | null>(null);
+  const groups = useMemo(() => groupByHorizon(tasks, justChecked), [tasks, justChecked]);
 
   async function withBusy(action: () => Promise<unknown>, failure: string) {
     setBusy(true);
@@ -116,11 +130,36 @@ export default function TasksPage() {
 
   async function handleToggle(task: Task) {
     if (!user) return;
-    await withBusy(() => setTaskDone(user.id, task.id, !task.done), "Could not update the task");
+
+    // Re-opening needs no ceremony: the row is arriving, not leaving. Drop any
+    // lingering tick first so unchecking inside the linger window is immediate.
+    if (task.done) {
+      setJustChecked((prev) => withoutId(prev, task.id));
+      await withBusy(() => setTaskDone(user.id, task.id, false), "Could not update the task");
+      return;
+    }
+
+    // Marked done locally first, so the tick and the strike-through land on the
+    // click rather than after the round trip. The linger runs alongside the
+    // request rather than after it, so the row is held for DONE_LINGER_MS *or*
+    // the request, whichever is slower -- a slow network does not add delay on
+    // top of the pause, and a fast one still shows the tick.
+    setJustChecked((prev) => new Set(prev).add(task.id));
+    const linger = new Promise((resolve) => setTimeout(resolve, DONE_LINGER_MS));
+    try {
+      await withBusy(() => setTaskDone(user.id, task.id, true), "Could not update the task");
+    } finally {
+      await linger;
+      // Cleared whether the save worked or not: on failure the reload has already
+      // put the row back undone, and holding a false tick would be worse than
+      // losing the animation.
+      setJustChecked((prev) => withoutId(prev, task.id));
+    }
   }
 
   async function handleDelete(task: Task) {
     if (!user) return;
+    setDeletingTask(null);
     await withBusy(() => deleteTask(user.id, task.id), "Could not delete the task");
   }
 
@@ -139,6 +178,7 @@ export default function TasksPage() {
 
   async function handleStopRepeat(rule: RecurringTask) {
     if (!user) return;
+    setStoppingRule(null);
     // Occurrences already ticked off stay: they record work actually done.
     await withBusy(
       () => deleteRepeating(user.id, rule.id),
@@ -207,7 +247,7 @@ export default function TasksPage() {
               tasks={groups.overdue}
               onToggle={handleToggle}
               onEdit={setEditingTask}
-              onDelete={handleDelete}
+              onDelete={setDeletingTask}
               onPriority={handlePriority}
               onSnooze={setSnoozing}
               onWake={handleWake}
@@ -222,7 +262,7 @@ export default function TasksPage() {
               tasks={groups.undated}
               onToggle={handleToggle}
               onEdit={setEditingTask}
-              onDelete={handleDelete}
+              onDelete={setDeletingTask}
               onPriority={handlePriority}
               onSnooze={setSnoozing}
               onWake={handleWake}
@@ -238,7 +278,7 @@ export default function TasksPage() {
                 tasks={groups.done}
                 onToggle={handleToggle}
                 onEdit={setEditingTask}
-                onDelete={handleDelete}
+                onDelete={setDeletingTask}
                 onPriority={handlePriority}
                 onSnooze={setSnoozing}
                 onWake={handleWake}
@@ -264,7 +304,7 @@ export default function TasksPage() {
               rules={repeating}
               onAdd={() => { setEditingRule(null); setAddingRule(true); }}
               onEdit={(rule) => { setEditingRule(rule); setAddingRule(true); }}
-              onStop={handleStopRepeat}
+              onStop={setStoppingRule}
               busy={busy}
             />
           </div>
@@ -275,7 +315,7 @@ export default function TasksPage() {
               tasks={groups.soon}
               onToggle={handleToggle}
               onEdit={setEditingTask}
-              onDelete={handleDelete}
+              onDelete={setDeletingTask}
               onPriority={handlePriority}
               onSnooze={setSnoozing}
               onWake={handleWake}
@@ -327,40 +367,3 @@ export default function TasksPage() {
   );
 }
 
-interface TaskGroups {
-  overdue: Task[];
-  soon: Task[];
-  later: Task[];
-  undated: Task[];
-  done: Task[];
-}
-
-/**
- * Sort tasks into how-soon buckets.
- *
- * Anything past its date leads, because that is the only group where the answer
- * changes what you do in the next hour. Completed tasks leave every other group
- * so a finished assignment does not sit in "overdue" forever.
- */
-function groupByHorizon(tasks: Task[]): TaskGroups {
-  const now = today();
-  const groups: TaskGroups = { overdue: [], soon: [], later: [], undated: [], done: [] };
-
-  for (const task of tasks) {
-    if (task.done) {
-      groups.done.push(task);
-      continue;
-    }
-    if (!task.due_date) {
-      groups.undated.push(task);
-      continue;
-    }
-
-    const days = daysBetween(now, task.due_date);
-    if (days < 0) groups.overdue.push(task);
-    else if (days <= ASSIGNMENT_HORIZON) groups.soon.push(task);
-    else groups.later.push(task);
-  }
-
-  return groups;
-}

@@ -444,10 +444,14 @@ export default function SettingsPage() {
             aria-labelledby="settings-tab-academic"
             hidden={active !== "academic"}
           >
-            <h2>Academic</h2>
-            <p className="muted small-text">
-              Your current term decides which courses count as past, current, or future.
-            </p>
+            <div className="headingWithTip">
+              <h2>Academic</h2>
+              <HelpTip label="What the academic settings decide">
+                Your current term decides which courses count as past, current or
+                future, which is what the Grades page groups by. The first-year
+                anchor is what gives each term real dates.
+              </HelpTip>
+            </div>
 
             <form className="loginForm" onSubmit={handleAcademicSubmit}>
               <div className="loginField">
@@ -491,11 +495,11 @@ export default function SettingsPage() {
                   onChange={(event) => setFirstYear(event.target.value)}
                   placeholder="e.g. 2023"
                 />
-                <span className="muted small-text">
-                  A school year is 1, 2, 3 — not a calendar year — so this is what
-                  gives each term real dates. Leave it blank and nothing that
-                  measures a term can say when it ran.
-                </span>
+                <HelpTip label="What the first-year anchor is for">
+                  A school year is 1, 2, 3 — not a calendar year. This is what gives each
+                  term real dates, so leaving it blank means nothing that measures a term
+                  can say when it ran.
+                </HelpTip>
                 {/* Worked out from courses that already carry dates, which is
                     evidence rather than a label. Offered rather than applied:
                     getting this wrong shifts every term in the app by a year,
@@ -539,9 +543,10 @@ export default function SettingsPage() {
                   onChange={(event) => setDefaultTarget(event.target.value)}
                   required
                 />
-                <span className="loginHint">
-                  Used for any course without its own target.
-                </span>
+                <HelpTip label="What the default target does">
+                  Used for any course that has not been given a target of its own.
+                  Changing it moves every course still on the default.
+                </HelpTip>
               </div>
 
               <div className="settingsToggle">
@@ -551,12 +556,13 @@ export default function SettingsPage() {
                   checked={gpaEnabled}
                   onChange={(event) => setGpaEnabled(event.target.checked)}
                 />
-                <label htmlFor="gpa-enabled">
-                  Show CGPA
-                  <span className="small-text muted">
-                    {" "}&mdash; UBC doesn&apos;t put a GPA on transcripts, so this is optional.
-                  </span>
-                </label>
+                <span className="labelWithTip">
+                  <label htmlFor="gpa-enabled">Show CGPA</label>
+                  <HelpTip label="Why CGPA is optional">
+                    UBC does not put a GPA on transcripts, so this is off by default. Turn
+                    it on if you need the figure for an application.
+                  </HelpTip>
+                </span>
               </div>
 
               {academicError && <p className="loginError">{academicError}</p>}
@@ -575,11 +581,14 @@ export default function SettingsPage() {
             aria-labelledby="settings-tab-calendar"
             hidden={active !== "calendar"}
           >
-            <h2>Calendar</h2>
-            <p className="muted small-text">
-              These decide which gaps between your classes are worth offering as
-              study time. They were under Academic until the groups existed.
-            </p>
+            <div className="headingWithTip">
+              <h2>Calendar</h2>
+              <HelpTip label="What the calendar settings decide">
+                Which gaps between your classes are worth offering as study time.
+                The window sets the hours, and the minimum block decides how short
+                a gap stops being useful.
+              </HelpTip>
+            </div>
 
             <form className="loginForm" onSubmit={handleCalendarSubmit}>
               {/* First in the panel because it is the one setting here that can
@@ -589,7 +598,7 @@ export default function SettingsPage() {
                     accessible name is computed from its label's contents, so a
                     nested button would append its own name to the select's and
                     leave it announced as "Time zone What the time zone affects". */}
-                <span className="settingsLabelRow">
+                <span className="labelWithTip">
                   <label htmlFor="timezone">Time zone</label>
                   <HelpTip label="What the time zone affects">
                     Reminders fire on this clock, not the server&apos;s. It also
@@ -651,9 +660,10 @@ export default function SettingsPage() {
                     required
                   />
                 </div>
-                <span className="loginHint">
-                  The hours free blocks are offered in.
-                </span>
+                <HelpTip label="What the study window does">
+                  Free blocks are only offered between these hours, so a gap at seven in
+                  the morning is not suggested unless you said it counts.
+                </HelpTip>
               </div>
 
               <div className="loginField">
@@ -668,9 +678,11 @@ export default function SettingsPage() {
                   onChange={(event) => setMinBlock(event.target.value)}
                   required
                 />
-                <span className="loginHint">
-                  Minutes. Below this a gap is walking time, not study time.
-                </span>
+                <span className="loginHint">Minutes</span>
+                <HelpTip label="What the minimum block is for">
+                  A gap shorter than this is walking time rather than study time, so it is
+                  left out of the free blocks the calendar offers.
+                </HelpTip>
               </div>
 
               {calendarError && <p className="loginError">{calendarError}</p>}
@@ -715,11 +727,13 @@ export default function SettingsPage() {
             aria-labelledby="settings-tab-financial"
             hidden={active !== "financial"}
           >
-            <h2>Financial</h2>
-            <p className="muted small-text">
-              How income divides between your accounts, and what you can file
-              spending under.
-            </p>
+            <div className="headingWithTip">
+              <h2>Financial</h2>
+              <HelpTip label="What the financial settings decide">
+                How income divides between your accounts when you record a deposit,
+                and which categories you can file spending under.
+              </HelpTip>
+            </div>
 
             <div className="settingsActions">
               <button

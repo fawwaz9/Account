@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Modal from "../../../shared/components/Modal";
+import HelpTip from "../../../shared/components/HelpTip";
 import { fetchSnoozes, snoozeTask } from "../api";
 import { Task, TaskSnooze } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
@@ -76,10 +77,11 @@ export default function SnoozeModal({ task, onClose, onSaved }: SnoozeModalProps
   return (
     <Modal title={`Snooze · ${task.title}`} onClose={onClose}>
       <form className="calForm" onSubmit={handleSubmit}>
-        <p className="small-text muted">
-          It leaves the list until then and comes back in its own place. The due
-          date{task.due_date ? ` of ${dueLabel(task.due_date)}` : ""} does not move.
-        </p>
+        <HelpTip label="What snoozing does">
+          It leaves the list until the date you pick and comes back in its own place.
+          The due date{task.due_date ? ` of ${dueLabel(task.due_date)}` : ""} does not
+          move, so nothing about when the work is actually owed changes.
+        </HelpTip>
 
         <div className="snoozePresets">
           {PRESETS.map((preset) => {

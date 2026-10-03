@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import Modal from "../../../shared/components/Modal";
+import HelpTip from "../../../shared/components/HelpTip";
+import DeleteConfirmModal from "../../grades/components/DeleteConfirmModal";
 import { createReminder, deleteReminder, fetchReminders } from "../api";
 import { requestNotificationPermission } from "../hooks/useReminders";
 import { Reminder, ReminderCreate } from "../types";
@@ -39,6 +41,8 @@ export default function ReminderModal({ open, courses, onClose, onSaved }: Remin
   const [pending, setPending] = useState<Reminder[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Deleting a reminder is permanent; there is no archive and no restore.
+  const [deleting, setDeleting] = useState<Reminder | null>(null);
 
   useEffect(() => {
     if (!open || !user) return;
@@ -80,6 +84,7 @@ export default function ReminderModal({ open, courses, onClose, onSaved }: Remin
   }
 
   async function handleDelete(reminder: Reminder) {
+    setDeleting(null);
     if (!user) return;
     setPending((current) => current.filter((row) => row.id !== reminder.id));
     try {
@@ -93,10 +98,11 @@ export default function ReminderModal({ open, courses, onClose, onSaved }: Remin
   return (
     <Modal title="Reminders" onClose={onClose}>
       <form className="calForm" onSubmit={handleSubmit}>
-        <p className="small-text muted">
-          A reminder notifies rather than waits — there is nothing to tick off.
-          It only fires while the app is open.
-        </p>
+        <HelpTip label="What a reminder is">
+          A reminder notifies rather than waits — there is nothing to tick off. It
+          only fires while the app is open, so it is a nudge while you are using the
+          app rather than a notification that will reach you otherwise.
+        </HelpTip>
 
         <label className="calField">
           <span className="calFieldLabel">Remind me to</span>
@@ -165,7 +171,7 @@ export default function ReminderModal({ open, courses, onClose, onSaved }: Remin
                 <button
                   type="button"
                   className="calButton calButtonDanger"
-                  onClick={() => handleDelete(reminder)}
+                  onClick={() => setDeleting(reminder)}
                   aria-label={`Remove ${reminder.title}`}
                 >
                   Remove
@@ -175,6 +181,21 @@ export default function ReminderModal({ open, courses, onClose, onSaved }: Remin
           </ul>
         </div>
       )}
+
+      <DeleteConfirmModal
+        open={deleting !== null}
+        title="Delete this reminder?"
+        message={
+          deleting
+            ? `"${deleting.title}" will be deleted. Reminders have no archive, so ` +
+              `this cannot be undone.`
+            : ""
+        }
+        submitting={false}
+        error={error}
+        onCancel={() => setDeleting(null)}
+        onConfirm={() => { if (deleting) void handleDelete(deleting); }}
+      />
     </Modal>
   );
 }

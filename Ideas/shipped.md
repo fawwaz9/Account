@@ -840,6 +840,84 @@ QUESTIONS WORTH ANSWERING BEFORE BUILDING, not while:
 
 ---
 
+## The three interface quality asks -- SHIPPED 2026-10-03
+
+Asked for 2026-09-28; all three closed together. The counts in `next.md` were the
+size of each job as measured then, and two of the three turned out to be wrong in
+ways worth recording.
+
+**CONFIRM EVERY DELETE -- and it was ten, not nine.** The hand audit listed nine
+unconfirmed delete paths. Enumerating every call site against the api layer instead
+found a tenth, `deleteShift` in JobsPage. Every destructive call site now goes
+through `DeleteConfirmModal`, and the two that cascade say so: the sinking fund
+previously announced "Remove {name} and its transfers" in its own aria-label and then
+performed it on one click, and removing a job takes its shifts and paycheques.
+
+Each message names what SURVIVES rather than only what goes -- the fund's money stays
+in the account, the job's ledger transactions stay, a recorded paycheque outlives its
+shift -- because that is the part that settles whether to click.
+
+Two of the seven were not what their labels said: `Repeating.onStop` and
+`Recurring.onDelete` both call a delete, so "Stop" was deleting the rule. The dialogs
+say so, and say that occurrences already ticked off and payments already made stay.
+A calendar event looked like it might be exempt under the recoverable rule, but
+`restoreOccurrence` un-skips one occurrence of a repeat -- there is no undelete for an
+event, so it is permanent and asks.
+
+`deleteConfirmations.test.ts` is the part that lasts: it reads the api layer for every
+`delete*`/`clear*` export, finds every call site, and fails if one has no
+confirmation, with a RECOVERABLE allowlist so the exemption is explicit rather than
+implied. A hand count missed one in ten; the enumeration cannot.
+
+**MAKE A CLICK FEEL LIKE A CLICK.** `:active` appeared zero times in the stylesheet,
+across 192 buttons, so the only feedback a press ever had was `:hover` -- which touch
+does not have. The spec's "one rule on the shared button classes covers all 183" was
+not achievable: `.buttons` carries 19 of the 192 and `.calButton` 64. It needed a bare
+`button:not(:disabled):active` baseline plus per-class rules, because
+`.class:hover` is (0,2,0) against `button:active`'s (0,1,1) and you are always
+hovering while pressing. Press lands where hover lifted from; reduced motion keeps the
+brightness change and drops the movement. A stylesheet test asserts it cannot regress
+to zero and that no disabled button presses.
+
+**EXPLAIN ON DEMAND -- and "128 ambient sentences" was an overcount.** All 133
+muted nodes were dumped and read. Most are figures, labels, status lines, errors and
+empty states, which is what `muted` is for; hiding a figure behind a question mark
+makes the app worse. The genuine "what is this?" prose was about 20 nodes, and 20
+moved: 31 HelpTips across 12 files, up from 2 in 1, with the node count going
+133 -> 118 because the remainder are doing real work.
+
+The rule held: text that changes what you are about to do stayed on the page
+("Deleting a category removes the label only", "Replaces any pattern already set"),
+and the two chart lines stayed because the panel is a heading and that sentence --
+behind a mark it would be an empty box explaining nothing.
+
+Two fixes beyond the sweep. The account toggles' explanations were INSIDE `<label>`,
+so the checkbox was announced with the whole sentence appended; moving them out fixed
+the accessible name. And `Loading`'s bootstrap spinner was styled in `layout.css`,
+which only MainLayout imports, while ProtectedRoute renders it before MainLayout
+mounts -- unstyled in development for the one case it exists for.
+
+A correction worth keeping: HelpTip's styles moved to `globals.css` for organisation,
+NOT because they were unreachable. The first claim was that they rendered unstyled
+outside /settings in dev; that was wrong, because `main.tsx` imports login.css,
+grades.css, courseDetail.css and calendar.css directly. The code comment and the test
+docstring were corrected rather than left confidently wrong.
+
+**Also shipped with it: the task tick is now visible.** Checking a task used to await
+the server, reload, and regroup in the same frame, so the tick never rendered -- the
+row simply vanished from the fortnight. It is optimistic now, held crossed out for
+300ms in the group it was already in, with the linger running alongside the request so
+a slow network adds no delay on top of the pause. The grouping rule moved to
+`features/tasks/horizon.ts` with 17 tests; four mutations each fail, including the one
+that matters -- letting a lingering row fall through to done breaks five.
+
+254 frontend tests across 26 files. Frontend only: no image, no schema, no API
+revision. Moving CSS between files was verified by comparing every selector's
+declarations across the old and new builds -- no pre-existing selector lost one, the
+only differences being two minifier normalisations.
+
+---
+
 ## "Today" meant UTC, not the student's day -- FIXED 2026-10-02
 The owner noticed free time was wrong and named the cause: "I think it is using
 utc". It was. `free_blocks` used `datetime.now()` and `crunch` used

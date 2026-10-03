@@ -4,6 +4,7 @@ import { Account } from "../types";
 import { getErrorMessage } from "../../grades/components/AddCourseModal";
 import { useAuth } from "../../../app/auth/AuthContext";
 import Modal from "../../../shared/components/Modal";
+import HelpTip from "../../../shared/components/HelpTip";
 
 interface IncomeSplitModalProps {
   readonly open: boolean;
@@ -77,11 +78,10 @@ export default function IncomeSplitModal({
   return (
     <Modal title="Income split" onClose={onClose}>
       <form className="loginForm" onSubmit={handleSubmit}>
-        <p className="small-text muted">
-          Money you record as income divides between these by ratio, so the
-          shares need not total 100 — only their sizes relative to each other
-          matter.
-        </p>
+        <HelpTip label="How the split works">
+          Money you record as income divides between these by ratio, so the shares
+          need not total 100 — only their sizes relative to each other matter.
+        </HelpTip>
 
         <ul className="splitList">
           {accounts.map((account) => {

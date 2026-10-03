@@ -30,7 +30,13 @@ this section as the reasoning behind the ordering.
   SMALLER THAN THIS ENTRY USED TO CLAIM, checked 2026-09-17: the throttle covers
   only /login and /register at 8 attempts per 15 minutes, and 4 of 5 users sign
   in with Google, which never reaches it. So it is a wide-invite blocker, not a
-  today problem. Fix is in client_ip(), api/routes/auth.py:33.
+  today problem. The function is `client_of()` in api/routes/auth.py, and its own
+  docstring explains why the header is not read today: an unvalidated
+  X-Forwarded-For is attacker-controlled and would hand out unlimited fresh
+  throttle keys. The fix is to trust a specific forwarded position from Cloud Run.
+  PROMOTED 2026-10-02: this is now a **gate on open signup** in
+  `account-vision.md` §4 Phase 2, not a loose cheap win. Open signup does not ship
+  before it does.
 - Request caching on the frontend (audit #35). Every navigation refetches what
   it already has, and every reload() refetches all four endpoints when one row
   changed. This was invisible on localhost and is not from a phone.
@@ -43,6 +49,7 @@ this section as the reasoning behind the ordering.
   income is enough. So this needs no course_id on income, no "dropped" flag
   alongside archived, and no work. Set aside rather than closed -- worth
   reopening only if the refund case turns out to be common in practice.
+- Add a drop_deadline variable that warns about the drop deadline. After this deadline a dropped course is not refundable. If a student tries to delete this course a warning will come up advising to drop instead (this wil archive the course rather than fully deleting).
 
 ### Cheap wins, read-only
 - The term retrospective. Derived from data already stored: no new tables, no
@@ -79,10 +86,23 @@ this section as the reasoning behind the ordering.
 
 ## Interface quality, asked for 2026-09-28
 
-> **Status, 2026-10-02.** The third ask is half built: `HelpTip` exists and is in
-> use twice. The first two -- confirmations on every destructive action, and a
-> visible acknowledgement for every click -- are still open, and so is the rest of
-> the (?) sweep. Detail below.
+> **CLOSED 2026-10-03.** All three shipped; see `shipped.md`, "The three interface
+> quality asks". Headline numbers, because they differ from the counts below:
+>
+> * **Deletes: it was TEN, not nine.** Enumerating the call sites instead of reading
+>   the list found `deleteShift` in JobsPage, which the hand audit missed. Every
+>   destructive call site now confirms, and `deleteConfirmations.test.ts` fails CI if
+>   an eleventh appears.
+> * **Clicks: `:active` now exists**, as a bare `button:not(:disabled):active`
+>   baseline plus per-class rules. One rule on the shared classes could never have
+>   covered 183 buttons -- `.buttons` carries 19 of 192 and `.calButton` 64, and a
+>   class's own `:hover` outranks an element-level `:active`.
+> * **The (?) sweep: "128 ambient sentences" was an overcount.** Reading all 133
+>   nodes, most are figures, labels, status, errors and empty states -- which is what
+>   `muted` is for. The genuine "what is this?" prose was about 20 nodes and all 20
+>   moved. 31 HelpTips across 12 files, up from 2 in 1.
+>
+> The call sites and counts below are kept as the record of what was found.
 Three standing asks, all of them about the app acknowledging the person using
 it. Counted against the code on the day they were written, so the numbers below
 are the size of each job rather than an impression of it.
@@ -372,6 +392,18 @@ are the size of each job rather than an impression of it.
         Add functionality for users to work together.
         One user can add a user to a task, assignment, project or just an evemt on the calender.
         This task/calender event will then show up for all users that are added.
+          PROMOTED 2026-10-02 out of Wild and into `account-vision.md` §4 Phase 2 as
+          "Shared tasks and events -- group coursework". The reasoning for the
+          promotion: the vision had sport teams and shared completion stats but
+          nothing for the work students actually share, and group projects are both
+          the commonest student collaboration and a better growth loop for an
+          academic app than intramurals -- inviting a collaborator is an invitation
+          to the app, triggered by coursework every student already has.
+          What it costs, which is why it is not free: tasks and events stop being
+          strictly per-user (vision §5.1), and it is the only place one user gets
+          WRITE access to another's row. Membership must be writable by the owner
+          only, or a collaborator could add themselves to anything -- so an explicit
+          join table with its own policy, never a list column on the task.
 
 
 ---

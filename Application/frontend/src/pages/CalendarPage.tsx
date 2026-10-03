@@ -4,6 +4,7 @@ import WeekView from "../features/calender/components/WeekView";
 import EventCard from "../features/calender/components/EventCard";
 import EventModal from "../features/calender/components/EventModal";
 import Modal from "../shared/components/Modal";
+import DeleteConfirmModal from "../features/grades/components/DeleteConfirmModal";
 import { useCalender } from "../features/calender/hooks/useCalender";
 import TimeInsights from "../features/calender/components/TimeInsights";
 import TermTimeline from "../features/calender/components/TermTimeline";
@@ -35,6 +36,7 @@ export default function CalendarPage() {
   const [composeDate, setComposeDate] = useState(today());
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   // Bumped with reload so the insights follow an edit.
   const [insightNonce, setInsightNonce] = useState(0);
   const [blackoutsOpen, setBlackoutsOpen] = useState(false);
@@ -106,6 +108,7 @@ export default function CalendarPage() {
 
   async function handleDelete() {
     if (!user || !selected) return;
+    setConfirmingDelete(false);
 
     setBusy(true);
     setActionError(null);
@@ -242,7 +245,7 @@ export default function CalendarPage() {
             occurrence={selected}
             onEdit={handleEditSeries}
             onSkip={handleSkip}
-            onDelete={handleDelete}
+            onDelete={() => setConfirmingDelete(true)}
             onClose={() => setSelected(null)}
             busy={busy}
           />

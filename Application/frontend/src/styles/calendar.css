@@ -371,6 +371,15 @@
   border-color: var(--gold);
 }
 
+.calButton:not(:disabled):active {
+  /* Its own rule because `.calButton:hover:not(:disabled)` outranks the element
+     selector in globals, so the baseline press would never show on the 64 buttons
+     that use this class. */
+  transform: translateY(1px);
+  border-color: var(--gold);
+  filter: brightness(0.92);
+}
+
 .calButton:disabled {
   opacity: 0.55;
   cursor: default;

@@ -116,6 +116,38 @@ h1, h2, h3 {
   filter: brightness(1.25);
 }
 
+/* ===== Pressed states =====
+   `:active` appeared ZERO times in the whole stylesheet, so no button anywhere
+   acknowledged being pressed -- 192 of them, and the only feedback was hover,
+   which touch does not have at all.
+
+   A bare element selector is the baseline because the buttons are not on one
+   shared class: `.buttons` carries 19 of the 192 and `.calButton` 64, so a
+   class-only rule would miss most of the app. Anything with its own hover
+   transform needs its own `:active` as well, since `.class:hover` (0,2,0)
+   outranks `button:active` (0,1,1) and you are always hovering while pressing. */
+button:not(:disabled):active {
+  transform: translateY(1px);
+  filter: brightness(0.92);
+}
+
+/* Lands where hover lifted it from, so press reads as the button going down
+   rather than jumping. */
+.buttons:not(:disabled):active {
+  transform: translateY(1px);
+  border-color: var(--gold);
+  filter: brightness(1.05);
+}
+
+/* Motion is the part some people cannot tolerate; the brightness change carries
+   the same message, so the press survives without the movement. */
+@media (prefers-reduced-motion: reduce) {
+  button:not(:disabled):active,
+  .buttons:not(:disabled):active {
+    transform: none;
+  }
+}
+
 /* ===== Subtle text ===== */
 .muted {
   color: var(--muted);
@@ -147,4 +179,132 @@ h1, h2, h3 {
 .error{
   font-size: 13px;
   color: var(--error);
+}
+
+/* ===== HelpTip =====
+ *
+ * The mark sits inline beside a label; its panel is a block in normal flow
+ * underneath, so it can never run off the edge of a narrow screen.
+ *
+ * Moved here from login.css on 2026-10-03 for where it belongs, not for a bug. The
+ * component lives in shared/components and is used on the Budget, Jobs, Tasks and
+ * Settings pages, so the shared sheet is its home. It was NOT broken before:
+ * main.tsx imports login.css, grades.css, courseDetail.css and calendar.css
+ * directly, so those are global in development as well as in the single production
+ * sheet, and the marks were styled everywhere already.
+ *
+ * The two row classes came with it and lost their `settings` prefix, which stopped
+ * being true once Budget, Jobs and Tasks used them too. */
+.helpTip {
+  display: inline;
+}
+
+/* A label with a mark beside it, on one line. The mark stays out of the <label>
+   itself so it cannot end up in the control's accessible name. */
+.labelWithTip {
+  display: block;
+}
+
+.labelWithTip > label {
+  display: inline;
+}
+
+/* A panel heading with its mark beside the word rather than flung to the far
+   right of the card, which is what `.sectionHeading`'s space-between would do to
+   a one-word heading like "Academic". Baseline-aligned so the circle sits on the
+   text's line rather than its box. */
+.headingWithTip {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.headingWithTip > h2 {
+  margin: 0;
+}
+
+/* White as asked, and round, so it reads as a question rather than a control
+   that does something. Small enough to sit in a label without changing its
+   line height. */
+.helpTipMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  margin-left: 6px;
+  padding: 0;
+  border: 1px solid var(--muted);
+  border-radius: 50%;
+  background: none;
+  color: #fff;
+  font-size: 0.68rem;
+  font-family: inherit;
+  line-height: 1;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.helpTipMark:hover,
+.helpTipMark[aria-expanded="true"] {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.helpTipMark:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.helpTipPanel {
+  display: block;
+  margin: 8px 0 2px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--gold);
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+/* ===== The auth bootstrap spinner =====
+   `Loading` is rendered by ProtectedRoute as well as MainLayout, and ProtectedRoute
+   can run before MainLayout mounts — so in development, where CSS is injected per
+   imported module, these rules were not present for the one case they exist for.
+   Production never showed it, because there is only one sheet. */
+/* ===== Signing in =====
+   Shown while the session check is in flight. It replaced `return null`, which
+   gave a blank white page on every cold load for as long as the check took --
+   indistinguishable from the app being broken. */
+
+.authBootstrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 60vh;
+}
+
+.authBootstrapSpinner {
+  width: 22px;
+  height: 22px;
+  border: 2px solid #1f2a44;
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: authBootstrapSpin 0.7s linear infinite;
+}
+
+@keyframes authBootstrapSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* The override travels with the rule it overrides, or the two end up in different
+   sheets and the collision guard flags the name as defined twice. */
+@media (prefers-reduced-motion: reduce) {
+  .authBootstrapSpinner { animation: none; }
 }

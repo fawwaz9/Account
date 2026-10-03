@@ -5,6 +5,7 @@ import { getErrorMessage } from "../../grades/components/AddCourseModal";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { fromIso, today } from "../../../shared/utils/dateUtils";
 import Modal from "../../../shared/components/Modal";
+import DeleteConfirmModal from "../../grades/components/DeleteConfirmModal";
 
 interface BlackoutsModalProps {
   readonly open: boolean;
@@ -30,6 +31,9 @@ export default function BlackoutsModal({ open, onClose, onSaved }: BlackoutsModa
   const [endsOn, setEndsOn] = useState(today());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Permanent: a removed blocked period is gone, and the free-time and
+  // workload figures move with it.
+  const [deleting, setDeleting] = useState<TermBlackout | null>(null);
 
   useEffect(() => {
     if (!open || !user) return;
@@ -70,6 +74,7 @@ export default function BlackoutsModal({ open, onClose, onSaved }: BlackoutsModa
   }
 
   async function handleDelete(id: string) {
+    setDeleting(null);
     if (!user) return;
     setBusy(true);
     setError(null);
@@ -115,7 +120,7 @@ export default function BlackoutsModal({ open, onClose, onSaved }: BlackoutsModa
               <button
                 type="button"
                 className="bulkRemove"
-                onClick={() => handleDelete(row.id)}
+                onClick={() => setDeleting(row)}
                 disabled={busy}
                 aria-label={`Remove ${row.label}`}
               >
@@ -177,6 +182,22 @@ export default function BlackoutsModal({ open, onClose, onSaved }: BlackoutsModa
           </button>
         </div>
       </form>
+
+      <DeleteConfirmModal
+        open={deleting !== null}
+        title="Remove this blocked period?"
+        message={
+          deleting
+            ? `"${deleting.label}" will be removed, and the free-time and workload ` +
+              `figures will start counting those days again.`
+            : ""
+        }
+        confirmLabel="Remove it"
+        submitting={false}
+        error={error}
+        onCancel={() => setDeleting(null)}
+        onConfirm={() => { if (deleting) void handleDelete(deleting.id); }}
+      />
     </Modal>
   );
 }

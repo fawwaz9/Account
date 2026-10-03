@@ -58,6 +58,9 @@ export default function BudgetView() {
   const [addingAccount, setAddingAccount] = useState(false);
   const [splitOpen, setSplitOpen] = useState(false);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
+  // "Stop" deletes the instruction. The payments it already made are real money
+  // that really moved, so those stay -- but the rule itself does not come back.
+  const [stoppingRule, setStoppingRule] = useState<RecurringTransaction | null>(null);
   const [fundOpen, setFundOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<RecurringTransaction | null>(null);
   const [addingRule, setAddingRule] = useState(false);
@@ -72,6 +75,7 @@ export default function BudgetView() {
 
   async function handleStopRule(rule: RecurringTransaction) {
     if (!user) return;
+    setStoppingRule(null);
 
     setRuleBusy(true);
     try {
@@ -203,11 +207,27 @@ export default function BudgetView() {
             upcoming={upcoming}
             onAdd={() => { setEditingRule(null); setAddingRule(true); }}
             onEdit={(rule) => { setEditingRule(rule); setAddingRule(true); }}
-            onDelete={handleStopRule}
+            onDelete={setStoppingRule}
             busy={ruleBusy}
           />
         </>
       )}
+
+      <DeleteConfirmModal
+        open={stoppingRule !== null}
+        title="Stop this standing instruction?"
+        message={
+          stoppingRule
+            ? `"${stoppingRule.description}" will stop running and the rule will be ` +
+              `deleted. Payments it has already made stay in the ledger — that money ` +
+              `really moved.`
+            : ""
+        }
+        confirmLabel="Stop it"
+        submitting={ruleBusy}
+        onCancel={() => setStoppingRule(null)}
+        onConfirm={() => { if (stoppingRule) void handleStopRule(stoppingRule); }}
+      />
 
       <DeleteConfirmModal
         open={remove.pending !== null}

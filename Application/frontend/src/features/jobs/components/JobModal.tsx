@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import Modal from "../../../shared/components/Modal";
+import DeleteConfirmModal from "../../grades/components/DeleteConfirmModal";
+import HelpTip from "../../../shared/components/HelpTip";
 import RecurrenceEditor from "../../calender/components/RecurrenceEditor";
 import { createJob, deleteJob, updateJob } from "../api";
 import { Job, JOB_KIND_LABELS, JobCreate, JobKind } from "../types";
@@ -49,6 +51,10 @@ export default function JobModal({ open, job, onClose, onSaved }: JobModalProps)
   const [form, setForm] = useState<JobCreate>(formFor(job));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Removing a job takes its shifts and its paycheques with it, so it asks. The
+  // confirmation stacks over this editor, which is the case `Modal`'s own Escape
+  // stack exists for -- only the top dialog answers the keystroke.
+  const [confirmingRemoval, setConfirmingRemoval] = useState(false);
 
   useEffect(() => {
     setForm(formFor(job));
@@ -111,6 +117,7 @@ export default function JobModal({ open, job, onClose, onSaved }: JobModalProps)
   }
 
   return (
+    <>
     <Modal title={job ? "Edit job" : "New job"} onClose={onClose} panelClassName="widePopup">
       <form className="calForm" onSubmit={handleSubmit}>
         <div className="calRow">
@@ -228,11 +235,10 @@ export default function JobModal({ open, job, onClose, onSaved }: JobModalProps)
             decide how long your balance has to last. */}
         <fieldset className="payRepeat">
           <legend className="calFieldLabel">Does the paycheque repeat?</legend>
-          <p className="small-text muted">
-            How often you are paid, not when you work. Shifts are added
-            separately. Leave the date empty if the pay is irregular — nothing
-            will be predicted.
-          </p>
+          <HelpTip label="What the pay schedule means">
+            How often you are paid, not when you work — shifts are added separately.
+            Leave the date empty if the pay is irregular and nothing will be predicted.
+          </HelpTip>
 
           {form.pay_starts_on ? (
             <RecurrenceEditor
@@ -264,5 +270,26 @@ export default function JobModal({ open, job, onClose, onSaved }: JobModalProps)
         </div>
       </form>
     </Modal>
+
+    <DeleteConfirmModal
+      open={confirmingRemoval}
+      title="Remove this job?"
+      message={
+        job
+          ? `"${job.name}" will be removed, and so will every shift and paycheque ` +
+            `recorded against it. Transactions already in the ledger stay where ` +
+            `they are; what goes is the job and its record of hours and pay.`
+          : ""
+      }
+      confirmLabel="Remove the job"
+      submitting={saving}
+      error={error}
+      onCancel={() => setConfirmingRemoval(false)}
+      onConfirm={async () => {
+        setConfirmingRemoval(false);
+        await handleDelete();
+      }}
+    />
+    </>
   );
 }

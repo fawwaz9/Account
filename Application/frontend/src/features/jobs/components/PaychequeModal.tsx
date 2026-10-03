@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import Modal from "../../../shared/components/Modal";
+import DeleteConfirmModal from "../../grades/components/DeleteConfirmModal";
+import HelpTip from "../../../shared/components/HelpTip";
 import { deletePaycheque, previewPaycheque, recordPaycheque, updatePaycheque } from "../api";
 import {
   DeductionEntry,
@@ -70,6 +72,8 @@ export default function PaychequeModal({
   const [form, setForm] = useState<PaychequeCreate>(formFor(paycheque, jobs));
   const [preview, setPreview] = useState<PaychequePreview | null>(null);
   const [saving, setSaving] = useState(false);
+  // Permanent, and it takes the cheque's deduction lines with it.
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -140,6 +144,7 @@ export default function PaychequeModal({
   }
 
   async function handleDelete() {
+    setConfirmingDelete(false);
     if (!user || !paycheque) return;
     setSaving(true);
     try {
@@ -228,9 +233,10 @@ export default function PaychequeModal({
 
         <fieldset className="payDeductions">
           <legend className="calFieldLabel">Deductions</legend>
-          <p className="small-text muted">
-            Tax, EI, CPP, dues. These never reach the ledger — only the net does.
-          </p>
+          <HelpTip label="What deductions are">
+            Tax, EI, CPP, dues. These never reach the ledger — only the net does, so
+            your balance moves by what actually landed in the account.
+          </HelpTip>
 
           {form.deductions.map((entry, index) => (
             <div className="calRow" key={index}>
@@ -277,7 +283,12 @@ export default function PaychequeModal({
 
         <div className="calFormActions">
           {paycheque && (
-            <button type="button" className="calButton calButtonDanger" onClick={handleDelete} disabled={saving}>
+            <button
+              type="button"
+              className="calButton calButtonDanger"
+              onClick={() => setConfirmingDelete(true)}
+              disabled={saving}
+            >
               Remove
             </button>
           )}
@@ -289,6 +300,19 @@ export default function PaychequeModal({
           </button>
         </div>
       </form>
+
+      <DeleteConfirmModal
+        open={confirmingDelete}
+        title="Delete this paycheque?"
+        message={
+          "The cheque and its deduction lines will be deleted. The shifts it was " +
+          "calculated from stay where they are — what goes is the record of being paid."
+        }
+        submitting={saving}
+        error={error}
+        onCancel={() => setConfirmingDelete(false)}
+        onConfirm={() => void handleDelete()}
+      />
     </Modal>
   );
 }

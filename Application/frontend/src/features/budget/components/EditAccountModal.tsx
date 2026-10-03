@@ -4,6 +4,7 @@ import { Account, AccountKind } from "../types";
 import { getErrorMessage } from "../../grades/components/AddCourseModal";
 import { useAuth } from "../../../app/auth/AuthContext";
 import Modal from "../../../shared/components/Modal";
+import HelpTip from "../../../shared/components/HelpTip";
 
 interface EditAccountModalProps {
   readonly account: Account | null;
@@ -210,13 +211,14 @@ export default function EditAccountModal({
             checked={counts}
             onChange={(event) => setCounts(event.target.checked)}
           />
-          <label htmlFor="account-counts">
-            Count toward net worth
-            <span className="small-text muted">
-              {" "}— turn off for money that is not really yours, like money you
-              have lent out or a pot you hold for someone else
-            </span>
-          </label>
+          <span className="labelWithTip">
+            <label htmlFor="account-counts">Count toward net worth</label>
+            <HelpTip label="When to turn this off">
+              Turn it off for money that is not really yours — money you have lent out,
+              or a pot you hold for someone else. It leaves the headline figure without
+              hiding the account.
+            </HelpTip>
+          </span>
         </div>
 
         {/* Neither belongs on a form for something that does not exist yet. */}
@@ -229,12 +231,13 @@ export default function EditAccountModal({
               disabled={locked}
               onChange={(event) => setArchived(event.target.checked)}
             />
-            <label htmlFor="account-archived">
-              Archive
-              <span className="small-text muted">
-                {" "}— keeps its history but stops offering it
-              </span>
-            </label>
+            <span className="labelWithTip">
+              <label htmlFor="account-archived">Archive</label>
+              <HelpTip label="What archiving does">
+                Keeps the account and its history but stops offering it when you record
+                something. Reversible, unlike deleting it.
+              </HelpTip>
+            </span>
           </div>
         )}
 

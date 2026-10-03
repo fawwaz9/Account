@@ -239,39 +239,8 @@
   .topbarRight { justify-content: flex-end; }
 }
 
-/* ===== Signing in =====
-   Shown while the session check is in flight. It replaced `return null`, which
-   gave a blank white page on every cold load for as long as the check took --
-   indistinguishable from the app being broken. */
-
-.authBootstrap {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  min-height: 60vh;
-}
-
-.authBootstrapSpinner {
-  width: 22px;
-  height: 22px;
-  border: 2px solid #1f2a44;
-  border-top-color: var(--gold);
-  border-radius: 50%;
-  animation: authBootstrapSpin 0.7s linear infinite;
-}
-
-@keyframes authBootstrapSpin {
-  to { transform: rotate(360deg); }
-}
-
 /* Respecting the setting rather than spinning regardless: the element still
    says what is happening, it just stops moving. */
-@media (prefers-reduced-motion: reduce) {
-  .authBootstrapSpinner { animation: none; }
-}
-
 /* ===== Printing =====
    A page that prints is one page: the sidebar and topbar exist to navigate
    between pages, which a printed sheet has already stopped doing. Anything

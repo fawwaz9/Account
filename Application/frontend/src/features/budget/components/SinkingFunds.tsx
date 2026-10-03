@@ -5,7 +5,9 @@ import {
   fetchSinkingFunds,
   undoContribution,
 } from "../api";
+import DeleteConfirmModal from "../../grades/components/DeleteConfirmModal";
 import { SinkingFund } from "../types";
+import HelpTip from "../../../shared/components/HelpTip";
 import { formatMoney } from "../money";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { dueLabel } from "../../../shared/utils/dateUtils";
@@ -33,6 +35,10 @@ export default function SinkingFunds({ nonce, onAdd, onChanged }: SinkingFundsPr
   const [funds, setFunds] = useState<SinkingFund[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Removing a fund takes its transfers with it, so it asks first. The modal
+  // rather than the inline "Yes / Keep" pair used elsewhere in an editable list:
+  // the cascade needs a sentence, and the inline pair has nowhere to put one.
+  const [pendingRemoval, setPendingRemoval] = useState<SinkingFund | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -62,6 +68,11 @@ export default function SinkingFunds({ nonce, onAdd, onChanged }: SinkingFundsPr
     <section className="sinkSection">
       <div className="sectionHeading">
         <h2>Set aside</h2>
+        <HelpTip label="What setting aside does">
+          A fund says what something costs and when it is due, and works out what to
+          put by each month. A missed month raises the rest rather than quietly moving
+          the deadline.
+        </HelpTip>
         <button type="button" className="calButton" onClick={onAdd} disabled={busy}>
           New fund
         </button>
@@ -70,10 +81,7 @@ export default function SinkingFunds({ nonce, onAdd, onChanged }: SinkingFundsPr
       {error && <p className="calError">{error}</p>}
 
       {funds.length === 0 ? (
-        <p className="muted small-text">
-          Nothing reserved. A fund says what something costs and when it is due,
-          and works out what to put by each month.
-        </p>
+        <p className="muted small-text">Nothing reserved yet.</p>
       ) : (
         <ul className="sinkList">
           {funds.map((fund) => (
@@ -152,6 +160,29 @@ export default function SinkingFunds({ nonce, onAdd, onChanged }: SinkingFundsPr
           ))}
         </ul>
       )}
+      {/* It announced the cascade in its own aria-label and then performed it on
+          one click. Now the label is a promise the dialog keeps. */}
+      <DeleteConfirmModal
+        open={pendingRemoval !== null}
+        title="Remove this fund?"
+        message={
+          pendingRemoval
+            ? `"${pendingRemoval.name}" and every transfer recorded against it will ` +
+              `be removed. The money itself stays in the account it was moved to; ` +
+              `what goes is the goal and its history.`
+            : ""
+        }
+        confirmLabel="Remove the fund"
+        submitting={busy}
+        error={error}
+        onCancel={() => setPendingRemoval(null)}
+        onConfirm={async () => {
+          const fund = pendingRemoval;
+          if (!fund) return;
+          await act(() => deleteSinkingFund(user!.id, fund.id), "Could not remove that fund");
+          setPendingRemoval(null);
+        }}
+      />
     </section>
   );
 }

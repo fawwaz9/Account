@@ -13,6 +13,7 @@ import { useDebounce } from "../../../shared/hooks/useDebounce";
 import { formatMoney } from "../money";
 import { today } from "../../../shared/utils/dateUtils";
 import Modal from "../../../shared/components/Modal";
+import DeleteConfirmModal from "../../grades/components/DeleteConfirmModal";
 
 interface TuitionModalProps {
   readonly open: boolean;
@@ -53,6 +54,8 @@ export default function TuitionModal({
   const [preview, setPreview] = useState<TuitionPreview | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Permanent, and the term budget and per-course cost both move with it.
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   // Credits are history: a payment recorded before a course was added should
   // not start billing for it just because a typo in the fees was fixed. The
   // recount is there when the bill really did change, and is opt-in.
@@ -175,6 +178,7 @@ export default function TuitionModal({
   // Built on the server: school_year is a year of standing, not a calendar
   // year, so joining the parts here produced "3 Fall".
   async function handleDelete() {
+    setConfirmingDelete(false);
     if (!user || !paymentId) return;
     setSubmitting(true);
     setError(null);
@@ -424,6 +428,21 @@ export default function TuitionModal({
           </button>
         </div>
       </form>
+
+      <DeleteConfirmModal
+        open={confirmingDelete}
+        title="Delete this tuition payment?"
+        message={
+          "The payment and its deduction lines will be deleted, and the term budget " +
+          "and the per-course cost will both change. The ledger transaction it wrote " +
+          "is removed with it."
+        }
+        confirmLabel="Delete payment"
+        submitting={submitting}
+        error={error}
+        onCancel={() => setConfirmingDelete(false)}
+        onConfirm={() => void handleDelete()}
+      />
     </Modal>
   );
 }

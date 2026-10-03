@@ -1,5 +1,6 @@
 import { RecurringTransaction, UpcomingCharge } from "../types";
 import { formatMoney } from "../money";
+import HelpTip from "../../../shared/components/HelpTip";
 import { dueLabel, shortDate } from "../../../shared/utils/dateUtils";
 
 const KIND_LABELS: Record<string, string> = {
@@ -58,16 +59,18 @@ export default function Recurring({
         <div>
           <div className="sectionHeading">
             <h2>Standing instructions</h2>
+            <HelpTip label="What a standing instruction is">
+              Rent, a subscription or a monthly transfer, recorded for you on the day it
+              happens rather than waiting to be typed. Stopping one deletes the rule; the
+              payments it already made stay in the ledger.
+            </HelpTip>
             <button type="button" className="calButton" onClick={onAdd} disabled={busy}>
               Add
             </button>
           </div>
 
           {rules.length === 0 ? (
-            <p className="muted">
-              Nothing recurring yet. Rent, a subscription or a monthly transfer set up here is
-              recorded for you on the day it happens.
-            </p>
+            <p className="muted">Nothing recurring yet.</p>
           ) : (
             <ul className="recurringList">
               {rules.map((rule) => (
