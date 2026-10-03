@@ -1,0 +1,97 @@
+# Tests on every push.
+#
+# Reports; blocks nothing. `npm test` is kept out of the Pages build on purpose
+# (Ideas/shipping.md, "The three green lights") so a red test cannot take away
+# the ability to ship a hotfix, and this keeps to that: there is no branch
+# protection behind it. It exists so the three green lights are run on every
+# commit by something that never forgets, rather than by hand when remembered.
+#
+# Needs no credentials and touches nothing outside the runner.
+
+name: CI
+
+on:
+  # Every branch, not just main. PR branches are covered by their own pushes,
+  # so `pull_request` is deliberately absent: on a private repository it would
+  # bill the same commit twice. `ship` is included because the API deploy runs
+  # from it, and this is the first time CI sees that commit.
+  push:
+    paths-ignore:
+      - "**/*.md"
+      - "Ideas/**"
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        # Load-bearing: tests/conftest.py puts backend/ on sys.path relative to
+        # itself, and several tests import helpers as top-level modules.
+        working-directory: Application/backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: Application/backend/requirements.txt
+
+      - run: pip install -r requirements.txt
+
+      - name: pytest
+        env:
+          # app/config.py builds Settings() at import, with GOOGLE_CLIENT_ID
+          # required and JWT_SECRET required at 32+ characters. There is no
+          # Application/.env on a runner, so without these, five test files fail
+          # at collection. Dummies: no test calls Google or needs a real key.
+          GOOGLE_CLIENT_ID: ci-dummy.apps.googleusercontent.com
+          JWT_SECRET: ci-dummy-not-a-real-secret-0123456789abcdef
+          # TEST_DATABASE_URL is deliberately unset: conftest.py defaults it to
+          # in-memory SQLite and points the app's own DATABASE_URL at a temp file
+          # before anything imports it.
+          #
+          # The variable that permits a REMOTE test database must never appear in
+          # any workflow in this repository. The suite drops every table before
+          # the first test and after the last; conftest.py refuses a remote target
+          # at collection for exactly that reason.
+        run: python -m pytest tests/ -q -W error::sqlalchemy.exc.SAWarning
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        # Load-bearing: categoryRow, classCollisions and pageWidth tests read
+        # src/styles relative to the working directory.
+        working-directory: Application/frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"            # matches Pages' NODE_VERSION
+          cache: npm
+          cache-dependency-path: Application/frontend/package-lock.json
+
+      - run: npm ci
+
+      - run: npm test
+
+      # `build` is `tsc --noEmit && vite build`, so this is also the typecheck,
+      # and `npm run` puts node_modules/.bin first, so the npx-tsc trap cannot
+      # happen here.
+      #
+      # This dist/ is built with no VITE_API_BASE_URL, so its _headers point at
+      # localhost. It proves the bundle assembles and nothing else. Never upload
+      # or deploy it.
+      - run: npm run build
