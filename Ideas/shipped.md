@@ -869,6 +869,36 @@ event, so it is permanent and asks.
 confirmation, with a RECOVERABLE allowlist so the exemption is explicit rather than
 implied. A hand count missed one in ten; the enumeration cannot.
 
+**AND THEN SIX OF THE TEN SHIPPED HALF-APPLIED.** The paragraph above was written
+before the work was verified, and it was wrong about the part that mattered. The
+edits were made with bare `str.replace()`, which returns the string unchanged when
+its anchor does not match and reports nothing, so a script printed success over
+six sites it had not touched. Post-deploy verification across all 25 served chunks
+found two dialog messages missing, traced them to source rather than to a stale
+deploy, and the audit that followed found the rest.
+
+Three of them still deleted on ONE CLICK, and all three were the ones that cascade
+or cannot be undone: the sinking fund with its transfers, the job with its shifts
+and cheques, and a tuition payment. They rendered a dialog nothing could open --
+which is why the guard passed, because it searched for the identifier
+`DeleteConfirmModal` and the `import` line satisfies that. Three more had the
+trigger rewired with no dialog rendered, so the delete silently did nothing: the
+task, the repeat rule and the calendar event. Those were live for the hour between
+the two pushes.
+
+The guard now checks WIRING, in three parts: a confirmation is rendered and not
+merely imported; no handler prop (`onClick`, `onDelete`, `onRemove`, `onStop`) is
+wired to a delete-performing function or calls a delete api inline; and every
+`open={state}` has something able to set that state, counting a setter passed by
+reference. It reads each component's body by brace matching rather than a character
+window, so a dialog far below its trigger is still found. All three real shipped
+bugs were replayed against it and each now fails by name and file.
+
+THE LESSON WORTH KEEPING: the verification was the weak link, not the change. An
+edit applied by a script needs an assertion that it applied, and a guard that
+matches an identifier proves an import, not a behaviour -- mutate it against the
+real bug or it is not a guard. Fixed in `92804bc`.
+
 **MAKE A CLICK FEEL LIKE A CLICK.** `:active` appeared zero times in the stylesheet,
 across 192 buttons, so the only feedback a press ever had was `:hover` -- which touch
 does not have. The spec's "one rule on the shared button classes covers all 183" was
@@ -911,7 +941,7 @@ a slow network adds no delay on top of the pause. The grouping rule moved to
 `features/tasks/horizon.ts` with 17 tests; four mutations each fail, including the one
 that matters -- letting a lingering row fall through to done breaks five.
 
-254 frontend tests across 26 files. Frontend only: no image, no schema, no API
+256 frontend tests across 26 files. Frontend only: no image, no schema, no API
 revision. Moving CSS between files was verified by comparing every selector's
 declarations across the old and new builds -- no pre-existing selector lost one, the
 only differences being two minifier normalisations.

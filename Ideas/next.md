@@ -89,10 +89,14 @@ this section as the reasoning behind the ordering.
 > **CLOSED 2026-10-03.** All three shipped; see `shipped.md`, "The three interface
 > quality asks". Headline numbers, because they differ from the counts below:
 >
-> * **Deletes: it was TEN, not nine.** Enumerating the call sites instead of reading
->   the list found `deleteShift` in JobsPage, which the hand audit missed. Every
->   destructive call site now confirms, and `deleteConfirmations.test.ts` fails CI if
->   an eleventh appears.
+> * **Deletes: it was TEN, not nine -- and it took two deploys.** Enumerating the
+>   call sites instead of reading the list found `deleteShift` in JobsPage, which the
+>   hand audit missed. The first deploy then shipped six of the ten half-applied,
+>   three of them still deleting on one click, because the edits used bare
+>   `str.replace()` with no assertion and the guard matched the identifier
+>   `DeleteConfirmModal`, which an `import` line satisfies. `92804bc` wired all ten
+>   and rewrote the guard to check wiring -- rendered not imported, no handler prop
+>   deleting directly, every `open={state}` reachable from something that can set it.
 > * **Clicks: `:active` now exists**, as a bare `button:not(:disabled):active`
 >   baseline plus per-class rules. One rule on the shared classes could never have
 >   covered 183 buttons -- `.buttons` carries 19 of 192 and `.calButton` 64, and a
