@@ -23,6 +23,16 @@ export function useTasks({ includeDone, includeArchived, courseId }: UseTasksOpt
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Which filter the rows currently in `tasks` were actually fetched with.
+  //
+  // Until a fetch completes, `tasks` answers the PREVIOUS question. That is why
+  // turning on "show completed" used to flash "Nothing finished yet." before the
+  // list appeared: the empty message was true of the old answer and was being
+  // read as the new one. A list that knows its rows are not its own says
+  // "Loading..." instead of asserting an emptiness nobody has established.
+  const filterKey = `${includeDone ? 1 : 0}|${includeArchived ? 1 : 0}|${courseId ?? ""}`;
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+
   // Same ticket rule as the calendar: toggling "show completed" twice quickly
   // must not leave the earlier answer on screen under the later label.
   const latestRequest = useRef(0);
@@ -53,17 +63,23 @@ export function useTasks({ includeDone, includeArchived, courseId }: UseTasksOpt
       if (ticket !== latestRequest.current) return;
       setTasks(next);
       setRepeating(nextRepeating);
+      setLoadedKey(filterKey);
     } catch (err) {
       if (ticket !== latestRequest.current) return;
       setError(err instanceof Error ? err.message : "Could not load your tasks");
     } finally {
       if (ticket === latestRequest.current) setLoading(false);
     }
-  }, [userId, includeDone, includeArchived, courseId]);
+  }, [userId, includeDone, includeArchived, courseId, filterKey]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  return { tasks, repeating, loading, error, reload: load };
+  // Loading, specifically, with nothing on screen that answers the current
+  // filter -- as against a plain reload, where the rows already shown are still
+  // the right ones and replacing them with "Loading..." would only flicker.
+  const stale = loading && loadedKey !== filterKey;
+
+  return { tasks, repeating, loading, stale, error, reload: load };
 }

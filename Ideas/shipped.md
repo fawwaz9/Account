@@ -840,6 +840,40 @@ QUESTIONS WORTH ANSWERING BEFORE BUILDING, not while:
 
 ---
 
+## "Show completed" flashed "Nothing finished yet." -- FIXED 2026-10-03
+
+Reported from the screen: turning the toggle on showed the empty message first and
+the finished tasks a moment later.
+
+The toggle changes `includeDone`, which refetches -- but `tasks` still holds the
+rows fetched WITHOUT the done ones, so the Done group rendered with zero rows and
+said "Nothing finished yet.". The message was never wrong about the data in state;
+it was a true statement about the previous answer being read as the new one. An
+empty message is a claim about the data, and no group may make it before the data
+arrives.
+
+`useTasks` now returns `stale` alongside `loading`: loading AND the rows in state
+were fetched under a different filter. `loading` alone could not drive this, because
+it is also true during a plain reload, when the rows already on screen are still
+right -- wiring the lists to it would flicker every empty group every time a task
+was added. `TaskList` takes `loading` and, only when it has no rows, shows
+"Loading..." in place of the empty message and withholds the count as well, since
+"0 tasks" beside "Loading..." is the same false claim in fewer words. All four
+lists are wired, so the fortnight and Overdue stop asserting emptiness on first
+load too. No CSS: the built stylesheet is byte-identical.
+
+The guard covers all three links, because this morning proved the leaf being right
+is not the question: seven component tests, three hook tests for `stale`, and a
+source test that every `<TaskList>` in `TasksPage` is actually passed
+`loading={stale}` -- the "written correctly, never wired" failure mode. Five
+mutations were each confirmed to fail a test by name, including dropping the prop
+from the Done list and wiring it to plain `loading`.
+
+269 frontend tests across 28 files. Frontend only: no image, no schema, no API
+revision.
+
+---
+
 ## The three interface quality asks -- SHIPPED 2026-10-03
 
 Asked for 2026-09-28; all three closed together. The counts in `next.md` were the

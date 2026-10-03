@@ -57,7 +57,7 @@ import "../styles/tasks.css";
 export default function TasksPage() {
   const { user } = useAuth();
   const [showDone, setShowDone] = useState(false);
-  const { tasks, repeating, loading, error, reload } = useTasks({
+  const { tasks, repeating, loading, stale, error, reload } = useTasks({
     includeDone: showDone,
     includeArchived: showDone,
   });
@@ -253,6 +253,7 @@ export default function TasksPage() {
               onWake={handleWake}
               busy={busy}
               emptyMessage="Nothing overdue."
+              loading={stale}
             />
           </div>
 
@@ -268,6 +269,7 @@ export default function TasksPage() {
               onWake={handleWake}
               busy={busy}
               emptyMessage="Nothing without a date."
+              loading={stale}
             />
           </div>
 
@@ -284,6 +286,7 @@ export default function TasksPage() {
                 onWake={handleWake}
                 busy={busy}
                 emptyMessage="Nothing finished yet."
+                loading={stale}
               />
             </div>
           )}
@@ -321,6 +324,7 @@ export default function TasksPage() {
               onWake={handleWake}
               busy={busy}
               emptyMessage="Clear for a fortnight."
+              loading={stale}
             />
             {/* Under the list it qualifies, so the fortnight is not read as
                 everything there is. */}
