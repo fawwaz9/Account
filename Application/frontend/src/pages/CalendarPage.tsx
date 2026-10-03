@@ -272,6 +272,23 @@ export default function CalendarPage() {
         onSaved={reload}
       />
 
+      {/* `restoreOccurrence` un-skips one occurrence of a repeat; there is no
+          undelete for an event, so this is permanent and asks first. */}
+      <DeleteConfirmModal
+        open={confirmingDelete}
+        title="Delete this event?"
+        message={
+          selected
+            ? `"${selected.title}" will be deleted from the calendar. If it repeats, the `
+              + `whole series goes, not just this occurrence.`
+            : ""
+        }
+        submitting={busy}
+        error={actionError}
+        onCancel={() => setConfirmingDelete(false)}
+        onConfirm={() => void handleDelete()}
+      />
+
       <BlackoutsModal
         open={blackoutsOpen}
         onClose={() => setBlackoutsOpen(false)}

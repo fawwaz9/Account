@@ -257,7 +257,12 @@ export default function JobModal({ open, job, onClose, onSaved }: JobModalProps)
 
         <div className="calFormActions">
           {job && (
-            <button type="button" className="calButton" onClick={handleDelete} disabled={saving}>
+            <button
+              type="button"
+              className="calButton"
+              onClick={() => setConfirmingRemoval(true)}
+              disabled={saving}
+            >
               Remove
             </button>
           )}

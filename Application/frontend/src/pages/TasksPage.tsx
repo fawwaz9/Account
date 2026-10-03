@@ -356,6 +356,40 @@ export default function TasksPage() {
         onSaved={reload}
       />
 
+      <DeleteConfirmModal
+        open={deletingTask !== null}
+        title="Delete this task?"
+        message={
+          deletingTask
+            ? `"${deletingTask.title}" will be deleted. There is no undo — if you only `
+              + `want it out of the way, tick it off instead.`
+            : ""
+        }
+        submitting={busy}
+        error={actionError}
+        onCancel={() => setDeletingTask(null)}
+        onConfirm={() => { if (deletingTask) void handleDelete(deletingTask); }}
+      />
+
+      {/* The button says "Stop", and it calls deleteRepeating. The rule goes; the
+          occurrences already ticked off stay, because they record work done. */}
+      <DeleteConfirmModal
+        open={stoppingRule !== null}
+        title="Stop this repeat?"
+        message={
+          stoppingRule
+            ? `"${stoppingRule.title}" will stop repeating and the rule will be deleted. `
+              + `Occurrences you have already ticked off stay where they are — they record `
+              + `work you actually did.`
+            : ""
+        }
+        confirmLabel="Stop repeating"
+        submitting={busy}
+        error={actionError}
+        onCancel={() => setStoppingRule(null)}
+        onConfirm={() => { if (stoppingRule) void handleStopRepeat(stoppingRule); }}
+      />
+
       <RepeatingModal
         open={addingRule}
         rule={editingRule}

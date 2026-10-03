@@ -148,10 +148,7 @@ export default function SinkingFunds({ nonce, onAdd, onChanged }: SinkingFundsPr
                 type="button"
                 className="sinkRemove small-text"
                 disabled={busy}
-                onClick={() => act(
-                  () => deleteSinkingFund(user!.id, fund.id),
-                  "Could not remove that fund"
-                )}
+                onClick={() => setPendingRemoval(fund)}
                 aria-label={`Remove ${fund.name} and its transfers`}
               >
                 Remove

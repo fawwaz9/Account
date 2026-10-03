@@ -410,7 +410,7 @@ export default function TuitionModal({
             <button
               type="button"
               className="deleteCourseButton"
-              onClick={handleDelete}
+              onClick={() => setConfirmingDelete(true)}
               disabled={submitting}
             >
               Delete payment
