@@ -107,6 +107,13 @@ cd Application/backend  && .venv/bin/python -m pytest tests/ -q -W error::sqlalc
 cd Application/frontend && npm test && ./node_modules/.bin/tsc --noEmit && npm run build
 ```
 
+CI runs exactly these on every push. Running them locally first is still
+faster than waiting for it.
+
+> **CI runs on UTC; the test user lives in America/Regina.** A test that compares
+> against `date.today()` passes on your Mac and fails on CI every evening after
+> 6pm Regina time. Expect `user_today(db, user.id)`, the app's own clock.
+
 > **`npm test` is deliberately not part of `npm run build`.** Cloudflare Pages
 > runs the build script, so a red test there would take away your ability to
 > deploy a hotfix. The gate belongs here, in front of a person, not in the
@@ -171,6 +178,37 @@ database `create_all` just built, the migration path is never exercised.
 column is invisible to the running image, so it can land early and safely. New
 code against a missing column is a 500. And pushing `main` is what builds the
 frontend, so it goes last, after the API it depends on is proven.
+
+### The automated path — use this
+
+```sh
+git push origin HEAD:ship    # the API: backup, schema gate, build, deploy, verify (~3 min)
+# read the run: gh run watch, or the Actions tab
+git push origin main         # the frontend, last, when the API run is green
+```
+
+`.github/workflows/deploy-api.yml` does steps 10, 12 and 13 below, and checks
+what step 13 asks you to check: that the revision taking 100% of traffic runs
+the digest just pushed, `/health`, and CORS against a stranger's origin as well
+as yours. Its summary prints the four facts step 16 wants for `ROLLBACK.md`.
+
+**Step 11 is still yours.** The workflow never applies the schema. It compares
+the models against production's catalogue first and refuses to deploy if a table
+or column is missing, printing the command to run. So: if the deploy stops at
+*schema-gate*, do step 11 by hand, then re-run the deploy.
+
+`main` keeps its meaning — pushing it builds the frontend — so the order holds:
+`ship` deploys the API on its own, and the push to `main` stays a person's call
+at the last reversible moment. CI (`.github/workflows/ci.yml`) runs the three
+green lights on every push, `ship` included; it reports and blocks nothing.
+
+Auth is Workload Identity Federation: there is no key. GCP mints tokens only for
+`refs/heads/ship` of this repository, to `github-deployer@account-504419`, which
+holds three roles, each on one resource. If it is ever refused, that binding is
+the first place to look.
+
+**The steps below are the manual fallback** — for when Actions is down or the
+GCP binding breaks. They are what the workflow does, in the same order.
 
 ### 10. Back up first
 
@@ -436,10 +474,10 @@ reasoning and the measurements are in `deployment.md` under *Housekeeping*.
 4. Docs in the same commit.
 5. Tests, `./node_modules/.bin/tsc`, build.
 6. Exercise it against a **copy** of the database.
-7. Back up.
-8. Schema to Supabase — only if `app/_database/` changed, columns asserted absent first.
-9. Build amd64, smoke-test, push.
-10. `gcloud run deploy --port=8000`, confirm `latestRevision: True`.
+7. `git push origin HEAD:ship` — backup, build, deploy and verify, automated.
+8. If it stops at the schema gate: schema to Supabase by hand, then re-run it.
+9. (Manual fallback for 7, if Actions or GCP auth is broken: steps 10–13.)
+10. Read the run green before going on.
 11. Push `main`, verify the frontend **by content**, and by chunk — the bundle is
     split, and a 200 on a missing asset is Pages serving `index.html`.
 12. Update `ROLLBACK.md` and `shipped.md` (and `next.md`, if an entry is now closed).

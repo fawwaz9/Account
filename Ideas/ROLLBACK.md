@@ -18,10 +18,12 @@ deployment on **2026-09-28**, including that traffic is on `LATEST`.
 | Database | Supabase project `kujxxairehpwhxhnkbct`, region `us-west-2`, Postgres 17.6 |
 | Backups | GitHub Actions artifacts, `Backup database` workflow, 90-day retention |
 | Secrets | Google Secret Manager: `jwt-secret`, `database-url` |
-| Current image | `…/backend:2ee1e0e` — revision `account-api-00024-hj7`, serving 100% |
-| Previous image | `…/backend:6b3dcce` — revisions `account-api-00022-vmx` and `00023-jzr`, the latter an allowlist change on the same image |
+| Current image | `…/backend:4a9cbac` — revision `account-api-00026-6rn`, serving 100%. First deploy by the `ship` workflow |
+| Same app code | `…/backend:095d37b` (`00025-4cz`) and `…/backend:2ee1e0e` (`00024-hj7`). **`app/` is identical across 00024–00026** — 00025 and 00026 proved the deploy pipeline and changed only scripts and tests. Rolling back to either changes nothing a user sees |
+| Previous image | `…/backend:6b3dcce` — revisions `account-api-00022-vmx` and `00023-jzr`, the latter an allowlist change on the same image. **The last functionally different release** |
+| Deployer | `github-deployer@account-504419.iam.gserviceaccount.com`, via Workload Identity Federation (pool `github`, provider `github`). No key. Tokens only for `refs/heads/ship` of this repo. Roles: `artifactregistry.writer` on the `account` repo, `run.developer` on `account-api`, `iam.serviceAccountUser` on `account-api@…` |
 | GCP project | `account-504419`, registry `us-west1-docker.pkg.dev/account-504419/account` |
-| Repo | `fawwaz9/Account` — a push to `main` rebuilds the **frontend** only |
+| Repo | `fawwaz9/Account` — a push to `main` rebuilds the **frontend**; a push to `ship` deploys the **API** (`deploy-api.yml`) |
 
 > **There is a second Supabase project, `ommqbgaasrusrlizzyzm`.** It was created
 > for the step 34 restore test and holds **a full copy of every user's financial

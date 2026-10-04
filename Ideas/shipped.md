@@ -840,6 +840,56 @@ QUESTIONS WORTH ANSWERING BEFORE BUILDING, not while:
 
 ---
 
+## CI, and the API deploys itself from `ship` -- SHIPPED 2026-10-03
+
+Asked for because deploying by hand took too long. `shipping.md` steps 10-15 were
+a dozen commands typed in order from a laptop, each with a trap someone had
+already fallen into.
+
+**CI** (`ci.yml`) runs the three green lights on every push: backend pytest and
+frontend test + build, in parallel, ~90s. Docs-only commits skip it. It reports
+and blocks nothing, keeping the rule that a red test cannot block a hotfix.
+Proven by breaking it on purpose -- no `JWT_SECRET` failed the backend at
+collection, a type error only `tsc` can see failed the build with the tests
+green, and a docs-only push started no run.
+
+**The deploy** (`deploy-api.yml`): `git push origin HEAD:ship` runs the backup
+(`backup.yml`, now callable, its plausibility gate a precondition), builds amd64,
+smoke-tests the container, checks the image carries this commit's source, pushes,
+deploys with `--port=8000`, then verifies that the revision taking 100% of traffic
+runs the digest just pushed, `/health`, and CORS against a stranger's origin as
+well as ours. A separate branch because pushing `main` IS the frontend deploy:
+anything triggered by it would deploy the API after the frontend.
+
+**The schema is never applied by the workflow.** `check_schema_conformance.py`
+compares the models with production's catalogue and refuses the deploy when a
+table or column is missing, printing the fix. It replaces the git-diff gate, which
+fired on a deleted design note and could not see a column missing from
+`ADDED_COLUMNS`. It runs as `ci_reader`, a CONNECT-only role refused every row of
+data -- proven on a throwaway Postgres 17 that such a role still sees the schema.
+
+**No key exists.** Workload Identity Federation: GCP mints tokens only for
+`refs/heads/ship` of this repo. A probe proved it three ways before any role was
+granted -- `ship` got a token, that token was refused the registry, and another
+branch was refused a token outright. The deployer then got three roles, each on
+one resource, none project-wide.
+
+Three things the first runs caught, all fixed:
+- The gate's first credential failure crashed with exit 1 -- the code meaning
+  "apply the schema". A bad password must not send anyone to run a migration; it
+  now exits 2 and says it could not connect.
+- The first real deploy SUCCEEDED and then failed its own check: Cloud Run records
+  a revision's image by digest, never by the tag deployed. It now resolves what
+  `:SHA` is in the registry and compares digests -- which a moved tag cannot fool.
+- CI's first evening run failed two tests that compared against `date.today()`.
+  The test user lives in America/Regina and the runner in UTC, so from 6pm they
+  disagree by a day. Both now expect `user_today`; the suite passes on UTC, local
+  and UTC+14 clocks.
+
+Two deploys (00025, 00026) changed no app code -- they proved the pipeline.
+
+---
+
 ## "Show completed" flashed "Nothing finished yet." -- FIXED 2026-10-03
 
 Reported from the screen: turning the toggle on showed the empty message first and
