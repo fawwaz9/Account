@@ -100,3 +100,13 @@ def test_no_url_is_refused(tmp_path):
 
     assert result.returncode == 2
     assert "SCHEMA_CHECK_URL is not set" in result.stderr
+
+
+def test_a_connection_failure_is_not_reported_as_a_missing_schema(tmp_path):
+    # Exit 1 sends someone to run a migration. A bad password must not.
+    result = run_check("postgresql://nobody:wrong@127.0.0.1:1/none")
+
+    assert result.returncode == 2
+    assert "Could not connect" in result.stderr
+    assert "not the schema" in result.stderr
+    assert "Traceback" not in result.stderr

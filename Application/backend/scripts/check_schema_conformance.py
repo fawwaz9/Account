@@ -39,6 +39,7 @@ sys.path.insert(0, str(BACKEND_DIR))
 
 from sqlalchemy import create_engine, inspect  # noqa: E402
 from sqlalchemy.engine import make_url  # noqa: E402
+from sqlalchemy.exc import OperationalError  # noqa: E402
 from sqlalchemy.pool import NullPool  # noqa: E402
 
 from app._database.db import Base, connect_args_for, normalize_database_url  # noqa: E402
@@ -83,8 +84,23 @@ def main() -> int:
 
     engine = create_engine(url, connect_args=connect_args_for(url), poolclass=NullPool)
     try:
-        inspector = inspect(engine)
-        live_tables = set(inspector.get_table_names())
+        try:
+            inspector = inspect(engine)
+            live_tables = set(inspector.get_table_names())
+        except OperationalError as exc:
+            # Could not connect, so nothing is known about the schema either way.
+            # Exit 2, not 1: 1 means "a column is missing, apply the schema", and
+            # sending someone to run a migration over a bad password is worse than
+            # no message at all. The driver's last line carries the actual reason.
+            reason = str(exc.orig).strip().splitlines()[-1] if exc.orig else str(exc)
+            print(f"Could not connect to {where}:\n  {reason}", file=sys.stderr)
+            print(
+                "\nThis is the credential or the network, not the schema. Check the "
+                f"{VARIABLE} secret: session pooler port 5432, and a username of the "
+                "form <role>.<project-ref>.",
+                file=sys.stderr,
+            )
+            return 2
 
         if len(live_tables) < MIN_LIVE_TABLES:
             print(
