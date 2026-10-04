@@ -520,7 +520,13 @@ def get_single_transaction(user_id: VerifiedUserId, transaction_id: UUID, db: DB
 def edit_transaction(
     user_id: VerifiedUserId, transaction_id: UUID, transaction: TransactionUpdate, db: DBSession
 ):
-    updated = update_transaction(db, user_id, transaction_id, transaction)
+    # The service refuses a course or category that is not the caller's, and an
+    # amount edit on a tuition row, by raising. Uncaught, both were a 500 -- the
+    # tuition one in front of a real user, with a message written for them.
+    try:
+        updated = update_transaction(db, user_id, transaction_id, transaction)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if updated is None:
         raise HTTPException(status_code=404, detail="Transaction not found")
 

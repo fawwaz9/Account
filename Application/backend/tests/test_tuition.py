@@ -496,6 +496,36 @@ def test_the_plain_editor_refuses_a_tuition_amount(db, user):
                            TransactionUpdate(amount=5.0))
 
 
+def test_the_route_says_so_rather_than_crashing(db, user):
+    """The service raises; the route has to turn that into the message.
+
+    It did not: the PATCH route never caught ValueError, so this refusal --
+    written for the person reading it -- reached them as a bare 500.
+    """
+    from fastapi.testclient import TestClient
+
+    import app.main
+    from app._database.db import get_db
+    from app.Auth.dependencies import get_current_user
+
+    set_term(db, user)
+    account = make_account(db, user.id, "Chequing")
+    in_term(db, user, "CPSC 210", credits=4.0)
+    payment = pay(db, user, account, rate=250.0)
+
+    app.main.app.dependency_overrides[get_current_user] = lambda: user
+    app.main.app.dependency_overrides[get_db] = lambda: db
+    try:
+        response = TestClient(app.main.app).patch(
+            f"/api/finances/{user.id}/transactions/{payment.transaction_id}", json={"amount": 5.0},
+        )
+    finally:
+        app.main.app.dependency_overrides.clear()
+
+    assert response.status_code == 400
+    assert "Pay Tuition" in response.json()["detail"]
+
+
 def test_a_tuition_row_says_which_payment_owns_it(db, user):
     """The client needs this to send the row to the right editor."""
     from app.Finances.services.transaction_service import list_transactions
