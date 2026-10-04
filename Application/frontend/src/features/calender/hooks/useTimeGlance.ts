@@ -19,6 +19,10 @@ export function useTimeGlance() {
   const userId = user?.id;
   const [blocks, setBlocks] = useState<FreeBlock[]>([]);
   const [load, setLoad] = useState<WeekLoad | null>(null);
+  // Whether the week has been read, successfully. A failed read leaves `load`
+  // null exactly as an unanswered one does, and the dashboard's checklist must
+  // not take either for "nothing on your week".
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     if (!userId) return;
@@ -37,15 +41,17 @@ export function useTimeGlance() {
         if (cancelled) return;
         setBlocks(nextBlocks);
         setLoad(nextLoad);
+        setLoaded(true);
       })
       .catch(() => {
         if (cancelled) return;
         setBlocks([]);
         setLoad(null);
+        setLoaded(false);
       });
 
     return () => { cancelled = true; };
   }, [userId]);
 
-  return { blocks, load };
+  return { blocks, load, loaded };
 }

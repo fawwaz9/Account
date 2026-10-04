@@ -5,19 +5,46 @@ import { useBudgetGlance } from "../features/budget/hooks/useBudgetGlance";
 import { useTimeGlance } from "../features/calender/hooks/useTimeGlance";
 import { duration } from "../shared/utils/dateUtils";
 import { formatMoney } from "../features/budget/money";
+import GetStarted, { steps } from "../features/onboarding/GetStarted";
+
+function browserZone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return undefined;
+  }
+}
 
 export default function Dashboard() {
   const { user } = useAuth();
 
-  const { summary, error: summaryError } = useDashboard();
-  const { summary: budget, totalBalance, error: budgetError } = useBudgetGlance();
-  const { blocks: freeBlocks, load: weekLoad } = useTimeGlance();
+  const { summary, loading: summaryLoading, error: summaryError } = useDashboard();
+  const {
+    accounts, summary: budget, totalBalance, error: budgetError, loaded: budgetLoaded,
+  } = useBudgetGlance();
+  const { blocks: freeBlocks, load: weekLoad, loaded: weekLoaded } = useTimeGlance();
   // Nothing to say without a timetable, so the section stays away
   // rather than showing a row of zeroes.
   const hasWeek = Boolean(weekLoad && (weekLoad.booked_minutes > 0
     || weekLoad.task_count > 0 || freeBlocks.length > 0));
 
   const hasCourses = (summary?.total_courses ?? 0) > 0;
+
+  // Only once every source has answered, and answered successfully. The steps
+  // are claims about what exists, so a slow or failed read must not show a
+  // student a list telling them to add courses they already have.
+  const checklistReady = Boolean(
+    user && !summaryLoading && !summaryError && summary && budgetLoaded && weekLoaded
+  );
+  const checklist = checklistReady && user ? steps({
+    termSet: Boolean(user.current_school_year && user.current_semester),
+    zone: user.preferences?.timezone,
+    browserZone: browserZone(),
+    courseCount: summary?.total_courses ?? 0,
+    hasMoney: accounts.some((account) => account.balance !== 0)
+      || (budget?.total_actual ?? 0) > 0,
+    hasWeek: Boolean(weekLoad && (weekLoad.booked_minutes > 0 || weekLoad.task_count > 0)),
+  }) : null;
 
   return (
     <div className="dashboard">
@@ -29,6 +56,8 @@ export default function Dashboard() {
       {/* Discarded entirely once, so a failed budget fetch rendered as no
           budget section at all -- indistinguishable from having no money. */}
       {budgetError && <p className="muted" role="alert">{budgetError}</p>}
+
+      {checklist && user && <GetStarted userId={user.id} steps={checklist} />}
 
       {hasCourses && summary && (
         <section className="gradeSummary">

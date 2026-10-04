@@ -57,3 +57,60 @@
 }
 
 .summaryCourses p { margin: 0; font-size: 0.9rem; }
+
+/* The first-run checklist. A column, not the stat row the other sections use. */
+.getStarted {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.getStartedHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.getStartedHeader h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.getStartedCount {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: normal;
+  margin-left: 6px;
+}
+
+.getStartedHide {
+  margin-left: auto;
+}
+
+.getStartedList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.getStartedStep {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.getStartedStep a {
+  color: var(--gold-soft);
+}
+
+.getStartedMark {
+  width: 1.2em;
+  color: var(--gold);
+}
+
+.getStartedDone {
+  color: var(--muted);
+}

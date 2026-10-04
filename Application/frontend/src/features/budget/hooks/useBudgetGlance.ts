@@ -52,5 +52,8 @@ export function useBudgetGlance() {
   // construction rather than by both being written the same way twice.
   const totalBalance = worth?.net_worth ?? 0;
 
-  return { accounts, summary, totalBalance, netWorth: worth, error };
+  // Read successfully, as opposed to not yet answered or failed.
+  const loaded = summary !== null && error === null;
+
+  return { accounts, summary, totalBalance, netWorth: worth, error, loaded };
 }
