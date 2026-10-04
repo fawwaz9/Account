@@ -13,6 +13,7 @@ import { useDashboard } from "../../features/grades/hooks/useDashboard";
 import { useBlindSpots } from "../../features/grades/hooks/useBlindSpots";
 import { Course } from "../../features/grades/types";
 import { useAuth } from "../../app/auth/AuthContext";
+import { useShortcut } from "../../shared/hooks/useShortcut";
 
 interface TermGroup {
   semester: string;
@@ -75,6 +76,9 @@ export default function GradesPage() {
   }
 
   const viewingYear = selectedYear !== null;
+
+  // Only while "Add Course" is on screen: a past year's view has no such button.
+  useShortcut("n", () => setIsModalOpen(true), !viewingYear);
 
   return (
     <>

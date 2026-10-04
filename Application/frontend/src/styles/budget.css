@@ -617,6 +617,42 @@
   outline-offset: 1px;
 }
 
+/* The reorder handle, in the corner below the pencil and quiet like it. Always
+   shown for the same reason: there is no hover on a touch screen. */
+.sectorDrag {
+  position: absolute;
+  bottom: 8px;
+  right: 10px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: grab;
+  padding: 2px 4px;
+  border-radius: 4px;
+  opacity: 0.45;
+  /* Without this a finger on the handle scrolls the page instead of dragging. */
+  touch-action: none;
+  transition: 0.15s ease;
+}
+
+.sectorCard:hover .sectorDrag { opacity: 1; }
+.sectorDrag:hover { color: var(--gold); opacity: 1; }
+.sectorDrag:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+.sectorDrag:disabled { cursor: progress; opacity: 0.3; }
+
+.sectorCard--dragging {
+  border-color: var(--gold);
+  box-shadow: 0 6px 18px var(--shadow);
+  opacity: 0.85;
+}
+.sectorCard--dragging .sectorDrag { cursor: grabbing; color: var(--gold); opacity: 1; }
+
 .shareWarning { color: var(--gold); }
 
 /* ===== Standing instructions =====

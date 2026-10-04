@@ -12,6 +12,7 @@ import { useJobs } from "../features/jobs/hooks/useJobs";
 import { deleteShift } from "../features/jobs/api";
 import { Job, Paycheque, ShiftOccurrence } from "../features/jobs/types";
 import { useAuth } from "../app/auth/AuthContext";
+import { useShortcut } from "../shared/hooks/useShortcut";
 import "../styles/calendar.css";
 import "../styles/jobs.css";
 
@@ -37,6 +38,8 @@ export default function JobsPage() {
   const [payingCheque, setPayingCheque] = useState<Paycheque | null>(null);
   const [recordingPay, setRecordingPay] = useState(false);
   const [removingShift, setRemovingShift] = useState(false);
+
+  useShortcut("n", () => { setEditing(null); setAdding(true); });
   // The tenth unconfirmed delete, missed by the audit of nine: removing a shift
   // is permanent, and the hours it carried leave the earnings figures with it.
   const [removingTarget, setRemovingTarget] = useState<ShiftOccurrence | null>(null);

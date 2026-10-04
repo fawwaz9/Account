@@ -324,12 +324,10 @@ are the size of each job rather than an impression of it.
         Reimbursement state, and who and when for money lent out. On whichever
           account you actually keep it in -- there is no seeded pot for it since
           the "Money Lent" default was removed.
-        Account ordering is stored (position) but has no editor, so the grid
-          order is whatever creation happened to produce. Worth a drag handle
-          only if the list gets long.
-        (Restored 2026-09-17. These two were listed only in design/finances.md
+        (Restored 2026-09-17. These were listed only in design/finances.md
         and in the "Needs new storage" section below, so the module list read as
-        though Budget had nothing left. It does.)
+        though Budget had nothing left. It does. Account ordering, the other of
+        the two, shipped 2026-10-03.)
 
 ### Grades x Budget (nothing else does this)
         A dollar figure next to a dropped course, since the deadline to drop with a refund is a date on the calendar.
@@ -337,14 +335,7 @@ are the size of each job rather than an impression of it.
 
 ### Quality of Life
         Weekly digest on the dashboard: what is due, what moved, what you spent.
-        Keyboard shortcuts for the four things you do twenty times a day.
         Offline-capable, because campus wifi. Only read-only offline should be implemented.
-        Remove all the dashboard buttons for the modules the sidebar is enough in my opinion.
-          Confirmed: Dashboard.tsx lines 149-169, five buttons that only call
-          navigate() -- /grades, /calendar, /tasks, /budget, /settings. They
-          duplicate the sidebar exactly. Deleting them is deletion only, no
-          replacement needed. Check the .action-widget CSS has no other user
-          before removing it too.
         Add icons for each module in the sidebar.
           Confirmed missing: Sidebar.tsx renders labels only, zero svg. The nav
           is a plain array of {to, label} at lines 11-17, so this is one icon

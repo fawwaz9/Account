@@ -876,6 +876,48 @@ against a production-URL build.
 
 ---
 
+## Keyboard shortcuts, and accounts you can reorder -- SHIPPED 2026-10-03
+Frontend only. No endpoint, no schema, no deploy gate.
+
+KEYBOARD SHORTCUTS. G then a letter goes to a module (D G C T J B S, read from
+the Sidebar's own NAV array so the two cannot drift). ? opens the list -- the
+only place shortcuts are shown, by the owner's choice. N adds on the current
+page: new event, focus the task quick-add, new job, Add Course, Record Money.
+On the calendar, the arrows step and T goes to today. Every one calls the same
+handler as the visible button it stands in for. N on Grades is off while a past
+year is shown (no Add Course there) and on Budget while there are no accounts
+(Record Money is disabled then).
+  "NOTHING FIRES WHILE TYPING" is one function, isTypingContext in
+  shared/hooks/useShortcut.ts: inputs, textareas, selects, contenteditable,
+  any modifier (Cmd-K stays the omnibox's), IME composition, an already
+  handled event, and ANY OPEN aria-modal DIALOG -- so N pressed on a form's
+  Save button cannot open a second form behind it.
+  G sequences listen on the CAPTURE phase so the key after G is consumed
+  before any page hears it; otherwise G T on the calendar would also jump to
+  today. Tested, and mutation-tested along with each guard above.
+
+ACCOUNT ORDERING. A drag handle on each account card, beside the pencil and
+outside the card's Link (a handle inside it would open the account on every
+drag). Pointer Events with pointer capture, not HTML5 drag-and-drop, which
+never fires on touch; touch-action: none on the handle. The card under the
+finger is found by elementFromPoint and its index in the grid, so the wrapping
+grid needs no layout maths. The focused handle also moves by arrow keys, one
+place per press. Escape mid-drag puts it back.
+  SAVED AS ONE PATCH PER ACCOUNT THAT MOVED, through the existing
+  ownership-checked account route. Not atomic: a failure midway leaves a mixed
+  order. Accepted on purpose -- it costs nothing but order, dragging again fixes
+  it, and a batch endpoint would have needed a backend deploy. Either way the
+  grid reloads to what the server holds and says so on failure.
+  Every index is written, not nudged: accounts made before ordering existed can
+  share position 0, and only distinct positions make the order mean anything.
+  New accounts were already created at position = count, so they land last.
+
+NOT VERIFIED IN A REAL BROWSER by me: the pointer path is tested in jsdom with
+elementFromPoint stubbed, so actual hit-testing on a phone was not exercised.
+
+Also removed from next.md: "remove the dashboard buttons", which had shipped in
+0224d31 (see the dead-code pass above) but was still listed as to-do.
+
 ## Every frontend "today" on the Settings time zone -- SHIPPED 2026-10-03
 
 The follow-up the now-line left open. The week view had moved onto the Settings

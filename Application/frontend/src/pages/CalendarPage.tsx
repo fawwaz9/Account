@@ -21,6 +21,7 @@ import { fetchCourses } from "../features/grades/api";
 import { Course } from "../features/grades/types";
 import { useAuth } from "../app/auth/AuthContext";
 import { addDays, monthLabel, shortDate, today, weekLabel } from "../shared/utils/dateUtils";
+import { useShortcut } from "../shared/hooks/useShortcut";
 import "../styles/calendar.css";
 
 export default function CalendarPage() {
@@ -59,6 +60,13 @@ export default function CalendarPage() {
     setComposeDate(date);
     setComposing(true);
   }
+
+  // The same calls the buttons in the header make, so a shortcut can never do
+  // something its button would not.
+  useShortcut("n", () => openNewEvent(today()));
+  useShortcut("ArrowLeft", () => step(-1));
+  useShortcut("ArrowRight", () => step(1));
+  useShortcut("t", () => setCursor(today()));
 
   /** A task changed in the editor moves hours around, so the insights refetch. */
   async function handleTaskSaved() {

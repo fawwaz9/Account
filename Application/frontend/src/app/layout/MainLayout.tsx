@@ -3,6 +3,7 @@ import { Outlet } from "react-router-dom";
 import Loading from "../../shared/components/Loading";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
+import KeyboardShortcuts from "./KeyboardShortcuts";
 import "../../styles/layout.css";
 
 /**
@@ -23,6 +24,7 @@ export default function MainLayout() {
   return (
     <div className="appShell">
       <Sidebar />
+      <KeyboardShortcuts />
       <div className="appMain">
         <Topbar />
         <main className="appContent">

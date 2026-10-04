@@ -1,3 +1,4 @@
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Account, InvestmentReturn } from "../types";
 import { formatMoney, formatPercent } from "../money";
@@ -7,6 +8,32 @@ interface SectorsProps {
   readonly accounts: readonly Account[];
   readonly onEdit: (account: Account) => void;
   readonly onAdd: () => void;
+  /** Saves a new order, given every account id in it. No handles without it. */
+  readonly onReorder?: (orderedIds: string[]) => Promise<void>;
+}
+
+/**
+ * Which accounts need a new `position` for the cards to read in `orderedIds`.
+ *
+ * Only the ones whose stored position differs from their new index, so a move
+ * of one card writes as few rows as it can. Every index is written out rather
+ * than nudged: accounts created before ordering existed can share a position,
+ * and only distinct ones make the order mean anything.
+ */
+export function positionChanges(
+  accounts: readonly Account[],
+  orderedIds: readonly string[],
+): { id: string; position: number }[] {
+  const stored = new Map(accounts.map((account) => [account.id, account.position]));
+  return orderedIds
+    .map((id, position) => ({ id, position }))
+    .filter(({ id, position }) => stored.get(id) !== position);
+}
+
+function moved(ids: readonly string[], id: string, to: number) {
+  const next = ids.filter((each) => each !== id);
+  next.splice(Math.max(0, Math.min(to, next.length)), 0, id);
+  return next;
 }
 
 /** The pots money sits in, with what each currently holds. */
@@ -54,7 +81,78 @@ function worthOf(account: Account) {
     : account.balance;
 }
 
-export default function Sectors({ accounts, onEdit, onAdd }: SectorsProps) {
+export default function Sectors({ accounts, onEdit, onAdd, onReorder }: SectorsProps) {
+  const gridRef = useRef<HTMLDivElement>(null);
+  // The order on screen while a card is being moved or saved; null otherwise,
+  // when the cards simply follow what the server last sent.
+  const [order, setOrder] = useState<string[] | null>(null);
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const byId = new Map(accounts.map((account) => [account.id, account]));
+  const shown = order
+    ? order.map((id) => byId.get(id)).filter((account): account is Account => Boolean(account))
+    : accounts;
+  const canReorder = Boolean(onReorder) && accounts.length > 1;
+
+  async function commit(ids: string[]) {
+    setDragging(null);
+    if (!onReorder || positionChanges(accounts, ids).length === 0) {
+      setOrder(null);
+      return;
+    }
+    setOrder(ids);
+    setSaving(true);
+    setError(null);
+    try {
+      await onReorder(ids);
+    } catch {
+      setError("Couldn't save the new order. Showing the order that was saved.");
+    } finally {
+      setSaving(false);
+      setOrder(null);
+    }
+  }
+
+  function startDrag(event: React.PointerEvent<HTMLButtonElement>, id: string) {
+    if (saving) return;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    setDragging(id);
+    setOrder(accounts.map((account) => account.id));
+  }
+
+  // The card under the pointer, by its place in the grid. Works in a grid of any
+  // shape, so the wrap at narrow widths needs no maths of its own.
+  function dragOver(event: React.PointerEvent<HTMLButtonElement>) {
+    if (!dragging || !order || !gridRef.current) return;
+    const under = document.elementFromPoint?.(event.clientX, event.clientY);
+    const card = under?.closest(".sectorCard");
+    if (!card) return;
+    const index = Array.from(gridRef.current.querySelectorAll(".sectorCard")).indexOf(card);
+    if (index >= 0 && order[index] !== dragging) setOrder(moved(order, dragging, index));
+  }
+
+  function cancelDrag() {
+    setDragging(null);
+    setOrder(null);
+  }
+
+  // The same handle, by keyboard: one place per press, saved straight away.
+  function nudge(event: React.KeyboardEvent<HTMLButtonElement>, id: string) {
+    if (event.key === "Escape" && dragging) {
+      cancelDrag();
+      return;
+    }
+    const step = { ArrowUp: -1, ArrowLeft: -1, ArrowDown: 1, ArrowRight: 1 }[event.key];
+    if (!step || saving || dragging) return;
+    event.preventDefault();
+    const ids = accounts.map((account) => account.id);
+    // Past either end, moved() leaves the order as it was, and commit saves
+    // nothing for an order that did not change.
+    void commit(moved(ids, id, ids.indexOf(id) + step));
+  }
+
   return (
     <section className="sectors">
       <div className="sectorsHeader">
@@ -69,10 +167,17 @@ export default function Sectors({ accounts, onEdit, onAdd }: SectorsProps) {
         </div>
       </div>
 
-      <div className="sectorGrid">
-        {accounts.map((account) => (
+      {saving && <p className="small-text muted" role="status">Saving order…</p>}
+      {error && <p className="small-text error" role="alert">{error}</p>}
+
+      <div className="sectorGrid" ref={gridRef}>
+        {shown.map((account) => (
           <div
-            className={`sectorCard${account.kind === "debt" ? " sectorCard--debt" : ""}`}
+            className={[
+              "sectorCard",
+              account.kind === "debt" ? "sectorCard--debt" : "",
+              dragging === account.id ? "sectorCard--dragging" : "",
+            ].filter(Boolean).join(" ")}
             key={account.id}
           >
             {/* The stripe is decoration. The kind is also written out, because
@@ -146,6 +251,26 @@ export default function Sectors({ accounts, onEdit, onAdd }: SectorsProps) {
             >
               ✎
             </button>
+
+            {/* A sibling of the Link, like the pencil: a handle inside it would
+                open the account on every drag. Pointer events rather than HTML
+                drag-and-drop, which never fires on a touch screen. */}
+            {canReorder && (
+              <button
+                type="button"
+                className="sectorDrag"
+                aria-label={`Reorder ${account.name}`}
+                title="Drag to reorder, or use the arrow keys"
+                disabled={saving}
+                onPointerDown={(event) => startDrag(event, account.id)}
+                onPointerMove={dragOver}
+                onPointerUp={() => order && void commit(order)}
+                onPointerCancel={cancelDrag}
+                onKeyDown={(event) => nudge(event, account.id)}
+              >
+                ⠿
+              </button>
+            )}
           </div>
         ))}
       </div>

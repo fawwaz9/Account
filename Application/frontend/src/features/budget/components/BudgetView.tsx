@@ -4,7 +4,7 @@ import NetWorth from "./NetWorth";
 import SinkingFunds from "./SinkingFunds";
 import Subscriptions from "./Subscriptions";
 import SinkingFundModal from "./SinkingFundModal";
-import Sectors from "./Sectors";
+import Sectors, { positionChanges } from "./Sectors";
 import Transactions from "./Transactions";
 import AddMoneyModal from "./AddMoneyModal";
 import PlannedSpend from "./PlannedSpend";
@@ -21,9 +21,10 @@ import TuitionModal from "./TuitionModal";
 import TermBudget from "./TermBudget";
 import { useTransactionDelete } from "../hooks/useTransactionDelete";
 import DeleteConfirmModal from "../../grades/components/DeleteConfirmModal";
-import { deleteRecurring, setBudgetTarget } from "../api";
+import { deleteRecurring, setBudgetTarget, updateAccount } from "../api";
 import { Account, RecurringTransaction, Transaction } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
+import { useShortcut } from "../../../shared/hooks/useShortcut";
 
 const NO_ACCOUNTS_YET = "Add an account first -- money has to go somewhere.";
 
@@ -37,6 +38,22 @@ export default function BudgetView() {
   // Grades page already loads.
   const { courses } = useCourses();
   const [modalOpen, setModalOpen] = useState(false);
+
+  // One PATCH per account that moved. Separate requests, so a failure midway
+  // leaves a mixed order -- which costs nothing but order, and is fixed by
+  // dragging again. Reloaded either way, so the grid shows what was saved.
+  async function reorderAccounts(orderedIds: string[]) {
+    if (!user) return;
+    try {
+      for (const change of positionChanges(accounts, orderedIds)) {
+        await updateAccount(user.id, change.id, { position: change.position });
+      }
+    } finally {
+      await reload();
+    }
+  }
+  // Record Money, under the same condition its button is enabled on.
+  useShortcut("n", () => setModalOpen(true), accounts.length > 0);
   const [tuitionOpen, setTuitionOpen] = useState(false);
   const [editingTuition, setEditingTuition] = useState<string | null>(null);
   // Bumped alongside reload so the term panel refetches when money moves.
@@ -146,6 +163,7 @@ export default function BudgetView() {
 
           <Sectors
             accounts={accounts}
+            onReorder={reorderAccounts}
             onEdit={setEditingAccount}
             onAdd={() => setAddingAccount(true)}
           />

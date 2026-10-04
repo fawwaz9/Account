@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { captureTask, previewCapture } from "../api";
 import { QuickCapturePreview } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
+import { useShortcut } from "../../../shared/hooks/useShortcut";
 import useDebounce from "../../../shared/hooks/useDebounce";
 import { dueLabel, duration } from "../../../shared/utils/dateUtils";
 
@@ -27,6 +28,10 @@ export default function QuickCapture({ onCaptured }: QuickCaptureProps) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const debounced = useDebounce(text, 200);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // N on the Tasks page lands here: this box is the page's fast way to add.
+  useShortcut("n", () => inputRef.current?.focus());
 
   // Only the newest preview may land. Typing fast fires several, and without
   // this an earlier reading can resolve last and sit under later text.
@@ -72,6 +77,7 @@ export default function QuickCapture({ onCaptured }: QuickCaptureProps) {
     <form className="captureForm" onSubmit={handleSubmit}>
       <div className="captureRow">
         <input
+          ref={inputRef}
           className="taskInput taskInputWide"
           value={text}
           onChange={(event) => setText(event.target.value)}

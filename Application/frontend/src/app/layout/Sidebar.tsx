@@ -5,16 +5,18 @@ interface NavItem {
   readonly label: string;
   /** end so "/" only matches the dashboard, not every route beneath it */
   readonly end?: boolean;
+  /** The letter after G that goes here (KeyboardShortcuts reads this list). */
+  readonly key: string;
 }
 
-const NAV: NavItem[] = [
-  { to: "/", label: "Dashboard", end: true },
-  { to: "/grades", label: "Grades" },
-  { to: "/calendar", label: "Calendar" },
-  { to: "/tasks", label: "Tasks" },
-  { to: "/jobs", label: "Jobs" },
-  { to: "/budget", label: "Budget" },
-  { to: "/settings", label: "Settings" },
+export const NAV: NavItem[] = [
+  { to: "/", label: "Dashboard", end: true, key: "d" },
+  { to: "/grades", label: "Grades", key: "g" },
+  { to: "/calendar", label: "Calendar", key: "c" },
+  { to: "/tasks", label: "Tasks", key: "t" },
+  { to: "/jobs", label: "Jobs", key: "j" },
+  { to: "/budget", label: "Budget", key: "b" },
+  { to: "/settings", label: "Settings", key: "s" },
 ];
 
 export default function Sidebar() {

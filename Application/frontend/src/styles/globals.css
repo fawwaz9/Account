@@ -319,3 +319,42 @@ button:not(:disabled):active {
 @media (prefers-reduced-motion: reduce) {
   .authBootstrapSpinner { animation: none; }
 }
+
+/* The ? list of keyboard shortcuts. Here rather than in a page stylesheet:
+   it opens on every page, and page CSS only loads with its own route. */
+.shortcutList {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.shortcutRow {
+  display: grid;
+  grid-template-columns: 7rem 1fr;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.shortcutRow dt,
+.shortcutRow dd {
+  margin: 0;
+}
+
+.shortcutList kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--panel-2);
+  color: var(--gold-soft);
+  font-family: inherit;
+  font-size: 0.85em;
+  text-align: center;
+}
+
+.shortcutActions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
