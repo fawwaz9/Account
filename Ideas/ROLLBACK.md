@@ -25,11 +25,11 @@ deployment on **2026-09-28**, including that traffic is on `LATEST`.
 | GCP project | `account-504419`, registry `us-west1-docker.pkg.dev/account-504419/account` |
 | Repo | `fawwaz9/Account` — a push to `main` rebuilds the **frontend**; a push to `ship` deploys the **API** (`deploy-api.yml`) |
 
-> **There is a second Supabase project, `ommqbgaasrusrlizzyzm`.** It was created
-> for the step 34 restore test and holds **a full copy of every user's financial
-> data and password hashes**. Its password has been rotated. It is not production
-> and nothing points at it — but do not confuse the two when restoring, and
-> delete it when the restore drill is no longer needed.
+> **The production Supabase project is the only one.** The second project
+> (`ommqbgaasrusrlizzyzm`, "Account_backup"), created for the step 34 restore test
+> and holding a full copy of every user's data, was **deleted on 2026-10-04**. A
+> future restore drill should restore into a project created for it, and delete
+> that project when the drill is done.
 
 ## First: what kind of broken?
 

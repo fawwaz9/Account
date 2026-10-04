@@ -87,10 +87,8 @@ Three things, in order of how soon they matter:
 
 Deployment leftovers, none urgent, all written up in `deployment.md`:
 the Dockerfile ignores `$PORT` (hence `--port=8000` on every deploy); backups
-exist in one place only, expiring at 90 days; and a **second Supabase project
-(`ommqbgaasrusrlizzyzm`) holds a full copy of everyone's data** from the restore
-test — its password is rotated, but it should be deleted or treated as
-production.
+exist in one place only, expiring at 90 days. (The second Supabase project
+from the restore test, `ommqbgaasrusrlizzyzm`, was deleted 2026-10-04.)
 
 ---
 

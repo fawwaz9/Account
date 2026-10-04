@@ -744,9 +744,6 @@ wrong, and the measurements that decide what the work above should look like.
   retention. A second copy in a GCS bucket or B2 was flagged and not done.
 - The Dockerfile hardcodes uvicorn on 8000 instead of honouring $PORT, which is
   why --port=8000 is mandatory on every single deploy. One line, never done.
-- A second Supabase project, ommqbgaasrusrlizzyzm, holds a full copy of
-  everyone's financial data and password hashes from the step 34 restore test.
-  Its password has been rotated. Delete it or treat it as production.
 - Eight of the ten UptimeRobot monitors are meaningless: the Pages SPA fallback
   returns an identical 200 for every path, including invented ones, so they
   cannot fail. Two are real -- /health and the frontend root.
@@ -796,9 +793,6 @@ What will actually bite, roughly in order:
 - Backups are one copy, one place, 90 days. Corruption noticed in month four has
   nothing clean to go back to. They are 30 KB; a second destination costs
   nothing but the habit.
-- The second Supabase project, ommqbgaasrusrlizzyzm, still holds everyone's
-  financial data and password hashes. It is both a standing breach surface and
-  the occupant of the spare slot on a 2-project free plan.
 - Security drift. Pinned dependencies are excellent for reproducibility and
   terrible for patches, because nothing updates them. Over two or three years
   that is real CVE exposure in FastAPI, SQLAlchemy and the JWT library. A

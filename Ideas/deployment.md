@@ -53,9 +53,8 @@ the watch actually showed.
 - **The Dockerfile does not honour `$PORT`**, which is why `--port=8000` is
   mandatory on every deploy.
 - **One copy of each backup**, in GitHub artifacts only, expiring at 90 days.
-- **A second Supabase project exists** (`ommqbgaasrusrlizzyzm`) holding a full
-  copy of everyone's data from the step 34 restore test. Its password has been
-  rotated. Delete it or treat it as production.
+- ~~**A second Supabase project exists** (`ommqbgaasrusrlizzyzm`) holding a full
+  copy of everyone's data from the step 34 restore test.~~ **Deleted 2026-10-04.**
 
 Phase 0 was run against a `VACUUM INTO` copy on ports 8200/5273. It confirmed the
 images build, the stack works, auth works end to end, data survives
