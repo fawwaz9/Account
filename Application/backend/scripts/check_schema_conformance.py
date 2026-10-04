@@ -37,13 +37,14 @@ os.environ["DATABASE_URL"] = "sqlite://"
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_DIR))
 
-from sqlalchemy import create_engine, inspect  # noqa: E402
+from sqlalchemy import create_engine, inspect, text  # noqa: E402
 from sqlalchemy.engine import make_url  # noqa: E402
 from sqlalchemy.exc import OperationalError  # noqa: E402
 from sqlalchemy.pool import NullPool  # noqa: E402
 
 from app._database.db import Base, connect_args_for, normalize_database_url  # noqa: E402
 from app._database import models  # noqa: E402,F401 - populates Base.metadata
+from app._database import rls  # noqa: E402
 
 VARIABLE = "SCHEMA_CHECK_URL"
 
@@ -57,6 +58,30 @@ MIN_MODEL_TABLES = 26
 #: schema, or it is the wrong database. Every table would then read as missing --
 #: which fails loudly, but as a misleading list rather than the real cause.
 MIN_LIVE_TABLES = 20
+
+
+def rls_state(engine) -> dict | None:
+    """Which isolation functions exist, and how far row security is switched on.
+
+    None on SQLite, which has neither and is only ever this script's own test
+    fixture. pg_proc, pg_class and pg_roles are readable without privileges,
+    like the inspector's catalogue, so the CONNECT-only role is enough.
+    """
+    if engine.dialect.name != "postgresql":
+        return None
+    with engine.connect() as conn:
+        functions = set(conn.execute(text(
+            "SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace "
+            "WHERE n.nspname = 'public'"
+        )).scalars())
+        protected = conn.execute(text(
+            "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
+            "WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relrowsecurity"
+        )).scalar()
+        role_exists = conn.execute(
+            text("SELECT 1 FROM pg_roles WHERE rolname = :r"), {"r": rls.APP_ROLE}
+        ).scalar() is not None
+    return {"functions": functions, "protected": protected, "role_exists": role_exists}
 
 
 def main() -> int:
@@ -83,6 +108,7 @@ def main() -> int:
         return 2
 
     engine = create_engine(url, connect_args=connect_args_for(url), poolclass=NullPool)
+    state = None
     try:
         try:
             inspector = inspect(engine)
@@ -122,10 +148,26 @@ def main() -> int:
                 for column in table.columns
                 if column.name not in present
             )
+
+        # The row-level security functions. The API calls them to sign anyone
+        # in, so new code against a database without them locks every user
+        # out -- the same failure as a missing column, and the same fix.
+        state = rls_state(engine)
+        if state is not None:
+            missing.extend(
+                f"function {name}()" for name in rls.FUNCTIONS if name not in state["functions"]
+            )
     finally:
         engine.dispose()
 
     print(f"Checked {len(expected)} tables against {where}")
+    # Informational only: whether isolation is switched on is a decision made
+    # by pointing the API at the app role, not something a deploy should gate.
+    if state is not None:
+        print(
+            f"Row-level security: on for {state['protected']} of {len(expected)} tables; "
+            f"role {rls.APP_ROLE} {'exists' if state['role_exists'] else 'does not exist'}"
+        )
 
     # Reported, never failed on. A table production has and the models do not is
     # usually a feature removed without dropping its data -- a decision, not an

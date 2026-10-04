@@ -63,8 +63,13 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
         ids[row.__tablename__] = row.id
         return row
 
+    # Deterministic per marker: the same world built twice has the same ids,
+    # which is what lets test_noninterference compare a database holding B's
+    # world against one that does not, row for row and response for response.
+    counter = iter(range(1, 1000))
+
     def new_id():
-        return uuid.uuid4()
+        return uuid.uuid5(uuid.NAMESPACE_URL, f"account-isolation-world/{marker}/{next(counter)}")
 
     account = add(AccountModel(
         id=new_id(), user_id=user_id, name=f"{marker} chequing", kind="spending",

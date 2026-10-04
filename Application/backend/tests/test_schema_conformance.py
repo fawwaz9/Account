@@ -110,3 +110,59 @@ def test_a_connection_failure_is_not_reported_as_a_missing_schema(tmp_path):
     assert "Could not connect" in result.stderr
     assert "not the schema" in result.stderr
     assert "Traceback" not in result.stderr
+
+
+# ---------------------------------------------------- row-level security --
+# Postgres only: the functions the API signs people in with live in pg_proc,
+# which SQLite does not have. Each case gets a scratch database inside the
+# test container, created and dropped here.
+
+import pytest  # noqa: E402
+from sqlalchemy.engine import make_url  # noqa: E402
+
+from app._database import rls  # noqa: E402
+from tests.conftest import TEST_DATABASE_URL, TESTING_SQLITE  # noqa: E402
+
+SCRATCH_DB = "account_gate_check"
+
+
+@pytest.fixture
+def scratch_postgres():
+    if TESTING_SQLITE:
+        pytest.skip("needs Postgres")
+    admin = create_engine(TEST_DATABASE_URL, isolation_level="AUTOCOMMIT")
+    with admin.connect() as conn:
+        conn.execute(text(f"DROP DATABASE IF EXISTS {SCRATCH_DB}"))
+        conn.execute(text(f"CREATE DATABASE {SCRATCH_DB}"))
+    url = make_url(TEST_DATABASE_URL).set(database=SCRATCH_DB).render_as_string(hide_password=False)
+    try:
+        yield url
+    finally:
+        with admin.connect() as conn:
+            conn.execute(text(f"DROP DATABASE IF EXISTS {SCRATCH_DB} WITH (FORCE)"))
+        admin.dispose()
+
+
+def test_a_database_without_the_sign_in_functions_is_refused(scratch_postgres):
+    engine = create_engine(scratch_postgres)
+    Base.metadata.create_all(engine)
+    engine.dispose()
+
+    result = run_check(scratch_postgres)
+
+    assert result.returncode == 1
+    for name in rls.FUNCTIONS:
+        assert f"function {name}()" in result.stderr
+
+
+def test_the_functions_alone_are_enough_to_deploy(scratch_postgres):
+    """Policies are a separate switch; the deploy needs only what the code calls."""
+    engine = create_engine(scratch_postgres)
+    Base.metadata.create_all(engine)
+    rls.install(engine)
+    engine.dispose()
+
+    result = run_check(scratch_postgres)
+
+    assert result.returncode == 0, result.stderr
+    assert "Row-level security: on for" in result.stdout

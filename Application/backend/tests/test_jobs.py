@@ -239,6 +239,36 @@ def test_replacing_a_course_timetable_leaves_shifts_alone(db, user):
     assert db.query(EventModel).filter(EventModel.job_id == job.id).count() == 1
 
 
+def test_a_job_with_a_confirmed_shift_can_still_be_deleted(db, user):
+    """It could not. The blocks were bulk-deleted while a shift record still
+    pointed at one, the foreign key refused, and the route answered 500 -- for
+    every job with even one confirmed shift. Found by test_noninterference.py.
+
+    A cash tip already filed stays in the ledger, as the delete dialog says.
+    """
+    from app._database.models import ShiftRecordModel, TransactionModel
+    from app.Jobs.schemas.job import ShiftCreate, ShiftRecordUpsert
+    from app.Jobs.services.job_service import add_shift, confirm_shift, set_cash_tip_account
+    from conftest import make_account
+
+    cash = make_account(db, user.id, "Cash")
+    set_cash_tip_account(db, user.id, cash.id)
+    job = hourly_job(db, user)
+    on = datetime.date(2026, 9, 14)
+    event = add_shift(db, user.id, job.id, ShiftCreate(
+        on_date=on, start_time=datetime.time(9), end_time=datetime.time(13)))
+    confirm_shift(db, user.id, event, on,
+                  ShiftRecordUpsert(confirmed=True, tip_amount=20.0, tip_is_cash=True))
+
+    delete_job(db, user.id, job.id)
+
+    assert db.query(JobModel).filter(JobModel.id == job.id).count() == 0
+    assert db.query(EventModel).filter(EventModel.job_id == job.id).count() == 0
+    assert db.query(ShiftRecordModel).filter(ShiftRecordModel.job_id == job.id).count() == 0
+    tips = db.query(TransactionModel).filter(TransactionModel.user_id == user.id).all()
+    assert [t.amount for t in tips] == [20.0]
+
+
 def test_deleting_a_job_takes_its_calendar_blocks_with_it(db, user):
     job = hourly_job(db, user)
     schedule(db, user, job)

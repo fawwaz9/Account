@@ -495,9 +495,28 @@ def client(db):
 @pytest.mark.parametrize(("method", "path", "variant", "leaf"), _cases())
 def test_route_isolation(db, client, two_worlds, method, path, variant, leaf):
     a, b, world_a, world_b, day = two_worlds
+    token = create_access_token(a.id, a.session_epoch or 0)
+
+    for url, query, body in _expanded_requests(method, path, variant, leaf, a, b, world_a, world_b, day):
+        before = snapshot(db)
+        response = client.request(
+            method, url, params=query, json=body, headers={"Authorization": f"Bearer {token}"},
+        )
+        db.rollback()
+        after = snapshot(db)
+
+        problems = _check(before, after, b, world_b, response, url)
+        assert not problems, (
+            f"{method} {url} [{variant}] -> {response.status_code}\n"
+            f"query: {query}\nbody: {body}\n" + "\n".join(problems)
+        )
+        _check_status(method, path, variant, response)
+
+
+def _expanded_requests(method, path, variant, leaf, a, b, world_a, world_b, day):
+    """Every (url, query, body) one case sends. Shared with test_rls.py."""
     route = _route_for(method, path)
     url, query, body = _request(route, method, path, variant, leaf, a, b, world_a, world_b, day)
-    token = create_access_token(a.id, a.session_epoch or 0)
 
     requests = [(query, body)]
     if variant == "foreign-refs":
@@ -520,23 +539,19 @@ def test_route_isolation(db, client, two_worlds, method, path, variant, leaf):
         else:
             expanded.append((query, body))
 
-    for query, body in expanded:
-        before = snapshot(db)
-        response = client.request(
-            method, url, params=query, json=body, headers={"Authorization": f"Bearer {token}"},
-        )
-        db.rollback()
-        after = snapshot(db)
-
-        problems = _check(before, after, b, world_b, response, url)
-        assert not problems, (
-            f"{method} {url} [{variant}] -> {response.status_code}\n"
-            f"query: {query}\nbody: {body}\n" + "\n".join(problems)
-        )
-        _check_status(method, path, variant, response)
+    return [(url, query, body) for query, body in expanded]
 
 
 def _check_status(method, path, variant, response):
+    # Not vacuous: a read of the caller's own data has to succeed. Without
+    # this, a suite whose requests all failed authentication -- a wrong token,
+    # the app on the wrong database -- would leak nothing and pass.
+    if variant == "own-read" and method == "GET":
+        assert 200 <= response.status_code < 300, (
+            f"{method} {path}: reading your own data answered {response.status_code}, so "
+            f"this run is not exercising the route. {response.text[:300]}"
+        )
+
     if variant == "foreign-user":
         assert response.status_code == 403, (
             f"{method} {path} answered {response.status_code} to a request for another "

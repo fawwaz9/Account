@@ -4,6 +4,13 @@ from uuid import UUID, uuid4
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app._database.identity import (
+    act_as,
+    email_taken,
+    expired_user_ids,
+    user_id_by_email,
+    user_id_by_google_id,
+)
 from app._database.models import CourseModel, UserModel, utc_now
 from app.Grades.utils.terms import suggest_first_year
 from app.Auth.schemas.credentials import RegisterRequest
@@ -25,12 +32,16 @@ from app.Users.schemas.user import (
 
 
 def create_user(db: Session, user_data: UserCreate):
-    existing = db.query(UserModel).filter(UserModel.email.ilike(user_data.email)).first()
-    if existing:
+    if email_taken(db, user_data.email):
         raise ValueError(error_user["already_exists"])
 
+    # The new account's id is chosen here, so the session can act as it before
+    # the insert: under row-level security a row may only be written by the
+    # user it belongs to.
+    new_id = uuid4()
+    act_as(db, new_id)
     user = UserModel(
-        id=uuid4(),
+        id=new_id,
         name=user_data.name,
         email=user_data.email,
         google_id=user_data.google_id,
@@ -48,7 +59,18 @@ def get_user(db: Session, user_id: UUID):
 
 
 def get_user_by_email(db: Session, email: str):
-    return db.query(UserModel).filter(UserModel.email.ilike(email)).first()
+    """The account for ``email``, and from here on the session acts for it.
+
+    Only sign-in and registration ask this, and both are about that account:
+    signing in makes it the caller, and registration needs to know what kind of
+    account already holds the address. Acting as it is what lets the row be
+    read under row-level security.
+    """
+    user_id = user_id_by_email(db, email)
+    if user_id is None:
+        return None
+    act_as(db, user_id)
+    return get_user(db, user_id)
 
 
 def create_local_user(db: Session, data: RegisterRequest):
@@ -66,8 +88,10 @@ def create_local_user(db: Session, data: RegisterRequest):
             raise ValueError(error_auth["use_google"])
         raise ValueError(error_user["already_exists"])
 
+    new_id = uuid4()
+    act_as(db, new_id)
     user = UserModel(
-        id=uuid4(),
+        id=new_id,
         name=data.name,
         email=data.email,
         google_id=None,
@@ -108,7 +132,12 @@ def authenticate_local_user(db: Session, email: str, password: str):
 
 
 def get_user_by_google_id(db: Session, google_id: str):
-    return db.query(UserModel).filter(UserModel.google_id == google_id).first()
+    """The account linked to ``google_id``; the session then acts for it."""
+    user_id = user_id_by_google_id(db, google_id)
+    if user_id is None:
+        return None
+    act_as(db, user_id)
+    return get_user(db, user_id)
 
 
 def get_or_create_user_by_google_id(db: Session, user_data: UserCreate):
@@ -187,14 +216,8 @@ def update_user(db: Session, user_id: UUID, data: UserUpdate):
 
     update_data = data.model_dump(exclude_unset=True)
     new_email = update_data.get("email")
-    if new_email is not None:
-        existing = (
-            db.query(UserModel)
-            .filter(UserModel.id != user_id, UserModel.email.ilike(new_email))
-            .first()
-        )
-        if existing:
-            raise ValueError(error_user["already_exists"])
+    if new_email is not None and email_taken(db, new_email, except_user_id=user_id):
+        raise ValueError(error_user["already_exists"])
 
     # A changed address is an unproven address. Without this the verified flag
     # survives the change, which defeats the pre-hijacking guard in
@@ -342,14 +365,14 @@ def purge_expired_users(db: Session, on_day: date | None = None) -> int:
     if on_day is not None:
         cutoff = datetime.combine(on_day, time.min) - timedelta(days=DELETION_GRACE_DAYS)
 
-    expired = (
-        db.query(UserModel)
-        .filter(UserModel.deleted_at.isnot(None), UserModel.deleted_at <= cutoff)
-        .all()
-    )
-    for user in expired:
-        db.delete(user)
-
-    if expired:
-        db.commit()
+    # One account at a time, each as itself: under row-level security the
+    # cascade can only see -- and so only delete -- the rows of the user the
+    # session is acting for, which is exactly the set that should go.
+    expired = expired_user_ids(db, cutoff)
+    for user_id in expired:
+        act_as(db, user_id)
+        user = get_user(db, user_id)
+        if user is not None:
+            db.delete(user)
+            db.commit()
     return len(expired)

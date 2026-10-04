@@ -20,6 +20,7 @@ import time
 from app._database.db import Base, engine
 from app._database import models  # noqa: F401 - populates Base.metadata
 from app._database.migrations import ensure_indexes, ensure_schema
+from app._database import rls
 
 logger = logging.getLogger("app.schema")
 
@@ -36,6 +37,9 @@ def apply_schema() -> float:
     Base.metadata.create_all(bind=engine)
     ensure_schema()
     ensure_indexes()
+    # Row-level security functions, and the policies once the app role exists.
+    # A no-op on SQLite. Last, because the policies are written per table.
+    rls.install(engine)
 
     elapsed = time.monotonic() - started
     logger.info("schema up to date in %.2fs", elapsed)

@@ -1,6 +1,14 @@
 import uuid
 from sqlalchemy.orm import Session, selectinload
-from app._database.models import CourseModel, CourseCategoryWeightModel, GradeModel, UserModel
+from app._database.models import (
+    CourseCategoryWeightModel,
+    CourseModel,
+    GradeModel,
+    RecurringTaskModel,
+    ReminderModel,
+    TransactionModel,
+    UserModel,
+)
 from app.Grades.schemas.course import CourseCreate, CourseUpdate, clean_links
 from app.Grades.services.grade_service import (
     calculate_gpa_points,
@@ -242,6 +250,21 @@ def delete_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
     if not course:
         return None
 
+    # What only *mentions* the course is kept, with the mention cleared: money
+    # tagged to it happened, a reminder is still a reminder, and a repeating
+    # task is a standing decision. Its grades, timetable and tasks are the
+    # course itself and go with it (the ORM cascades). Without these three,
+    # deleting any course with a tagged expense, a reminder or a repeating task
+    # failed the foreign key, as a 500. Found by test_noninterference.py.
+    db.query(TransactionModel).filter(
+        TransactionModel.user_id == user_id, TransactionModel.course_id == course_id,
+    ).update({TransactionModel.course_id: None}, synchronize_session=False)
+    db.query(ReminderModel).filter(
+        ReminderModel.user_id == user_id, ReminderModel.course_id == course_id,
+    ).update({ReminderModel.course_id: None}, synchronize_session=False)
+    db.query(RecurringTaskModel).filter(
+        RecurringTaskModel.user_id == user_id, RecurringTaskModel.course_id == course_id,
+    ).update({RecurringTaskModel.course_id: None}, synchronize_session=False)
     db.delete(course)
     db.commit()
     return course

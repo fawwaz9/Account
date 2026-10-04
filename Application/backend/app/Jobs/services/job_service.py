@@ -242,6 +242,16 @@ def delete_job(db: Session, user_id: uuid.UUID, job_id: uuid.UUID):
 
     removed = as_schema(job, user_today(db, user_id))
 
+    # In this order, because each points at the next. A shift record points at
+    # its calendar block, so the records go before the blocks: the blocks are a
+    # bulk delete, which skips the ORM's cascades, and with a confirmed shift
+    # still pointing at one the delete failed the foreign key and every job
+    # with a single confirmed shift could not be removed at all. Then the job,
+    # whose cascade takes its paycheques. Ledger transactions stay, as the
+    # dialog promises -- a cash tip already filed is money that arrived.
+    db.query(ShiftRecordModel).filter(
+        ShiftRecordModel.user_id == user_id, ShiftRecordModel.job_id == job_id
+    ).delete(synchronize_session=False)
     db.query(EventModel).filter(
         EventModel.user_id == user_id, EventModel.job_id == job_id
     ).delete(synchronize_session=False)

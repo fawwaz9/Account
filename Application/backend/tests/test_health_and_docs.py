@@ -210,17 +210,28 @@ def test_the_purge_still_runs_when_the_schema_check_does_not(monkeypatch, tmp_pa
 
 
 def test_applying_the_schema_is_idempotent(monkeypatch, tmp_path):
-    """It runs as a deploy step, and deploys get retried."""
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'twice.db'}")
-    app_with(monkeypatch)
-    from app._database.schema import apply_schema
+    """It runs as a deploy step, and deploys get retried.
 
-    apply_schema()
-    apply_schema()  # must not raise
+    On a private file. This used to set DATABASE_URL and reload app.main, but
+    the engine lives in app._database.db and is bound once at import, so the
+    reload changed nothing: the schema went into the suite's shared scratch
+    database, and the count below read whatever any other run had left there.
+    """
+    from sqlalchemy import create_engine, inspect
 
-    from app._database.db import engine
-    from sqlalchemy import inspect
-    assert len(inspect(engine).get_table_names()) == 26
+    import app._database.migrations as migrations
+    import app._database.schema as schema
+    from app._database.db import Base
+
+    private = create_engine(f"sqlite:///{tmp_path / 'twice.db'}")
+    monkeypatch.setattr(schema, "engine", private)
+    monkeypatch.setattr(migrations, "engine", private)
+
+    schema.apply_schema()
+    schema.apply_schema()  # must not raise
+
+    assert set(inspect(private).get_table_names()) == set(Base.metadata.tables)
+    private.dispose()
 
 
 # ---------------------------------------------------------- allowed origins --

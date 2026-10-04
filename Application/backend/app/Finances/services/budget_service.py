@@ -10,6 +10,7 @@ from app._database.models import (
     AccountCategoryMonthLimitModel,
     AccountModel,
     BudgetTargetModel,
+    RecurringTransactionModel,
     SpendCategoryModel,
     TransactionModel,
     UserModel,
@@ -179,6 +180,13 @@ def delete_category(db: Session, user_id: uuid.UUID, category_id: uuid.UUID):
         TransactionModel.category_id == category_id,
         TransactionModel.user_id == user_id,
     ).update({TransactionModel.category_id: None}, synchronize_session=False)
+    # Standing instructions too, the same way: the rule keeps running and its
+    # future rows arrive uncategorised. Missing, and every category a recurring
+    # rule used could not be deleted -- the foreign key refused, as a 500.
+    db.query(RecurringTransactionModel).filter(
+        RecurringTransactionModel.category_id == category_id,
+        RecurringTransactionModel.user_id == user_id,
+    ).update({RecurringTransactionModel.category_id: None}, synchronize_session=False)
     db.delete(category)
     db.commit()
     return category

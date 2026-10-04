@@ -55,6 +55,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 # choosing where the fixtures run.
 os.environ["DATABASE_URL"] = f"sqlite:///{Path(tempfile.gettempdir()) / 'account-suite-app.db'}"
 
+from app._database import rls  # noqa: E402
 from app._database.db import (  # noqa: E402
     apply_sqlite_pragmas,
     connect_args_for,
@@ -170,6 +171,10 @@ def _pg_engine():
     engine = _make_engine(TEST_DATABASE_URL)
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+    # The row-level security functions the application calls on Postgres.
+    # Policies only follow if the app role exists, which in a plain test
+    # container it does not -- tests/test_rls.py creates it for itself.
+    rls.install(engine)
     try:
         yield engine
     finally:
