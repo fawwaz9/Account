@@ -1,11 +1,14 @@
 /**
- * Calendar date arithmetic, in the viewer's own timezone.
+ * Calendar date arithmetic. "Today" is read in the student's Settings time zone
+ * (see `setClockZone`); everything else here is plain date arithmetic.
  *
  * Every date in this app is a plain YYYY-MM-DD: a lecture at 10:00 is at 10:00
  * wherever you read it from. So the rule here matches `features/budget/dates.ts`
  * -- never `toISOString()`, which is UTC and, west of Greenwich, reports
  * tomorrow's date all evening.
  */
+
+import { nowIn } from "./zonedNow";
 
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 
@@ -35,8 +38,26 @@ export function fromIso(value: string): Date {
   return new Date(year, month - 1, day);
 }
 
+/**
+ * The time zone "today" is read in: the student's Settings zone once the
+ * signed-in user is known, and the browser's until then.
+ *
+ * Module state, set by AuthProvider, rather than a zone passed to every caller:
+ * over forty places ask for today, and each one threading a zone through is
+ * forty chances to forget it. The backend reads today from the same setting
+ * (`app/shared/dates.py`), so the page and every figure the server sends now
+ * agree about which day it is -- which they did not when the device's zone and
+ * the setting differed, travelling for instance.
+ */
+let clockZone: string | null = null;
+
+/** Called by AuthProvider whenever the signed-in user changes. */
+export function setClockZone(zone: string | null | undefined): void {
+  clockZone = zone || null;
+}
+
 export function today(): string {
-  return isoDate(new Date());
+  return nowIn(clockZone).date;
 }
 
 export function addDays(value: string, count: number): string {

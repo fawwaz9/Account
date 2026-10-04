@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchFreeBlocks, fetchWeekLoad } from "../api";
 import { FreeBlock, WeekLoad } from "../types";
-import { addDays, isoDate } from "../../../shared/utils/dateUtils";
+import { addDays, startOfWeek, today } from "../../../shared/utils/dateUtils";
 import { useAuth } from "../../../app/auth/AuthContext";
 
 /**
@@ -25,8 +25,7 @@ export function useTimeGlance() {
 
     // Monday to Sunday of the week containing today, so the dashboard and the
     // calendar's week view agree about which week "this week" is.
-    const now = new Date();
-    const monday = addDays(isoDate(now), -((now.getDay() + 6) % 7));
+    const monday = startOfWeek(today());
     const sunday = addDays(monday, 6);
 
     let cancelled = false;

@@ -840,6 +840,28 @@ QUESTIONS WORTH ANSWERING BEFORE BUILDING, not while:
 
 ---
 
+## Every frontend "today" on the Settings time zone -- SHIPPED 2026-10-03
+
+The follow-up the now-line left open. The week view had moved onto the Settings
+zone; the month view's today, and every other frontend `today()` -- about forty
+call sites across tasks, budget, jobs and the calendar -- still read the browser
+clock, so while travelling the month could mark a different day from the week.
+
+Fixed at the source rather than at forty call sites: `today()` reads a module-level
+zone that `AuthProvider` sets from the signed-in user, falling back to the browser
+when nobody is signed in or the zone is unusable. Set during the provider's render,
+not in an effect, so a page's first `today()` is already on the student's clock --
+an effect would open on the browser's day and flip. Two places that read
+`new Date()` directly (the dashboard's "this week", a sinking fund's months-to-go)
+now go through `today()` too.
+
+Guarded at each link: the clock, the provider actually setting it, and the month
+view marking the right cell. Three mutations each fail by name -- the provider
+never setting the zone, `today()` ignoring it, and the call moved into an effect.
+Frontend only.
+
+---
+
 ## A now-line on the week, and event colours you choose -- SHIPPED 2026-10-03
 
 **The now-line.** A red line at the current minute, in today's column of the week

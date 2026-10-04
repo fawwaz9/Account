@@ -180,8 +180,10 @@ export default function SinkingFundModal({
 
 /** Whole calendar months from today to the due date, counting this one. */
 function monthsUntil(due: string): number {
-  const now = new Date();
+  // The student's today, not the browser's: on the last evening of a month the
+  // two can sit in different months, and this counts months.
+  const [nowYear, nowMonth] = today().split("-").map(Number);
   const [year, month] = due.split("-").map(Number);
-  const diff = (year - now.getFullYear()) * 12 + (month - 1 - now.getMonth());
+  const diff = (year - nowYear) * 12 + (month - nowMonth);
   return Math.max(0, diff) + 1;
 }

@@ -1,5 +1,3 @@
-import { isoDate } from "./dateUtils";
-
 export interface ZonedNow {
   /** The calendar day where the student is, as YYYY-MM-DD. */
   readonly date: string;
@@ -39,6 +37,12 @@ export function nowIn(zone: string | null | undefined, at: Date = new Date()): Z
       minutes: Number(part("hour")) * 60 + Number(part("minute")),
     };
   } catch {
-    return { date: isoDate(at), minutes: at.getHours() * 60 + at.getMinutes() };
+    // Spelled out rather than imported: dateUtils' today() is built on this
+    // function, so importing back from it would make the two a cycle.
+    const pad = (value: number) => String(value).padStart(2, "0");
+    return {
+      date: `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`,
+      minutes: at.getHours() * 60 + at.getMinutes(),
+    };
   }
 }

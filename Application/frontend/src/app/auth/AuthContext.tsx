@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from "react";
 import { getCurrentUser, CurrentUser } from "../../services/currentUserClient";
+import { setClockZone } from "../../shared/utils/dateUtils";
 
 interface AuthContextType {
   token: string | null;
@@ -62,6 +63,12 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
       // leave the existing user in place; the 401 path already handles expiry
     }
   }, []);
+
+  // During render, not in an effect: children render after this body in the
+  // same pass, so the first today() any page asks for is already on the
+  // student's clock. An effect would run after they had rendered, and the page
+  // would open on the browser's day and flip. Idempotent for a given user.
+  setClockZone(user?.preferences?.timezone);
 
   const value = useMemo(
     () => ({ token, user, isAuthenticated: !!token && !!user, isLoading, login, logout, refreshUser }),

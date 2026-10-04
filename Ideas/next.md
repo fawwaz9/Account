@@ -211,14 +211,6 @@ are the size of each job rather than an impression of it.
         (?) sweep, which is tracked under Interface quality above.
 
 ### Calendar
-        The rest of the frontend's "today" on the Settings time zone.
-          The week view moved to it with the now-line (shipped.md, 2026-10-03);
-          the month view's today highlight and every other frontend `today()`
-          still read the browser clock. They differ only when the device and the
-          setting disagree -- travelling -- but then the month can mark a
-          different day from the week beside it. `shared/utils/zonedNow.ts`'s
-          `nowIn(zone)` is the clock to move them onto.
-
 ### Grades
         Term retrospective when a term closes: what moved, what slipped, what you predicted vs got.
         Syllabus paste: drop the text in, get categories, weights and due dates proposed for review.
