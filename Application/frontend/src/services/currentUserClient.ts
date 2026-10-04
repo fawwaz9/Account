@@ -1,3 +1,4 @@
+import type { EventKind } from "../features/calender/types";
 import { get, patch } from "./apiClient";
 import { endpoints } from "./endpoints";
 
@@ -45,6 +46,11 @@ export interface CurrentUser {
     study_day_end: string;
     /** Below this a gap is walking time, not study time. */
     min_free_block_minutes: number;
+    /**
+     * Colour per event kind, only for the kinds the student changed. A missing
+     * kind means its default (features/calender/kindColors.ts).
+     */
+    event_colors?: Partial<Record<EventKind, string>>;
     [key: string]: unknown;
   };
 }

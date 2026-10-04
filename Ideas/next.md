@@ -211,27 +211,13 @@ are the size of each job rather than an impression of it.
         (?) sweep, which is tracked under Interface quality above.
 
 ### Calendar
-        A line at the exact time of the day it currently is.
-          Confirmed missing -- nothing in the calendar draws one today.
-          Cheap: WeekView.tsx already lays the grid out from DAY_START with a
-          fixed HOUR_HEIGHT (weekLayout.ts), so the line is one absolutely
-          positioned div at (nowHour - DAY_START) * HOUR_HEIGHT, inside the
-          column for today only. The only real decisions are whether it ticks
-          (a minute interval) or is placed once on render, and that it must not
-          draw on a week that is not the current one.
-        Color customization of different category types of events.
-          There are EIGHT kinds, not the five your data happens to use:
-          lecture, lab, discussion, midterm, final, deadline, personal, shift.
-          Colour is a CSS class per kind today -- EventCard.tsx:24 builds
-          `calChip-${kind}` and calendar.css carries a rule for each.
-          So customising means storing a colour per kind. UserPreferences is
-          the natural home: a JSON column parsed through a Pydantic model,
-          where new keys are additive and need no migration.
-          ONE THING TO DECIDE FIRST: EventKind's own docstring says these are a
-          fixed enum rather than a user table precisely BECAUSE each kind has
-          behaviour attached -- a midterm is themed and sorts differently, and
-          shifts are excluded from blackouts. Recolouring them is fine; letting
-          users ADD kinds is the thing that conflicts with that reasoning.
+        The rest of the frontend's "today" on the Settings time zone.
+          The week view moved to it with the now-line (shipped.md, 2026-10-03);
+          the month view's today highlight and every other frontend `today()`
+          still read the browser clock. They differ only when the device and the
+          setting disagree -- travelling -- but then the month can mark a
+          different day from the week beside it. `shared/utils/zonedNow.ts`'s
+          `nowIn(zone)` is the clock to move them onto.
 
 ### Grades
         Term retrospective when a term closes: what moved, what slipped, what you predicted vs got.

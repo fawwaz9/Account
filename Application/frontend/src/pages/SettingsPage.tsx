@@ -6,6 +6,8 @@ import { fetchAccounts, fetchCategories } from "../features/budget/api";
 import { Account, SpendCategory } from "../features/budget/types";
 import IncomeSplitModal from "../features/budget/components/IncomeSplitModal";
 import BlackoutsModal from "../features/calender/components/BlackoutsModal";
+import EventColors from "../features/calender/components/EventColors";
+import { KindColors } from "../features/calender/kindColors";
 import HelpTip from "../shared/components/HelpTip";
 import CategoriesModal from "../features/budget/components/CategoriesModal";
 import "../styles/login.css";
@@ -111,6 +113,7 @@ export default function SettingsPage() {
   // next Calendar save -- a save changing something nobody asked it to, which
   // is the fault the preference-patch fix existed to stop.
   const [zone, setZone] = useState(user?.preferences?.timezone ?? DEFAULT_ZONE);
+  const [colors, setColors] = useState<KindColors>(user?.preferences?.event_colors ?? {});
   const [academicError, setAcademicError] = useState<string | null>(null);
   const [academicSaved, setAcademicSaved] = useState(false);
   const [savingAcademic, setSavingAcademic] = useState(false);
@@ -175,6 +178,7 @@ export default function SettingsPage() {
     setStudyEnd(clockValue(user.preferences?.study_day_end, "22:00"));
     setMinBlock(String(user.preferences?.min_free_block_minutes ?? 30));
     setZone(user.preferences?.timezone ?? DEFAULT_ZONE);
+    setColors(user.preferences?.event_colors ?? {});
   }, [user]);
 
   // Fetched once, not per tab open: two GETs on a page you visit to change one
@@ -279,6 +283,9 @@ export default function SettingsPage() {
         study_day_start: studyStart,
         study_day_end: studyEnd,
         min_free_block_minutes: Number(minBlock),
+        // The whole map, always: the API replaces it, so a kind put back to its
+        // default is absent here and therefore removed there.
+        event_colors: colors,
       });
       await refreshUser();
       setCalendarSaved(true);
@@ -684,6 +691,18 @@ export default function SettingsPage() {
                   left out of the free blocks the calendar offers.
                 </HelpTip>
               </div>
+
+              <fieldset className="loginField kindColorField">
+                <legend className="labelWithTip">
+                  <span>Event colours</span>
+                  <HelpTip label="What event colours change">
+                    How each kind of event is drawn on the calendar, in both the
+                    month and the week. Midterms and finals keep their heavier bar
+                    and bold title, so exam weeks stand out in any colour.
+                  </HelpTip>
+                </legend>
+                <EventColors colors={colors} onChange={setColors} />
+              </fieldset>
 
               {calendarError && <p className="loginError">{calendarError}</p>}
               {calendarSaved && <p className="loginSuccess">Saved.</p>}

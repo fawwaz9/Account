@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.Calendar.schemas.event import EventKind
 from app.Grades.schemas.course import CourseDetail
 
 # Each domain label excludes the dot, so a label and the separator that follows
@@ -56,6 +57,28 @@ class AuthProvider(str, Enum):
     LOCAL = "local"
 
 
+#: A colour as the browser's <input type="color"> produces it, and nothing else.
+#: Short forms and names are refused rather than normalised: the value is put
+#: straight into a CSS custom property, and the only shape every reader can rely
+#: on is the one the picker emits.
+HEX_COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def validate_event_colors(colors: dict[EventKind, str] | None) -> dict[EventKind, str] | None:
+    """Every value a #rrggbb colour, lowercased; keys are already EventKinds.
+
+    Shared by `UserPreferences` and `UserPreferencesPatch` so the two cannot
+    drift. Both must run it: a bad colour written through the patch would be
+    re-read through `UserPreferences` on every page, and fail there instead.
+    """
+    if colors is None:
+        return None
+    for kind, color in colors.items():
+        if not isinstance(color, str) or not HEX_COLOR.match(color):
+            raise ValueError(f"Colour for {kind.value} must be #rrggbb, got {color!r}")
+    return {kind: color.lower() for kind, color in colors.items()}
+
+
 class UserPreferences(BaseModel):
     timezone: str = Field(default="America/Regina", description="IANA timezone")
     currency: str = Field(default="CAD", min_length=3, max_length=3)
@@ -78,6 +101,16 @@ class UserPreferences(BaseModel):
     #: Below this a gap is not a block: twenty minutes between two lectures is
     #: walking time, not an hour of work.
     min_free_block_minutes: int = Field(default=30, ge=5, le=240)
+    #: The student's own colour per event kind. Only the kinds they changed: a
+    #: missing kind means its default, so resetting one is removing its key and
+    #: no stale copy of a default is ever stored. Recolouring only -- kinds
+    #: themselves stay a fixed enum because each carries behaviour.
+    event_colors: dict[EventKind, str] = Field(default_factory=dict)
+
+    @field_validator("event_colors")
+    @classmethod
+    def validate_event_colors(cls, v: dict[EventKind, str]) -> dict[EventKind, str]:
+        return validate_event_colors(v)
 
     @field_validator("currency")
     @classmethod
@@ -134,6 +167,8 @@ class UserPreferencesPatch(BaseModel):
     study_day_start: time | None = None
     study_day_end: time | None = None
     min_free_block_minutes: int | None = Field(default=None, ge=5, le=240)
+    #: Replaces the whole map when sent -- Settings always sends all of it.
+    event_colors: dict[EventKind, str] | None = None
 
     # Both validators pass `None` straight through. An explicit null means "no
     # opinion" here, and running the check on it would reject the one value that
@@ -146,6 +181,11 @@ class UserPreferencesPatch(BaseModel):
         if not v.isalpha():
             raise ValueError("Currency must be a 3-letter ISO 4217 code")
         return v.upper()
+
+    @field_validator("event_colors")
+    @classmethod
+    def validate_event_colors(cls, v: dict[EventKind, str] | None) -> dict[EventKind, str] | None:
+        return validate_event_colors(v)
 
     @field_validator("timezone")
     @classmethod

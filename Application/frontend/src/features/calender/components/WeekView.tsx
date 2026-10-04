@@ -5,7 +5,11 @@ import { Task } from "../../tasks/types";
 import { hasSpecificTime } from "../../tasks/dueTime";
 import { TaskChip } from "./EventCard";
 import { DAY_START, HOUR_HEIGHT, HOURS, OPENING_HOUR, place, placeTasks } from "../weekLayout";
-import { clockTime, fromIso, hourLabel, today } from "../../../shared/utils/dateUtils";
+import { clockTime, fromIso, hourLabel } from "../../../shared/utils/dateUtils";
+import { useAuth } from "../../../app/auth/AuthContext";
+import { useNow } from "../hooks/useNow";
+import { useKindColors } from "../hooks/useKindColors";
+import { kindStyle } from "../kindColors";
 
 const WEEKDAY_HEADINGS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -42,7 +46,12 @@ export default function WeekView({
   onSelectTask,
   onAddOnDay,
 }: WeekViewProps) {
-  const now = today();
+  // The Settings time zone, not the browser's: the backend's "today" comes from
+  // it, and the highlighted column and the line below must agree with each
+  // other and with every figure the server sends.
+  const zone = useAuth().user?.preferences?.timezone;
+  const now = useNow(zone);
+  const colors = useKindColors();
   const bodyRef = useRef<HTMLDivElement>(null);
   const gridHeight = HOURS.length * HOUR_HEIGHT;
 
@@ -62,7 +71,7 @@ export default function WeekView({
         {days.map((day, index) => (
           <div
             key={day.date}
-            className={day.date === now ? "weekHead weekHeadToday" : "weekHead"}
+            className={day.date === now.date ? "weekHead weekHeadToday" : "weekHead"}
           >
             <span className="weekHeadDay">{WEEKDAY_HEADINGS[index]}</span>
             <button
@@ -88,6 +97,7 @@ export default function WeekView({
                   className={`calChip calChip-${occurrence.kind}${
                     EXAM_KINDS.includes(occurrence.kind) ? " calChipExam" : ""
                   }`}
+                  style={kindStyle(occurrence.kind, colors)}
                   onClick={() => onSelectOccurrence(occurrence)}
                 >
                   <span className="calChipTitle">{occurrence.title}</span>
@@ -133,6 +143,7 @@ export default function WeekView({
                     type="button"
                     className={`weekBlock calChip-${item.occurrence.kind}${exam ? " weekBlockExam" : ""}`}
                     style={{
+                      ...kindStyle(item.occurrence.kind, colors),
                       top,
                       height: Math.max(height, 18),
                       left: `${item.column * width}%`,
@@ -187,6 +198,20 @@ export default function WeekView({
                   </button>
                 );
               })}
+
+              {/* The current minute, in today's column and nowhere else -- so a
+                  week that is not this one draws no line at all, with no branch
+                  of its own. Hidden from assistive technology: it would announce
+                  a new time every minute, and the header already marks today. */}
+              {day.date === now.date && (
+                <div
+                  className="weekNow"
+                  style={{ top: ((now.minutes - DAY_START * 60) / 60) * HOUR_HEIGHT }}
+                  aria-hidden="true"
+                >
+                  <span className="weekNowDot" />
+                </div>
+              )}
             </div>
           ))}
         </div>

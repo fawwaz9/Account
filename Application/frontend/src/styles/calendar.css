@@ -153,21 +153,48 @@
   white-space: nowrap;
 }
 
-/* Kinds are distinguished by hue *and* by the left bar's weight, so the grid
+/* Each kind's colour, as one custom property. The student can choose their own
+   in Settings; it arrives as an inline --kind-color on the chip, which outranks
+   these, so an unchanged kind paints exactly from here. kindColors.ts mirrors
+   these values for the pickers, and a test keeps the two in step.
+
+   Kinds are distinguished by hue *and* by the left bar's weight, so the grid
    still reads for someone who cannot separate the colours. */
-.calChip-lecture { border-left-color: #4593d6; background: rgba(69, 147, 214, 0.14); }
-.calChip-lab { border-left-color: #56b39a; background: rgba(86, 179, 154, 0.14); }
-.calChip-discussion { border-left-color: #8a7fd4; background: rgba(138, 127, 212, 0.14); }
-.calChip-deadline { border-left-color: var(--gold); background: rgba(212, 175, 55, 0.14); }
-.calChip-personal { border-left-color: #94a3b8; }
+.calChip-lecture { --kind-color: #4593d6; }
+.calChip-lab { --kind-color: #56b39a; }
+.calChip-discussion { --kind-color: #8a7fd4; }
+.calChip-deadline { --kind-color: var(--gold); }
+/* Personal sits on the plain grey ground the base chip already has, so it keeps
+   that ground's lighter tint rather than the kinds' 14%. */
+.calChip-personal { --kind-color: #94a3b8; --kind-tint: 12%; --kind-block-tint: 18%; }
+/* Green rather than another blue: work is not coursework, and the one thing a
+   student wants to see at a glance is where paid hours sit against the
+   timetable. */
+.calChip-shift { --kind-color: #4fa86f; }
+.calChip-midterm { --kind-color: #e0685f; }
+.calChip-final { --kind-color: #c9453c; }
+
+/* The bar and the tint, derived from the kind's colour. color-mix against
+   transparent at N% is the colour at alpha N/100 -- the same rgba these rules
+   used to spell out per kind. Exams are styled separately below. */
+.calChip-lecture,
+.calChip-lab,
+.calChip-discussion,
+.calChip-deadline,
+.calChip-personal,
+.calChip-shift {
+  border-left-color: var(--kind-color);
+  background: color-mix(in srgb, var(--kind-color) var(--kind-tint, 14%), transparent);
+}
+
 .calChip-task { border-left-color: var(--gold-soft); background: rgba(245, 217, 123, 0.1); }
 
 /* An exam is not another class block: heavier bar, stronger ground, so the week
    that matters is visible without reading a single title. */
 .calChipExam {
   border-left-width: 5px;
-  border-left-color: #e0685f;
-  background: rgba(224, 104, 95, 0.2);
+  border-left-color: var(--kind-color);
+  background: color-mix(in srgb, var(--kind-color) 20%, transparent);
   font-weight: 600;
 }
 
@@ -180,9 +207,8 @@
    `calChip-final` is already emitted beside `calChipExam`, so this needs no
    change to any component. */
 .calChipExam.calChip-final {
-  border-left-color: #c9453c;
-  background: rgba(201, 69, 60, 0.26);
-  box-shadow: inset 0 0 0 1px rgba(201, 69, 60, 0.55);
+  background: color-mix(in srgb, var(--kind-color) 26%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--kind-color) 55%, transparent);
   font-weight: 700;
 }
 
@@ -615,27 +641,57 @@
   filter: brightness(1.25);
 }
 
-/* Same hues as the month chips, so a lecture reads as a lecture in both. */
-.weekBlock.calChip-lecture { border-left-color: #4593d6; background: rgba(69, 147, 214, 0.22); }
-.weekBlock.calChip-lab { border-left-color: #56b39a; background: rgba(86, 179, 154, 0.22); }
-.weekBlock.calChip-discussion { border-left-color: #8a7fd4; background: rgba(138, 127, 212, 0.22); }
-.weekBlock.calChip-deadline { border-left-color: var(--gold); background: rgba(212, 175, 55, 0.22); }
-.weekBlock.calChip-personal { border-left-color: #94a3b8; }
+/* Same colours as the month chips -- the same --kind-color -- so a lecture
+   reads as a lecture in both, and a colour chosen in Settings lands in both. */
+.weekBlock.calChip-lecture,
+.weekBlock.calChip-lab,
+.weekBlock.calChip-discussion,
+.weekBlock.calChip-deadline,
+.weekBlock.calChip-personal,
+.weekBlock.calChip-shift {
+  border-left-color: var(--kind-color);
+  background: color-mix(in srgb, var(--kind-color) var(--kind-block-tint, 22%), transparent);
+}
 
 .weekBlockExam {
   border-left-width: 5px;
-  border-left-color: #e0685f;
-  background: rgba(224, 104, 95, 0.28);
+  border-left-color: var(--kind-color);
+  background: color-mix(in srgb, var(--kind-color) 28%, transparent);
   font-weight: 600;
 }
 
 /* Same distinction in the week grid, where a final and a midterm would
    otherwise be the same block in the same colour. */
 .weekBlockExam.calChip-final {
-  border-left-color: #c9453c;
-  background: rgba(201, 69, 60, 0.34);
-  box-shadow: inset 0 0 0 1px rgba(201, 69, 60, 0.6);
+  background: color-mix(in srgb, var(--kind-color) 34%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--kind-color) 60%, transparent);
   font-weight: 700;
+}
+
+/* The current time, in today's column only.
+   Above the blocks and the deadline markers (z-index 2), because the moment it
+   marks is the one thing on the grid that is true of every block it crosses.
+   Ignores the pointer, so it never takes a click meant for the block under it.
+   Its own red, near but not equal to the exam hues: it is not an event. */
+.weekNow {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  height: 2px;
+  margin-top: -1px;
+  background: #ff5a52;
+  pointer-events: none;
+}
+
+.weekNowDot {
+  position: absolute;
+  left: -4px;
+  top: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff5a52;
 }
 
 .weekBlockTitle {
@@ -927,21 +983,6 @@
   color: var(--gold);
 }
 
-/* A shift.
-   Green rather than another blue: work is not coursework, and the one thing a
-   student wants to see at a glance is where paid hours sit against the
-   timetable. Same hue in both views, so a shift reads as a shift whichever
-   grid it is drawn in. */
-.calChip-shift {
-  border-left-color: #4fa86f;
-  background: rgba(79, 168, 111, 0.14);
-}
-
-.weekBlock.calChip-shift {
-  border-left-color: #4fa86f;
-  background: rgba(79, 168, 111, 0.22);
-}
-
 /* ===== Term timeline =====
    Every course in the term on one axis. The month grid answers "what is this
    week"; this answers "what shape is the term" -- which courses overlap, where
@@ -1015,4 +1056,51 @@
     grid-template-columns: minmax(0, 1fr);
     gap: 2px;
   }
+}
+
+/* ===== Event colours (Settings) ===== */
+
+.kindColorList {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kindColorRow {
+  display: grid;
+  grid-template-columns: 7rem 2.5rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.kindColorInput {
+  width: 2.5rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 1px solid #1f2a44;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+
+/* A sample, not a control: the calendar's own chip, minus the pointer. */
+.kindColorSample {
+  cursor: default;
+}
+
+@media (max-width: 480px) {
+  .kindColorRow {
+    grid-template-columns: 6rem 2.5rem minmax(0, 1fr);
+  }
+}
+
+/* A fieldset only for the legend's semantics -- one group, one name -- so the
+   browser's border and padding are taken off. */
+.kindColorField {
+  margin: 0;
+  padding: 0;
+  border: none;
+  min-width: 0;
 }

@@ -2,6 +2,8 @@ import { EventOccurrence, EXAM_KINDS } from "../types";
 import { Task } from "../../tasks/types";
 import { hasSpecificTime } from "../../tasks/dueTime";
 import { clockTime, duration } from "../../../shared/utils/dateUtils";
+import { kindStyle } from "../kindColors";
+import { useKindColors } from "../hooks/useKindColors";
 
 interface EventCardProps {
   readonly occurrence: EventOccurrence;
@@ -17,11 +19,13 @@ interface EventCardProps {
  */
 export function EventChip({ occurrence, onSelect }: EventCardProps) {
   const exam = EXAM_KINDS.includes(occurrence.kind);
+  const colors = useKindColors();
 
   return (
     <button
       type="button"
       className={`calChip calChip-${occurrence.kind}${exam ? " calChipExam" : ""}`}
+      style={kindStyle(occurrence.kind, colors)}
       onClick={() => onSelect(occurrence)}
       title={[occurrence.title, occurrence.location].filter(Boolean).join(" - ")}
     >

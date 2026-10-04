@@ -248,9 +248,60 @@ describe("each tab saves only its own preferences", () => {
     await waitFor(() => expect(updatePreferences).toHaveBeenCalled());
     const sent = updatePreferences.mock.calls[0][1] as Record<string, unknown>;
     expect(Object.keys(sent).sort()).toEqual(
-      ["min_free_block_minutes", "study_day_end", "study_day_start", "timezone"],
+      ["event_colors", "min_free_block_minutes", "study_day_end", "study_day_start", "timezone"],
     );
     expect(updateAcademicStatus).not.toHaveBeenCalled();
+  });
+});
+
+describe("event colours", () => {
+  function openCalendar() {
+    render(<SettingsPage />);
+    fireEvent.click(screen.getByRole("tab", { name: "Calendar" }));
+  }
+
+  async function save() {
+    fireEvent.submit(screen.getByLabelText("Shortest useful gap").closest("form")!);
+    await waitFor(() => expect(updatePreferences).toHaveBeenCalled());
+    return (updatePreferences.mock.calls[0][1] as Record<string, unknown>).event_colors;
+  }
+
+  afterEach(() => { delete (user.preferences as Record<string, unknown>).event_colors; });
+
+  it("offers a colour for every kind, labelled", () => {
+    openCalendar();
+    for (const name of ["Lecture", "Lab", "Discussion", "Midterm", "Final", "Deadline", "Personal", "Shift"]) {
+      expect(screen.getByLabelText(name, { selector: "input" })).toBeTruthy();
+    }
+  });
+
+  it("saves nothing but an empty map when nothing was changed", async () => {
+    openCalendar();
+    expect(await save()).toEqual({});
+  });
+
+  it("saves a colour the user picked, and only that one", async () => {
+    openCalendar();
+    fireEvent.change(screen.getByLabelText("Lecture", { selector: "input" }), { target: { value: "#123456" } });
+    expect(await save()).toEqual({ lecture: "#123456" });
+  });
+
+  it("shows the change on the sample before it is saved", () => {
+    openCalendar();
+    fireEvent.change(screen.getByLabelText("Lab", { selector: "input" }), { target: { value: "#123456" } });
+    const sample = document.querySelector<HTMLElement>(".kindColorSample.calChip-lab")!;
+    expect(sample.style.getPropertyValue("--kind-color")).toBe("#123456");
+  });
+
+  it("offers Default only for a changed kind, and Default removes it from the save", async () => {
+    (user.preferences as Record<string, unknown>).event_colors = { lab: "#010203", final: "#040506" };
+    openCalendar();
+
+    expect(screen.queryByRole("button", { name: /default colour for Lecture/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /default colour for Lab/ }));
+    expect(screen.queryByRole("button", { name: /default colour for Lab/ })).toBeNull();
+
+    expect(await save()).toEqual({ final: "#040506" });
   });
 });
 

@@ -840,6 +840,41 @@ QUESTIONS WORTH ANSWERING BEFORE BUILDING, not while:
 
 ---
 
+## A now-line on the week, and event colours you choose -- SHIPPED 2026-10-03
+
+**The now-line.** A red line at the current minute, in today's column of the week
+view and nowhere else -- so a week that is not this one draws none, with no branch
+of its own. It ticks on the minute boundary, not 60s from mount, so it moves when
+the clock does. It ignores the pointer and is hidden from screen readers.
+
+It reads the **Settings time zone**, not the browser's: the backend's "today"
+already does, and a line from a different clock would sit in a different column
+from every server figure. The week's highlighted "today" column moved onto the
+same clock, so the two always agree. `nowIn(zone)` in `shared/utils/zonedNow.ts`
+uses Intl with `hourCycle: "h23"` (midnight is minute 0, not 24:00) and falls back
+to the browser clock for an unusable zone, as the backend falls back to UTC. The
+month view still uses the browser clock -- left for a later slice, in next.md.
+
+**Event colours.** All eight kinds, in Settings -> Calendar, each beside a sample
+drawn with the calendar's own classes, so an exam keeps its heavier bar in any
+colour. Stored as `preferences.event_colors`, only for kinds changed: "Default"
+removes the key rather than storing a copy, so a retuned default reaches everyone
+who never touched it. Validated as `#rrggbb` on BOTH `UserPreferences` and
+`UserPreferencesPatch` -- dropping it from the patch model fails five tests. Kinds
+stay a fixed enum; recolouring only.
+
+The stylesheet moved from sixteen hardcoded colour pairs to one `--kind-color` per
+kind, with bar and tint derived by `color-mix`; a chosen colour arrives as an
+inline custom property. Proven identical for an unchanged calendar by resolving
+what each kind actually paints, before and after, in both views -- all sixteen
+match, including personal's lighter grey and both exam grounds. A test keeps
+`kindColors.ts`'s defaults in step with the stylesheet's.
+
+No migration (a JSON key). API rollback is safe alone: older code's
+`UserPreferences` ignores the unknown key.
+
+---
+
 ## CI, and the API deploys itself from `ship` -- SHIPPED 2026-10-03
 
 Asked for because deploying by hand took too long. `shipping.md` steps 10-15 were
