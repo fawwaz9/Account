@@ -221,43 +221,12 @@ are the size of each job rather than an impression of it.
         Syllabus paste: drop the text in, get categories, weights and due dates proposed for review.
         Make syllabus parser the main when adding courses but add a button to do it manually.
         When editing courses the manual is the default but syllabus parser will be available under the manual grid.
-        Fixed term dates -- DONE 2026-09-17, shipped exactly as asked below.
-          Kept only because it records what changed and what is still owed.
-          WAS: nothing stored anywhere. term_span() took min(start_date) and
-          max(end_date) across a term's courses, so a term could only be
-          measured if its courses happened to carry dates -- and 21 of 27 did
-          not. That is why every past term had nothing to measure.
-          NOW: Grades/utils/terms.py holds TERM_DATES and every reader goes
-          through one accessor, term_dates(semester, school_year, first_year):
-            Fall    Sep 1  - Dec 31   (the school year's own calendar year)
-            Winter  Jan 1  - Apr 30   (+1)
-            Spring  May 1  - Jun 30   (+1)   <-- corrected on the way in
-            Summer  Jul 1  - Aug 31   (+1)
-          The +1 is the whole reason a school year is written 2025-2026; without
-          it Winter lands eight months before the Fall it follows.
-          THE WIDER SPAN WAS ACCEPTED DELIBERATELY. Your Fall really runs Sep 9
-          to Dec 7, so Term Budget now counts a few weeks either side. Fixed
-          dates WIN over a course's own -- that was the decision -- with one
-          carve-out: the class timetable still uses each course's real dates, or
-          it would invent three lectures before term and three after.
-          Jobs was reading its own duplicated copy of the old rule and now
-          imports the same accessor. That bug is what the duplication cost.
-          STILL OWED BEFORE ANY OF IT SHOWS: nobody has set the first-year
-          anchor in Settings. It suggests 2024 from your dated courses. One
-          click now fixes three things at once -- the Term Budget span, the Jobs
-          term, and the heading above them.
-        term_label is no longer trusted for the term heading -- DONE 2026-09-17.
-          It read "Fall 2025-2026" above a span computed over 2026, because the
-          heading came from a free-text field and the dates came from the
-          anchor. term_name() now derives the label from the anchor too, so one
-          fact feeds both. Winter deliberately keeps the SCHOOL year's calendar
-          year, so January 2027 still reads 2026-2027 rather than starting a new
-          one -- there is a test for exactly that, and the mutation that used
-          the term's own year instead fails it.
-          term_label survives only as the fallback for a user with no anchor.
-          It has NO EDITOR anywhere in the app, which is why it went stale and
-          stayed stale, so it is a column nobody can fix by hand. Worth removing
-          once every user has an anchor; nothing else reads it.
+        Drop the users.term_label column.
+          Since term dates and the term heading both derive from the first-year
+          anchor (shipped.md, 2026-09-17), term_label is only a fallback for a
+          user with no anchor. It has no editor anywhere in the app, which is how
+          it went a year stale. Remove it once every user has set the anchor in
+          Settings -- until then it is still the only heading those users get.
 
         Is it worth it or safe to make not just the dates but the semesters editable due to how integral they are to the structure of the app.
           Safe, but not free, and there are three things to know first.

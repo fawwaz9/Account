@@ -270,6 +270,13 @@ Newest work is at the bottom of each group. Split out of `whats_next.txt` on
           run September 2026. The label is a year stale, so the anchor is
           suggested from the dated courses instead -- it offers 2024, which is
           right. Worth fixing the label too.
+        The term heading comes from the anchor too (1ceb30f). It read "Fall
+          2025-2026" above a span computed over 2026, because the heading came
+          from the free-text term_label and the dates from the anchor. term_name()
+          now derives both from one fact. Winter keeps the school year's calendar
+          year, so January 2027 still reads 2026-2027 -- tested, and the mutation
+          using the term's own year fails it. term_label survives only as the
+          fallback for a user with no anchor.
         Cheapest path to a target. Ranks what is left in a course by how much of
           the final average each item still controls, with a per-hour rate where
           the task carries an estimate. Top three only, ranked by points per
