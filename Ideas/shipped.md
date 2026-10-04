@@ -847,7 +847,7 @@ QUESTIONS WORTH ANSWERING BEFORE BUILDING, not while:
 
 ---
 
-## Cash tips go to one chosen account -- BUILT 2026-10-03, AWAITING DEPLOY APPROVAL
+## Cash tips go to one chosen account -- SHIPPED 2026-10-04
 
 A cash tip used to split across accounts by income share like a paycheque, which
 claimed it was in the bank when it was in a pocket. Settings -> Financial now has
@@ -870,6 +870,9 @@ Guarded by 16 tests that count every account's rows before and after, plus four
 existing tests updated to choose an account (one had started passing vacuously).
 Seven mutations each fail by name. The copy-of-local-data check ran but proved
 little: local data has no shift tips.
+
+LIVE: be4f1d7, revision account-api-00028-jwz; frontend verified byte-for-byte
+against a production-URL build.
 
 ---
 
