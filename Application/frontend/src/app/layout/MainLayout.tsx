@@ -4,6 +4,7 @@ import Loading from "../../shared/components/Loading";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
 import KeyboardShortcuts from "./KeyboardShortcuts";
+import { useVisitCounter } from "../../shared/hooks/useVisitCounter";
 import "../../styles/layout.css";
 
 /**
@@ -21,6 +22,8 @@ import "../../styles/layout.css";
  * this outlet.
  */
 export default function MainLayout() {
+  useVisitCounter();
+
   return (
     <div className="appShell">
       <Sidebar />

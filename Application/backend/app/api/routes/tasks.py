@@ -56,6 +56,7 @@ from app.Tasks.services.task_service import (
 from app.Tasks.services.timing_service import completion_timing
 from app.shared import audit
 from app.shared.errors import error_user, responses
+from app.Usage.services.usage_service import CREATE, record as record_usage
 
 router = APIRouter()
 
@@ -112,6 +113,7 @@ def add_task(user_id: VerifiedUserId, task: TaskCreate, db: DBSession):
     if created is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
 
+    record_usage(db, user_id, CREATE, "tasks")
     return created
 
 
@@ -252,6 +254,7 @@ def create_from_quick_capture(user_id: VerifiedUserId, request: QuickCaptureRequ
     if task is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
 
+    record_usage(db, user_id, CREATE, "tasks")
     return QuickCaptureResult(task=task, preview=preview)
 
 

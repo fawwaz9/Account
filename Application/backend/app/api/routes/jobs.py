@@ -48,6 +48,7 @@ from app.Jobs.services.job_service import (
 )
 from app.shared import audit
 from app.shared.errors import error_user, responses
+from app.Usage.services.usage_service import CREATE, record as record_usage
 
 router = APIRouter()
 
@@ -96,6 +97,7 @@ def add_job(user_id: VerifiedUserId, job: JobCreate, db: DBSession):
     if created is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
 
+    record_usage(db, user_id, CREATE, "jobs")
     return created
 
 

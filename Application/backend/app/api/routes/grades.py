@@ -35,6 +35,7 @@ from app.Grades.services.cheapest_path import cheapest_path
 from app.Grades.services.dash_services import DEFAULT_TARGET_GRADE, get_dashboard
 from app.Grades.services.blind_spot_service import category_blind_spots
 from app.shared import audit
+from app.Usage.services.usage_service import CREATE, record as record_usage
 
 router = APIRouter()
 
@@ -90,6 +91,7 @@ def add_course(user_id: VerifiedUserId, course: CourseCreate, db: DBSession):
     if new_course is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
 
+    record_usage(db, user_id, CREATE, "grades")
     return new_course
 
 @router.get("/{user_id}/courses/search", response_model=list[Course], responses=responses["user_404"])
@@ -249,6 +251,7 @@ def create_grade(user_id: VerifiedUserId, course_id: UUID, grade: GradeCreate, d
     if new_grade is None:
         raise HTTPException(status_code=404, detail=error_course["not_found"])
 
+    record_usage(db, user_id, CREATE, "grades")
     return new_grade
 
 @router.post("/{user_id}/courses/{course_id}/grades/bulk", response_model=list[Grade], responses={404: {"description": error_course["not_found"]}, 400: {"description": error_grade["invalid_data"]}})

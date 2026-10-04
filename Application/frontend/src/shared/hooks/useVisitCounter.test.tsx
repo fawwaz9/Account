@@ -1,0 +1,70 @@
+// @vitest-environment jsdom
+import { cleanup, render } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const post = vi.fn().mockResolvedValue(null);
+vi.mock("../../services/apiClient", () => ({ post: (...args: unknown[]) => post(...args) }));
+vi.mock("../../app/auth/AuthContext", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
+
+import { moduleFor, useVisitCounter } from "./useVisitCounter";
+
+function Probe() {
+  useVisitCounter();
+  return null;
+}
+
+function visit(path: string) {
+  return render(<MemoryRouter initialEntries={[path]}><Probe /></MemoryRouter>);
+}
+
+function installSessionStorage() {
+  const data = new Map<string, string>();
+  Object.defineProperty(window, "sessionStorage", {
+    configurable: true,
+    value: {
+      getItem: (k: string) => data.get(k) ?? null,
+      setItem: (k: string, v: string) => void data.set(k, v),
+      removeItem: (k: string) => void data.delete(k),
+      clear: () => data.clear(),
+    },
+  });
+}
+
+beforeEach(() => {
+  post.mockClear();
+  installSessionStorage();
+});
+afterEach(cleanup);
+
+describe("moduleFor", () => {
+  it("names the room a path is in, and nothing else", () => {
+    expect(moduleFor("/")).toBe("dashboard");
+    expect(moduleFor("/grades/courses/abc")).toBe("grades");
+    expect(moduleFor("/budget/accounts/x")).toBe("budget");
+    expect(moduleFor("/login")).toBeNull();
+  });
+});
+
+describe("useVisitCounter", () => {
+  it("counts a room once per day in this tab", () => {
+    visit("/grades");
+    cleanup();
+    visit("/grades/courses/abc");
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(post).toHaveBeenCalledWith("usage/u1/visits", { module: "grades" });
+  });
+
+  it("counts each room separately", () => {
+    visit("/grades");
+    cleanup();
+    visit("/budget");
+    expect(post.mock.calls.map((call) => (call[1] as { module: string }).module)).toEqual(["grades", "budget"]);
+  });
+
+  it("never lets a failed count surface", async () => {
+    post.mockRejectedValueOnce(new Error("offline"));
+    expect(() => visit("/tasks")).not.toThrow();
+    await Promise.resolve();
+  });
+});

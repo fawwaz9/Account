@@ -41,6 +41,7 @@ from app.Calendar.schemas.load import CrunchStrip, FreeBlock, WeekLoad
 from app.Calendar.services.load_service import crunch, free_blocks, week_load
 from app.shared import audit
 from app.shared.errors import error_course, error_user, responses
+from app.Usage.services.usage_service import CREATE, record as record_usage
 
 router = APIRouter()
 
@@ -93,6 +94,7 @@ def add_event(user_id: VerifiedUserId, event: EventCreate, db: DBSession):
     if created is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
 
+    record_usage(db, user_id, CREATE, "calendar")
     return created
 
 

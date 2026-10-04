@@ -400,6 +400,21 @@ export default function SettingsPage() {
                 </span>
               </span>
             </div>
+            {/* Said out loud, as the vision requires of any analytics here, but
+                behind the (?) rather than as ambient text: it answers "what is
+                this", which is what the owner asked those to be for. */}
+            <div className="settingsRow">
+              <span className="settingsLabel">Usage counts</span>
+              <span>
+                On{" "}
+                <HelpTip label="What usage counts are">
+                  Each day, which parts of the app you opened and how many things you added
+                  in each -- a count, nothing more. No pages, no content, nothing you typed.
+                  They are only ever read as totals across everyone, to see which parts of
+                  the app are worth building on, and they are deleted with your account.
+                </HelpTip>
+              </span>
+            </div>
           </div>
           <div className="settingsCard">
             <h2>{hasPassword ? "Change password" : "Add a password"}</h2>

@@ -40,6 +40,7 @@ from app._database.models import (
     TransactionModel,
     TuitionDeductionModel,
     TuitionPaymentModel,
+    UsageEventModel,
 )
 
 BYDAY = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"]
@@ -186,6 +187,7 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
     add(TuitionDeductionModel(
         id=new_id(), tuition_payment_id=payment.id, description=f"{marker} bursary", amount=100.0,
     ))
+    add(UsageEventModel(id=new_id(), user_id=user_id, day=WORLD_DAY, kind="visit", module="grades"))
     _ = (event, transaction, recurring_task)
 
     db.commit()

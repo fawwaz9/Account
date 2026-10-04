@@ -98,6 +98,7 @@ from app.Finances.services.activity_service import get_account_activity
 from app.Finances.services.deposit_service import preview_deposit, record_deposit
 from app.shared.errors import error_user, responses
 from app.shared import audit
+from app.Usage.services.usage_service import CREATE, record as record_usage
 
 router = APIRouter()
 
@@ -490,6 +491,7 @@ def add_transaction(user_id: VerifiedUserId, transaction: TransactionCreate, db:
     if created is None:
         raise HTTPException(status_code=404, detail="Account not found")
 
+    record_usage(db, user_id, CREATE, "budget")
     return created
 
 
@@ -504,6 +506,7 @@ def add_transfer(user_id: VerifiedUserId, transfer: TransferCreate, db: DBSessio
     if created is None:
         raise HTTPException(status_code=404, detail="Account not found")
 
+    record_usage(db, user_id, CREATE, "budget")
     return created
 
 
@@ -674,6 +677,7 @@ def add_deposit(user_id: VerifiedUserId, deposit: DepositCreate, db: DBSession):
     if created is None:
         raise HTTPException(status_code=404, detail="Account not found")
 
+    record_usage(db, user_id, CREATE, "budget")
     return created
 
 

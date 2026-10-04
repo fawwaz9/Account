@@ -80,6 +80,9 @@ export const endpoints = {
     /** GET previews which module a line goes to; POST files it there. */
     base: (userId: string) => `omnibox/${userId}`,
   },
+  usage: {
+    visits: (userId: string) => `usage/${userId}/visits`,
+  },
   finances: {
     safeToSpend: (userId: string) => `finances/${userId}/safe-to-spend`,
     subscriptions: (userId: string) => `finances/${userId}/subscriptions`,

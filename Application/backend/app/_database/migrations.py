@@ -30,6 +30,10 @@ ADDED_COLUMNS: dict[str, dict[str, str]] = {
         "first_year_calendar_year": "INTEGER",
         "session_epoch": "INTEGER NOT NULL DEFAULT 0",
         "deleted_at": "DATETIME",
+        # TIMESTAMP, not DATETIME like the line above: this one will run as an
+        # ALTER on Postgres, which has no DATETIME type. Nullable and not
+        # backfilled -- see UserModel.created_at.
+        "created_at": "TIMESTAMP",
     },
     "courses": {
         "target_grade": "FLOAT",

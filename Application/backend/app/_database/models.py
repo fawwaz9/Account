@@ -80,6 +80,11 @@ class UserModel(Base):
     #: advances every September would silently re-date every course in the app
     #: the moment they bumped it. Year 1 never moves.
     first_year_calendar_year = Column(Integer, nullable=True)
+    #: When the account was made. NULL for accounts that predate the column:
+    #: unknown, and deliberately not guessed -- the analytics that read it
+    #: (time to first value) leave those accounts out rather than treat a
+    #: backfilled date as a real one.
+    created_at = Column(DateTime, nullable=True, default=utc_now)
 
     # Every table a user directly owns, so "delete my account" removes all of
     # it. Only `courses` and `accounts` were listed here once, which left
@@ -107,6 +112,7 @@ class UserModel(Base):
     jobs = relationship("JobModel", cascade=cascade)
     shift_records = relationship("ShiftRecordModel", cascade=cascade, overlaps="job,shift_records")
     paycheques = relationship("PaychequeModel", cascade=cascade, overlaps="job,paycheques")
+    usage_events = relationship("UsageEventModel", cascade=cascade)
 
     @property
     def has_password(self) -> bool:
@@ -1207,5 +1213,44 @@ Index(
     AccountMonthValueModel.user_id,
     AccountMonthValueModel.account_id,
     AccountMonthValueModel.month,
+    unique=True,
+)
+
+
+class UsageEventModel(Base):
+    """One user, one day, one kind of use of one module: a counter, not a log.
+
+    Phase 0's analytics (Ideas/overhaul/phase0.md item 4). What the vision's
+    gates need -- weekly actives, the universe test (two rooms in a week),
+    per-module adoption, time to first value -- are all questions of *which
+    days* someone used *which rooms*, so that is all this keeps: no paths, no
+    content, no timestamps finer than the first and last of the day.
+
+    Per user, like every other table, so it sits under the same row policy and
+    leaves with the account. Read across users only by
+    ``scripts/usage_report.py``, which prints aggregates and nothing else.
+    """
+
+    __tablename__ = "usage_events"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    day = Column(Date, nullable=False)
+    #: "visit" (a page of the module was opened) or "create" (something was
+    #: added in it). See app/Usage/services/usage_service.py.
+    kind = Column(String, nullable=False)
+    module = Column(String, nullable=False)
+    count = Column(Integer, nullable=False, default=1)
+    first_at = Column(DateTime, nullable=False, default=utc_now)
+    last_at = Column(DateTime, nullable=False, default=utc_now)
+
+
+# One counter per user, day, kind and module: a second visit increments it.
+Index(
+    "uq_usage_events_user_day_kind_module",
+    UsageEventModel.user_id,
+    UsageEventModel.day,
+    UsageEventModel.kind,
+    UsageEventModel.module,
     unique=True,
 )
