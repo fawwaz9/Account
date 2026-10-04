@@ -12,6 +12,7 @@ from app._database.models import GradeModel, TaskModel, TransactionModel
 from app.Omnibox.schemas.omnibox import OmniboxKind
 from app.Omnibox.services.omnibox_service import build_preview, file_it
 from app.Finances.services.transaction_service import list_transactions
+from app.shared.dates import user_today
 from conftest import make_account, make_category, make_course, make_user
 
 
@@ -166,8 +167,11 @@ def test_an_expense_with_a_date_uses_it(db, user):
 
 
 def test_an_expense_with_no_date_is_today(db, user):
+    # The STUDENT's today, not the machine's. The fixture user is in
+    # America/Regina; CI runs in UTC, so from 6pm to midnight Regina time
+    # `date.today()` is already tomorrow and this failed every evening.
     setup_account(db, user)
-    assert build_preview(db, user.id, "coffee 4.50").on_date == date.today()
+    assert build_preview(db, user.id, "coffee 4.50").on_date == user_today(db, user.id)
 
 
 def test_money_with_nowhere_to_put_it_cannot_be_filed(db, user):

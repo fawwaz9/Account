@@ -11,6 +11,7 @@ import uuid
 import pytest
 
 from app._database.models import TaskModel, TaskSnoozeModel
+from app.shared.dates import user_today
 from app.Tasks.schemas.task import SnoozeRequest, TaskCreate
 from app.Tasks.services.task_service import (
     create_task,
@@ -123,9 +124,12 @@ def test_waking_a_task_keeps_the_history(db, user):
 def test_a_snooze_needs_a_future_date(db, user):
     task = a_task(db, user)
 
+    # Today on the student's clock. With the machine's, on a UTC runner in the
+    # evening Regina time, "today" was the student's tomorrow -- a valid future
+    # date -- and the refusal this test exists to see never came.
     with pytest.raises(ValueError, match="future"):
         snooze_task(db, user.id, task.id, SnoozeRequest(
-            until=datetime.date.today(), reason=None))
+            until=user_today(db, user.id), reason=None))
 
 
 def test_a_finished_task_cannot_be_snoozed(db, user):
