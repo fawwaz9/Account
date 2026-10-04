@@ -330,6 +330,20 @@ grep -c "a string only the new code has" /tmp/live.js
 Grep the **file**, never a shell variable — a 475 KB bundle in a variable gave a
 false negative once.
 
+> **For an exact answer, build what Pages builds.** Minification strips names
+> and comments, so new logic often has no greppable string. Build locally with
+> the production API URL into a scratch directory and compare chunks with the
+> sibling-import hashes normalised:
+>
+> ```sh
+> VITE_API_BASE_URL=https://account-api-210502804146.us-west1.run.app/api \
+>   ./node_modules/.bin/vite build --outDir /tmp/prodbuild --emptyOutDir
+> ```
+>
+> Comparing against your ordinary local build is not enough: the different API
+> URL string shifts esbuild's character frequencies, and minified identifiers
+> come out renamed (`ig` vs `i0`) even when the code is the same.
+
 > **The bundle is split, so `index-*.js` is not the app.** Routes are lazy since
 > the code-splitting work, and a new string lands in whichever chunk owns it. A
 > grep of the entry chunk that finds nothing has proved nothing. Find the chunk
