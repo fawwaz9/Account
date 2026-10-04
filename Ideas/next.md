@@ -284,6 +284,45 @@ are the size of each job rather than an impression of it.
           good enough is worth finding out before building anything.
         Confirmed shifts leave the shifts section after 20 days They are still in db and calendar. 
           Also unconfirmed shifts should be placed at the top of the list sorted by the closest dates.
+        Pay on specific days of the month. PROPOSED 2026-10-03.
+          TODAY: a monthly pay schedule is ONE day a month, the same day of the
+          month as the first cheque (the shared repeat rule in
+          Calendar/utils/recurrence.py). It cannot say "the 15th and the last
+          day", "the last day of the month" or "the last Friday", and a first
+          cheque on the 29th-31st SKIPS every month that lacks that date -- the
+          rule was built for rent, where inventing a date would move it, but for
+          pay it means no cheque in February.
+          DECIDED (asked 2026-10-03):
+          - Three patterns, all offered:
+              specific dates      the 1st; the 15th and the 30th (semi-monthly)
+              last day of month   Jan 31, Feb 28/29, Apr 30
+              Nth weekday         the last Friday; the 2nd and 4th Thursday
+            Patterns can be combined within one job's schedule only where it
+            makes sense (dates with last-day, e.g. 15th + last); an Nth-weekday
+            schedule stands alone.
+          - Short months MOVE TO THE LAST DAY: a "30th" pays Feb 28. Opposite of
+            the rent rule, so it must be a pay-schedule behaviour, not a change to
+            the shared rule -- Budget's monthly recurring payments keep skipping.
+          - Weekends are a PER-JOB choice: previous weekday, next weekday, or
+            leave the date as is. Employers differ. Nth-weekday schedules never
+            land on a weekend, so the setting only applies to date patterns.
+          - Salaried amount stays PER CHEQUE (period_amount, as today): two
+            cheques of $1,500 a month is entered as $1,500, the figure printed
+            on a stub. Expected earnings already count pay dates in the term, so
+            a semi-monthly job correctly expects twice the cheques.
+          WHY IT MATTERS BEYOND THE LABEL: next_pay_on is the horizon
+          safe-to-spend measures to (Finances/services/safe_service.py), so a
+          payday that should have rolled back to Friday but reads as Saturday
+          makes safe-to-spend count on money a day late.
+          SHAPE: new columns on jobs for the month-day list, the last-day flag,
+          the Nth-weekday positions and the weekend policy (recur_byday already
+          holds weekdays). That is a SCHEMA CHANGE -- ADDED_COLUMNS entries and
+          the manual schema step before deploy, and backend deploys wait for the
+          owner's go-ahead. The form needs a third "monthly" mode in the pay
+          schedule editor.
+          NOT COVERED: statutory holidays. A payday on Canada Day moves for most
+          payroll, but that needs a holiday calendar per province; the per-job
+          weekend rule is the cheap 90%. Worth asking again if it bites.
 
 ### Budget
         Reimbursement state, and who and when for money lent out. On whichever
