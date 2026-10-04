@@ -244,3 +244,16 @@ class ShiftOccurrence(BaseModel):
     tip_in_ledger: bool = False
     rate_override: float | None = None
     notes: str | None = None
+
+
+class CashTipAccountChoice(BaseModel):
+    """Where cash tips go. Null clears the choice, and later tips are held."""
+
+    account_id: UUID | None = None
+
+
+class CashTipAccountResult(BaseModel):
+    account_id: UUID | None
+    #: How many held tips were filed into the account by this choice.
+    filed: int
+

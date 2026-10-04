@@ -120,3 +120,18 @@ export async function addShift(userId: string, jobId: string, payload: ShiftCrea
 export async function deleteShift(userId: string, eventId: string) {
   return del<string>(endpoints.jobs.shift(userId, eventId));
 }
+
+export interface CashTipAccountResult {
+  account_id: string | null;
+  /** How many held cash tips this choice filed into the account. */
+  filed: number;
+}
+
+/**
+ * Choose the one account cash tips go to, or null to hold them. Choosing files
+ * every tip that was waiting; tips already in the budget stay where they are.
+ */
+export async function chooseCashTipAccount(userId: string, accountId: string | null) {
+  return put<CashTipAccountResult>(endpoints.jobs.cashTipAccount(userId), { account_id: accountId });
+}
+

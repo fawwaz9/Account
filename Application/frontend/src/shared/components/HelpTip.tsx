@@ -8,6 +8,12 @@ interface HelpTipProps {
    */
   readonly label: string;
   readonly children: React.ReactNode;
+  /**
+   * "warning" draws a red "!" instead of the "?": something here needs doing,
+   * not just explaining. Same button, same panel, same keyboard behaviour --
+   * only the mark changes, so it is never a second popover to keep in step.
+   */
+  readonly tone?: "help" | "warning";
 }
 
 /**
@@ -34,7 +40,7 @@ interface HelpTipProps {
  * traps no focus and covers nothing, so it needs none of that. `CourseSearch`
  * already handles Escape locally on an anchored panel the same way.
  */
-export default function HelpTip({ label, children }: HelpTipProps) {
+export default function HelpTip({ label, children, tone = "help" }: HelpTipProps) {
   const [open, setOpen] = useState(false);
   const panelId = useId();
 
@@ -52,14 +58,14 @@ export default function HelpTip({ label, children }: HelpTipProps) {
     >
       <button
         type="button"
-        className="helpTipMark"
+        className={tone === "warning" ? "helpTipMark helpTipWarning" : "helpTipMark"}
         aria-expanded={open}
         aria-controls={panelId}
         aria-label={label}
         onClick={() => setOpen((was) => !was)}
       >
         {/* The glyph is decoration; `aria-label` above carries the meaning. */}
-        <span aria-hidden="true">?</span>
+        <span aria-hidden="true">{tone === "warning" ? "!" : "?"}</span>
       </button>
 
       {open && (

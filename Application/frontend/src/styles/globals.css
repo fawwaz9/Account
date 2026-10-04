@@ -257,6 +257,17 @@ button:not(:disabled):active {
   outline-offset: 2px;
 }
 
+/* Something needs doing, not explaining. Red in every state, including the
+   hover and open states that turn an ordinary mark gold -- declared after them,
+   at the same specificity, so it wins. */
+.helpTipMark.helpTipWarning,
+.helpTipMark.helpTipWarning:hover,
+.helpTipMark.helpTipWarning[aria-expanded="true"] {
+  border-color: #ff5a52;
+  color: #ff5a52;
+  font-weight: 700;
+}
+
 .helpTipPanel {
   display: block;
   margin: 8px 0 2px;

@@ -278,10 +278,6 @@ are the size of each job rather than an impression of it.
         Overtime rules, if a per-shift rate override stops being enough. It was
           offered and declined once already: an override covers the stat holiday
           and the night differential without a provincial rule table.
-        Somewhere for cash to live. A cash tip splits by income share like any
-          other income, which claims it is in the bank when it is in a pocket.
-          A cash account with its own share is the workaround; whether that is
-          good enough is worth finding out before building anything.
         Confirmed shifts leave the shifts section after 20 days They are still in db and calendar. 
           Also unconfirmed shifts should be placed at the top of the list sorted by the closest dates.
         Pay on specific days of the month. PROPOSED 2026-10-03.

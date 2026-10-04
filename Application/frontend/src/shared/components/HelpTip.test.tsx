@@ -124,3 +124,28 @@ describe("HelpTip", () => {
     expect(new Set(ids).size).toBe(2);
   });
 });
+
+describe("the warning tone", () => {
+  it("draws a red ! instead of the ?", () => {
+    render(<HelpTip label="This needs doing" tone="warning">Do this.</HelpTip>);
+    const mark = screen.getByRole("button", { name: "This needs doing" });
+
+    expect(mark.textContent).toBe("!");
+    expect(mark.classList).toContain("helpTipWarning");
+  });
+
+  it("leaves the default exactly as it was", () => {
+    render(<HelpTip label="What this does">The explanation.</HelpTip>);
+    const mark = screen.getByRole("button", { name: "What this does" });
+
+    expect(mark.textContent).toBe("?");
+    expect(mark.classList).not.toContain("helpTipWarning");
+  });
+
+  it("opens the same panel, which can hold a link", () => {
+    render(<HelpTip label="This needs doing" tone="warning">Go <a href="/x">here</a></HelpTip>);
+    fireEvent.click(screen.getByRole("button", { name: "This needs doing" }));
+
+    expect(screen.getByRole("link", { name: "here" })).toBeTruthy();
+  });
+});

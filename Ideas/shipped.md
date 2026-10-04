@@ -847,6 +847,32 @@ QUESTIONS WORTH ANSWERING BEFORE BUILDING, not while:
 
 ---
 
+## Cash tips go to one chosen account -- BUILT 2026-10-03, AWAITING DEPLOY APPROVAL
+
+A cash tip used to split across accounts by income share like a paycheque, which
+claimed it was in the bank when it was in a pocket. Settings -> Financial now has
+"Cash tips go to": one account, and the whole tip lands there as one row.
+
+**Decided with the owner, and the default changed:** with no account chosen -- or
+the chosen one archived or deleted -- a cash tip is HELD: recorded on the shift,
+kept out of the budget. A red "!" beside the confirmed shift in Jobs says so and
+links to Settings -> Financial (Settings now opens on ?tab=). Choosing an account
+files every held tip into it. Changing the account affects tips from now on --
+tips already in the budget, including old split ones, stay where they landed.
+
+Choosing has its own endpoint (PUT /jobs/{user_id}/cash-tip-account) rather than
+riding on the preferences save: it writes to the ledger and needs an ownership
+check, so both happen in one transaction, and the generic save cannot set it.
+`tip_in_ledger` had been sent by the API all along and shown nowhere, so a tip
+with nowhere to go was invisible until now.
+
+Guarded by 16 tests that count every account's rows before and after, plus four
+existing tests updated to choose an account (one had started passing vacuously).
+Seven mutations each fail by name. The copy-of-local-data check ran but proved
+little: local data has no shift tips.
+
+---
+
 ## Every frontend "today" on the Settings time zone -- SHIPPED 2026-10-03
 
 The follow-up the now-line left open. The week view had moved onto the Settings

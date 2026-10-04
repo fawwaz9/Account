@@ -6,6 +6,8 @@ from fastapi import APIRouter, HTTPException, Query
 from app._database.dependencies import DBSession
 from app.Auth.services.access import VerifiedUserId
 from app.Jobs.schemas.job import (
+    CashTipAccountChoice,
+    CashTipAccountResult,
     Job,
     ShiftCreate,
     JobCreate,
@@ -32,6 +34,7 @@ from app.Jobs.services.paycheque_service import (
     update_paycheque,
 )
 from app.Jobs.services.job_service import (
+    set_cash_tip_account,
     add_shift,
     confirm_shift,
     create_job,
@@ -66,6 +69,25 @@ def get_jobs(
         raise HTTPException(status_code=404, detail=error_user["not_found"])
 
     return jobs
+
+
+# Not under /jobs/: a sibling of /earnings and /paycheques, so no /jobs/{job_id}
+# route can ever parse "cash-tip-account" as a job id, whatever the order here.
+@router.put(
+    "/{user_id}/cash-tip-account",
+    response_model=CashTipAccountResult,
+    responses=responses["user_both"],
+)
+def choose_cash_tip_account(user_id: VerifiedUserId, choice: CashTipAccountChoice, db: DBSession):
+    """Choose the one account cash tips go to, and file every tip held for want of one.
+
+    404 when the account is not one of yours, or is archived -- and then nothing
+    is written, neither the choice nor any tip.
+    """
+    filed = set_cash_tip_account(db, user_id, choice.account_id)
+    if filed is None:
+        raise HTTPException(status_code=404, detail="That account is not one of yours, or is archived")
+    return CashTipAccountResult(account_id=choice.account_id, filed=filed)
 
 
 @router.post("/{user_id}/jobs", response_model=Job, responses=responses["user_both"])

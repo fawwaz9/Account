@@ -78,6 +78,11 @@ vi.mock("../features/budget/api", () => ({
   ]),
 }));
 
+const chooseCashTipAccount = vi.fn();
+vi.mock("../features/jobs/api", () => ({
+  chooseCashTipAccount: (...args: unknown[]) => chooseCashTipAccount(...args),
+}));
+
 // BlackoutsModal fetches its own data when it opens; stubbed so the dialog has
 // something to resolve rather than an unhandled rejection.
 vi.mock("../features/calender/api", () => ({
@@ -302,6 +307,84 @@ describe("event colours", () => {
     expect(screen.queryByRole("button", { name: /default colour for Lab/ })).toBeNull();
 
     expect(await save()).toEqual({ final: "#040506" });
+  });
+});
+
+describe("opening on a named tab", () => {
+  afterEach(() => window.history.pushState({}, "", "/"));
+
+  it("opens on Financial from ?tab=financial, where the held-tip warning links", () => {
+    window.history.pushState({}, "", "/settings?tab=financial");
+    render(<SettingsPage />);
+    expect(selected().map((tab) => tab.textContent)).toEqual(["Financial"]);
+  });
+
+  it("opens on Academic for a tab that does not exist", () => {
+    window.history.pushState({}, "", "/settings?tab=nonsense");
+    render(<SettingsPage />);
+    expect(selected().map((tab) => tab.textContent)).toEqual(["Academic"]);
+  });
+});
+
+describe("where cash tips go", () => {
+  function openFinancial() {
+    render(<SettingsPage />);
+    fireEvent.click(screen.getByRole("tab", { name: "Financial" }));
+  }
+
+  afterEach(() => { delete (user.preferences as Record<string, unknown>).cash_tip_account_id; });
+
+  it("offers Not chosen and the active accounts", async () => {
+    openFinancial();
+    const select = screen.getByLabelText("Cash tips go to") as HTMLSelectElement;
+    await waitFor(() => expect(select.options.length).toBe(2));
+    expect([...select.options].map((o) => o.textContent)).toEqual(["Not chosen", "Spending"]);
+  });
+
+  it("saves on change and says how many held tips it filed", async () => {
+    chooseCashTipAccount.mockResolvedValue({ account_id: "a1", filed: 2 });
+    openFinancial();
+    const select = screen.getByLabelText("Cash tips go to");
+    await waitFor(() => expect((select as HTMLSelectElement).options.length).toBe(2));
+
+    fireEvent.change(select, { target: { value: "a1" } });
+
+    await waitFor(() => expect(chooseCashTipAccount).toHaveBeenCalledWith("u1", "a1"));
+    expect(await screen.findByText("Saved. 2 held tips filed into Spending.")).toBeTruthy();
+    expect(updatePreferences).not.toHaveBeenCalled();
+  });
+
+  it("sends null for Not chosen", async () => {
+    (user.preferences as Record<string, unknown>).cash_tip_account_id = "a1";
+    chooseCashTipAccount.mockResolvedValue({ account_id: null, filed: 0 });
+    openFinancial();
+    const select = screen.getByLabelText("Cash tips go to");
+    await waitFor(() => expect((select as HTMLSelectElement).options.length).toBe(2));
+
+    fireEvent.change(select, { target: { value: "" } });
+
+    await waitFor(() => expect(chooseCashTipAccount).toHaveBeenCalledWith("u1", null));
+    expect(await screen.findByText("Saved.")).toBeTruthy();
+  });
+
+  it("puts the choice back and says so when saving fails", async () => {
+    chooseCashTipAccount.mockRejectedValue(new Error("That account is not one of yours, or is archived"));
+    openFinancial();
+    const select = screen.getByLabelText("Cash tips go to") as HTMLSelectElement;
+    await waitFor(() => expect(select.options.length).toBe(2));
+
+    fireEvent.change(select, { target: { value: "a1" } });
+
+    expect(await screen.findByText("That account is not one of yours, or is archived")).toBeTruthy();
+    expect(select.value).toBe("");
+  });
+
+  it("says so when the chosen account has gone, because tips are being held", async () => {
+    (user.preferences as Record<string, unknown>).cash_tip_account_id = "archived-or-deleted";
+    openFinancial();
+
+    expect(await screen.findByText(/no longer available, so new\s+tips are being held/)).toBeTruthy();
+    expect((screen.getByLabelText("Cash tips go to") as HTMLSelectElement).value).toBe("");
   });
 });
 

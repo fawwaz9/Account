@@ -117,6 +117,12 @@ export interface ShiftOccurrence {
   assumed: boolean;
   tip_amount: number;
   tip_is_cash: boolean;
+  /**
+   * Whether a cash tip has actually reached the budget. False while it is held
+   * for want of an account to go to (Settings -> Financial), and always false
+   * for a tip paid on the cheque, which arrives inside the paycheque instead.
+   */
+  tip_in_ledger: boolean;
   rate_override: number | null;
   notes: string | null;
 }

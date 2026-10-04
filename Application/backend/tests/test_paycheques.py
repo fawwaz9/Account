@@ -26,7 +26,13 @@ from app.Jobs.schemas.job import (
     ShiftScheduleCreate,
 )
 from app.Jobs.schemas.paycheque import DeductionEntry, PaychequeCreate, PaychequeUpdate
-from app.Jobs.services.job_service import confirm_shift, create_job, list_shifts, set_shift_schedule
+from app.Jobs.services.job_service import (
+    confirm_shift,
+    create_job,
+    list_shifts,
+    set_cash_tip_account,
+    set_shift_schedule,
+)
 from app.Jobs.services.paycheque_service import (
     delete_paycheque,
     list_paycheques,
@@ -232,6 +238,8 @@ def test_the_expectation_is_frozen_when_the_cheque_is_recorded(db, user, account
 # --- tips ----------------------------------------------------------------
 
 def test_a_cash_tip_reaches_the_ledger(db, user, accounts, worked):
+    # Cash tips go to one chosen account; with none chosen they are held.
+    set_cash_tip_account(db, user.id, accounts[0].id)
     shifts = list_shifts(db, user.id, PERIOD_START, PERIOD_END)
     confirm_shift(db, user.id, shifts[0].event_id, shifts[0].on_date,
                   ShiftRecordUpsert(tip_amount=45.0, tip_is_cash=True))
@@ -270,6 +278,7 @@ def test_a_cash_tip_is_left_out_of_what_the_cheque_should_come_to(db, user, acco
 
 
 def test_changing_a_tip_to_on_cheque_removes_the_row_it_wrote(db, user, accounts, worked):
+    set_cash_tip_account(db, user.id, accounts[0].id)
     shifts = list_shifts(db, user.id, PERIOD_START, PERIOD_END)
     event_id, on_date = shifts[0].event_id, shifts[0].on_date
 
@@ -283,11 +292,14 @@ def test_changing_a_tip_to_on_cheque_removes_the_row_it_wrote(db, user, accounts
 
 
 def test_clearing_a_tip_removes_its_row(db, user, accounts, worked):
+    # Chosen, or no row is ever written and "removed" would pass vacuously.
+    set_cash_tip_account(db, user.id, accounts[0].id)
     shifts = list_shifts(db, user.id, PERIOD_START, PERIOD_END)
     event_id, on_date = shifts[0].event_id, shifts[0].on_date
 
     confirm_shift(db, user.id, event_id, on_date,
                   ShiftRecordUpsert(tip_amount=45.0, tip_is_cash=True))
+    assert income_rows(db, user) != []
     confirm_shift(db, user.id, event_id, on_date, ShiftRecordUpsert(tip_amount=0.0))
 
     assert income_rows(db, user) == []

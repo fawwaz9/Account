@@ -51,6 +51,8 @@ export interface CurrentUser {
      * kind means its default (features/calender/kindColors.ts).
      */
     event_colors?: Partial<Record<EventKind, string>>;
+    /** The one account cash tips go to; null or absent means tips are held. */
+    cash_tip_account_id?: string | null;
     [key: string]: unknown;
   };
 }

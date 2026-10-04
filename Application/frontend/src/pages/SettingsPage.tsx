@@ -8,6 +8,7 @@ import IncomeSplitModal from "../features/budget/components/IncomeSplitModal";
 import BlackoutsModal from "../features/calender/components/BlackoutsModal";
 import EventColors from "../features/calender/components/EventColors";
 import { KindColors } from "../features/calender/kindColors";
+import { chooseCashTipAccount } from "../features/jobs/api";
 import HelpTip from "../shared/components/HelpTip";
 import CategoriesModal from "../features/budget/components/CategoriesModal";
 import "../styles/login.css";
@@ -133,13 +134,20 @@ export default function SettingsPage() {
    * survives a tab switch for free -- which is the agreed behaviour, not a
    * happy accident, so there is a test for it.
    */
-  const [active, setActive] = useState<TabId>("academic");
+  // ?tab=financial opens on that tab -- the Jobs page's held-tip warning links
+  // here. Read from window.location once, at mount, rather than a router hook:
+  // it is only ever an entry point, and the page then owns the tab itself.
+  const [active, setActive] = useState<TabId>(() => initialTab());
   const tablistRef = useRef<HTMLDivElement>(null);
 
   // What the Financial tab's two modals need. Two GETs rather than `useBudget`,
   // which returns these alongside six other reads and a `runRecurring` write --
   // a cost the budget page is right to pay and a settings page is not.
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [tipAccount, setTipAccount] = useState<string>(user?.preferences?.cash_tip_account_id ?? "");
+  const [savingTip, setSavingTip] = useState(false);
+  const [tipMessage, setTipMessage] = useState<string | null>(null);
+  const [tipError, setTipError] = useState<string | null>(null);
   const [categories, setCategories] = useState<SpendCategory[]>([]);
   const [splitOpen, setSplitOpen] = useState(false);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
@@ -179,6 +187,7 @@ export default function SettingsPage() {
     setMinBlock(String(user.preferences?.min_free_block_minutes ?? 30));
     setZone(user.preferences?.timezone ?? DEFAULT_ZONE);
     setColors(user.preferences?.event_colors ?? {});
+    setTipAccount(user.preferences?.cash_tip_account_id ?? "");
   }, [user]);
 
   // Fetched once, not per tab open: two GETs on a page you visit to change one
@@ -293,6 +302,41 @@ export default function SettingsPage() {
       setCalendarError(err instanceof Error ? err.message : "Could not save your settings");
     } finally {
       setSavingCalendar(false);
+    }
+  }
+
+  const activeAccounts = accounts.filter((account) => !account.archived);
+  // Chosen, but archived or deleted since: tips are being held, and that needs
+  // saying on the page, because it changes what you should do.
+  const tipAccountGone =
+    tipAccount !== "" && accounts.length > 0 && !activeAccounts.some((account) => account.id === tipAccount);
+
+  /**
+   * Choose where cash tips go. Saves on change, like the tab's other controls
+   * that write for themselves -- and says what happened, because choosing can
+   * file tips that were waiting, which is money moving into an account.
+   */
+  async function handleTipAccount(next: string) {
+    if (!user) return;
+    const previous = tipAccount;
+    setTipAccount(next);
+    setTipMessage(null);
+    setTipError(null);
+    setSavingTip(true);
+    try {
+      const result = await chooseCashTipAccount(user.id, next || null);
+      const name = activeAccounts.find((account) => account.id === next)?.name;
+      setTipMessage(
+        result.filed > 0 && name
+          ? `Saved. ${result.filed} held ${result.filed === 1 ? "tip" : "tips"} filed into ${name}.`
+          : "Saved.",
+      );
+      await refreshUser();
+    } catch (err) {
+      setTipAccount(previous);
+      setTipError(err instanceof Error ? err.message : "Could not save that");
+    } finally {
+      setSavingTip(false);
     }
   }
 
@@ -781,6 +825,38 @@ export default function SettingsPage() {
                 Budget page and it appears here.
               </p>
             )}
+
+            <div className="loginField">
+              <span className="labelWithTip">
+                <label htmlFor="cash-tip-account">Cash tips go to</label>
+                <HelpTip label="Where cash tips go">
+                  A cash tip is in your pocket, not the bank, so it goes into this
+                  one account instead of being split like a paycheque. Until you
+                  choose, tips are recorded on the shift but kept out of your
+                  budget. Tips already in your budget stay where they are.
+                </HelpTip>
+              </span>
+              <select
+                id="cash-tip-account"
+                className="loginInput"
+                value={tipAccountGone ? "" : tipAccount}
+                onChange={(event) => void handleTipAccount(event.target.value)}
+                disabled={savingTip}
+              >
+                <option value="">Not chosen</option>
+                {activeAccounts.map((account) => (
+                  <option key={account.id} value={account.id}>{account.name}</option>
+                ))}
+              </select>
+              {tipAccountGone && (
+                <p className="loginError">
+                  The account chosen for cash tips is no longer available, so new
+                  tips are being held. Choose another.
+                </p>
+              )}
+              {tipError && <p className="loginError">{tipError}</p>}
+              {tipMessage && <p className="loginSuccess" role="status">{tipMessage}</p>}
+            </div>
           </div>
         </div>
       </div>
@@ -816,3 +892,10 @@ export default function SettingsPage() {
     </div>
   );
 }
+
+/** The tab named in ?tab=, if it is one of ours; Academic otherwise. */
+function initialTab(): TabId {
+  const named = new URLSearchParams(window.location.search).get("tab");
+  return TABS.some((tab) => tab.id === named) ? (named as TabId) : "academic";
+}
+

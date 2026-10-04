@@ -28,13 +28,14 @@ from datetime import date, datetime, time, timedelta
 from sqlalchemy.orm import Session
 
 from app._database.models import (
+    AccountModel,
     EventModel,
     JobModel,
     ShiftRecordModel,
     TransactionModel,
+    UserModel,
 )
 from app.Finances.schemas.transaction import TransactionKind
-from app.Finances.services.deposit_service import active_accounts, split_income
 from app.Calendar.schemas.event import EventKind
 from app.Calendar.services.event_service import list_occurrences
 from app.Calendar.utils.recurrence import (
@@ -575,6 +576,13 @@ def confirm_shift(
         )
         db.add(record)
 
+    # The tip as it was, so sync_cash_tip can tell a re-save of the hours from a
+    # change to the tip. A new record had no tip.
+    previous_tip = (
+        record.tip_amount or 0.0,
+        True if record.tip_is_cash is None else record.tip_is_cash,
+    )
+
     record.worked_start = data.worked_start
     record.worked_end = data.worked_end
     record.confirmed = data.confirmed
@@ -583,33 +591,99 @@ def confirm_shift(
     record.rate_override = data.rate_override
     record.notes = data.notes
 
-    sync_cash_tip(db, user_id, record, event)
+    sync_cash_tip(db, user_id, record, previous_tip)
 
     db.commit()
     db.refresh(record)
     return ShiftRecord.model_validate(record)
 
 
+def cash_tip_account(db: Session, user_id: uuid.UUID) -> AccountModel | None:
+    """The account cash tips are filed into, or None when there is nowhere to.
+
+    None when nothing is chosen, and equally when the chosen account has been
+    archived or no longer exists -- so every caller treats all three the same
+    way, by holding the tip, with no special case for any of them.
+    """
+    user = db.query(UserModel).filter(UserModel.id == user_id).first()
+    raw = (user.preferences or {}).get("cash_tip_account_id") if user else None
+    if not raw:
+        return None
+    try:
+        account_id = uuid.UUID(str(raw))
+    except ValueError:
+        return None
+    return (
+        db.query(AccountModel)
+        .filter(
+            AccountModel.id == account_id,
+            AccountModel.user_id == user_id,
+            AccountModel.archived.is_(False),
+        )
+        .first()
+    )
+
+
+def file_cash_tip(
+    db: Session, user_id: uuid.UUID, record: ShiftRecordModel, account: AccountModel
+) -> TransactionModel:
+    """Write one income row for a cash tip into `account`, and point the record at it.
+
+    One row, not a split: a cash tip is in one place -- a pocket, a tin, a cash
+    account -- and splitting it by income share claimed it had reached the bank.
+    """
+    job = db.query(JobModel).filter(JobModel.id == record.job_id).first()
+    row = TransactionModel(
+        id=uuid.uuid4(),
+        user_id=user_id,
+        account_id=account.id,
+        kind=INCOME,
+        amount=round(record.tip_amount, 2),
+        description=f"{job.name if job else 'Shift'} tips",
+        occurred_on=record.on_date,
+    )
+    db.add(row)
+    db.flush()
+    record.tip_transaction_id = row.id
+    db.flush()
+    return row
+
+
 def sync_cash_tip(
-    db: Session, user_id: uuid.UUID, record: ShiftRecordModel, event: EventModel
+    db: Session,
+    user_id: uuid.UUID,
+    record: ShiftRecordModel,
+    previous_tip: tuple[float, bool],
 ) -> None:
-    """Keep the ledger row for a cash tip in step with the record.
+    """Keep a shift's cash tip and the ledger in step.
 
     Cash is money already in hand, so it is the one part of a shift that reaches
     the budget without waiting for a cheque. A tip paid through payroll does not:
     it arrives inside the cheque's gross, and writing a row for it here as well
     would count it twice.
 
-    Written and unwritten rather than only written, because a tip can be
-    corrected to zero, or marked as having gone on the cheque after all, and
-    either leaves a row that no longer describes anything.
+    It goes into the one account chosen for cash tips (`cash_tip_account`). With
+    none chosen -- or the chosen one archived or gone -- the tip is HELD: recorded
+    on the shift, absent from the budget, and `tip_in_ledger` false, which the
+    Jobs page marks so the student knows to choose one. Choosing then files every
+    held tip (`set_cash_tip_account`).
     """
     wants_row = record.tip_amount > 0 and record.tip_is_cash
+    unchanged = (round(previous_tip[0], 2), previous_tip[1]) == (
+        round(record.tip_amount, 2), record.tip_is_cash
+    )
 
-    # A tip splits across accounts like any other income, so it is several rows
-    # tied by a group -- the record points at one of them, and the group is what
-    # finds the rest. Deleting only the row it points at would orphan the others.
-    anchor = None
+    # Tips from now on: a tip already in the budget is never moved by re-saving
+    # the shift for its hours or its notes -- including a tip from before this
+    # rule, which was split across several accounts. Only a changed tip, or one
+    # that never reached the budget, is (re)written.
+    if unchanged and record.tip_transaction_id is not None:
+        return
+
+    # A tip written by the old rule is several rows tied by a group; the record
+    # points at one, and the group finds the rest. Deleting only the row it
+    # points at would orphan the others.
+    existing = []
     if record.tip_transaction_id is not None:
         anchor = (
             db.query(TransactionModel)
@@ -619,69 +693,89 @@ def sync_cash_tip(
             )
             .first()
         )
-
-    existing = []
-    if anchor is not None:
-        existing = (
-            db.query(TransactionModel)
-            .filter(
-                TransactionModel.user_id == user_id,
-                TransactionModel.group_id == anchor.group_id,
+        if anchor is not None:
+            existing = (
+                db.query(TransactionModel)
+                .filter(
+                    TransactionModel.user_id == user_id,
+                    TransactionModel.group_id == anchor.group_id,
+                )
+                .all()
+                if anchor.group_id is not None
+                else [anchor]
             )
-            .all()
-            if anchor.group_id is not None
-            else [anchor]
-        )
 
-    if not wants_row:
-        for row in existing:
-            db.delete(row)
-        record.tip_transaction_id = None
-        db.flush()
-        return
-
-    job = db.query(JobModel).filter(JobModel.id == record.job_id).first()
-    description = f"{job.name if job else 'Shift'} tips"
-
-    # Rewritten rather than patched: the amount changed, so the split changed,
-    # and reconciling row-by-row against a new split is more ways to be wrong.
+    # Rewritten rather than patched: the amount changed, so the row changed.
     for row in existing:
         db.delete(row)
     record.tip_transaction_id = None
     db.flush()
 
-    # Split like any other income, so cash lands wherever the student has said
-    # incoming money goes. A student who wants cash tracked apart can give a
-    # cash account its own income share.
-    accounts = active_accounts(db, user_id)
-    split = split_income(round(record.tip_amount, 2), accounts)
-    if not split:
-        # No account takes a share, so there is nowhere to put it. Recording the
-        # tip on the shift still happens -- refusing would block logging your
-        # hours over an unrelated budget setting -- and `tip_in_ledger` says the
-        # money has not reached the budget, so the gap is visible rather than
-        # silent.
-        record.tip_transaction_id = None
-        db.flush()
+    if not wants_row:
         return
 
-    group_id = uuid.uuid4()
-    rows = [
-        TransactionModel(
-            id=uuid.uuid4(),
-            user_id=user_id,
-            account_id=entry.account_id,
-            kind=INCOME,
-            amount=entry.amount,
-            description=description,
-            occurred_on=record.on_date,
-            group_id=group_id,
+    account = cash_tip_account(db, user_id)
+    if account is None:
+        # Held. Recording the shift still succeeds -- refusing would block
+        # logging your hours over an unrelated setting.
+        return
+
+    file_cash_tip(db, user_id, record, account)
+
+
+def set_cash_tip_account(
+    db: Session, user_id: uuid.UUID, account_id: uuid.UUID | None
+) -> int | None:
+    """Choose where cash tips go, and file every tip that was waiting for it.
+
+    Returns how many held tips were filed, or None when `account_id` is not one
+    of this user's active accounts -- in which case nothing at all is written.
+    Clearing (None) files nothing; later tips are held.
+
+    Held tips were never in the budget, so filing them is not moving past money.
+    Tips already in the budget stay where they landed: changing the account
+    affects tips from now on.
+    """
+    user = db.query(UserModel).filter(UserModel.id == user_id).first()
+    if user is None:
+        return None
+
+    account = None
+    if account_id is not None:
+        account = (
+            db.query(AccountModel)
+            .filter(
+                AccountModel.id == account_id,
+                AccountModel.user_id == user_id,
+                AccountModel.archived.is_(False),
+            )
+            .first()
         )
-        for entry in split
-        if entry.amount > 0
-    ]
-    db.add_all(rows)
+        if account is None:
+            return None
+
+    # Reassigned whole: SQLAlchemy does not see a mutation inside a JSON column.
+    user.preferences = {
+        **(user.preferences or {}),
+        "cash_tip_account_id": str(account_id) if account_id is not None else None,
+    }
     db.flush()
-    # The first row is what the record points at; the group ties the rest to it.
-    record.tip_transaction_id = rows[0].id if rows else None
-    db.flush()
+
+    filed = 0
+    if account is not None:
+        held = (
+            db.query(ShiftRecordModel)
+            .filter(
+                ShiftRecordModel.user_id == user_id,
+                ShiftRecordModel.tip_is_cash.is_(True),
+                ShiftRecordModel.tip_amount > 0,
+                ShiftRecordModel.tip_transaction_id.is_(None),
+            )
+            .all()
+        )
+        for record in held:
+            file_cash_tip(db, user_id, record, account)
+            filed += 1
+
+    db.commit()
+    return filed

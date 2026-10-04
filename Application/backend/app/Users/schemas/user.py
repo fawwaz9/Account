@@ -106,6 +106,12 @@ class UserPreferences(BaseModel):
     #: no stale copy of a default is ever stored. Recolouring only -- kinds
     #: themselves stay a fixed enum because each carries behaviour.
     event_colors: dict[EventKind, str] = Field(default_factory=dict)
+    #: The one account cash tips are filed into. None means tips are held out
+    #: of the budget until one is chosen. Read here, but NOT on
+    #: UserPreferencesPatch: choosing it files every held tip, and that side
+    #: effect and its ownership check live in one call
+    #: (PUT /jobs/{user_id}/cash-tip-account), not in a generic settings save.
+    cash_tip_account_id: UUID | None = None
 
     @field_validator("event_colors")
     @classmethod

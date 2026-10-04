@@ -1,5 +1,7 @@
 import { ShiftOccurrence } from "../types";
+import { Link } from "react-router-dom";
 import { clockTime, dueLabel } from "../../../shared/utils/dateUtils";
+import HelpTip from "../../../shared/components/HelpTip";
 
 interface ShiftListProps {
   readonly shifts: ShiftOccurrence[];
@@ -61,7 +63,18 @@ export default function ShiftList({ shifts, onConfirm, onRemove, busy }: ShiftLi
             </span>
 
             {shift.confirmed ? (
-              <span className="shiftState shiftStateDone">Confirmed</span>
+              <span className="shiftState shiftStateDone">
+                Confirmed
+                {/* A cash tip waiting for somewhere to go: recorded, but not in
+                    the budget until an account is chosen for cash tips. A tip on
+                    the cheque is never "waiting" -- it arrives with the pay. */}
+                {heldTip(shift) && (
+                  <HelpTip label="This tip is not in your budget" tone="warning">
+                    Cash tips wait until you choose an account for them.{" "}
+                    <Link to="/settings?tab=financial">Choose in Settings</Link>
+                  </HelpTip>
+                )}
+              </span>
             ) : (
               <button
                 type="button"
@@ -101,3 +114,9 @@ export default function ShiftList({ shifts, onConfirm, onRemove, busy }: ShiftLi
 function hours(minutes: number): string {
   return `${Math.round((minutes / 60) * 10) / 10}h`;
 }
+
+/** A confirmed cash tip that has not reached the budget. */
+export function heldTip(shift: ShiftOccurrence): boolean {
+  return shift.confirmed && shift.tip_is_cash && shift.tip_amount > 0 && !shift.tip_in_ledger;
+}
+

@@ -25,6 +25,7 @@ from app.Jobs.services.job_service import (
     create_job,
     list_shifts,
     remove_shift,
+    set_cash_tip_account,
     set_shift_schedule,
 )
 
@@ -228,6 +229,7 @@ def test_deleting_a_confirmed_shift_with_a_cash_tip_removes_the_tip_from_the_led
     """
     from app._database.models import TransactionModel
 
+    set_cash_tip_account(db, user.id, accounts_ready.id)
     event_id = one_off(db, user, job, on=MON)
     confirm_shift(db, user.id, event_id, MON, ShiftRecordUpsert(
         tip_amount=45.0, tip_is_cash=True))
