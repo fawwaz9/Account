@@ -203,10 +203,18 @@ jobs:
             --format='value(spec.containers[0].image)')
           echo "serving: $REV ($PCT%)  $IMG_LIVE"
           [ "$PCT" = "100" ] || { echo "new revision is not taking all traffic" >&2; exit 1; }
+          # Cloud Run records the image by DIGEST (backend@sha256:...), not by the
+          # tag it was deployed with, so a tag-name match can never pass. Compare
+          # digests: what the registry says :SHA is, against what is running.
+          # Stronger than a tag anyway -- a tag can be moved, a digest cannot.
+          WANT=$(gcloud artifacts docker images describe "${IMG}:${SHA}" \
+            --format='value(image_summary.digest)')
+          [ -n "$WANT" ] || { echo "could not resolve ${IMG}:${SHA} in the registry" >&2; exit 1; }
           case "$IMG_LIVE" in
-            *":${SHA}"|*":${SHA}@"*) ;;
-            *) echo "serving $IMG_LIVE, expected :${SHA}" >&2; exit 1 ;;
+            *"@${WANT}") ;;
+            *) echo "serving $IMG_LIVE, expected @${WANT} (:${SHA})" >&2; exit 1 ;;
           esac
+          echo "digest matches :${SHA} -> ${WANT}"
           [ "$REV" != "$PREV_REV" ] || { echo "no new revision was created" >&2; exit 1; }
           echo "NEW_REV=$REV" >> "$GITHUB_ENV"
 
