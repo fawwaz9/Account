@@ -211,6 +211,11 @@ are the size of each job rather than an impression of it.
         (?) sweep, which is tracked under Interface quality above.
 
 ### Calendar
+        Mobile calendar views: 1 day, 3 day, and month.
+          On a phone the week view's seven columns are too narrow to read, so
+          mobile offers a 1-day and a 3-day view alongside the month, in place of
+          the full week.
+
 ### Grades
         Term retrospective when a term closes: what moved, what slipped, what you predicted vs got.
         Syllabus paste: drop the text in, get categories, weights and due dates proposed for review.
