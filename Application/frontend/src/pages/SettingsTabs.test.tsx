@@ -411,6 +411,31 @@ describe("blocked periods", () => {
       expect(screen.getByRole("dialog", { name: "Blocked periods" })).toBeDefined(),
     );
   });
+
+  it("sits before the event colours, inside the calendar form", () => {
+    render(<SettingsPage />);
+    fireEvent.click(screen.getByRole("tab", { name: "Calendar" }));
+
+    const button = screen.getByRole("button", { name: "Blocked periods" });
+    const colours = screen.getByText("Event colours");
+    // DOCUMENT_POSITION_FOLLOWING: the colours come after the button.
+    expect(button.compareDocumentPosition(colours) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(button.closest("form")).toBe(colours.closest("form"));
+  });
+
+  it("does not save the calendar form when it opens its dialog", async () => {
+    // Inside a form, a <button> without type="button" submits it.
+    render(<SettingsPage />);
+    fireEvent.click(screen.getByRole("tab", { name: "Calendar" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Blocked periods" }));
+    fireEvent.click(screen.getByRole("button", { name: "What blocked periods do" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("dialog", { name: "Blocked periods" })).toBeDefined(),
+    );
+    expect(updatePreferences).not.toHaveBeenCalled();
+  });
 });
 
 describe("the financial tab", () => {

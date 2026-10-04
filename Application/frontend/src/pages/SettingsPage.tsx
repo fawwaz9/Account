@@ -692,6 +692,30 @@ export default function SettingsPage() {
                 </HelpTip>
               </div>
 
+              {/* Inside the form, but no part of its Save: the dialog writes for
+                  itself. Both controls here are type="button" (the HelpTip's
+                  included), so neither can submit the form -- a plain <button>
+                  in a form submits it, which would save the calendar settings
+                  as a side effect of opening a dialog. Still on the Calendar
+                  page too, where you notice a reading break while looking at the
+                  week it ruins. The mark sits beside the button, never inside
+                  it: a button cannot contain a button. */}
+              <div className="settingsActions">
+                <button
+                  type="button"
+                  className="calButton"
+                  onClick={() => setBlackoutsOpen(true)}
+                >
+                  Blocked periods
+                </button>
+                <HelpTip label="What blocked periods do">
+                  Weeks when classes do not run. Entered once and applied to
+                  everything attached to a course, so a reading break does not have
+                  to be cancelled on each of six of them. Your own events, standing
+                  payments and repeating tasks carry on.
+                </HelpTip>
+              </div>
+
               <fieldset className="loginField kindColorField">
                 <legend className="labelWithTip">
                   <span>Event colours</span>
@@ -712,27 +736,6 @@ export default function SettingsPage() {
               </button>
             </form>
 
-            {/* Outside the form: it writes for itself and has no part in the Save
-                above. Still on the Calendar page too, where you notice a reading
-                break while looking at the week it ruins. */}
-            {/* The mark sits beside the button, never inside it: a button cannot
-                contain a button, and nesting them would give one control two
-                meanings depending on where you clicked. */}
-            <div className="settingsActions">
-              <button
-                type="button"
-                className="calButton"
-                onClick={() => setBlackoutsOpen(true)}
-              >
-                Blocked periods
-              </button>
-              <HelpTip label="What blocked periods do">
-                Weeks when classes do not run. Entered once and applied to
-                everything attached to a course, so a reading break does not have
-                to be cancelled on each of six of them. Your own events, standing
-                payments and repeating tasks carry on.
-              </HelpTip>
-            </div>
           </div>
 
           {/* No form and no Save: both of these are their own dialogs that write
