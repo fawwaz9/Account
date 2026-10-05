@@ -307,3 +307,48 @@ def _no_push_network(monkeypatch):
 
     monkeypatch.setattr(push_service, "default_sender", fake_sender)
     return sent
+
+
+#: What the fake model answers for every syllabus in the suite: a real-looking
+#: course whose weights sum to 100, one dated item, one TBA final.
+SUITE_SYLLABUS = {
+    "course_code": "CPSC 221",
+    "course_name": "Basic Algorithms and Data Structures",
+    "professor": None,
+    "multiple_schemes": False,
+    "assessments": [
+        {"name": "Assignments", "category": "Assignment", "weight": 30, "count": 3,
+         "due_date": None, "date_tba": False},
+        {"name": "Midterm", "category": "Midterm", "weight": 30, "count": 1,
+         "due_date": "2026-10-20", "date_tba": False},
+        {"name": "Final exam", "category": "Final", "weight": 40, "count": 1,
+         "due_date": None, "date_tba": True},
+    ],
+}
+
+
+@pytest.fixture(autouse=True)
+def _no_llm_network(monkeypatch):
+    """No test may reach a real language model.
+
+    Configured, so the intake routes run for real in every suite -- the
+    isolation and non-interference walks included -- against a fake that
+    records each request and answers SUITE_SYLLABUS in the OpenAI shape.
+    Tests that care about the answer replace it or pass a transport.
+    """
+    import json as _json
+
+    from app.config import settings
+    from app.Intake.services import llm
+
+    monkeypatch.setattr(settings, "LLM_PROVIDER", "openai")
+    monkeypatch.setattr(settings, "LLM_MODEL_EXTRACT", "suite-model")
+    monkeypatch.setattr(settings, "LLM_API_KEY", "suite-key")
+    sent = []
+
+    def fake_post(url, headers, body):
+        sent.append((url, headers, body))
+        return {"choices": [{"message": {"content": _json.dumps(SUITE_SYLLABUS)}}]}
+
+    monkeypatch.setattr(llm, "_post", fake_post)
+    return sent

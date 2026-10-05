@@ -116,6 +116,7 @@ class UserModel(Base):
     push_subscriptions = relationship("PushSubscriptionModel", cascade=cascade)
     survey_responses = relationship("SurveyResponseModel", cascade=cascade)
     imports = relationship("ImportModel", cascade=cascade)
+    syllabus_parses = relationship("SyllabusParseModel", cascade=cascade)
 
     @property
     def has_password(self) -> bool:
@@ -1337,3 +1338,30 @@ class ImportModel(Base):
     filename = Column(String, nullable=True)
     row_count = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, nullable=False, default=utc_now)
+
+
+class SyllabusParseModel(Base):
+    """One syllabus read by a language model, and what the person did with it.
+
+    Phase 1 item 1. Kept for two reasons: the daily cap counts these, and the
+    no-change measure (account-vision.md §15) is read from them -- of the
+    fields the parse produced, how many the person changed before confirming.
+    The document itself is not kept here (see the Phase 1 decisions on
+    storage); only what was extracted.
+    """
+
+    __tablename__ = "syllabus_parses"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    #: The course the parse built, once applied. Cleared if the course is deleted.
+    course_id = Column(Uuid, ForeignKey("courses.id"), nullable=True, index=True)
+    filename = Column(String, nullable=True)
+    provider = Column(String, nullable=False)
+    model = Column(String, nullable=False)
+    #: What was extracted, as the SyllabusExtract schema.
+    result = Column(JSON, nullable=False, default=dict)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+    applied_at = Column(DateTime, nullable=True)
+    fields_total = Column(Integer, nullable=True)
+    fields_changed = Column(Integer, nullable=True)

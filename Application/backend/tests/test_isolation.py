@@ -110,6 +110,7 @@ PATH_SOURCES = {
     "import_id": "imports",
     "job_id": "jobs",
     "paycheque_id": "paycheques",
+    "parse_id": "syllabus_parses",
     "payment_id": "tuition_payments",
     "reminder_id": "reminders",
     "task_id": "tasks",
@@ -171,6 +172,15 @@ BODY_PATCHES: dict[tuple[str, str], list[dict]] = {
     ("POST", "/api/finances/{user_id}/imports/preview"): [{
         "csv_text": "Date,Description,Amount\n2026-09-14,zzownera import,-4.50\n",
         "mapping": None,
+    }],
+    ("POST", "/api/intake/{user_id}/syllabus"): [{
+        "filename": "s.pdf", "media_type": "application/pdf", "content_base64": "JVBERi0xLjQgdGVzdA==",
+    }],
+    ("POST", "/api/intake/{user_id}/syllabus/{parse_id}/apply"): [{
+        "course_code": "ZZOWN 101", "course_name": "zzownera built", "year": 3, "semester": "Fall",
+        "credits": 3.0, "professor": None,
+        "assessments": [{"name": "Final", "category": "Final", "weight": 100.0, "count": 1,
+                         "due_date": None, "date_tba": True}],
     }],
     ("POST", "/api/finances/{user_id}/subscriptions/confirm"): [
         {"instruction.kind": "expense", "instruction.to_account_id": None},

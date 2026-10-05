@@ -42,6 +42,7 @@ from app._database.models import (
     PushSubscriptionModel,
     ImportModel,
     SurveyResponseModel,
+    SyllabusParseModel,
     TuitionPaymentModel,
     UsageEventModel,
 )
@@ -213,6 +214,12 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
     )
     db.add(imported_row)
     ids["transactions_imported"] = imported_row.id
+    # An unapplied parse, so applying someone else's is an attempt to build a
+    # course from their syllabus.
+    add(SyllabusParseModel(id=new_id(), user_id=user_id, filename=f"{marker}.pdf", provider="openai",
+                           model="suite-model", result={"course_code": f"{marker[:8]} 1",
+                                                        "course_name": f"{marker} syllabus",
+                                                        "assessments": []}))
     # A question of the world's own, so the real one is still unanswered and
     # A's request to answer it reaches the write path instead of a 409.
     add(SurveyResponseModel(id=new_id(), user_id=user_id, question=f"{marker} question", answer="very"))

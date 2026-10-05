@@ -40,6 +40,16 @@ class Settings(BaseSettings):
     VAPID_SUBJECT: str = "https://account-2a7.pages.dev"
     CRON_SECRET: str | None = Field(default=None, min_length=32)
 
+    #: Document intake (Phase 1 item 1, account-vision.md §13.21). All optional:
+    #: without them syllabus reading reports itself unavailable. The provider is
+    #: openai, gemini or anthropic; the model is that provider's model name.
+    LLM_PROVIDER: str | None = None
+    LLM_MODEL_EXTRACT: str | None = None
+    LLM_API_KEY: str | None = None
+    #: Parses per person per day: every call costs money, and a cap is what
+    #: keeps a stuck retry loop from costing much of it.
+    LLM_PARSES_PER_DAY: int = Field(default=10, ge=1, le=200)
+
     model_config = SettingsConfigDict(env_file=ENV_FILE, extra="ignore")
 
 

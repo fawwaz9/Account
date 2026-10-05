@@ -1,6 +1,7 @@
 import uuid
 from sqlalchemy.orm import Session, selectinload
 from app._database.models import (
+    SyllabusParseModel,
     CourseCategoryWeightModel,
     CourseModel,
     GradeModel,
@@ -265,6 +266,9 @@ def delete_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
     db.query(RecurringTaskModel).filter(
         RecurringTaskModel.user_id == user_id, RecurringTaskModel.course_id == course_id,
     ).update({RecurringTaskModel.course_id: None}, synchronize_session=False)
+    db.query(SyllabusParseModel).filter(
+        SyllabusParseModel.user_id == user_id, SyllabusParseModel.course_id == course_id,
+    ).update({SyllabusParseModel.course_id: None}, synchronize_session=False)
     db.delete(course)
     db.commit()
     return course
