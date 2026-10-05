@@ -886,8 +886,15 @@ ISOLATION ON 2026-10-05: the owner switched DATABASE_URL to `database-url-app`
 (revision account-api-00030-xmq, same image). In the first 206 requests as
 `account_app` -- password sign-in, every finance read, grades, jobs, calendar,
 account reorders, recurring runs and visit counts -- there was no failure but a
-favicon 404, and no permission or row-security error in the logs. NOT YET: step 6
-(push secrets and scheduler).
+favicon 404, and no permission or row-security error in the logs.
+PUSH ON 2026-10-05: the owner added the VAPID key, cron secret and the 5-minute
+Cloud Scheduler job. Every push request then returned 500: the runbook stored the
+key from `print()`, trailing newline and all, and base64 refused it. Settings sat
+on "Checking..." because the failed-check path never set the device flag (and
+would have claimed "not set up"). Both are fixed (eb41226 frontend, 238c122
+`.strip()` on the key, each with a test that fails without it); the runbook
+command now prints without the newline. LIVE: revision account-api-00032-vxd. The
+scheduler's call returns 200; a call with no secret, or a wrong one, returns 403.
 
 ---
 
