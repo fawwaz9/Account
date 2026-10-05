@@ -7,6 +7,7 @@ import {
   SinkingFundUpdate,
   SafeToSpend,
   CashFlowForecast,
+  AnnualPlan,
   SubscriptionCandidate,
   Account,
   AccountActivity,
@@ -371,6 +372,15 @@ export async function fetchSafeToSpend(userId: string) {
 /** Where the spending accounts are heading, to the end of the term. */
 export async function fetchForecast(userId: string) {
   return get<CashFlowForecast>(endpoints.finances.forecast(userId));
+}
+
+/** The year as one running balance; with a target, the weekly hours it takes. */
+export async function fetchPlan(userId: string, target?: number, until?: string) {
+  const params = new URLSearchParams();
+  if (target !== undefined) params.set("target", String(target));
+  if (until) params.set("until", until);
+  const query = params.toString();
+  return get<AnnualPlan>(`${endpoints.finances.plan(userId)}${query ? `?${query}` : ""}`);
 }
 
 /* ===== Subscription audit ===== */

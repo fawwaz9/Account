@@ -667,3 +667,44 @@ export interface CashFlowForecast {
   run_rates: MerchantRunRate[];
   assumptions: string[];
 }
+
+/* ===== Year plan and hours-to-goal (Phase 1 item 10) ===== */
+
+export interface PlanMonth {
+  /** The first of the month. */
+  month: string;
+  money_in: number;
+  /** Positive: what leaves. */
+  money_out: number;
+  end_balance: number;
+}
+
+export interface PlanScenario {
+  extra_hours_per_week: number;
+  end_balance: number;
+}
+
+export interface PlanGoal {
+  target: number;
+  target_on: string;
+  base_end_balance: number;
+  /** Negative when the target is already met. */
+  shortfall: number;
+  job_name: string;
+  net_hourly: number;
+  weeks: number;
+  extra_hours_per_week: number | null;
+  scenarios: PlanScenario[];
+}
+
+export interface AnnualPlan {
+  starts_on: string;
+  ends_on: string;
+  starting_balance: number;
+  months: PlanMonth[];
+  ending_balance: number;
+  lowest_balance: number;
+  lowest_on: string;
+  goal: PlanGoal | null;
+  assumptions: string[];
+}

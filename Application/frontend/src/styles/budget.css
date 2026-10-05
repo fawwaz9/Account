@@ -1528,3 +1528,81 @@
   padding: 2px 0;
   color: var(--muted);
 }
+
+/* ===== The year, month by month (Phase 1 item 10) ===== */
+
+.yearPlan {
+  margin: 0 0 22px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+}
+
+/* Its own scroll container, so a narrow phone scrolls the table, never the page. */
+.yearPlanTable {
+  overflow-x: auto;
+  margin: 10px 0;
+}
+
+.yearPlanTable table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.yearPlanTable th,
+.yearPlanTable td {
+  padding: 4px 8px;
+  text-align: right;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+
+.yearPlanTable th:first-child {
+  text-align: left;
+}
+
+.yearPlanTable thead th {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.yearPlanNegative {
+  color: var(--delete);
+}
+
+.yearPlanGoal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.yearPlanGoal label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.yearPlanGoal input[type="number"] {
+  width: 8rem;
+}
+
+.yearPlanAnswer {
+  margin-top: 10px;
+}
+
+.yearPlanScenarios {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  max-width: 22rem;
+}
+
+.yearPlanScenarios li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 0;
+}
