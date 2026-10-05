@@ -851,3 +851,47 @@
   font-size: 0.76rem;
   line-height: 1.35;
 }
+
+/* ===== Required final, inline (Phase 1 item 2) =====
+   The same card as the grade band beside it, because the two are read
+   together: where the course can still finish, and what the final has to do
+   about it. */
+
+.requiredFinalPanel {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.requiredFinalTarget {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.requiredFinalPanelAnswer {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--gold);
+}
+
+/* A quiet text control, like the course links' edit: the panel is the answer,
+   and the calculator is for a different question. Padding and box-sizing set
+   so it does not inherit the base button padding. */
+.requiredFinalTryAnother {
+  margin: 8px 0 0;
+  padding: 0;
+  box-sizing: border-box;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.requiredFinalTryAnother:hover {
+  color: var(--gold);
+}

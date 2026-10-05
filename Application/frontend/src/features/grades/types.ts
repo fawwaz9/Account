@@ -106,6 +106,8 @@ export interface CourseDetail {
   transfer_credit: boolean;
   /** Searchable and still in the average, but out of credits completed. */
   archived: boolean;
+  /** past, current or future against the student's term, computed by the API. */
+  term_bucket: TermBucket;
   /**
    * Where the course lives, in the order they were arranged. Sent and stored
    * whole -- there is no per-link endpoint, because the list carries no ids.

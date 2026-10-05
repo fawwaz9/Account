@@ -15,6 +15,7 @@ import EditGradeModal from "../../features/grades/components/EditGradeModal";
 import EditCourseModal from "../../features/grades/components/EditCourseModal";
 import DeleteConfirmModal from "../../features/grades/components/DeleteConfirmModal";
 import RequiredFinalModal from "../../features/grades/components/RequiredFinalModal";
+import RequiredFinalPanel from "../../features/grades/components/RequiredFinalPanel";
 import BulkGradesModal from "../../features/grades/components/BulkGradesModal";
 import { getErrorMessage } from "../../features/grades/components/AddCourseModal";
 import GradeCategoryColumn from "../../features/grades/components/GradeCategoryColumn";
@@ -274,6 +275,18 @@ export default function CourseDetailPage() {
         <div className="courseInsights">
           <CourseCost userId={user.id} courseId={courseId} nonce={reloadNonce} />
           <GradeBand userId={user.id} courseId={courseId} nonce={reloadNonce} />
+          {/* Against the course's own target, or the account default -- the
+              rule the grades page's Attention panel already uses. Silent for
+              a course whose final is not still ahead. */}
+          {course && (
+            <RequiredFinalPanel
+              userId={user.id}
+              course={course}
+              defaultTarget={user.preferences?.default_target_grade ?? 85}
+              nonce={reloadNonce}
+              onTryAnother={() => setShowRequiredFinal(true)}
+            />
+          )}
           {/* Beside the band rather than under it: the band says where the
               course can still finish, this says what to do about it, and they
               are read together. The row already collapses whatever is silent. */}
