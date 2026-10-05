@@ -208,19 +208,94 @@ returns `f`.
 **Undo:** `GRANT ALL ON category_budgets TO anon, authenticated;` (not that you
 would want it).
 
-## Next batch, after this one (built on `phase1-next`, waiting)
+## Next batch (built on `phase1-next`, waiting for your go-ahead)
 
-Not part of the deploy above. It goes once that one is live, with its own
-go-ahead.
+Rebased onto `main` on 2026-10-05, so `deploy.run.sh` can fast-forward both
+`ship` and `main` to it.
 
-| What | Commits | Schema change |
+| What | Commit | Schema change |
 |---|---|---|
-| Picking a scheme as the grade (D25, D29), and the required-final fix for courses weighted past 100% | `0a8107b`, `cf19d17` | **New column `courses.counting_scheme_id` (UUID)** |
-| A syllabus adding to an existing course, add-only (D27, D30) | `da290c6` | None |
-| `deploy.run.sh` printing why a job never ran | `cb625d3` | None |
-| The degree audit (D31) | `01c6eaa` | **New tables `degree_requirements`, `course_equivalences`** |
+| Picking a scheme as the grade (D25, D29), and the required-final fix for courses weighted past 100% | `3dca729`, `46db2df` | **New column `courses.counting_scheme_id` (UUID)** |
+| A syllabus adding to an existing course, add-only (D27, D30) | `6f8a5b2` | None |
+| The degree audit (D31) | `9d5adfb` | **New tables `degree_requirements`, `course_equivalences`** |
+| `deploy.run.sh` pushes the branch so CI runs, and a docs-only commit stands on its code's run | `43f65e7` | None |
+| **The purge fix** (below) | `4598a82` | None |
 
-The schema step is the same command as step 0, run from `phase1-next`. It adds
-the nullable column and the two tables, with no backfill, and installs their
-row policies.
+**The purge fix, and why it should not wait long.** The expired-account purge
+runs at API startup. It did not reach `account_category_limits`,
+`account_category_month_limits` or `account_month_values`, so purging anyone who
+had set a category limit or a month value would have the foreign key refuse the
+delete of their accounts, and the refusal raised out of startup: an instance
+that cannot start serves nothing. It has not happened yet. Category limits
+shipped 2026-09-25 and the grace period is 30 days, so **the earliest it could
+is about 2026-10-25**, and only for someone who set a limit and then asked to
+delete their account. The fix cascades those tables, gives every foreign key a
+relationship so the delete order is known (a test holds every key to it), and
+makes a refused purge roll back, log, and wait for the next start instead of
+raising. It needs no schema step, so it can ship on its own ahead of the rest
+if this batch is held up: cherry-pick `4598a82` onto `main` and run
+`deploy.run.sh api`.
 
+### 0. Back up, then apply the schema
+
+Run **Backup database** (Actions → Run workflow) and wait for it to pass. Then:
+
+```sh
+git checkout phase1-next
+cd Application/backend
+set -a; source ../.env; set +a
+DATABASE_URL="$SUPABASE_DATABASE_URL" .venv/bin/python -m app._database.schema
+```
+
+**What this adds:**
+- `ALTER TABLE courses ADD COLUMN counting_scheme_id UUID`. Nullable and not
+  backfilled: every course reads NULL, which means "the course's own weights",
+  exactly what it shows today.
+- The `degree_requirements` and `course_equivalences` tables, each with an index
+  on `user_id`, row security, a policy on `user_id`, and `account_app`'s grant.
+- As every time, install re-asserts the existing policies and grants.
+
+Nothing is dropped, rewritten or backfilled.
+
+**Verify** in the SQL editor:
+- `SELECT data_type FROM information_schema.columns WHERE table_name = 'courses' AND column_name = 'counting_scheme_id';`
+  returns `uuid`.
+- `SELECT relname, relrowsecurity FROM pg_class WHERE relname IN ('degree_requirements', 'course_equivalences');`
+  returns `t` twice.
+- `SELECT tablename, count(*) FROM pg_policies WHERE tablename IN ('degree_requirements', 'course_equivalences') GROUP BY tablename;`
+  returns both tables.
+- The deploy's schema gate passes in step 1. It refuses if this step has not run.
+
+**Undo:** not needed. The column is nullable and the tables are new; the API
+that is live now reads none of them.
+
+### 1. Deploy, API then frontend
+
+```sh
+./Application/deploy.run.sh all
+```
+
+It checks CI on the commit, asks, pushes `ship` and watches the Deploy API run
+(backup, schema gate, smoke test, digest check), then pushes `main` and waits
+until the live site matches a build of the same commit.
+
+**Verify:**
+- `/api/degree/<your id>` and `/api/grades/<your id>/courses/<a course id>/counting-scheme`
+  answer 401 without sign-in, against a 404 for a made-up route.
+- Signed in: Grades → **Degree audit** opens (empty until you add a
+  requirement). On a course with a second grading scheme, **Count as grade**
+  switches the course's grade and says which scheme is counting.
+- No errors in the logs.
+
+**Rollback: both halves together** — Cloud Run to `account-api-00034-54q`
+(`26db894`), and Pages to the `dbd78e1` deployment. The schema stays: the older
+API never reads the new column or tables.
+
+Either half alone loses no data, but each degrades:
+- **API alone:** the new pages and buttons show "Couldn't load the audit" /
+  "Couldn't change which scheme counts". A scheme someone picked is ignored, so
+  that course shows its own weights again until the API comes back, and the
+  required-final figure goes back to the old, wrong one past 100%. The purge
+  fix goes too, so the 2026-10-25 date above applies again.
+- **Frontend alone:** a scheme someone picked still counts on the API, but the
+  older course page neither says so nor offers a way to change it.

@@ -989,3 +989,36 @@ requirements in later. Prerequisites stay in Phase 2.
 
 **Offered, not chosen:** the paycheque flag review ("we said $38 short; were we
 right?"). It stays unbuilt.
+
+## D33. The purge reaches every table, and a refusal no longer stops startup (2026-10-05)
+
+**Found** while checking that account deletion removes the degree tables. They
+were fine. A new test that purges a user owning a row in *every* table (the
+isolation world) found what the old eight-table test could not:
+
+- **Three tables were never purged.** `UserModel` did not cascade to
+  `account_category_limits`, `account_category_month_limits` or
+  `account_month_values`. Their foreign keys then refused the delete of the
+  user's accounts.
+- **Twelve foreign keys had no relationship.** SQLAlchemy orders deletes by
+  relationships, so those went in whatever order the flush picked. It was right
+  by luck for budget targets and wrong for imports.
+- **The purge runs in the API's startup**, so one refusal would stop new
+  instances starting.
+
+**Done (`4598a82`):**
+- The three tables cascade from the user.
+- Every foreign key has a relationship. A test reads the metadata and holds
+  every key, present and future, to it.
+- A refused purge is rolled back whole and logged, and that account waits for
+  the next start. The others still go.
+- Each of the three protections was mutation-checked: removing it fails a test.
+
+**Production:** not hit yet. The earliest it could happen is about 2026-10-25:
+category limits shipped 2026-09-25, plus the 30-day grace period. It needs no
+schema step, so it can ship ahead of the batch if the batch waits.
+
+**Why not delete these rows by hand in the purge** instead of with
+relationships? A hand-ordered list is what left these tables out in the first
+place. Relationships plus a test that reads the metadata can't fall behind a
+new table.
