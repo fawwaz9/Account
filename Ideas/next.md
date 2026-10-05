@@ -601,9 +601,10 @@ wrong, and the measurements that decide what the work above should look like.
   o'clock where the student is and must survive a clock change, so the
   comparison goes through their timezone preference. Comparing against UTC
   would have fired a 20:00 reminder at 17:30 local -- two and a half hours early.
-- Reminders have no scheduler and no push. The client asks what is due while it
-  is open, and the banner says so, because a notification you half-trust is
-  worse than one whose limits you know.
+- Reminders push with the app closed since Phase 0 (2026-10-05): Cloud
+  Scheduler calls the dispatch endpoint every 5 minutes, and each device is
+  turned on in Settings. The open app skips its own notification for a reminder
+  already pushed.
 - Snoozing never moves due_date. Moving it would hide the deferral rather than
   record it, and would leave the completion-timing figure measuring against a
   date the student chose instead of the one they were given. The snooze history
