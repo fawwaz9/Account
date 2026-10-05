@@ -89,6 +89,11 @@ export const endpoints = {
     pending: (userId: string) => `survey/${userId}/pending`,
     responses: (userId: string) => `survey/${userId}/responses`,
   },
+  intake: {
+    status: (userId: string) => `intake/${userId}/status`,
+    syllabus: (userId: string) => `intake/${userId}/syllabus`,
+    apply: (userId: string, parseId: string) => `intake/${userId}/syllabus/${parseId}/apply`,
+  },
   push: {
     status: (userId: string) => `push/${userId}/status`,
     subscriptions: (userId: string) => `push/${userId}/subscriptions`,

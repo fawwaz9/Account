@@ -1,6 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import CourseList from "../../features/grades/components/CourseList";
 import AddCourseModal from "../../features/grades/components/AddCourseModal";
+import SyllabusModal from "../../features/intake/SyllabusModal";
+import { intakeStatus } from "../../features/intake/api";
 import CourseSearch from "../../features/grades/components/CourseSearch";
 import SemesterSummary from "../../features/grades/components/SemesterSummary";
 import CreditsBar from "../../features/grades/components/CreditsBar";
@@ -28,6 +31,19 @@ export default function GradesPage() {
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const [readingSyllabus, setReadingSyllabus] = useState(false);
+  // Offered only once the server says it can read one: a button that always
+  // answers "not set up yet" is a control that only states an absence.
+  const [syllabusReady, setSyllabusReady] = useState(false);
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    intakeStatus(user.id)
+      .then((status) => { if (!cancelled) setSyllabusReady(status.available); })
+      .catch(() => { if (!cancelled) setSyllabusReady(false); });
+    return () => { cancelled = true; };
+  }, [user?.id]);
 
   // Archived means "done with, keep the record": it still counts toward the
   // average and stays searchable, it just should not crowd the lists you read
@@ -115,13 +131,24 @@ export default function GradesPage() {
                     </button>
                   </span>
                 ) : (
-                  <button
-                    type="button"
-                    className="buttons addCourseButton"
-                    onClick={() => setIsModalOpen(true)}
-                  >
-                    Add Course
-                  </button>
+                  <span className="addCourseActions">
+                    <button
+                      type="button"
+                      className="buttons addCourseButton"
+                      onClick={() => setIsModalOpen(true)}
+                    >
+                      Add Course
+                    </button>
+                    {syllabusReady && (
+                      <button
+                        type="button"
+                        className="buttons addCourseButton"
+                        onClick={() => setReadingSyllabus(true)}
+                      >
+                        From a syllabus
+                      </button>
+                    )}
+                  </span>
                 )}
               </div>
 
@@ -209,6 +236,18 @@ export default function GradesPage() {
           </div>
         </div>
       </div>
+
+      {readingSyllabus && user && (
+        <SyllabusModal
+          userId={user.id}
+          onClose={() => setReadingSyllabus(false)}
+          onBuilt={(courseId) => {
+            setReadingSyllabus(false);
+            void reload();
+            navigate(`/grades/courses/${courseId}`);
+          }}
+        />
+      )}
 
       <AddCourseModal
         open={isModalOpen}
