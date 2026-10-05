@@ -208,9 +208,11 @@ returns `f`.
 **Undo:** `GRANT ALL ON category_budgets TO anon, authenticated;` (not that you
 would want it).
 
-## Next batch (built on `phase1-next`, waiting for your go-ahead)
+## Next batch (built on `phase1-batch2`, waiting for your go-ahead)
 
-Rebased onto `main` on 2026-10-05, so `deploy.run.sh` can fast-forward both
+Rebased onto `main` on 2026-10-05 as `phase1-batch2` (the old `phase1-next`
+on GitHub is the pre-rebase copy, deleted once this is on `main`), so
+`deploy.run.sh` can fast-forward both
 `ship` and `main` to it.
 
 | What | Commit | Schema change |
@@ -241,7 +243,7 @@ if this batch is held up: cherry-pick `4598a82` onto `main` and run
 Run **Backup database** (Actions → Run workflow) and wait for it to pass. Then:
 
 ```sh
-git checkout phase1-next
+git checkout phase1-batch2
 cd Application/backend
 set -a; source ../.env; set +a
 DATABASE_URL="$SUPABASE_DATABASE_URL" .venv/bin/python -m app._database.schema
