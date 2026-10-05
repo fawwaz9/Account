@@ -942,6 +942,26 @@
   color: var(--gold);
 }
 
+.schemeCountsBadge {
+  padding: 0 6px;
+  border: 1px solid var(--gold);
+  border-radius: 999px;
+  color: var(--gold);
+}
+
+.schemeCounts summary span:first-child {
+  font-weight: 600;
+}
+
+.schemeCounting {
+  margin: 0 0 6px;
+}
+
+.schemeCountingNote {
+  font-size: 0.75rem;
+  color: var(--gold);
+}
+
 .schemeLines {
   margin: 6px 0 0;
   font-size: 0.8rem;

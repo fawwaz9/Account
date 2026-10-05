@@ -16,6 +16,7 @@ export const endpoints = {
     gradeBand: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/grade-band`,
     cheapestPath: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/cheapest-path`,
     schemes: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/schemes`,
+    countingScheme: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/counting-scheme`,
     scheme: (userId: string, courseId: string, schemeId: string) =>
       `grades/${userId}/courses/${courseId}/schemes/${schemeId}`,
     courseGrades: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/grades`,

@@ -6,6 +6,8 @@ export interface CourseLink {
 }
 
 export interface Course {
+  /** The grading scheme that is this course's grade, when one was picked. */
+  counting_scheme_id?: string | null;
   id: string;
   code: string;
   name: string;
@@ -86,6 +88,8 @@ export interface CourseCreate {
 }
 
 export interface CourseDetail {
+  /** The grading scheme that is this course's grade, when one was picked. */
+  counting_scheme_id?: string | null;
   id: string;
   code: string;
   name: string;
@@ -463,4 +467,6 @@ export interface SchemeComparison {
   current: SchemeResult;
   schemes: SchemeResult[];
   best_id: string | null;
+  /** The scheme picked as the course's grade; null when its own weights are. */
+  counting_id?: string | null;
 }

@@ -155,3 +155,9 @@ export async function updateScheme(
 export async function deleteScheme(userId: string, courseId: string, schemeId: string) {
   return del<{ deleted: boolean }>(endpoints.grades.scheme(userId, courseId, schemeId));
 }
+
+/** Make a scheme the course's grade, or (null) put its own weights back. */
+export async function setCountingScheme(userId: string, courseId: string, schemeId: string | null) {
+  return put<SchemeComparison>(endpoints.grades.countingScheme(userId, courseId), { scheme_id: schemeId });
+}
+

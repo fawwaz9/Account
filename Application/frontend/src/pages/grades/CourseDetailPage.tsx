@@ -253,6 +253,11 @@ export default function CourseDetailPage() {
           {/* The average itself stays the capped number. This only says that
               bonus is in play, by either route -- a weighted bonus category or
               an ordinary grade marked above its own maximum. */}
+          {/* Says which grade this is when it isn't the course's own weights;
+              the scheme's name and working are in "Other grading schemes". */}
+          {course.counting_scheme_id && (
+            <div className="schemeCountingNote">by your picked scheme</div>
+          )}
           {carriesBonus(course) && (
             <div className="bonusBadge" title="Bonus marks count toward this course">
               ★ carries bonus
@@ -300,7 +305,12 @@ export default function CourseDetailPage() {
       )}
 
       {user && course && (
-        <GradingSchemes userId={user.id} course={course} nonce={reloadNonce} />
+        <GradingSchemes
+          userId={user.id}
+          course={course}
+          nonce={reloadNonce}
+          onCountingChanged={() => setReloadNonce((n) => n + 1)}
+        />
       )}
 
       {courseId && course && (

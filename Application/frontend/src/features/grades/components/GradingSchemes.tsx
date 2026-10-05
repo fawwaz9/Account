@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import Modal from "../../../shared/components/Modal";
 import DeleteConfirmModal from "./DeleteConfirmModal";
-import { createScheme, deleteScheme, fetchSchemes, updateScheme } from "../api";
+import HelpTip from "../../../shared/components/HelpTip";
+import { createScheme, deleteScheme, fetchSchemes, setCountingScheme, updateScheme } from "../api";
 import {
   CourseDetail,
   GradeCategory,
@@ -15,6 +16,8 @@ interface GradingSchemesProps {
   readonly course: CourseDetail;
   /** Bumped by the page whenever a grade changes, to refetch. */
   readonly nonce: number;
+  /** Called after the counting scheme changes, so the page reloads its grade. */
+  readonly onCountingChanged?: () => void;
 }
 
 const CATEGORIES = Object.values(GradeCategory);
@@ -27,13 +30,15 @@ const CATEGORIES = Object.values(GradeCategory);
  * (account-vision.md §7), so every figure opens into its categories: the
  * average after the scheme's rules, what was dropped, what replaced what.
  */
-export default function GradingSchemes({ userId, course, nonce }: GradingSchemesProps) {
+export default function GradingSchemes({ userId, course, nonce, onCountingChanged }: GradingSchemesProps) {
   const [comparison, setComparison] = useState<SchemeComparison | null>(null);
   const [editing, setEditing] = useState<SchemeResult | "new" | null>(null);
   const [removing, setRemoving] = useState<SchemeResult | null>(null);
   const [removingBusy, setRemovingBusy] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
+  const [counting, setCounting] = useState<string | "own" | null>(null);
+  const [countError, setCountError] = useState<string | null>(null);
   const latest = useRef(0);
 
   useEffect(() => {
@@ -58,25 +63,63 @@ export default function GradingSchemes({ userId, course, nonce }: GradingSchemes
     }
   }
 
+  /** Pick a scheme as the grade, or (null) the course's own weights. */
+  async function count(schemeId: string | null) {
+    setCounting(schemeId ?? "own");
+    setCountError(null);
+    try {
+      setComparison(await setCountingScheme(userId, course.id, schemeId));
+      onCountingChanged?.();
+    } catch {
+      setCountError("Couldn't change which scheme counts.");
+    } finally {
+      setCounting(null);
+    }
+  }
+
   if (!comparison) return null;
+  const countingId = comparison.counting_id ?? null;
+  const countingLabel = comparison.schemes.find((s) => s.id === countingId)?.label;
 
   return (
     <section className="gradingSchemes" aria-label="Grading schemes">
       {comparison.schemes.length > 0 && (
         <>
-          <h2>Other grading schemes</h2>
+          <h2>
+            Other grading schemes{" "}
+            <HelpTip label="What counting as the grade means">
+              The scheme that counts is this course&apos;s grade: its average, letter and GPA, the
+              required final, the grade band and Attention all use it. The category marks at the top of
+              the page stay on the course&apos;s own weights. Switching back is one click, and no mark
+              is changed either way.
+            </HelpTip>
+          </h2>
+          {countingLabel && (
+            <p className="small-text schemeCounting" role="status">Counting as your grade: {countingLabel}</p>
+          )}
           <ul>
-            <SchemeRow result={comparison.current} />
+            <SchemeRow
+              result={comparison.current}
+              counts={countingId === null}
+              busy={counting === "own"}
+              disabled={counting !== null}
+              onCount={countingId === null ? undefined : () => void count(null)}
+            />
             {comparison.schemes.map((result) => (
               <SchemeRow
                 key={result.id}
                 result={result}
                 best={result.id === comparison.best_id}
+                counts={result.id === countingId}
+                busy={counting === result.id}
+                disabled={counting !== null}
+                onCount={result.id === countingId || !result.id ? undefined : () => void count(result.id!)}
                 onEdit={() => setEditing(result)}
                 onRemove={() => { setRemoveError(null); setRemoving(result); }}
               />
             ))}
           </ul>
+          {countError && <p className="small-text error" role="alert">{countError}</p>}
         </>
       )}
       <button type="button" className="requiredFinalTryAnother" onClick={() => setEditing("new")}>
@@ -96,7 +139,11 @@ export default function GradingSchemes({ userId, course, nonce }: GradingSchemes
       <DeleteConfirmModal
         open={removing !== null}
         title="Remove this scheme?"
-        message={removing ? `"${removing.label}" will be removed. Your marks and the course's own weights are not touched.` : ""}
+        message={removing ? (
+          removing.id === countingId
+            ? `"${removing.label}" is counting as your grade. Removing it puts the course's own weights back as the grade. Your marks are not touched.`
+            : `"${removing.label}" will be removed. Your marks and the course's own weights are not touched.`
+        ) : ""}
         onConfirm={confirmRemove}
         onCancel={() => setRemoving(null)}
         submitting={removingBusy}
@@ -108,20 +155,27 @@ export default function GradingSchemes({ userId, course, nonce }: GradingSchemes
 }
 
 function SchemeRow({
-  result, best = false, onEdit, onRemove,
+  result, best = false, counts = false, busy = false, disabled = false, onCount, onEdit, onRemove,
 }: {
   readonly result: SchemeResult;
   readonly best?: boolean;
+  /** This row is the course's grade. */
+  readonly counts?: boolean;
+  readonly busy?: boolean;
+  readonly disabled?: boolean;
+  /** Make this row the grade. Absent when it already is. */
+  readonly onCount?: () => void;
   readonly onEdit?: () => void;
   readonly onRemove?: () => void;
 }) {
   return (
-    <li className={best ? "schemeRow schemeBest" : "schemeRow"}>
+    <li className={["schemeRow", best ? "schemeBest" : "", counts ? "schemeCounts" : ""].filter(Boolean).join(" ")}>
       <details>
         <summary>
           <span>{result.label}</span>
           <strong>{result.average}%</strong>
           {best && <span className="small-text schemeBadge">higher</span>}
+          {counts && <span className="small-text schemeCountsBadge">counts</span>}
         </summary>
         <table className="schemeLines">
           <tbody>
@@ -141,12 +195,15 @@ function SchemeRow({
           </tbody>
         </table>
       </details>
-      {onEdit && (
-        <span className="schemeActions">
-          <button type="button" className="calButton" onClick={onEdit}>Edit</button>
-          <button type="button" className="calButton" onClick={onRemove}>Remove</button>
-        </span>
-      )}
+      <span className="schemeActions">
+        {onCount && (
+          <button type="button" className="calButton" onClick={onCount} disabled={disabled}>
+            {busy ? "Switching…" : "Count as grade"}
+          </button>
+        )}
+        {onEdit && <button type="button" className="calButton" onClick={onEdit}>Edit</button>}
+        {onRemove && <button type="button" className="calButton" onClick={onRemove}>Remove</button>}
+      </span>
     </li>
   );
 }

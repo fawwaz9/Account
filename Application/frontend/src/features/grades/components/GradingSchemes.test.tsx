@@ -2,12 +2,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-const api = { fetchSchemes: vi.fn(), createScheme: vi.fn(), updateScheme: vi.fn(), deleteScheme: vi.fn() };
+const api = {
+  fetchSchemes: vi.fn(), createScheme: vi.fn(), updateScheme: vi.fn(), deleteScheme: vi.fn(), setCountingScheme: vi.fn(),
+};
 vi.mock("../api", () => ({
   fetchSchemes: (...a: unknown[]) => api.fetchSchemes(...a),
   createScheme: (...a: unknown[]) => api.createScheme(...a),
   updateScheme: (...a: unknown[]) => api.updateScheme(...a),
   deleteScheme: (...a: unknown[]) => api.deleteScheme(...a),
+  setCountingScheme: (...a: unknown[]) => api.setCountingScheme(...a),
 }));
 
 import GradingSchemes from "./GradingSchemes";
@@ -107,5 +110,45 @@ describe("GradingSchemes", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Add another grading scheme" }));
     fireEvent.click(screen.getByRole("button", { name: "Save scheme" }));
     expect((await screen.findByRole("alert")).textContent).toBe("Each category can appear once in a scheme");
+  });
+
+  it("makes a scheme the grade, says so while switching, and tells the page", async () => {
+    let finish: (value: SchemeComparison) => void = () => {};
+    api.setCountingScheme.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    const changed = vi.fn();
+    render(<GradingSchemes userId="u1" course={course} nonce={0} onCountingChanged={changed} />);
+    const [toScheme] = await screen.findAllByRole("button", { name: "Count as grade" });
+    expect(screen.getAllByRole("button", { name: "Count as grade" })).toHaveLength(1);  // own weights already count
+    fireEvent.click(toScheme);
+    expect(screen.getByRole("button", { name: "Switching…" })).toBeTruthy();
+    expect(api.setCountingScheme).toHaveBeenCalledWith("u1", "c1", "s1");
+    finish({ ...comparison, counting_id: "s1" });
+    expect(await screen.findByText("Counting as your grade: Final replaces midterm")).toBeTruthy();
+    expect(changed).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("counts")).toBeTruthy();
+  });
+
+  it("puts the course's own weights back from the first row", async () => {
+    api.fetchSchemes.mockResolvedValue({ ...comparison, counting_id: "s1" });
+    api.setCountingScheme.mockResolvedValue({ ...comparison, counting_id: null });
+    show();
+    expect(await screen.findByText("Counting as your grade: Final replaces midterm")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Count as grade" }));
+    await waitFor(() => expect(api.setCountingScheme).toHaveBeenCalledWith("u1", "c1", null));
+    await waitFor(() => expect(screen.queryByText(/Counting as your grade/)).toBeNull());
+  });
+
+  it("says when switching failed", async () => {
+    api.setCountingScheme.mockRejectedValue(new Error("500"));
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: "Count as grade" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("Couldn't change which scheme counts");
+  });
+
+  it("warns that removing the counting scheme puts the own weights back", async () => {
+    api.fetchSchemes.mockResolvedValue({ ...comparison, counting_id: "s1" });
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
+    expect(await screen.findByText(/is counting as your grade/)).toBeTruthy();
   });
 });
