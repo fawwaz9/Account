@@ -123,7 +123,9 @@ from sqlalchemy.engine import make_url  # noqa: E402
 from app._database import rls  # noqa: E402
 from tests.conftest import TEST_DATABASE_URL, TESTING_SQLITE  # noqa: E402
 
-SCRATCH_DB = "account_gate_check"
+#: Per process: two runs against one server (a local loop beside a mutation
+#: run) must not create and drop the same database under each other.
+SCRATCH_DB = f"account_gate_check_{os.getpid()}"
 
 
 @pytest.fixture

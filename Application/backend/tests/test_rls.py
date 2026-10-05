@@ -250,6 +250,33 @@ def test_lookups_are_exact_not_patterns(worlds, app_session):
     assert email_taken(app_session, "rls-_@example.com") is False
 
 
+def test_only_the_app_role_can_call_the_cross_user_functions(owner_engine):
+    """They run with the owner's rights, so nobody else may call them.
+
+    A login with no grant -- a stray role, or Supabase's anon -- asking for an
+    account by email must be refused outright, not answered.
+    """
+    with owner_engine.begin() as conn:
+        if not conn.execute(text("SELECT 1 FROM pg_roles WHERE rolname = 'rls_outsider'")).scalar():
+            conn.execute(text("CREATE ROLE rls_outsider LOGIN PASSWORD 'outsider_test_only'"))
+    url = make_url(TEST_DATABASE_URL).set(username="rls_outsider", password="outsider_test_only")
+    outsider = create_engine(url, connect_args=connect_args_for(TEST_DATABASE_URL))
+    try:
+        for call in (
+            "SELECT account_user_id_by_email('a@example.com')",
+            "SELECT account_user_id_by_google_id('g')",
+            "SELECT account_email_taken('a@example.com', NULL)",
+            "SELECT account_expired_user_ids(now()::timestamp)",
+            "SELECT account_release_push_endpoint('https://x')",
+            "SELECT account_users_with_unpushed_reminders(now()::timestamp)",
+        ):
+            with outsider.connect() as conn:
+                with pytest.raises(ProgrammingError, match="permission denied"):
+                    conn.execute(text(call))
+    finally:
+        outsider.dispose()
+
+
 # --------------------------------------------------------------------------
 # The scheduler, as the app role: each reminder to its owner's devices only.
 # --------------------------------------------------------------------------
