@@ -3,6 +3,8 @@ from fastapi import APIRouter, Query
 from fastapi import HTTPException
 from app._database.dependencies import DBSession
 from app.Auth.services.access import VerifiedUserId
+from app.Grades.schemas.scheme import GradingScheme, SchemeComparison, SchemeWrite
+from app.Grades.services import scheme_service
 from app.Grades.schemas.course import CategoryWeightsUpdate, CourseCreate, Course, CourseDetail, CourseUpdate
 from app.shared.errors import error_course, error_grade, error_user, responses
 from app.Grades.services.course_service import (
@@ -232,6 +234,50 @@ def get_required_final_score(
         message = str(exc)
         status_code = 404 if "not found" in message.lower() else 400
         raise HTTPException(status_code=status_code, detail=message)
+
+@router.get(
+    "/{user_id}/courses/{course_id}/schemes",
+    response_model=SchemeComparison,
+    responses=responses["course_404"],
+)
+def compare_schemes(user_id: VerifiedUserId, course_id: UUID, db: DBSession):
+    """The course average under its own weights and under each alternative scheme."""
+    result = scheme_service.compare(db, user_id, course_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail=error_course["not_found"])
+    return result
+
+
+@router.post(
+    "/{user_id}/courses/{course_id}/schemes",
+    response_model=GradingScheme,
+    responses=responses["course_both"],
+)
+def add_scheme(user_id: VerifiedUserId, course_id: UUID, scheme: SchemeWrite, db: DBSession):
+    result = scheme_service.create_scheme(db, user_id, course_id, scheme)
+    if result is None:
+        raise HTTPException(status_code=404, detail=error_course["not_found"])
+    return result
+
+
+@router.put(
+    "/{user_id}/courses/{course_id}/schemes/{scheme_id}",
+    response_model=GradingScheme,
+    responses=responses["course_both"],
+)
+def edit_scheme(user_id: VerifiedUserId, course_id: UUID, scheme_id: UUID, scheme: SchemeWrite, db: DBSession):
+    result = scheme_service.update_scheme(db, user_id, course_id, scheme_id, scheme)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Scheme not found")
+    return result
+
+
+@router.delete("/{user_id}/courses/{course_id}/schemes/{scheme_id}", responses=responses["course_404"])
+def remove_scheme(user_id: VerifiedUserId, course_id: UUID, scheme_id: UUID, db: DBSession):
+    if not scheme_service.delete_scheme(db, user_id, course_id, scheme_id):
+        raise HTTPException(status_code=404, detail="Scheme not found")
+    return {"deleted": True}
+
 
 @router.get("/{user_id}/courses/{course_id}/grades", response_model=list[Grade], responses=responses["course_404"])
 def list_grades(user_id: VerifiedUserId, course_id: UUID, db: DBSession):

@@ -41,6 +41,7 @@ from app._database.models import (
     TuitionDeductionModel,
     PushSubscriptionModel,
     ImportModel,
+    GradingSchemeModel,
     SurveyResponseModel,
     SyllabusParseModel,
     TuitionPaymentModel,
@@ -214,6 +215,11 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
     )
     db.add(imported_row)
     ids["transactions_imported"] = imported_row.id
+    # An alternative scheme on the world's course, so reading or editing
+    # someone else's is something to refuse.
+    add(GradingSchemeModel(id=new_id(), course_id=course.id, label=f"{marker} scheme",
+                           components=[{"category": "Final", "weight": 100.0, "drop_lowest": 0,
+                                        "replace_with": None}]))
     # An unapplied parse, so applying someone else's is an attempt to build a
     # course from their syllabus.
     add(SyllabusParseModel(id=new_id(), user_id=user_id, filename=f"{marker}.pdf", provider="openai",

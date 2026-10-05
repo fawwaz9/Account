@@ -177,6 +177,7 @@ class CourseModel(Base):
     )
     events = relationship("EventModel", back_populates="course", cascade=cascade)
     tasks = relationship("TaskModel", back_populates="course", cascade=cascade)
+    grading_schemes = relationship("GradingSchemeModel", cascade=cascade)
 
     @property
     def category_weights(self) -> dict[str, float]:
@@ -1365,3 +1366,25 @@ class SyllabusParseModel(Base):
     applied_at = Column(DateTime, nullable=True)
     fields_total = Column(Integer, nullable=True)
     fields_changed = Column(Integer, nullable=True)
+
+
+class GradingSchemeModel(Base):
+    """An alternative way a course can be graded. Phase 1 item 4 (vision §7).
+
+    "Choose your scheme", section-dependent weightings, "final replaces the
+    midterm if higher": the course's own category weights stay its grade, and a
+    scheme is a second reading of the same marks, compared beside it. The rules
+    live with the weights, as a list of components, so a scheme is one row
+    owned by one course -- which is also what lets the row policy say whose it
+    is.
+    """
+
+    __tablename__ = "grading_schemes"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    course_id = Column(Uuid, ForeignKey("courses.id"), nullable=False, index=True)
+    label = Column(String, nullable=False)
+    #: [{"category", "weight", "drop_lowest", "replace_with"}], one per category.
+    components = Column(JSON, nullable=False, default=list)
+    position = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, nullable=False, default=utc_now)

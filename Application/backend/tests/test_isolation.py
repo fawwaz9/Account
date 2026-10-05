@@ -113,6 +113,7 @@ PATH_SOURCES = {
     "parse_id": "syllabus_parses",
     "payment_id": "tuition_payments",
     "reminder_id": "reminders",
+    "scheme_id": "grading_schemes",
     "task_id": "tasks",
     "transaction_id": "transactions",
 }
@@ -172,6 +173,12 @@ BODY_PATCHES: dict[tuple[str, str], list[dict]] = {
     ("POST", "/api/finances/{user_id}/imports/preview"): [{
         "csv_text": "Date,Description,Amount\n2026-09-14,zzownera import,-4.50\n",
         "mapping": None,
+    }],
+    ("POST", "/api/grades/{user_id}/courses/{course_id}/schemes"): [{
+        "label": "zzownera scheme", "components": [{"category": "Final", "weight": 100.0}],
+    }],
+    ("PUT", "/api/grades/{user_id}/courses/{course_id}/schemes/{scheme_id}"): [{
+        "label": "zzownera scheme", "components": [{"category": "Final", "weight": 100.0}],
     }],
     ("POST", "/api/intake/{user_id}/syllabus"): [{
         "filename": "s.pdf", "media_type": "application/pdf", "content_base64": "JVBERi0xLjQgdGVzdA==",
