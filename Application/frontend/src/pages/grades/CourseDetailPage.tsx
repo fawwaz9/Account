@@ -18,6 +18,8 @@ import RequiredFinalModal from "../../features/grades/components/RequiredFinalMo
 import RequiredFinalPanel from "../../features/grades/components/RequiredFinalPanel";
 import GradingSchemes from "../../features/grades/components/GradingSchemes";
 import KeptSyllabi from "../../features/intake/KeptSyllabi";
+import SyllabusAddModal from "../../features/intake/SyllabusAddModal";
+import { intakeStatus } from "../../features/intake/api";
 import BulkGradesModal from "../../features/grades/components/BulkGradesModal";
 import { getErrorMessage } from "../../features/grades/components/AddCourseModal";
 import GradeCategoryColumn from "../../features/grades/components/GradeCategoryColumn";
@@ -39,6 +41,18 @@ export default function CourseDetailPage() {
   const [editingCourse, setEditingCourse] = useState(false);
   const [showRequiredFinal, setShowRequiredFinal] = useState(false);
   const [showBulkAdd, setShowBulkAdd] = useState(false);
+  const [addingSyllabus, setAddingSyllabus] = useState(false);
+  // Offered only once the server can read a syllabus, as on the grades page:
+  // a button that always answers "not set up" only states an absence.
+  const [syllabusReady, setSyllabusReady] = useState(false);
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    intakeStatus(user.id)
+      .then((status) => { if (!cancelled) setSyllabusReady(status.available); })
+      .catch(() => { if (!cancelled) setSyllabusReady(false); });
+    return () => { cancelled = true; };
+  }, [user?.id]);
   const [showClassTimes, setShowClassTimes] = useState(false);
 
   const [deleteGradeTarget, setDeleteGradeTarget] = useState<Grade | null>(null);
@@ -364,6 +378,16 @@ export default function CourseDetailPage() {
           Add Several
         </button>
 
+        {syllabusReady && (
+          <button
+            type="button"
+            className="editCourseButton"
+            onClick={() => setAddingSyllabus(true)}
+          >
+            From a Syllabus
+          </button>
+        )}
+
         <button
           type="button"
           className="editCourseButton"
@@ -425,6 +449,15 @@ export default function CourseDetailPage() {
         onClose={() => setShowClassTimes(false)}
         onSaved={refreshCourse}
       />
+
+      {addingSyllabus && user && courseId && (
+        <SyllabusAddModal
+          userId={user.id}
+          courseId={courseId}
+          onClose={() => setAddingSyllabus(false)}
+          onAdded={refreshCourse}
+        />
+      )}
 
       <BulkGradesModal
         open={showBulkAdd}

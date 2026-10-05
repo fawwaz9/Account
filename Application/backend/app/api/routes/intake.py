@@ -6,6 +6,9 @@ from fastapi import APIRouter, HTTPException, Response
 from app._database.dependencies import DBSession
 from app.Auth.services.access import VerifiedUserId
 from app.Intake.schemas.syllabus import (
+    AddPreview,
+    AddRequest,
+    AddResult,
     ApplyRequest,
     ApplyResult,
     IntakeStatus,
@@ -15,7 +18,7 @@ from app.Intake.schemas.syllabus import (
 )
 from app.Intake.services import llm, storage
 from app.Intake.services.kept_files import kept_files, read_kept_file
-from app.Intake.services.syllabus_service import RateLimited, apply, parse
+from app.Intake.services.syllabus_service import RateLimited, add_to_course, apply, parse, preview_add
 from app.Usage.services.usage_service import CREATE, record as record_usage
 
 router = APIRouter()
@@ -51,6 +54,28 @@ def apply_syllabus(user_id: VerifiedUserId, parse_id: UUID, confirmed: ApplyRequ
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if result is None:
         raise HTTPException(status_code=404, detail="Parse not found")
+    record_usage(db, user_id, CREATE, "grades")
+    return result
+
+
+@router.get("/{user_id}/syllabus/{parse_id}/add-to/{course_id}", response_model=AddPreview)
+def preview_add_to_course(user_id: VerifiedUserId, parse_id: UUID, course_id: UUID, db: DBSession):
+    """What a syllabus would add to a course you already have. Writes nothing."""
+    result = preview_add(db, user_id, parse_id, course_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Parse or course not found")
+    return result
+
+
+@router.post("/{user_id}/syllabus/{parse_id}/add-to/{course_id}", response_model=AddResult)
+def add_syllabus_to_course(user_id: VerifiedUserId, parse_id: UUID, course_id: UUID, request: AddRequest, db: DBSession):
+    """Add the confirmed assessments the course lacks. Never changes what it has."""
+    try:
+        result = add_to_course(db, user_id, parse_id, course_id, request)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if result is None:
+        raise HTTPException(status_code=404, detail="Parse or course not found")
     record_usage(db, user_id, CREATE, "grades")
     return result
 

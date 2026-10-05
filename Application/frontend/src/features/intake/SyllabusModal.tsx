@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import Modal from "../../shared/components/Modal";
 import { GradeCategory } from "../grades/types";
 import { applySyllabus, Assessment, ParseResult, readSyllabus } from "./api";
+import { asBase64 } from "./file";
 
 interface SyllabusModalProps {
   readonly userId: string;
@@ -219,16 +220,4 @@ export default function SyllabusModal({ userId, onClose, onBuilt }: SyllabusModa
       )}
     </Modal>
   );
-}
-
-function asBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const url = String(reader.result ?? "");
-      resolve(url.slice(url.indexOf(",") + 1));
-    };
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
 }

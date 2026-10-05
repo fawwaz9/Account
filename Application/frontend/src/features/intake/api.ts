@@ -69,3 +69,38 @@ export function fetchSyllabusFile(userId: string, parseId: string) {
   return getBlob(endpoints.intake.file(userId, parseId));
 }
 
+/* ===== Adding to a course you already have (Phase 1 D27) ===== */
+
+export interface ProposedRow {
+  name: string;
+  category: GradeCategory;
+  due_date: string | null;
+  /** The course already has this: shown, never added. */
+  exists: boolean;
+  matched: string | null;
+}
+
+export interface AddPreview {
+  rows: ProposedRow[];
+  weight_notes: { category: GradeCategory; syllabus: number; course: number }[];
+  unweighted: GradeCategory[];
+  section_offer: string | null;
+}
+
+export interface AddResult {
+  added: number;
+  skipped: number;
+  section_set: boolean;
+}
+
+export function previewAdd(userId: string, parseId: string, courseId: string) {
+  return get<AddPreview>(endpoints.intake.addTo(userId, parseId, courseId));
+}
+
+export function addToCourse(
+  userId: string, parseId: string, courseId: string,
+  body: { rows: { name: string; category: GradeCategory; due_date: string | null }[]; set_section: boolean },
+) {
+  return post<AddResult>(endpoints.intake.addTo(userId, parseId, courseId), body);
+}
+

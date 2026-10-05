@@ -121,3 +121,55 @@ class KeptSyllabus(BaseModel):
     media_type: str | None
     created_at: datetime
 
+
+# --- adding to a course you already have (Phase 1 D27) ---------------------
+
+class ProposedRow(BaseModel):
+    """One gradebook row the syllabus implies, and whether the course has it."""
+
+    name: str
+    category: GradeCategory
+    due_date: date | None = None
+    #: The course already has this; it is shown, never added.
+    exists: bool
+    #: The existing row it was matched to, when it exists.
+    matched: str | None = None
+
+
+class WeightNote(BaseModel):
+    """A weight the syllabus states that differs from the course's. Information
+    only: adding never changes a weight."""
+
+    category: GradeCategory
+    syllabus: float
+    course: float
+
+
+class AddPreview(BaseModel):
+    rows: list[ProposedRow]
+    weight_notes: list[WeightNote] = Field(default_factory=list)
+    #: Categories new rows would go into that the course weights at 0%, so they
+    #: would not count until a weight is set.
+    unweighted: list[GradeCategory] = Field(default_factory=list)
+    #: The syllabus's section, offered only when the course has none.
+    section_offer: str | None = None
+
+
+class AddRow(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    category: GradeCategory
+    due_date: date | None = None
+
+
+class AddRequest(BaseModel):
+    rows: list[AddRow] = Field(..., max_length=200)
+    #: Fill in the course's empty section from the syllabus.
+    set_section: bool = False
+
+
+class AddResult(BaseModel):
+    added: int
+    #: Rows sent that the course already had by the time they arrived.
+    skipped: int
+    section_set: bool = False
+
