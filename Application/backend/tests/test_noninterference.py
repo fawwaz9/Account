@@ -30,7 +30,7 @@ from sqlalchemy.orm import sessionmaker
 
 import app.main
 from app._database.db import get_db
-from app._database.models import Base, TermBlackoutModel, UserModel
+from app._database.models import AccountModel, Base, CourseModel, SpendCategoryModel, TermBlackoutModel, UserModel
 from app.Auth.services.session_service import create_access_token
 from app.shared.dates import user_today
 from tests import test_isolation as iso
@@ -40,6 +40,10 @@ from tests.isolation_world import seed_world, snapshot
 pytestmark = pytest.mark.skipif(not TESTING_SQLITE, reason="compares two in-memory databases")
 
 A_ID = uuid.uuid5(uuid.NAMESPACE_URL, "account-isolation-world/user-a")
+INFLUENCERS = {
+    name: uuid.uuid5(uuid.NAMESPACE_URL, f"account-isolation-world/b-influencer-{name}")
+    for name in ("blackout", "account", "category", "course")
+}
 B_ID = uuid.uuid5(uuid.NAMESPACE_URL, "account-isolation-world/user-b")
 
 TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})?")
@@ -65,10 +69,21 @@ def _build(with_b: bool):
         # mask. A's weekly lecture falls on `day`; a break of B's over it would
         # take A's class off A's timetable.
         session.add(TermBlackoutModel(
-            id=uuid.uuid5(uuid.NAMESPACE_URL, "account-isolation-world/b-influencer-blackout"),
+            id=INFLUENCERS["blackout"],
             user_id=B_ID, label="zzvictimb influencer", starts_on=day - timedelta(days=1),
             ends_on=day + timedelta(days=1),
         ))
+        # B already holds the names A's generated requests will try to create
+        # ("zzownera name", "zzownera code"). A duplicate check that forgot its
+        # user filter would refuse A -- and tell A that B has one by that name.
+        session.add(AccountModel(id=INFLUENCERS["account"], user_id=B_ID, name=f"{iso.MARK_A} name",
+                                 kind="other", income_share=0.0, archived=False, position=9))
+        session.add(SpendCategoryModel(id=INFLUENCERS["category"], user_id=B_ID,
+                                       name=f"{iso.MARK_A} name", archived=False, position=9))
+        session.add(CourseModel(id=INFLUENCERS["course"], user_id=B_ID, code=f"{iso.MARK_A} code",
+                                name=f"{iso.MARK_A} name", semester="Fall", year=3, credits=3.0,
+                                required=True, final_grade=0.0, average=0.0, no_final=False,
+                                transfer_credit=False, archived=False, links=[]))
         session.commit()
     return engine, session, a, world_a, world_b, day
 
@@ -143,8 +158,7 @@ def test_b_cannot_influence_a(method, path, _no_push_network):
     )
     known = {str(i) for i in (A_ID, *world_a.values()) if isinstance(i, uuid.UUID)}
     known |= {i.hex for i in (A_ID, *world_a.values()) if isinstance(i, uuid.UUID)}
-    b_keys = {B_ID, *(v for v in world_b.values() if isinstance(v, uuid.UUID)),
-              uuid.uuid5(uuid.NAMESPACE_URL, "account-isolation-world/b-influencer-blackout")}
+    b_keys = {B_ID, *(v for v in world_b.values() if isinstance(v, uuid.UUID)), *INFLUENCERS.values()}
     b_course = world_b["courses"]
     token = create_access_token(A_ID, 0)
 

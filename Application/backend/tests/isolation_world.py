@@ -165,7 +165,10 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
         notes=f"{marker} notes", due_date=WORLD_DAY, done=False, archived=False,
     ))
     transaction = add(TransactionModel(
-        id=new_id(), user_id=user_id, account_id=account.id, kind="expense", amount=25.0,
+        # Signed as the app stores it: an expense is negative. Stored positive,
+        # it was invisible to every sum of spending, so a summary that leaked
+        # every user's transactions still added up the same.
+        id=new_id(), user_id=user_id, account_id=account.id, kind="expense", amount=-25.0,
         description=f"{marker} coffee", occurred_on=WORLD_DAY, category_id=category.id,
         recurring_id=recurring_money.id,
     ))
@@ -175,7 +178,7 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
     ))
     add(TaskSnoozeModel(id=new_id(), task_id=task.id, until=day + timedelta(days=6), reason=f"{marker} reason"))
     tuition_txn = TransactionModel(
-        id=new_id(), user_id=user_id, account_id=account.id, kind="expense", amount=3000.0,
+        id=new_id(), user_id=user_id, account_id=account.id, kind="expense", amount=-3000.0,
         description=f"{marker} tuition", occurred_on=WORLD_DAY, course_id=course.id,
     )
     db.add(tuition_txn)

@@ -151,6 +151,9 @@ BODY_PATCHES: dict[tuple[str, str], list[dict]] = {
         {"kind": "expense", "to_account_id": None},
         {"kind": "transfer", "category_id": None},
     ],
+    # limit_amount omitted means "clear the limit", which writes nothing and so
+    # could never show a cross-link. Setting one is the attack worth trying.
+    ("PUT", "/api/finances/{user_id}/account-category-limits"): [{"limit_amount": 50.0}],
     ("POST", "/api/push/{user_id}/subscriptions"): [
         {"endpoint": "https://push.invalid/zzownera/new-device",
          "keys": {"p256dh": "BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4",
