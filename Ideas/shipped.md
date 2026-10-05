@@ -847,6 +847,29 @@ QUESTIONS WORTH ANSWERING BEFORE BUILDING, not while:
 
 ---
 
+## Phase 1, items 2 and 3: required final on the course page, a 7-day workload line -- SHIPPED 2026-10-05
+Phase 1 of Ideas/overhaul (Ideas/overhaul/Phase 1/). Decisions D7 and D8 in
+phase1-decisions.md. Both are frontend-only, over routes already live.
+
+- **Required final is a card beside the grade band** (item 2). It is measured
+  against the course's own target, or the account default (the Attention panel's
+  `effective_target` rule). It shows only when the final is still ahead: current
+  term, a weighted final, unmarked, not a transfer or no-final course. The old
+  calculator stays, as "Try another target". Cheapest path was already inline,
+  so the vision's "both behind a modal" was half out of date.
+- **"Next 7 days: Xh of estimated work, Yh free in your study hours"** on the
+  dashboard (item 3). A rolling window, today plus six, so it is the right
+  question on a Saturday; the Monday-to-Sunday glance below it is unchanged. It
+  says how many tasks have no estimate, and flags work above free time.
+
+Both say nothing while loading, on a failed read, or when there is nothing to
+say. Every guard is mutation-tested.
+
+LIVE: a337307 (item 2), then 974afaf (item 3). Each verified byte-identical to a
+production-URL build: 26 of 26 files.
+
+---
+
 ## Phase 0: isolation in the database, usage counts, push -- SHIPPED 2026-10-05
 Phase 0 of Ideas/overhaul (Ideas/overhaul/Phase 0/). Every decision, with its
 reasoning, is in phase0-decisions.md (D1-D11); the production steps are in
