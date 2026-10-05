@@ -52,6 +52,9 @@ class OmniboxPreview(BaseModel):
     account_name: str | None = None
     category_id: UUID | None = None
     category_name: str | None = None
+    #: True when the line named no category and one was suggested from your own
+    #: past choices or a curated rule (Phase 1 items 6 and 8). The summary says so.
+    category_suggested: bool = False
 
     #: Grade only.
     score: float | None = None

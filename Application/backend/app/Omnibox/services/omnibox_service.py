@@ -23,6 +23,7 @@ from datetime import date
 from sqlalchemy.orm import Session
 
 from app._database.models import AccountModel, SpendCategoryModel
+from app.Finances.services.categorize_service import Categorizer
 from app.Finances.schemas.transaction import TransactionCreate, TransactionKind
 from app.Finances.services.transaction_service import create_transaction
 from app.Grades.schemas.grade import GradeCreate
@@ -195,6 +196,19 @@ def _expense_preview(db: Session, user_id: uuid.UUID, parsed: Parsed, title: str
     # description, and the category name is the honest one.
     description = remainder or (named_category.name if named_category else "") or title
 
+    # No category named: suggest one the way an import does (your own past
+    # choice, then a curated rule, then your own words). The preview says
+    # "suggested", and filing rebuilds the same preview, so nothing is applied
+    # that was not on screen.
+    suggested = False
+    if named_category is None and description:
+        guess = Categorizer(db, user_id).suggest(description)
+        if guess.category_id is not None:
+            named_category = next(
+                (c for c in categories.values() if c.id == guess.category_id), None,
+            )
+            suggested = named_category is not None
+
     if account is None:
         return OmniboxPreview(
             **common, title=description, amount=parsed.amount, can_create=False,
@@ -205,7 +219,7 @@ def _expense_preview(db: Session, user_id: uuid.UUID, parsed: Parsed, title: str
     when = parsed.on_date or user_today(db, user_id)
     label = f"${parsed.amount:.2f} from {account.name}"
     if named_category:
-        label += f" · {named_category.name}"
+        label += f" · {named_category.name}" + (" (suggested)" if suggested else "")
     # The course was resolved from the same line, so say so -- otherwise the
     # expense silently acquires a course the preview never mentioned.
     if common.get("course_code"):
@@ -219,6 +233,7 @@ def _expense_preview(db: Session, user_id: uuid.UUID, parsed: Parsed, title: str
         account_name=account.name,
         category_id=named_category.id if named_category else None,
         category_name=named_category.name if named_category else None,
+        category_suggested=suggested,
         can_create=True,
         summary=f"{description or 'Expense'} · {label}",
     )

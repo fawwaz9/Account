@@ -276,3 +276,41 @@ def test_an_expense_keeps_the_course_it_names(db, user):
     result = file_it(db, user.id, "textbook cpsc 210 $80")
     row = db.query(TransactionModel).filter(TransactionModel.id == result.id).first()
     assert row.course_id == course.id
+
+
+# ------------------------------------------- suggested categories (Phase 1) --
+
+def test_an_expense_naming_no_category_gets_one_suggested_and_says_so(db, user):
+    setup_account(db, user)
+    groceries = make_category(db, user.id, "Groceries")
+    preview = build_preview(db, user.id, "$62.18 safeway")
+
+    assert (preview.category_id, preview.category_suggested) == (groceries.id, True)
+    assert "Groceries (suggested)" in preview.summary
+
+
+def test_filing_applies_exactly_the_suggestion_shown(db, user):
+    setup_account(db, user)
+    groceries = make_category(db, user.id, "Groceries")
+    file_it(db, user.id, "$62.18 safeway")
+
+    [row] = db.query(TransactionModel).filter(TransactionModel.user_id == user.id).all()
+    assert row.category_id == groceries.id
+
+
+def test_a_named_category_is_never_second_guessed(db, user):
+    setup_account(db, user)
+    make_category(db, user.id, "Groceries")
+    make_category(db, user.id, "Home")
+    preview = build_preview(db, user.id, "home 62.18 safeway")
+
+    assert (preview.category_name, preview.category_suggested) == ("Home", False)
+    assert "(suggested)" not in preview.summary
+
+
+def test_no_suggestion_means_no_category(db, user):
+    setup_account(db, user)
+    make_category(db, user.id, "Groceries")
+    preview = build_preview(db, user.id, "$9 mystery stall")
+
+    assert (preview.category_id, preview.category_suggested) == (None, False)
