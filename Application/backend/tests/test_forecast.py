@@ -142,13 +142,27 @@ def test_recurring_rows_tuition_and_other_accounts_are_not_in_the_pace(db, terme
     fees = txn(db, termed, chequing, "expense", -4100.0, ago(30), "Tuition")
     db.add(TuitionPaymentModel(id=uuid.uuid4(), user_id=termed.id, transaction_id=fees.id,
                                occurred_on=ago(30)))
-    card = make_account(db, termed.id, "Visa", kind="debt")
-    txn(db, termed, card, "expense", -300.0, ago(2), "Shoes")
+    savings = make_account(db, termed.id, "Savings", kind="savings")
+    txn(db, termed, savings, "expense", -300.0, ago(2), "Bank fee")  # not spending money
     db.commit()
 
     result = run(db, termed)
     # 112 / 56 = $2.00 a day.
     assert result.daily_spending == pytest.approx(2.0, abs=CENT)
+
+
+def test_card_purchases_count_toward_the_pace(db, termed, chequing):
+    """Paying the card off is a transfer, which the pace never sees. Without
+    this, someone who pays for everything by card would have no spending."""
+    txn(db, termed, chequing, "income", 2000.0, ago(56))
+    card = make_account(db, termed.id, "Visa", kind="debt")
+    txn(db, termed, card, "expense", -280.0, ago(2), "Shoes")
+    txn(db, termed, chequing, "transfer", -280.0, ago(1), "Pay Visa")
+    txn(db, termed, card, "transfer", 280.0, ago(1), "Payment")
+
+    result = run(db, termed)
+    # 280 / 56 = $5.00 a day: the purchase once, the payment not at all.
+    assert result.daily_spending == pytest.approx(5.0, abs=CENT)
 
 
 def test_a_short_history_is_divided_by_the_days_it_covers(db, termed, chequing):

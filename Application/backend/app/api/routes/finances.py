@@ -35,6 +35,8 @@ from app.Finances.services.sinking_service import (
 from app.Finances.services.safe_service import safe_to_spend
 from app.Finances.services.forecast_service import forecast
 from app.Finances.schemas.forecast import CashFlowForecast
+from app.Finances.services.plan_service import plan
+from app.Finances.schemas.plan import AnnualPlan
 from app.Finances.services.subscription_service import confirm_subscription, find_subscriptions
 from app.Finances.schemas.budget import (
     BudgetSummary,
@@ -241,6 +243,28 @@ def get_forecast(user_id: VerifiedUserId, db: DBSession):
     most, and every assumption it rests on.
     """
     result = forecast(db, user_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+    return result
+
+
+@router.get(
+    "/{user_id}/plan",
+    response_model=AnnualPlan,
+    responses=responses["user_both"],
+)
+def get_plan(
+    user_id: VerifiedUserId,
+    db: DBSession,
+    target: float | None = Query(None, ge=0, le=10_000_000, description="Balance to reach"),
+    until: date | None = Query(None, description="When to reach it; defaults to the school year's end"),
+):
+    """The year as one running balance, month by month -- and, given a target,
+    the extra weekly hours it would take."""
+    try:
+        result = plan(db, user_id, target=target, target_on=until)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if result is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
     return result

@@ -18,8 +18,10 @@ What goes in, and why each piece is counted once:
   taken net of the deduction rate your recorded cheques show, and only the
   spending accounts' share of your income split counts.
 * **Day-to-day spending:** the average of recent one-off expenses -- expenses
-  with no standing instruction behind them and no tuition -- carried forward
-  daily from tomorrow. Recurring rows are left out of the average because they
+  with no standing instruction behind them and no tuition, from the spending
+  accounts and from cards -- carried forward daily from tomorrow. Card
+  purchases count as they happen because the card is paid off by a transfer,
+  which the pace never sees. Recurring rows are left out of the average because they
   are already projected individually; counting both would charge rent twice.
 """
 
@@ -96,14 +98,16 @@ def forecast(db: Session, user_id: uuid.UUID, on_day: date | None = None) -> Cas
 
     excluded = tuition_transaction_ids(db, user_id)
     history_days = days_of_history(db, user_id, anchor)
-    daily = daily_one_off_spending(db, user_id, spendable_ids, anchor, history_days, excluded)
+    paying_from = spendable_ids | debt_account_ids(db, user_id)
+    daily = daily_one_off_spending(db, user_id, paying_from, anchor, history_days, excluded)
     if history_days == 0:
         assumptions.append("No spending history yet, so day-to-day spending is counted as $0.")
     else:
         assumptions.append(
             f"Day-to-day spending continues at {money_text(daily)} a day, the average of "
             f"one-off spending over the last {history_days} days "
-            "(standing instructions and tuition are counted separately)."
+            "(standing instructions and tuition are counted separately; card purchases count "
+            "as they happen, since your spending accounts pay the card)."
         )
         if history_days < 14:
             assumptions.append(
@@ -175,6 +179,22 @@ def days_of_history(db: Session, user_id: uuid.UUID, anchor: date) -> int:
     if first is None:
         return 0
     return max(0, min(LOOKBACK_DAYS, (anchor - first.occurred_on).days))
+
+
+def debt_account_ids(db: Session, user_id: uuid.UUID) -> set[uuid.UUID]:
+    """Cards and loans: a purchase on one is spending the spending accounts will pay.
+
+    Paying a card off is a transfer, which the pace never counts, so leaving
+    card purchases out too would leave a student who pays by card with almost
+    no spending at all.
+    """
+    rows = (
+        db.query(AccountModel.id)
+        .filter(AccountModel.user_id == user_id, AccountModel.archived.is_(False),
+                AccountModel.kind == "debt")
+        .all()
+    )
+    return {row.id for row in rows}
 
 
 def tuition_transaction_ids(db: Session, user_id: uuid.UUID) -> set[uuid.UUID]:
