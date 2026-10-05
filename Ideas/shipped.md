@@ -847,6 +847,45 @@ QUESTIONS WORTH ANSWERING BEFORE BUILDING, not while:
 
 ---
 
+## Phase 0: isolation in the database, usage counts, push -- SHIPPED 2026-10-05
+Phase 0 of Ideas/overhaul (Ideas/overhaul/Phase 0/). Every decision, with its
+reasoning, is in phase0-decisions.md (D1-D11); the production steps are in
+phase0-runbook.md.
+
+- **Row-level security on all 28 model tables.** Each table's policy names
+  `account_app` only, and none is forced, so the API -- still connecting as the
+  owner -- is unaffected until the connection switch (runbook step 5). Sign-in and
+  scheduler lookups go through seven `account_*` definer functions, callable by
+  nobody but the owner and `account_app`.
+- **An enumerated two-user isolation suite, plus non-interference tests.** These
+  run in CI on SQLite and Postgres, the Postgres run as the restricted role. Each
+  of the 164 `user_id` filters was removed in turn; every gap that exposed in the
+  suites was closed (D10).
+- **Bugs the suites found:** email lookups treated `_` and `%` as wildcards (an
+  account-takeover path); deleting a job with a confirmed shift, a course with
+  linked rows, and a category used by a recurring rule each returned 500; PATCH on
+  a tuition transaction returned 500.
+- **Usage counts.** One row per user, day, kind and room; the report script prints
+  totals only.
+- **Push notifications** with a service worker and manifest (iPhone: from the Home
+  Screen). They stay dormant until the VAPID key, cron secret and scheduler exist
+  (runbook step 6).
+
+GRANT GAPS FOUND ON PRODUCTION (D11). A blanket `GRANT ... ON ALL TABLES` would
+have handed the restricted role `category_budgets`, a leftover with no policy;
+grants now name model tables. Supabase grants every new function to anon by
+name, which `REVOKE FROM PUBLIC` misses; install now revokes from everyone but
+the owner and the app role. The owner switched off Supabase's Data API, which
+the app never used. Before this, anon could read every table through it.
+
+LIVE: 9f1f3cb on revision account-api-00029-29h (backup, schema gate 28/28, digest,
+health and CORS checked by the workflow); new routes answer 401 against a 404
+control. Frontend index-k4a8swTz.js; all 32 files byte-identical to a
+production-URL build. NOT YET: runbook step 5 (the connection switch that turns
+isolation on) and step 6 (push secrets and scheduler).
+
+---
+
 ## Cash tips go to one chosen account -- SHIPPED 2026-10-04
 
 A cash tip used to split across accounts by income share like a paycheque, which
