@@ -241,3 +241,14 @@ def test_weights_past_100_are_bonus_by_another_route_in_a_scheme_too(db, user):
     # (80 x 50 + 90 x 60) / 100 = 94, not / 110 = 85.45.
     assert calculate_current_average(course) == 94.0
     assert project(course, own_components(course), "own").average == 94.0
+
+
+
+def test_the_comparison_carries_each_scheme_as_written(db, user):
+    """A rule that has not applied yet ("drop 2" with one mark) is still the rule."""
+    course = make_course(db, user.id, "CPSC 302", category_weights={"Quiz": 100.0})
+    mark(db, course, "Quiz", 70)
+    create_scheme(db, user.id, course.id, scheme({"category": "Quiz", "weight": 100, "drop_lowest": 2}))
+    [result] = compare(db, user.id, course.id).schemes
+    assert result.lines[0].dropped == 0
+    assert result.components[0].drop_lowest == 2

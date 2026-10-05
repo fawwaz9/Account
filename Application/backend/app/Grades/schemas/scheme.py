@@ -62,6 +62,9 @@ class SchemeResult(BaseModel):
     #: own: graded categories only, bonus added on top, capped at 100.
     average: float
     lines: list[SchemeLine] = Field(default_factory=list)
+    #: The scheme as written, rules included -- what an editor starts from. The
+    #: lines say what the rules did to the marks so far, which can be less.
+    components: list[SchemeComponent] = Field(default_factory=list)
 
 
 class SchemeComparison(BaseModel):

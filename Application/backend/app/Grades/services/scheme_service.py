@@ -96,7 +96,7 @@ def project(course, components: list[SchemeComponent], label: str, scheme_id=Non
     )
     any_marked = any(value is not None for value in final_average.values())
     average = min(round(earned + bonus, 2), MAX_COURSE_PERCENT) if any_marked else 0.0
-    return SchemeResult(id=scheme_id, label=label, average=average, lines=lines)
+    return SchemeResult(id=scheme_id, label=label, average=average, lines=lines, components=components)
 
 
 def own_components(course) -> list[SchemeComponent]:
