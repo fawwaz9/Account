@@ -39,7 +39,7 @@ class TermPoint(BaseModel):
 class AttentionItem(BaseModel):
     """Something worth acting on, surfaced on the grades page."""
 
-    #: missing_final | below_target | weight_problem
+    #: missing_final | below_target | weight_problem | missing_section
     kind: str
     course_id: UUID
     course_code: str

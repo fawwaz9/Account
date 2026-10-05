@@ -72,6 +72,7 @@ def prompt(term_start: date | None, term_end: date | None) -> str:
 {{
   "course_code": "e.g. CPSC 221",
   "course_name": "e.g. Basic Algorithms and Data Structures",
+  "section": "the section this syllabus is for, e.g. 101 or V01, or null if it does not say",
   "professor": "the instructor's name, or null",
   "multiple_schemes": true if the syllabus offers more than one way the grade can be calculated,
   "assessments": [
@@ -233,6 +234,7 @@ def apply(db: Session, user_id: uuid.UUID, parse_id: uuid.UUID, confirmed: Apply
     course_data = CourseCreate(
         code=confirmed.course_code.strip(), name=confirmed.course_name.strip(),
         year=year, semester=semester, credits=confirmed.credits, professor=confirmed.professor,
+        section=confirmed.section,
         category_weights={category: round(weight, 2) for category, weight in weights.items()},
         no_final=GradeCategory.FINAL not in weights,
     )

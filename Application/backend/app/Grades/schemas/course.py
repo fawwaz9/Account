@@ -71,6 +71,14 @@ def clean_links(links: list["CourseLink"] | None) -> list[dict]:
     return cleaned
 
 
+def clean_section(value: str | None) -> str | None:
+    """A blank section is no section: stored as null, so Attention sees it missing."""
+    if value is None:
+        return None
+    value = value.strip()
+    return value or None
+
+
 def default_category_weights() -> dict[GradeCategory, float]:
     return dict.fromkeys(GradeCategory, 0.0)
 
@@ -99,6 +107,7 @@ class CourseBase(BaseModel):
     credits: float = Field(default=3.0, ge=0.5, le=10.0, description="The number of credits for the course")
     required: bool = Field(default=True, description="Indicates if the course is required or elective")
     professor: str | None = Field(default=None, max_length=100, description="The name of the professor teaching the course")
+    section: str | None = Field(default=None, max_length=20, description="The section you are in, e.g. 101 or L2B")
     final_grade: float = Field(default=0.0, ge=0, le=100, description="The final grade for the course submitted by the professor")
     target_grade: float | None = Field(default=None, ge=0, le=100, description="The grade you are aiming for; null uses the account default")
     category_weights: dict[GradeCategory, float] = Field(default_factory=default_category_weights, description="Weights by grade category")
@@ -120,6 +129,8 @@ class CourseBase(BaseModel):
 
         if self.name.strip() == "":
             raise ValueError("course name cannot be empty")
+
+        self.section = clean_section(self.section)
 
         if self.start_date and self.end_date and self.end_date < self.start_date:
             raise ValueError("end date cannot be before start date")
@@ -160,6 +171,7 @@ class CourseUpdate(BaseModel):
     credits: float | None = Field(default=None, ge=0.5, le=10.0, description="The number of credits for the course")
     required: bool | None = Field(default=None, description="Indicates if the course is required or elective")
     professor: str | None = Field(default=None, max_length=100, description="The name of the professor teaching the course")
+    section: str | None = Field(default=None, max_length=20, description="The section you are in, e.g. 101 or L2B")
     final_grade: float | None = Field(default=None, ge=0, le=100, description="The final grade for the course submitted by the professor")
     target_grade: float | None = Field(default=None, ge=0, le=100, description="The grade you are aiming for; null uses the account default")
     category_weights: dict[GradeCategory, float] | None = Field(default=None, description="Weights by grade category")
@@ -174,6 +186,12 @@ class CourseUpdate(BaseModel):
 
     @model_validator(mode="after")
     def validate_course_update(self):
+        # Sent as "" to clear it, which is stored as null like any other unset
+        # section. Only when sent: assigning a field marks it as set, and an
+        # unsent section would then be cleared by every edit that omits it.
+        if "section" in self.model_fields_set:
+            self.section = clean_section(self.section)
+
         if self.category_weights is not None:
             total = 0.0
             for weight in self.category_weights.values():

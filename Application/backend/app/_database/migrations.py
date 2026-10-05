@@ -51,6 +51,8 @@ ADDED_COLUMNS: dict[str, dict[str, str | dict[str, str]]] = {
         "no_final": "BOOLEAN NOT NULL DEFAULT 0",
         "transfer_credit": "BOOLEAN NOT NULL DEFAULT 0",
         "archived": "BOOLEAN NOT NULL DEFAULT 0",
+        # Optional and not backfilled: nobody has recorded a section yet.
+        "section": "VARCHAR",
     },
     "accounts": {
         # NOT "DEFAULT 0"/"DEFAULT 1" like the older booleans above. Postgres

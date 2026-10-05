@@ -27,6 +27,7 @@ export default function SyllabusModal({ userId, onClose, onBuilt }: SyllabusModa
   const [parsed, setParsed] = useState<ParseResult | null>(null);
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
+  const [section, setSection] = useState("");
   const [professor, setProfessor] = useState("");
   const [credits, setCredits] = useState("3");
   const [rows, setRows] = useState<Assessment[]>([]);
@@ -42,6 +43,7 @@ export default function SyllabusModal({ userId, onClose, onBuilt }: SyllabusModa
       setParsed(result);
       setCode(result.extract.course_code);
       setName(result.extract.course_name);
+      setSection(result.extract.section ?? "");
       setProfessor(result.extract.professor ?? "");
       setRows(result.extract.assessments);
     } catch (err) {
@@ -70,6 +72,7 @@ export default function SyllabusModal({ userId, onClose, onBuilt }: SyllabusModa
       const result = await applySyllabus(userId, parsed.id, {
         course_code: code.trim(),
         course_name: name.trim(),
+        section: section.trim() || null,
         professor: professor.trim() || null,
         credits: Number(credits) || 3,
         assessments: rows.map((row) => ({ ...row, name: row.name.trim() })),
@@ -117,6 +120,11 @@ export default function SyllabusModal({ userId, onClose, onBuilt }: SyllabusModa
             <label className="syllabusWide">
               <span className="small-text muted">Name</span>
               <input className="--input" value={name} onChange={(e) => setName(e.target.value)} aria-label="Course name" />
+            </label>
+            <label>
+              <span className="small-text muted">Section</span>
+              <input className="--input" value={section} maxLength={20} placeholder="101"
+                onChange={(e) => setSection(e.target.value)} aria-label="Section" />
             </label>
             <label>
               <span className="small-text muted">Professor</span>

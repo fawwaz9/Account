@@ -229,6 +229,25 @@ def test_confirming_builds_the_course_and_its_gradebook(db, termed):
     assert result.grades_created == 5
 
 
+def test_the_section_confirmed_is_the_courses(db, termed):
+    parsed = parse(db, termed.id, upload())
+    result = apply(db, termed.id, parsed.id, confirmed(section=" 101 "))
+    course = db.query(CourseModel).filter(CourseModel.id == result.course_id).one()
+    assert course.section == "101"
+
+
+def test_a_section_filled_in_is_not_counted_as_a_correction(db, termed):
+    """Many syllabi serve every section and name none; filling it in is
+    adding what the document never had, not fixing what the model read."""
+    parsed = parse(db, termed.id, upload())
+    result = apply(db, termed.id, parsed.id, confirmed(section="101"))
+    assert (result.fields_total, result.fields_changed) == (3 * 6 + 2, 0)
+
+
+def test_the_prompt_asks_for_the_section():
+    assert '"section"' in prompt(None, None)
+
+
 def test_no_change_is_measured(db, termed):
     parsed = parse(db, termed.id, upload())
     untouched = apply(db, termed.id, parsed.id, confirmed())

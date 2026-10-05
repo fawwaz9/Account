@@ -51,6 +51,9 @@ class ExtractedAssessment(BaseModel):
 class SyllabusExtract(BaseModel):
     course_code: str = Field(default="", max_length=20)
     course_name: str = Field(default="", max_length=100)
+    #: The section the syllabus is for ("101"), when it says. A syllabus
+    #: belongs to one section, so this is what it will be matched on.
+    section: str | None = Field(default=None, max_length=20)
     professor: str | None = Field(default=None, max_length=100)
     assessments: list[ExtractedAssessment] = Field(default_factory=list, max_length=80)
     #: True when the syllabus offers more than one grading scheme. Only the
@@ -87,6 +90,7 @@ class ApplyRequest(BaseModel):
 
     course_code: str = Field(..., min_length=3, max_length=20)
     course_name: str = Field(..., min_length=1, max_length=100)
+    section: str | None = Field(default=None, max_length=20)
     professor: str | None = Field(default=None, max_length=100)
     credits: float = Field(default=3.0, ge=0.5, le=10.0)
     #: The term the course is in. Null uses the term set in Settings.

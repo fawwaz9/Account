@@ -104,6 +104,30 @@ describe("SyllabusModal", () => {
     expect(body.assessments.map((a: { weight: number }) => a.weight)).toEqual([30, 30, 40]);
   });
 
+  it("carries the section read from the syllabus, editable, and blank as none", async () => {
+    api.readSyllabus.mockResolvedValue({ ...parsed, extract: { ...parsed.extract, section: "101" } });
+    api.applySyllabus.mockResolvedValue({ course_id: "c9", grades_created: 5, fields_total: 20, fields_changed: 0 });
+    show();
+    await choose();
+    expect((screen.getByLabelText("Section") as HTMLInputElement).value).toBe("101");
+    fireEvent.change(screen.getByLabelText("Weight of row 1"), { target: { value: "30" } });
+    fireEvent.change(screen.getByLabelText("Section"), { target: { value: " 102 " } });
+    fireEvent.click(create());
+    await waitFor(() => expect(api.applySyllabus).toHaveBeenCalledTimes(1));
+    expect(api.applySyllabus.mock.calls[0][2].section).toBe("102");
+
+    cleanup();
+    api.applySyllabus.mockClear();
+    api.readSyllabus.mockResolvedValue(parsed);  // a syllabus that names no section
+    show();
+    await choose();
+    expect((screen.getByLabelText("Section") as HTMLInputElement).value).toBe("");
+    fireEvent.change(screen.getByLabelText("Weight of row 1"), { target: { value: "30" } });
+    fireEvent.click(create());
+    await waitFor(() => expect(api.applySyllabus).toHaveBeenCalledTimes(1));
+    expect(api.applySyllabus.mock.calls[0][2].section).toBeNull();
+  });
+
   it("says why a syllabus couldn't be read, or a course couldn't be made", async () => {
     api.readSyllabus.mockRejectedValueOnce(new Error("That's today's limit for reading syllabi."));
     show();

@@ -139,6 +139,10 @@ class CourseModel(Base):
     credits = Column(Float, default=3.0)
     required = Column(Boolean, default=True)
     professor = Column(String)
+    #: The section the student is in ("101", "L2B"). Optional, but a syllabus
+    #: and a schedule belong to one section, not to the course code, so a
+    #: current course without one is called out in Attention.
+    section = Column(String, nullable=True)
     final_grade = Column(Float, default=0.0)
     # What you are aiming for in this course. Null falls back to the account
     # default, so a new course is measured against something without you

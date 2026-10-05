@@ -15,6 +15,7 @@ export interface Assessment {
 export interface SyllabusExtract {
   course_code: string;
   course_name: string;
+  section?: string | null;
   professor: string | null;
   assessments: Assessment[];
   multiple_schemes: boolean;
@@ -47,7 +48,7 @@ export function readSyllabus(userId: string, filename: string, mediaType: string
 export function applySyllabus(
   userId: string,
   parseId: string,
-  body: { course_code: string; course_name: string; professor: string | null; credits: number;
+  body: { course_code: string; course_name: string; section: string | null; professor: string | null; credits: number;
     assessments: Assessment[] },
 ) {
   return post<ApplyResult>(endpoints.intake.apply(userId, parseId), body);

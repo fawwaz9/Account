@@ -22,6 +22,7 @@ function buildFormFromCourse(course: CourseDetail | null): CourseCreate {
     credits: course?.credits ?? 3,
     required: course?.required ?? true,
     professor: course?.professor ?? null,
+    section: course?.section ?? null,
     final_grade: course?.final_grade ?? 0,
     target_grade: course?.target_grade ?? null,
     category_weights: course?.category_weights ?? {},

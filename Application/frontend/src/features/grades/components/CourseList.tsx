@@ -50,8 +50,10 @@ export function CourseCard({ course }: CourseCardProps) {
                 says why this one looks muted rather than dead. */}
             {course.archived && <span className="archivedTag">archived</span>}
           </span>
-          {course.professor && (
-            <span className="small-text courseProfessor">{course.professor}</span>
+          {(course.section || course.professor) && (
+            <span className="small-text courseProfessor">
+              {[course.section && `Section ${course.section}`, course.professor].filter(Boolean).join(" · ")}
+            </span>
           )}
         </span>
         {course.letter_grade && (

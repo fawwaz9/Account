@@ -121,6 +121,18 @@ export default function AddCourseForm({
         </label>
 
         <label className="calField">
+          <span className="calFieldLabel">Section (optional)</span>
+          <input
+            id="course-section"
+            value={form.section ?? ""}
+            maxLength={20}
+            onChange={(event) => updateField("section", event.target.value)}
+            className="--input w-full rounded-lg border border-slate-700 bg-transparent px-3 py-2 text-white"
+            placeholder="101"
+          />
+        </label>
+
+        <label className="calField">
           <span className="calFieldLabel">Final grade</span>
           <input
             id="course-final-grade"

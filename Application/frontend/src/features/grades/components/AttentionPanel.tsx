@@ -10,6 +10,7 @@ const LABELS: Record<AttentionKind, string> = {
   missing_final: "Missing final",
   below_target: "Below target",
   weight_problem: "Check weights",
+  missing_section: "No section",
 };
 
 /**

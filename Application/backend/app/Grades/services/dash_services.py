@@ -284,6 +284,7 @@ def collect_attention(courses, default_target: float) -> list[AttentionItem]:
     missing: list[AttentionItem] = []
     below: list[AttentionItem] = []
     weights: list[AttentionItem] = []
+    sections: list[AttentionItem] = []
 
     for course in courses:
         # Nothing here applies to a credit that was never marked.
@@ -316,7 +317,17 @@ def collect_attention(courses, default_target: float) -> list[AttentionItem]:
         for problem in weight_problems(course):
             weights.append(AttentionItem(kind="weight_problem", **common, message=problem))
 
-    return missing + below + weights
+        # A syllabus and a schedule belong to one section, so without it the
+        # course cannot be matched to either. Current courses only: syllabi
+        # change every term, so a past course's section no longer helps.
+        if course.term_bucket == CURRENT and not course.archived and not course.section:
+            sections.append(AttentionItem(
+                kind="missing_section", **common,
+                message="no section recorded; a syllabus and schedule belong to one section",
+            ))
+
+    # Last: the others change a grade you rely on, this only helps match one.
+    return missing + below + weights + sections
 
 
 def final_needed(course, target: float) -> str | None:

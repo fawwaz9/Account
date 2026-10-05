@@ -135,6 +135,7 @@ def create_course(db: Session, user_id: uuid.UUID, course_data: CourseCreate):
         credits=course_data.credits,
         required=course_data.required,
         professor=course_data.professor,
+        section=course_data.section,
         final_grade=course_data.final_grade,
         target_grade=course_data.target_grade,
         start_date=course_data.start_date,

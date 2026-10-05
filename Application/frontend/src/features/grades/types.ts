@@ -14,6 +14,8 @@ export interface Course {
   credits: number;
   required: boolean;
   professor: string | null;
+  /** The section you are in ("101"); a syllabus belongs to one section. */
+  section: string | null;
   final_grade: number;
   /** null uses the account default from Settings */
   target_grade: number | null;
@@ -61,6 +63,8 @@ export interface CourseCreate {
   credits: number;
   required: boolean;
   professor: string | null;
+  /** The section you are in ("101"); a syllabus belongs to one section. */
+  section: string | null;
   final_grade: number;
   /** The grade you are aiming for; null falls back to the account default */
   target_grade: number | null;
@@ -90,6 +94,8 @@ export interface CourseDetail {
   credits: number;
   required: boolean;
   professor: string | null;
+  /** The section you are in ("101"); a syllabus belongs to one section. */
+  section: string | null;
   final_grade: number;
   category_weights: Partial<Record<GradeCategory, number>>;
   /** Null when nothing is marked. See Course.average. */
@@ -131,6 +137,8 @@ export interface CourseUpdate{
   credits: number | null;
   required: boolean | null;
   professor: string | null;
+  /** The section you are in ("101"); a syllabus belongs to one section. */
+  section: string | null;
   final_grade: number | null;
   target_grade: number | null;
   category_weights: Partial<Record<GradeCategory, number>> | null;
@@ -333,7 +341,7 @@ export interface YearSummary {
   course_count: number;
 }
 
-export type AttentionKind = "missing_final" | "below_target" | "weight_problem";
+export type AttentionKind = "missing_final" | "below_target" | "weight_problem" | "missing_section";
 
 export interface AttentionItem {
   kind: AttentionKind;
