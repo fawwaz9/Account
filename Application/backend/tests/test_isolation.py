@@ -52,7 +52,7 @@ import re
 import types
 import typing
 import uuid
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 import pytest
 from fastapi.dependencies.utils import get_flat_dependant
@@ -130,6 +130,12 @@ FIELD_SOURCES = {
     "transaction_id": "transactions",
     "paycheque_id": "paycheques",
 }
+
+#: Date parameters that open and close a window, by name.
+#: Query parameters only: a body's starts_on/ends_on keep the world's day, or a
+#: blackout or event would be created spanning four months and be refused.
+WINDOW_STARTS = {"start", "period_start"}
+WINDOW_ENDS = {"end", "period_end"}
 
 #: Fix-ups for bodies the generator cannot get right on its own: cross-field
 #: rules ("an hourly job needs a rate"). Each entry is a list of patches, and
@@ -292,6 +298,15 @@ def _sample(annotation, name: str, refs: dict[str, str]):
         if issubclass(inner, datetime):
             return datetime.combine(date.fromisoformat(refs["__day__"]), time(9, 0), tzinfo=timezone.utc).isoformat()
         if issubclass(inner, date):
+            # A window has to contain the world, or a list that leaked every
+            # user's rows would return nothing and pass: start=end=today is a
+            # one-day window, and "upcoming" rightly excludes today. Found by
+            # mutation -- an unfiltered recurring projection went unnoticed.
+            day = date.fromisoformat(refs["__day__"])
+            if name in WINDOW_STARTS:
+                return (day - timedelta(days=30)).isoformat()
+            if name in WINDOW_ENDS:
+                return (day + timedelta(days=90)).isoformat()
             return refs["__day__"]
         if issubclass(inner, time):
             return "09:00:00"
