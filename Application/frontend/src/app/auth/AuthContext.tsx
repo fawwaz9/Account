@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from "react";
 import { getCurrentUser, CurrentUser } from "../../services/currentUserClient";
 import { setClockZone } from "../../shared/utils/dateUtils";
+import { forgetThisDevice } from "../../features/notifications/push";
 
 interface AuthContextType {
   token: string | null;
@@ -50,6 +51,9 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    // Before anything else, and without waiting: a shared computer must stop
+    // receiving this person's reminders the moment they sign out.
+    forgetThisDevice();
     setToken(null);
     setUser(null);
   }, []);

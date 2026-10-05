@@ -273,3 +273,37 @@ def make_course(db, user_id: uuid.UUID, code: str, **overrides) -> CourseModel:
     db.commit()
     db.refresh(row)
     return row
+
+
+#: One VAPID key for the whole run; generating one per test would be wasted work.
+_SUITE_VAPID_KEY = None
+
+
+@pytest.fixture(autouse=True)
+def _no_push_network(monkeypatch):
+    """No test may reach a real push service.
+
+    The push routes and the scheduler POST to whatever endpoint a subscription
+    holds. In the suite those are made-up addresses, but "made-up" is not a
+    guarantee, so the network sender is replaced for every test: it records
+    what would have been sent and answers 201. Tests that care about the
+    answer pass a sender of their own.
+    """
+    from app.config import settings
+    from app.Notifications.services import push_service
+
+    # Configured, so the push routes run for real in every suite -- including
+    # the isolation and non-interference walks -- against the fake below.
+    global _SUITE_VAPID_KEY
+    if _SUITE_VAPID_KEY is None:
+        from app.Notifications.services.webpush import generate_keys
+        _SUITE_VAPID_KEY = generate_keys()[0]
+    monkeypatch.setattr(settings, "VAPID_PRIVATE_KEY", _SUITE_VAPID_KEY)
+    sent = []
+
+    def fake_sender(endpoint, headers, body):
+        sent.append((endpoint, headers, body))
+        return 201
+
+    monkeypatch.setattr(push_service, "default_sender", fake_sender)
+    return sent

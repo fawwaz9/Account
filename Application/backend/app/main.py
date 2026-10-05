@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from app.api.routes import (
-    calendar, finances, grades, jobs, omnibox, recurring, tasks, usage, users, auth,
+    calendar, finances, grades, jobs, omnibox, push, recurring, tasks, usage, users, auth,
 )
 from app._database.db import Base, SessionLocal, engine
 from app._database import models
@@ -170,3 +170,5 @@ app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
 # any one.
 app.include_router(omnibox.router, prefix="/api/omnibox", tags=["Omnibox"])
 app.include_router(usage.router, prefix="/api/usage", tags=["Usage"])
+app.include_router(push.router, prefix="/api/push", tags=["Push"])
+app.include_router(push.internal, prefix="/api/internal", tags=["Internal"])

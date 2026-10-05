@@ -51,6 +51,7 @@ def as_schema(row: ReminderModel, codes: dict, now: datetime) -> Reminder:
         remind_at=row.remind_at,
         course_id=row.course_id,
         fired_at=row.fired_at,
+        pushed_at=row.pushed_at,
         dismissed_at=row.dismissed_at,
         created_at=row.created_at,
         course_code=codes.get(row.course_id),
@@ -172,6 +173,7 @@ def update_reminder(
     # already went off, and it would never be surfaced again.
     if moved:
         row.fired_at = None
+        row.pushed_at = None
         row.dismissed_at = None
 
     db.commit()

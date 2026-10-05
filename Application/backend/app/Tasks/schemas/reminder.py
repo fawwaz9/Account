@@ -37,6 +37,9 @@ class ReminderUpdate(BaseModel):
 class Reminder(ReminderBase):
     id: UUID = Field(default_factory=uuid4)
     fired_at: datetime | None = None
+    #: Pushed to a device by the scheduler; the app skips its own system
+    #: notification for these, so one reminder is not announced twice.
+    pushed_at: datetime | None = None
     dismissed_at: datetime | None = None
     created_at: datetime | None = None
     #: Denormalised, so a banner can say "CPSC 210" without the client holding

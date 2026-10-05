@@ -76,6 +76,9 @@ PUBLIC = {
     ("GET", "/health"),
     ("POST", "/api/auth/register"),
     ("POST", "/api/auth/login"),
+    # The scheduler's door: no user in it, refused without the cron secret
+    # (and absent entirely when none is configured, as in the suite).
+    ("POST", "/api/internal/reminders/dispatch"),
 }
 #: Routes about the caller themselves, resolved from the token rather than from
 #: the path, so there is no foreign id to put in it.
@@ -141,6 +144,11 @@ BODY_PATCHES: dict[tuple[str, str], list[dict]] = {
     ("POST", "/api/finances/{user_id}/recurring"): [
         {"kind": "expense", "to_account_id": None},
         {"kind": "transfer", "category_id": None},
+    ],
+    ("POST", "/api/push/{user_id}/subscriptions"): [
+        {"endpoint": "https://push.invalid/zzownera/new-device",
+         "keys": {"p256dh": "BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4",
+                  "auth": "BTBZMqHH6r4Tts7J_aSIgg"}},
     ],
     ("POST", "/api/finances/{user_id}/subscriptions/confirm"): [
         {"instruction.kind": "expense", "instruction.to_account_id": None},

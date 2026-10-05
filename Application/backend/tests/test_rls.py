@@ -251,6 +251,35 @@ def test_lookups_are_exact_not_patterns(worlds, app_session):
 
 
 # --------------------------------------------------------------------------
+# The scheduler, as the app role: each reminder to its owner's devices only.
+# --------------------------------------------------------------------------
+
+def test_the_scheduler_delivers_each_reminder_to_its_owner_only(worlds, app_session):
+    from datetime import datetime, timedelta, timezone
+
+    from app._database.models import ReminderModel
+    from app.Notifications.services.push_service import dispatch_due_reminders
+
+    owner, a, b, _, _ = worlds
+    at = datetime(2026, 10, 7, 12, 0, tzinfo=timezone.utc)  # 06:00 in America/Regina
+    for person in (a, b):
+        owner.add(ReminderModel(id=uuid.uuid4(), user_id=person.id, title=f"due {person.email}",
+                                remind_at=datetime(2026, 10, 7, 5, 30)))
+    owner.commit()
+    deliveries = []
+
+    def capture(endpoint, headers, body):
+        deliveries.append(endpoint)
+        return 201
+
+    result = dispatch_due_reminders(app_session, capture, at=at)
+
+    assert result["pushed"] == 2
+    assert sorted(deliveries) == ["https://push.invalid/zzownera/device",
+                                  "https://push.invalid/zzvictimb/device"]
+
+
+# --------------------------------------------------------------------------
 # The whole isolation suite, with the API connected as the app role.
 # --------------------------------------------------------------------------
 

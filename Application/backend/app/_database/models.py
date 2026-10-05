@@ -113,6 +113,7 @@ class UserModel(Base):
     shift_records = relationship("ShiftRecordModel", cascade=cascade, overlaps="job,shift_records")
     paycheques = relationship("PaychequeModel", cascade=cascade, overlaps="job,paycheques")
     usage_events = relationship("UsageEventModel", cascade=cascade)
+    push_subscriptions = relationship("PushSubscriptionModel", cascade=cascade)
 
     @property
     def has_password(self) -> bool:
@@ -670,6 +671,11 @@ class ReminderModel(Base):
     #: deleting it on acknowledgement would make the list unreviewable.
     dismissed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, nullable=False, default=utc_now)
+    #: When it was pushed to the student's devices, by the scheduler. Separate
+    #: from fired_at, which the open app stamps: a reminder can be shown in
+    #: the app and still need pushing, and the app uses this to skip its own
+    #: system notification for one a device already received.
+    pushed_at = Column(DateTime, nullable=True)
 
     course = relationship("CourseModel")
 
@@ -1254,3 +1260,27 @@ Index(
     UsageEventModel.module,
     unique=True,
 )
+
+
+class PushSubscriptionModel(Base):
+    """One browser on one device that agreed to receive push notifications.
+
+    Phase 0 item 5. ``endpoint`` is the push service's address for that browser
+    and ``p256dh``/``auth`` are its keys; all three come from the browser's
+    PushManager, and the payload is encrypted to them so the push service
+    carries it without being able to read it.
+
+    The endpoint is unique across users: it identifies a browser, not an
+    account, so when a second person signs in on the same browser and turns
+    notifications on, the subscription moves to them (see push_service).
+    """
+
+    __tablename__ = "push_subscriptions"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    endpoint = Column(String, nullable=False, unique=True)
+    p256dh = Column(String, nullable=False)
+    auth = Column(String, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+    last_sent_at = Column(DateTime, nullable=True)

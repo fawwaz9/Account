@@ -35,6 +35,9 @@ ADDED_COLUMNS: dict[str, dict[str, str]] = {
         # backfilled -- see UserModel.created_at.
         "created_at": "TIMESTAMP",
     },
+    "reminders": {
+        "pushed_at": "TIMESTAMP",
+    },
     "courses": {
         "target_grade": "FLOAT",
         # Defaulted at the column so existing rows read as an empty list rather

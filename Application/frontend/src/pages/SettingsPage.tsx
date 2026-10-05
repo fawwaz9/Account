@@ -10,6 +10,7 @@ import EventColors from "../features/calender/components/EventColors";
 import { KindColors } from "../features/calender/kindColors";
 import { chooseCashTipAccount } from "../features/jobs/api";
 import HelpTip from "../shared/components/HelpTip";
+import NotificationsSetting from "../features/notifications/NotificationsSetting";
 import CategoriesModal from "../features/budget/components/CategoriesModal";
 import "../styles/login.css";
 // The two budget modals reached from the Financial tab style their rows from
@@ -400,6 +401,7 @@ export default function SettingsPage() {
                 </span>
               </span>
             </div>
+            {user && <NotificationsSetting userId={user.id} />}
             {/* Said out loud, as the vision requires of any analytics here, but
                 behind the (?) rather than as ambient text: it answers "what is
                 this", which is what the owner asked those to be for. */}

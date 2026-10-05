@@ -34,7 +34,7 @@ from uuid import UUID
 from sqlalchemy import event, func, text
 from sqlalchemy.orm import Session
 
-from app._database.models import UserModel
+from app._database.models import PushSubscriptionModel, ReminderModel, UserModel
 
 #: The transaction-local setting the row policies read.
 SETTING = "app.user_id"
@@ -116,5 +116,39 @@ def expired_user_ids(db: Session, cutoff: datetime) -> list[UUID]:
         row.id for row in
         db.query(UserModel.id)
         .filter(UserModel.deleted_at.isnot(None), UserModel.deleted_at <= cutoff)
+        .all()
+    ]
+
+
+def release_push_endpoint(db: Session, endpoint: str) -> None:
+    """Forget ``endpoint`` for whichever account holds it. See rls.FUNCTION_SQL."""
+    if _is_postgres(db):
+        db.execute(text("SELECT account_release_push_endpoint(:endpoint)"), {"endpoint": endpoint})
+        return
+    db.query(PushSubscriptionModel).filter(PushSubscriptionModel.endpoint == endpoint).delete(
+        synchronize_session=False
+    )
+
+
+def users_with_unpushed_reminders(db: Session, horizon: datetime) -> list[UUID]:
+    """Accounts with a device and a reminder at or before ``horizon`` not yet pushed."""
+    if _is_postgres(db):
+        rows = db.execute(
+            text("SELECT account_users_with_unpushed_reminders(:horizon)"), {"horizon": horizon}
+        ).scalars()
+        return list(rows)
+    has_device = db.query(PushSubscriptionModel.id).filter(
+        PushSubscriptionModel.user_id == ReminderModel.user_id
+    ).exists()
+    return [
+        row.user_id for row in
+        db.query(ReminderModel.user_id)
+        .filter(
+            ReminderModel.dismissed_at.is_(None),
+            ReminderModel.pushed_at.is_(None),
+            ReminderModel.remind_at <= horizon,
+            has_device,
+        )
+        .distinct()
         .all()
     ]

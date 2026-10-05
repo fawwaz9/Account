@@ -84,9 +84,14 @@ function announce(rows: Reminder[], seen: Set<string>) {
   for (const row of rows) {
     if (seen.has(row.id)) continue;
     seen.add(row.id);
+    // Already on this person's devices through push; the banner still shows,
+    // but a second system notification for the same reminder would not.
+    if (row.pushed_at) continue;
     try {
       const body = [row.course_code, row.notes].filter(Boolean).join(" · ");
-      new Notification(row.title, { body: body || undefined, tag: row.id });
+      // The same tag the pushed notification uses, so if both ever happen
+      // the system replaces one with the other instead of stacking them.
+      new Notification(row.title, { body: body || undefined, tag: `reminder-${row.id}` });
     } catch {
       // Some browsers throw for a constructed Notification outside a service
       // worker. The banner has already covered it.

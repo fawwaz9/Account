@@ -30,6 +30,16 @@ class Settings(BaseSettings):
     JWT_SECRET: str = Field(..., min_length=32)
     JWT_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
 
+    #: Push notifications (Phase 0 item 5). All optional: without the keys the
+    #: feature reports itself unavailable, and without CRON_SECRET the
+    #: scheduler endpoint does not exist. See Ideas/overhaul/phase0-runbook.md.
+    VAPID_PRIVATE_KEY: str | None = None
+    #: The contact push services see. RFC 8292 allows a mailto: or an https:
+    #: URL; the site's own address, so no personal email leaves the app unless
+    #: one is configured deliberately.
+    VAPID_SUBJECT: str = "https://account-2a7.pages.dev"
+    CRON_SECRET: str | None = Field(default=None, min_length=32)
+
     model_config = SettingsConfigDict(env_file=ENV_FILE, extra="ignore")
 
 

@@ -57,6 +57,8 @@ FUNCTIONS = (
     "account_user_id_by_google_id",
     "account_email_taken",
     "account_expired_user_ids",
+    "account_release_push_endpoint",
+    "account_users_with_unpushed_reminders",
 )
 
 FUNCTION_SQL = """
@@ -83,12 +85,32 @@ CREATE OR REPLACE FUNCTION account_expired_user_ids(p_cutoff timestamp) RETURNS 
     LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
     AS $$ SELECT id FROM users WHERE deleted_at IS NOT NULL AND deleted_at <= p_cutoff $$;
 
+-- A browser's push endpoint identifies the browser, not an account: when a
+-- second person turns notifications on in the same browser, the endpoint is
+-- released from whoever held it. Possession of the endpoint -- an unguessable
+-- URL the browser hands only to the page that subscribed -- is the proof.
+CREATE OR REPLACE FUNCTION account_release_push_endpoint(p_endpoint text) RETURNS void
+    LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ DELETE FROM push_subscriptions WHERE endpoint = p_endpoint $$;
+
+-- Who has a reminder that may be due and has not been pushed, and a device to
+-- push it to. remind_at is local wall time, so the caller passes a horizon
+-- generous enough for every time zone and checks each user's own clock.
+CREATE OR REPLACE FUNCTION account_users_with_unpushed_reminders(p_horizon timestamp)
+    RETURNS SETOF uuid
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ SELECT DISTINCT r.user_id FROM reminders r
+          WHERE r.dismissed_at IS NULL AND r.pushed_at IS NULL AND r.remind_at <= p_horizon
+            AND EXISTS (SELECT 1 FROM push_subscriptions s WHERE s.user_id = r.user_id) $$;
+
 -- Definer functions run with their owner's rights, so nobody but the API
 -- needs to be able to call them.
 REVOKE ALL ON FUNCTION account_user_id_by_email(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_user_id_by_google_id(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_email_taken(text, uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_expired_user_ids(timestamp) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_release_push_endpoint(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_users_with_unpushed_reminders(timestamp) FROM PUBLIC;
 """
 
 
@@ -158,6 +180,8 @@ def grant_statements() -> list[str]:
         "GRANT EXECUTE ON FUNCTION account_user_id_by_google_id(text) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_email_taken(text, uuid) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_expired_user_ids(timestamp) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_release_push_endpoint(text) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_users_with_unpushed_reminders(timestamp) TO " + APP_ROLE,
     ]
 
 

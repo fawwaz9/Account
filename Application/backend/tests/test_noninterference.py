@@ -130,7 +130,7 @@ def _cases():
 
 
 @pytest.mark.parametrize(("method", "path"), list(_cases()))
-def test_b_cannot_influence_a(method, path):
+def test_b_cannot_influence_a(method, path, _no_push_network):
     runs = {}
     for with_b in (True, False):
         engine, session, a, world_a, world_b, day = _build(with_b)
@@ -151,18 +151,25 @@ def test_b_cannot_influence_a(method, path):
     try:
         for url, query, body in requests:
             answers = {}
+            pushed_to = {}
             for with_b, (engine, session, *_rest) in runs.items():
+                before_sends = len(_no_push_network)
                 app.main.app.dependency_overrides[get_db] = _yielding(session)
                 response = TestClient(app.main.app, raise_server_exceptions=bool(__import__("os").getenv("ISOLATION_RAISE"))).request(
                     method, url, params=query, json=body, headers={"Authorization": f"Bearer {token}"},
                 )
                 session.rollback()
+                pushed_to[with_b] = sorted(e for e, _h, _b in _no_push_network[before_sends:])
                 answers[with_b] = (
                     response.status_code,
                     _normalise(response.text, known),
                     _a_rows(snapshot(session), b_keys, b_course, known),
                 )
             with_b, alone = answers[True], answers[False]
+            # Push: A's request may only ever reach A's devices, B or no B.
+            assert pushed_to[True] == pushed_to[False], (
+                f"{method} {url}: sent to {pushed_to[True]} with B present, {pushed_to[False]} without"
+            )
             # Not vacuous. The first version of this file overrode get_db with
             # `lambda s=session: s`; FastAPI read the default as a query
             # parameter and every request in both runs was the same 500, so

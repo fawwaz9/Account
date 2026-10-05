@@ -83,6 +83,12 @@ export const endpoints = {
   usage: {
     visits: (userId: string) => `usage/${userId}/visits`,
   },
+  push: {
+    status: (userId: string) => `push/${userId}/status`,
+    subscriptions: (userId: string) => `push/${userId}/subscriptions`,
+    remove: (userId: string) => `push/${userId}/subscriptions/remove`,
+    test: (userId: string) => `push/${userId}/test`,
+  },
   finances: {
     safeToSpend: (userId: string) => `finances/${userId}/safe-to-spend`,
     subscriptions: (userId: string) => `finances/${userId}/subscriptions`,

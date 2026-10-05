@@ -70,6 +70,8 @@ export interface Reminder {
   course_id: string | null;
   course_code: string | null;
   fired_at: string | null;
+  /** Pushed to a device already; the app does not announce it a second time. */
+  pushed_at?: string | null;
   dismissed_at: string | null;
   created_at: string | null;
   /** Its moment has passed and nobody has dismissed it. Computed by the API. */

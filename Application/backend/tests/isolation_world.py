@@ -39,6 +39,7 @@ from app._database.models import (
     TermBlackoutModel,
     TransactionModel,
     TuitionDeductionModel,
+    PushSubscriptionModel,
     TuitionPaymentModel,
     UsageEventModel,
 )
@@ -188,6 +189,12 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
         id=new_id(), tuition_payment_id=payment.id, description=f"{marker} bursary", amount=100.0,
     ))
     add(UsageEventModel(id=new_id(), user_id=user_id, day=WORLD_DAY, kind="visit", module="grades"))
+    add(PushSubscriptionModel(
+        id=new_id(), user_id=user_id, endpoint=f"https://push.invalid/{marker}/device",
+        # A real P-256 point (RFC 8291's example), so it can be encrypted to.
+        p256dh="BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4",
+        auth="BTBZMqHH6r4Tts7J_aSIgg",
+    ))
     _ = (event, transaction, recurring_task)
 
     db.commit()
