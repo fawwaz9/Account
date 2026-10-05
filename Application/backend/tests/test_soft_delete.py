@@ -186,3 +186,32 @@ def test_a_live_account_reports_no_deadline(db, user):
 
     assert sent.deleted_at is None
     assert sent.deletes_on is None
+
+
+def test_a_purge_the_database_refuses_is_kept_for_the_next_one(db, user, monkeypatch):
+    """The purge runs at startup: one account it cannot delete must not stop
+    the API from starting, or stop the other accounts from going."""
+    from sqlalchemy.exc import IntegrityError
+
+    other = make_user(db, "other@example.com")
+    make_course(db, user.id, "COSC 111")
+    delete_user(db, user.id)
+    delete_user(db, other.id)
+
+    real_commit, refused = db.commit, []
+
+    def commit_refusing_once():
+        if not refused and user in db.deleted:
+            refused.append(True)
+            raise IntegrityError("DELETE FROM accounts", {}, Exception("FOREIGN KEY constraint failed"))
+        real_commit()
+
+    monkeypatch.setattr(db, "commit", commit_refusing_once)
+    assert purge_expired_users(db, on_day=past_the_deadline()) == 1
+    monkeypatch.setattr(db, "commit", real_commit)
+
+    assert refused
+    assert get_user(db, other.id) is None
+    assert get_user(db, user.id) is not None  # rolled back whole, course and all
+    assert db.query(CourseModel).count() == 1
+    assert purge_expired_users(db, on_day=past_the_deadline()) == 1  # and it goes next time

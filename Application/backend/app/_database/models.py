@@ -9,6 +9,13 @@ from app._database.db import Base
 
 cascade = "all, delete-orphan"
 
+# ORDERING. Every foreign key has a relationship on one side or the other, even
+# where nothing reads it. The unit of work orders its deletes by relationships,
+# not by foreign keys: purging a user deletes every row they own in one flush,
+# and a key no relationship covers was deleted in whatever order fell out --
+# accounts before the category limits that point at them, which the key refuses.
+# The purge runs at startup. tests/test_db_integrity.py holds every key to this.
+
 
 def utc_now() -> datetime:
     """Now, in UTC, stored naive to match every DateTime column here.
@@ -101,6 +108,9 @@ class UserModel(Base):
     transactions = relationship("TransactionModel", cascade=cascade, overlaps="account,transactions")
     spend_categories = relationship("SpendCategoryModel", cascade=cascade)
     budget_targets = relationship("BudgetTargetModel", cascade=cascade)
+    account_category_limits = relationship("AccountCategoryLimitModel", cascade=cascade)
+    account_category_month_limits = relationship("AccountCategoryMonthLimitModel", cascade=cascade)
+    account_month_values = relationship("AccountMonthValueModel", cascade=cascade)
     recurring_transactions = relationship("RecurringTransactionModel", cascade=cascade)
     sinking_funds = relationship("SinkingFundModel", cascade=cascade)
     tuition_payments = relationship("TuitionPaymentModel", cascade=cascade)
@@ -334,6 +344,7 @@ class TransactionModel(Base):
     account = relationship("AccountModel", back_populates="transactions")
     category = relationship("SpendCategoryModel", back_populates="transactions")
     recurring = relationship("RecurringTransactionModel", back_populates="transactions")
+    source_import = relationship("ImportModel")  # delete order only, see ORDERING
     course = relationship("CourseModel")
 
 
@@ -362,6 +373,7 @@ class BudgetTargetModel(Base):
     id = Column(Uuid, primary_key=True, default=uuid.uuid4)
     user_id = Column(Uuid, ForeignKey("users.id"), nullable=False)
     account_id = Column(Uuid, ForeignKey("accounts.id"), nullable=False)
+    account = relationship("AccountModel")  # delete order only, see ORDERING
     #: Always the first of the month, normalized on the way in so a month is
     #: one value rather than any of twenty-eight.
     month = Column(Date, nullable=False)
@@ -393,7 +405,9 @@ class AccountCategoryLimitModel(Base):
     id = Column(Uuid, primary_key=True, default=uuid.uuid4)
     user_id = Column(Uuid, ForeignKey("users.id"), nullable=False)
     account_id = Column(Uuid, ForeignKey("accounts.id"), nullable=False)
+    account = relationship("AccountModel")  # delete order only, see ORDERING
     category_id = Column(Uuid, ForeignKey("spend_categories.id"), nullable=False)
+    category = relationship("SpendCategoryModel")  # delete order only, see ORDERING
     limit_amount = Column(Float, nullable=False, default=0.0)
 
 
@@ -422,7 +436,9 @@ class AccountCategoryMonthLimitModel(Base):
     id = Column(Uuid, primary_key=True, default=uuid.uuid4)
     user_id = Column(Uuid, ForeignKey("users.id"), nullable=False)
     account_id = Column(Uuid, ForeignKey("accounts.id"), nullable=False)
+    account = relationship("AccountModel")  # delete order only, see ORDERING
     category_id = Column(Uuid, ForeignKey("spend_categories.id"), nullable=False)
+    category = relationship("SpendCategoryModel")  # delete order only, see ORDERING
     #: Always the first of the month, normalized on the way in.
     month = Column(Date, nullable=False)
     limit_amount = Column(Float, nullable=False, default=0.0)
@@ -466,6 +482,7 @@ class AccountMonthValueModel(Base):
     id = Column(Uuid, primary_key=True, default=uuid.uuid4)
     user_id = Column(Uuid, ForeignKey("users.id"), nullable=False)
     account_id = Column(Uuid, ForeignKey("accounts.id"), nullable=False)
+    account = relationship("AccountModel")  # delete order only, see ORDERING
     #: Always the first of the month, normalized on the way in.
     month = Column(Date, nullable=False)
     #: Market value minus ledger balance. Positive is up on what you put in.
@@ -504,6 +521,7 @@ class EventModel(Base):
     #: Set when this is a shift. Sits beside course_id and behaves the same way:
     #: it says which thing outside the calendar the block belongs to.
     job_id = Column(Uuid, ForeignKey("jobs.id"), nullable=True)
+    job = relationship("JobModel")  # delete order only, see ORDERING
     title = Column(String, nullable=False)
     #: lecture | lab | discussion | midterm | final | deadline | personal.
     #: Drives how the card is themed, not what it does.
@@ -623,7 +641,9 @@ class SinkingFundModel(Base):
     #: Where contributions come from, and where they go. Both required: a
     #: contribution is an ordinary transfer, and a transfer has two ends.
     from_account_id = Column(Uuid, ForeignKey("accounts.id"), nullable=False)
+    from_account = relationship("AccountModel", foreign_keys=[from_account_id])  # delete order only, see ORDERING
     to_account_id = Column(Uuid, ForeignKey("accounts.id"), nullable=False)
+    to_account = relationship("AccountModel", foreign_keys=[to_account_id])  # delete order only, see ORDERING
     archived = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, nullable=False, default=utc_now)
 
@@ -867,6 +887,7 @@ class TuitionPaymentModel(Base):
     #: The single expense this payment wrote. Deleting that row should take this
     #: with it, which the service does explicitly.
     transaction_id = Column(Uuid, ForeignKey("transactions.id"), nullable=False)
+    transaction = relationship("TransactionModel")  # delete order only, see ORDERING
     #: Which term was paid for, matching a course's own year and semester.
     school_year = Column(Integer, nullable=True)
     semester = Column(String, nullable=True)
@@ -1024,6 +1045,7 @@ class ShiftRecordModel(Base):
     #: one for those as well would count them twice.
     tip_is_cash = Column(Boolean, nullable=False, default=True)
     tip_transaction_id = Column(Uuid, ForeignKey("transactions.id"), nullable=True)
+    tip_transaction = relationship("TransactionModel")  # delete order only, see ORDERING
     #: Overrides the job's rate for this date alone -- a stat holiday, a night
     #: differential. Null uses the job's own rate.
     rate_override = Column(Float, nullable=True)
@@ -1348,6 +1370,7 @@ class ImportModel(Base):
     id = Column(Uuid, primary_key=True, default=uuid.uuid4)
     user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
     account_id = Column(Uuid, ForeignKey("accounts.id"), nullable=False, index=True)
+    account = relationship("AccountModel")  # delete order only, see ORDERING
     #: The file's name as the browser gave it, for "which import was that".
     filename = Column(String, nullable=True)
     row_count = Column(Integer, nullable=False, default=0)
@@ -1372,6 +1395,7 @@ class SyllabusParseModel(Base):
     user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
     #: The course the parse built, once applied. Cleared if the course is deleted.
     course_id = Column(Uuid, ForeignKey("courses.id"), nullable=True, index=True)
+    course = relationship("CourseModel")  # delete order only, see ORDERING
     filename = Column(String, nullable=True)
     provider = Column(String, nullable=False)
     model = Column(String, nullable=False)

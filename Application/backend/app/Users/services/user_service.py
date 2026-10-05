@@ -2,7 +2,7 @@ import logging
 from datetime import date, datetime, time, timedelta
 from uuid import UUID, uuid4
 
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app._database.identity import (
@@ -387,7 +387,16 @@ def purge_expired_users(db: Session, on_day: date | None = None) -> int:
         except StorageError as exc:
             logging.getLogger("audit").warning("purge of %s deferred: %s", user_id, exc)
             continue
-        db.delete(user)
-        db.commit()
+        # This runs at startup, so a refusal here must not take the API down
+        # with it: the account is rolled back whole, logged, and tried again on
+        # the next start. Every key is meant to be covered (ORDERING, in
+        # models.py); this is for the one that is not.
+        try:
+            db.delete(user)
+            db.commit()
+        except SQLAlchemyError as exc:
+            db.rollback()
+            logging.getLogger("audit").error("purge of %s failed, kept for the next one: %s", user_id, exc)
+            continue
         purged += 1
     return purged

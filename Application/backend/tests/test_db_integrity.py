@@ -8,7 +8,7 @@ the previous arrangement passed its tests whether or not the rule held.
 import uuid
 
 import pytest
-from sqlalchemy import inspect, text
+from sqlalchemy import func, inspect, select, text
 from sqlalchemy.exc import IntegrityError
 
 from app._database.migrations import BACKFILLS, ensure_indexes
@@ -165,6 +165,58 @@ def test_purging_a_user_leaves_nothing_behind(db, user):
         BudgetTargetModel, JobModel, EventModel, TransactionModel,
     ):
         assert db.query(model).count() == 0, f"{model.__name__} rows survived"
+
+
+def test_every_foreign_key_has_a_relationship():
+    """The unit of work orders deletes by relationships, not foreign keys.
+
+    A key no relationship covers is deleted in whatever order the flush picks,
+    which held for budget targets by luck and failed for category limits: the
+    purge deleted the account first and the key refused. See ORDERING in
+    models.py. Read from the metadata, so a new table is held to it too.
+    """
+    from app._database.models import Base
+
+    mappers = {m.local_table.name: m for m in Base.registry.mappers}
+
+    def covered(mapper, column):
+        return any(column in pair for r in mapper.relationships for pair in r.local_remote_pairs)
+
+    gaps = [
+        f"{table.name}.{fk.parent.name}"
+        for table in Base.metadata.sorted_tables
+        for fk in table.foreign_keys
+        if not covered(mappers[table.name], fk.parent)
+        and not covered(mappers[fk.column.table.name], fk.parent)
+    ]
+    assert gaps == []
+
+
+def test_purging_a_user_empties_every_table(db, user):
+    """Every table in the schema, read from the metadata, rather than a list
+    that has to remember each new one.
+
+    The isolation world puts one of this user's rows in every table. A new table
+    whose rows UserModel does not cascade to would survive the purge here -- on
+    Postgres the purge would instead be refused by the foreign key, and the
+    account would never go.
+    """
+    from app._database.models import Base
+    from app.shared.dates import user_today
+    from tests.isolation_world import seed_world
+
+    seed_world(db, user.id, "zzpurged", user_today(db, user.id))
+    delete_user(db, user.id)
+    purge_expired_users(
+        db, on_day=utc_now().date() + timedelta(days=DELETION_GRACE_DAYS + 1)
+    )
+
+    survived = {
+        table.name: count
+        for table in Base.metadata.sorted_tables
+        if (count := db.execute(select(func.count()).select_from(table)).scalar())
+    }
+    assert survived == {}
 
 
 # ----------------------------------------------------- deleting an account --
