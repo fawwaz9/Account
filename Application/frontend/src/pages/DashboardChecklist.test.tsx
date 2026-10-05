@@ -25,6 +25,7 @@ vi.mock("../features/grades/hooks/useDashboard", () => ({ useDashboard: () => st
 vi.mock("../features/budget/hooks/useBudgetGlance", () => ({ useBudgetGlance: () => state.budget }));
 vi.mock("../features/calender/hooks/useTimeGlance", () => ({ useTimeGlance: () => state.time }));
 vi.mock("../features/calender/hooks/useWorkloadForecast", () => ({ useWorkloadForecast: () => null }));
+vi.mock("../features/survey/DisappointmentQuestion", () => ({ default: () => null }));
 
 import Dashboard from "./Dashboard";
 

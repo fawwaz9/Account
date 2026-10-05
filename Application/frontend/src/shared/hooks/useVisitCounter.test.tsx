@@ -68,3 +68,30 @@ describe("useVisitCounter", () => {
     await Promise.resolve();
   });
 });
+
+describe("visits a notification caused", () => {
+  afterEach(() => window.history.replaceState(null, "", "/"));
+
+  it("are counted as prompted, and the marker leaves the address bar", () => {
+    window.history.replaceState(null, "", "/tasks?from=push");
+    visit("/tasks");
+    expect(post).toHaveBeenCalledWith("usage/u1/visits", { module: "tasks", prompted: true });
+    expect(window.location.search).toBe("");
+  });
+
+  it("stay prompted for the window, then an unprompted visit still counts", async () => {
+    const { isPrompted } = await import("../utils/promptedSession");
+    window.history.replaceState(null, "", "/tasks?from=push");
+    visit("/tasks");
+    cleanup();
+    visit("/tasks");
+    expect(post).toHaveBeenCalledTimes(1); // same tab, same day, still prompted
+
+    expect(isPrompted(Date.now() + 31 * 60 * 1000)).toBe(false);
+    window.sessionStorage.removeItem("account.prompted.until"); // the half hour has passed
+    cleanup();
+    visit("/tasks");
+    expect(post).toHaveBeenCalledTimes(2);
+    expect(post).toHaveBeenLastCalledWith("usage/u1/visits", { module: "tasks" });
+  });
+});

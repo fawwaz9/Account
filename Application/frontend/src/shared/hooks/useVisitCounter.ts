@@ -4,6 +4,7 @@ import { useAuth } from "../../app/auth/AuthContext";
 import { post } from "../../services/apiClient";
 import { endpoints } from "../../services/endpoints";
 import { today } from "../utils/dateUtils";
+import { isPrompted, takePromptedMarker } from "../utils/promptedSession";
 
 /** The room a path belongs to, as the sidebar names them; null for anything else. */
 export function moduleFor(pathname: string): string | null {
@@ -37,8 +38,13 @@ export function useVisitCounter() {
   const module = moduleFor(pathname);
 
   useEffect(() => {
+    takePromptedMarker();
     if (!userId || !module) return;
-    if (alreadyCounted(`account.visit.${userId}.${today()}.${module}`)) return;
-    post(endpoints.usage.visits(userId), { module }).catch(() => {});
+    // Prompted and unprompted are counted apart, so an unprompted visit later
+    // the same day still counts after a notification brought you in earlier.
+    const prompted = isPrompted();
+    const key = `account.visit.${userId}.${today()}.${module}${prompted ? ".prompted" : ""}`;
+    if (alreadyCounted(key)) return;
+    post(endpoints.usage.visits(userId), prompted ? { module, prompted } : { module }).catch(() => {});
   }, [userId, module]);
 }

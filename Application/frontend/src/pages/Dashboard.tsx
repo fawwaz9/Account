@@ -8,6 +8,7 @@ import WorkloadHeadline from "../features/calender/components/WorkloadHeadline";
 import { duration } from "../shared/utils/dateUtils";
 import { formatMoney } from "../features/budget/money";
 import GetStarted, { steps } from "../features/onboarding/GetStarted";
+import DisappointmentQuestion from "../features/survey/DisappointmentQuestion";
 
 function browserZone(): string | undefined {
   try {
@@ -61,6 +62,7 @@ export default function Dashboard() {
       {budgetError && <p className="muted" role="alert">{budgetError}</p>}
 
       {checklist && user && <GetStarted userId={user.id} steps={checklist} />}
+      {user && <DisappointmentQuestion userId={user.id} />}
 
       {hasCourses && summary && (
         <section className="gradeSummary">

@@ -38,6 +38,10 @@ self.addEventListener("notificationclick", (event) => {
   } catch {
     // fall back to the home page
   }
+  // Marks the visit as one a notification caused. The app's own universe test
+  // needs a room visited unprompted, and counting these would let the metric
+  // manufacture itself (account-vision.md §13.2). The app strips it on arrival.
+  target.searchParams.set("from", "push");
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
       for (const client of windows) {

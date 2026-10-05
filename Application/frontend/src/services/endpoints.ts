@@ -85,6 +85,10 @@ export const endpoints = {
   usage: {
     visits: (userId: string) => `usage/${userId}/visits`,
   },
+  survey: {
+    pending: (userId: string) => `survey/${userId}/pending`,
+    responses: (userId: string) => `survey/${userId}/responses`,
+  },
   push: {
     status: (userId: string) => `push/${userId}/status`,
     subscriptions: (userId: string) => `push/${userId}/subscriptions`,
