@@ -18,8 +18,8 @@ deployment on **2026-09-28**, including that traffic is on `LATEST`.
 | Database | Supabase project `kujxxairehpwhxhnkbct`, region `us-west-2`, Postgres 17.6 |
 | Backups | GitHub Actions artifacts, `Backup database` workflow, 90-day retention |
 | Secrets | Google Secret Manager: `jwt-secret`, `database-url` |
-| Current image | `…/backend:be4f1d7` — revision `account-api-00028-jwz`, serving 100%. Cash tips go to one chosen account, held when none is. **Rolls back alone safely**, but behaviour changes: the old API splits NEW cash tips by income share again, and the Settings control would 404 (the route is gone). Tips already filed or held stay as they are |
-| Previous (app code) | `…/backend:ce22de6` (`00027-bp4`): event colours. Before it, `4a9cbac` (`00026-6rn`), identical app code to `095d37b` and `2ee1e0e` |
+| Current image | `…/backend:9f1f3cb` — revision `account-api-00029-29h`, serving 100%. Phase 0: row-level security installed (inert while the API connects as the owner), usage counts, push code. **Rolls back alone safely while DATABASE_URL is still `database-url`**: the schema is additive and the old API ignores the new tables. The frontend's visit counter and Notifications row would 404. **Once runbook step 5 has switched DATABASE_URL to `database-url-app`, switch it back FIRST**: the old API never sets `app.user_id`, so as `account_app` it would see no rows at all |
+| Previous (app code) | `…/backend:be4f1d7` (`00028-jwz`): cash tips to one chosen account. Before it, `ce22de6` (`00027-bp4`), event colours |
 | Previous image | `…/backend:6b3dcce` — revisions `account-api-00022-vmx` and `00023-jzr`, the latter an allowlist change on the same image. **The last functionally different release** |
 | Deployer | `github-deployer@account-504419.iam.gserviceaccount.com`, via Workload Identity Federation (pool `github`, provider `github`). No key. Tokens only for `refs/heads/ship` of this repo. Roles: `artifactregistry.writer` on the `account` repo, `run.developer` on `account-api`, `iam.serviceAccountUser` on `account-api@…` |
 | GCP project | `account-504419`, registry `us-west1-docker.pkg.dev/account-504419/account` |
