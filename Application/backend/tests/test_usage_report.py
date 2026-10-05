@@ -17,7 +17,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.orm import sessionmaker
 
-from app._database.models import Base, UsageEventModel, UserModel
+from app._database.models import Base, SurveyResponseModel, UsageEventModel, UserModel
 from tests.conftest import TEST_DATABASE_URL, TESTING_SQLITE
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "usage_report.py"
@@ -57,6 +57,14 @@ def usage_db(tmp_path):
     use(people[0], "create", "grades", minutes_after=3)
     use(people[1], "visit", "dashboard")          # active, but no room
     use(people[1], "create", "tasks", minutes_after=30)
+    # Two rooms, but both opened from a notification: the loose universe test
+    # counts them, the vision's stricter one (one room unprompted) does not.
+    use(people[2], "prompted_visit", "tasks")
+    use(people[2], "prompted_visit", "calendar")
+    session.add(SurveyResponseModel(id=uuid.uuid4(), user_id=people[0].id,
+                                    question="disappointment", answer="very"))
+    session.add(SurveyResponseModel(id=uuid.uuid4(), user_id=people[1].id,
+                                    question="disappointment", answer="dismissed"))
     session.commit()
     identities = [(p.id, p.email, p.name) for p in people]
     session.close()
@@ -71,8 +79,9 @@ def test_the_numbers(usage_db):
     this_week = [l for l in result.stdout.splitlines()
                  if l.strip().startswith((date.today() - timedelta(days=date.today().weekday())).isoformat())]
     assert this_week, result.stdout
-    # new 3 | active 2 | two-rooms 1
-    assert [c.strip() for c in this_week[0].split("|")][1:4] == ["3", "2", "1"]
+    # new 3 | active 3 | two rooms 2 | two rooms, one unprompted 1
+    assert [c.strip() for c in this_week[0].split("|")][1:5] == ["3", "3", "2", "1"]
+    assert "very 1 | somewhat 0 | not 0 | declined to answer 1" in result.stdout
     assert "median 16 min across 2 accounts; under 5 min: 1" in result.stdout
     assert "signed up, nothing created yet: 1" in result.stdout
     assert "sinking_funds" in result.stdout and "<- unused" in result.stdout

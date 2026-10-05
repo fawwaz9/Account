@@ -114,6 +114,7 @@ class UserModel(Base):
     paycheques = relationship("PaychequeModel", cascade=cascade, overlaps="job,paycheques")
     usage_events = relationship("UsageEventModel", cascade=cascade)
     push_subscriptions = relationship("PushSubscriptionModel", cascade=cascade)
+    survey_responses = relationship("SurveyResponseModel", cascade=cascade)
 
     @property
     def has_password(self) -> bool:
@@ -1284,3 +1285,31 @@ class PushSubscriptionModel(Base):
     auth = Column(String, nullable=False)
     created_at = Column(DateTime, nullable=False, default=utc_now)
     last_sent_at = Column(DateTime, nullable=True)
+
+
+class SurveyResponseModel(Base):
+    """One person's answer to one in-app question. Phase 1 item 13.
+
+    The first question is the Sean Ellis test the Phase 1 exit gate is written
+    in -- "how would you feel if you could no longer use Account?" -- and its
+    answers are read only by the owner-run usage report, as counts. "dismissed"
+    is an answer too: asking again after "don't ask again" is how an app stops
+    being trusted.
+    """
+
+    __tablename__ = "survey_responses"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    question = Column(String, nullable=False)
+    answer = Column(String, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+
+
+# One answer per person per question: answering again replaces nothing, it is refused.
+Index(
+    "uq_survey_responses_user_question",
+    SurveyResponseModel.user_id,
+    SurveyResponseModel.question,
+    unique=True,
+)

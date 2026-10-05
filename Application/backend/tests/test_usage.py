@@ -95,3 +95,15 @@ def test_usage_leaves_with_the_account(db, user):
     delete_user(db, user.id)
     purge_expired_users(db, on_day=__import__("datetime").date(2099, 1, 1))
     assert db.query(UsageEventModel).count() == 0
+
+
+def test_a_visit_from_a_notification_is_counted_as_prompted(db, user, client):
+    """The universe test needs a room visited unprompted (§13.2); a visit a
+    notification caused is kept apart, and an unprompted one later the same
+    day still counts as its own."""
+    client.post(f"/api/usage/{user.id}/visits", json={"module": "tasks", "prompted": True})
+    client.post(f"/api/usage/{user.id}/visits", json={"module": "tasks"})
+    kinds = sorted(
+        row.kind for row in db.query(UsageEventModel).filter(UsageEventModel.user_id == user.id)
+    )
+    assert kinds == ["prompted_visit", "visit"]

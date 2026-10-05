@@ -25,6 +25,10 @@ from app.shared.dates import user_today
 logger = logging.getLogger("app.usage")
 
 VISIT = "visit"
+#: A visit that began from a push notification. Kept as its own kind rather
+#: than a flag so the per-day counter stays one row per kind, and so an
+#: unprompted visit later the same day is still counted as one.
+PROMPTED_VISIT = "prompted_visit"
 CREATE = "create"
 
 

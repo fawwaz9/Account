@@ -17,3 +17,7 @@ class Module(str, Enum):
 
 class VisitCreate(BaseModel):
     module: Module
+    #: Opened from a notification (within half an hour of tapping one). The
+    #: universe test needs a room visited unprompted, and a visit a notification
+    #: caused is the metric manufacturing itself (account-vision.md §13.2).
+    prompted: bool = False

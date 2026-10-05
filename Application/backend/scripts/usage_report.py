@@ -16,14 +16,18 @@ What it reports, and which gate each answers (account-vision.md §8, §11):
 
 * **Accounts** -- total, and new per week where the signup time is known.
 * **Weekly actives** -- anyone who opened or added anything that week.
-* **Universe test** -- people who used two or more rooms in one week. The rooms
-  are grades, calendar, tasks, jobs and budget; the dashboard and settings are
-  not rooms.
+* **Universe test** -- people who used two or more rooms in one week, and the
+  stricter form the vision's gate is written in (§13.2): two or more rooms
+  with at least one visit unprompted -- not opened from a notification. The
+  rooms are grades, calendar, tasks, jobs and budget; the dashboard and
+  settings are not rooms.
 * **Retention** -- of last week's actives, how many came back this week.
 * **Module adoption** -- distinct people per room over the last four weeks, and
   rows per table, which is how a zero-row feature gets noticed.
 * **Time to first value** -- from signup to the first thing created, for
   accounts made after signup times started being recorded.
+* **Would you be disappointed** -- the Sean Ellis question's answers, counted
+  (Phase 1 gate: at least three "very disappointed").
 """
 from __future__ import annotations
 
@@ -80,11 +84,13 @@ def collect(engine) -> dict:
         usage_rows = conn.execute(
             select(usage.c.user_id, usage.c.day, usage.c.kind, usage.c.module, usage.c.first_at)
         ).all()
+        survey = models.SurveyResponseModel.__table__
+        answers = conn.execute(select(survey.c.question, survey.c.answer)).all()
         table_counts = {
             table.name: conn.execute(select(func.count()).select_from(table)).scalar()
             for table in Base.metadata.sorted_tables
         }
-    return {"users": user_rows, "usage": usage_rows, "tables": table_counts}
+    return {"users": user_rows, "usage": usage_rows, "tables": table_counts, "answers": answers}
 
 
 def report(data: dict, weeks: int, today: date) -> list[str]:
@@ -103,6 +109,7 @@ def report(data: dict, weeks: int, today: date) -> list[str]:
 
     active = defaultdict(set)          # week -> people
     rooms = defaultdict(lambda: defaultdict(set))  # week -> person -> rooms
+    unprompted = defaultdict(lambda: defaultdict(set))  # week -> person -> rooms visited unprompted
     adoption = defaultdict(set)        # room -> people, last four weeks
     creates = defaultdict(int)         # room -> creates, last four weeks
     first_create = {}
@@ -112,6 +119,8 @@ def report(data: dict, weeks: int, today: date) -> list[str]:
         active[week].add(row.user_id)
         if row.module in ROOMS:
             rooms[week][row.user_id].add(row.module)
+            if row.kind == "visit":
+                unprompted[week][row.user_id].add(row.module)
             if week >= recent:
                 adoption[row.module].add(row.user_id)
         if row.kind == "create":
@@ -122,14 +131,19 @@ def report(data: dict, weeks: int, today: date) -> list[str]:
                 first_create[row.user_id] = row.first_at
 
     out.append("")
-    out.append("WEEKLY  (week of | new accounts | active | 2+ rooms | back from last week)")
+    out.append("WEEKLY  (week of | new accounts | active | 2+ rooms | 2+ rooms, one unprompted | back from last week)")
     previous = None
     for week in week_starts:
         people = active.get(week, set())
-        universe = sum(1 for r in rooms.get(week, {}).values() if len(r) >= 2)
+        week_rooms = rooms.get(week, {})
+        universe = sum(1 for r in week_rooms.values() if len(r) >= 2)
+        strict = sum(
+            1 for person, r in week_rooms.items()
+            if len(r) >= 2 and unprompted.get(week, {}).get(person)
+        )
         back = f"{len(people & previous)}/{len(previous)}" if previous else "-"
         out.append(f"  {week.isoformat()} | {new_by_week.get(week, 0):>3} | {len(people):>3} | "
-                   f"{universe:>3} | {back}")
+                   f"{universe:>3} | {strict:>3} | {back}")
         previous = people
 
     out.append("")
@@ -149,6 +163,16 @@ def report(data: dict, weeks: int, today: date) -> list[str]:
     else:
         out.append("  no accounts with both a signup time and a first creation yet")
     out.append(f"  signed up, nothing created yet: {sum(1 for u in known if u.id not in first_create)}")
+
+    out.append("")
+    out.append("WOULD YOU BE DISAPPOINTED WITHOUT IT  (Phase 1 gate: 3 or more \"very\")")
+    asked = [row.answer for row in data.get("answers", []) if row.question == "disappointment"]
+    if asked:
+        counts = {answer: asked.count(answer) for answer in ("very", "somewhat", "not", "dismissed")}
+        out.append(f"  very {counts['very']} | somewhat {counts['somewhat']} | not {counts['not']} | "
+                   f"declined to answer {counts['dismissed']}")
+    else:
+        out.append("  nobody has been asked yet (people are asked after 7 days of use)")
 
     out.append("")
     out.append("ROWS PER TABLE  (a zero is a feature nobody has used)")

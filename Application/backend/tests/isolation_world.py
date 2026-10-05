@@ -40,6 +40,7 @@ from app._database.models import (
     TransactionModel,
     TuitionDeductionModel,
     PushSubscriptionModel,
+    SurveyResponseModel,
     TuitionPaymentModel,
     UsageEventModel,
 )
@@ -200,6 +201,9 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
         p256dh="BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4",
         auth="BTBZMqHH6r4Tts7J_aSIgg",
     ))
+    # A question of the world's own, so the real one is still unanswered and
+    # A's request to answer it reaches the write path instead of a 409.
+    add(SurveyResponseModel(id=new_id(), user_id=user_id, question=f"{marker} question", answer="very"))
     _ = (event, transaction, recurring_task)
 
     db.commit()
