@@ -170,10 +170,18 @@ def policy_statements() -> list[str]:
 
 
 def grant_statements() -> list[str]:
-    """What the app role may do: data, never schema."""
+    """What the app role may do: data, never schema.
+
+    Table by table from the metadata, never ``ALL TABLES``: a table the models
+    don't build (production still holds one left by a rollback) gets no policy,
+    so a grant on it would hand the app role every user's rows in it.
+    """
     return [
         "GRANT USAGE ON SCHEMA public TO " + APP_ROLE,
-        "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO " + APP_ROLE,
+        *(
+            f"GRANT SELECT, INSERT, UPDATE, DELETE ON {table.name} TO {APP_ROLE}"
+            for table in Base.metadata.sorted_tables
+        ),
         "GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_current_user() TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_user_id_by_email(text) TO " + APP_ROLE,

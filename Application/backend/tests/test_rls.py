@@ -136,6 +136,31 @@ def test_every_table_has_row_security_and_a_policy(owner_engine):
         assert not row.relforcerowsecurity, f"{table.name}: FORCE would lock the owner out"
 
 
+def test_the_app_role_is_granted_the_model_tables_and_nothing_else(owner_engine):
+    """A table no model builds gets no policy, so it must get no grant either.
+
+    Production still holds ``category_budgets``, left by a rollback. A blanket
+    ``GRANT ... ON ALL TABLES`` would hand the app role every user's rows in
+    it, with no row policy in the way.
+    """
+    with owner_engine.begin() as conn:
+        conn.execute(text("CREATE TABLE rls_stray (id int, user_id uuid)"))
+    try:
+        rls.install(owner_engine)
+        with owner_engine.connect() as conn:
+            def granted(table):
+                return conn.execute(
+                    text("SELECT has_table_privilege(:r, :t, 'SELECT')"),
+                    {"r": rls.APP_ROLE, "t": table},
+                ).scalar()
+            assert not granted("rls_stray")
+            for table in Base.metadata.sorted_tables:
+                assert granted(table.name), f"{table.name}: the app role cannot read it"
+    finally:
+        with owner_engine.begin() as conn:
+            conn.execute(text("DROP TABLE rls_stray"))
+
+
 def test_the_app_role_is_not_privileged(app_session):
     row = app_session.execute(text(
         "SELECT rolsuper, rolbypassrls, rolcreaterole, rolcreatedb "
