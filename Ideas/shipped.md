@@ -847,6 +847,20 @@ QUESTIONS WORTH ANSWERING BEFORE BUILDING, not while:
 
 ---
 
+## Subscriptions found: "until when?" -- SHIPPED 2026-10-05
+Vision §13.9, Phase 1 decision D21. A recurring rule with no end date projects
+forever and corrupts any forecast, while leases and term-length subscriptions
+have natural ends.
+- Each found subscription has an optional Until date, no earlier than the next
+  expected charge. It reads "ongoing" until set, and is sent as the rule's
+  recurrence.until.
+- Frontend only: the confirm route already accepted the date and refuses an end
+  before the start.
+
+LIVE: c5c6238, all 26 changed files byte-identical to a production-URL build.
+
+---
+
 ## Phase 1, items 2 and 3: required final on the course page, a 7-day workload line -- SHIPPED 2026-10-05
 Phase 1 of Ideas/overhaul (Ideas/overhaul/Phase 1/). Decisions D7 and D8 in
 phase1-decisions.md. Both are frontend-only, over routes already live.
