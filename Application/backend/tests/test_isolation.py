@@ -113,6 +113,8 @@ PATH_SOURCES = {
     "parse_id": "syllabus_parses",
     "payment_id": "tuition_payments",
     "reminder_id": "reminders",
+    "requirement_id": "degree_requirements",
+    "equivalence_id": "course_equivalences",
     "scheme_id": "grading_schemes",
     "task_id": "tasks",
     "transaction_id": "transactions",
@@ -191,6 +193,15 @@ BODY_PATCHES: dict[tuple[str, str], list[dict]] = {
         "assessments": [{"name": "Final", "category": "Final", "weight": 100.0, "count": 1,
                          "due_date": None, "date_tba": True}],
     }],
+    ("POST", "/api/degree/{user_id}/requirements"): [{
+        "name": "zzownera requirement", "kind": "credits", "items": ["CPSC"], "credits_needed": 3.0,
+    }],
+    ("PUT", "/api/degree/{user_id}/requirements/{requirement_id}"): [{
+        "name": "zzownera requirement", "kind": "credits", "items": ["CPSC"], "credits_needed": 3.0,
+    }],
+    ("POST", "/api/degree/{user_id}/equivalences"): [{"from_codes": ["COSC 111"], "counts_as": ["CPSC 110"]}],
+    ("PUT", "/api/degree/{user_id}/equivalences/{equivalence_id}"): [
+        {"from_codes": ["COSC 111"], "counts_as": ["CPSC 110"]}],
     ("POST", "/api/finances/{user_id}/subscriptions/confirm"): [
         {"instruction.kind": "expense", "instruction.to_account_id": None},
         {"instruction.kind": "transfer", "instruction.category_id": None},

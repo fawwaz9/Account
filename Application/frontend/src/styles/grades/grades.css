@@ -993,3 +993,71 @@
 .scheduleWhen .scheduleDate {
   margin-left: 0;
 }
+
+/* ===== Degree audit (Phase 1 item 5) ===== */
+
+.degreeLink {
+  display: inline-block;
+  margin: 0 0 16px;
+}
+
+.degreeTotals {
+  margin: 0 0 18px;
+}
+
+.degreeCard {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.degreeCard header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.degreeCard h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.degreeCard header .schemeActions {
+  margin-left: auto;
+}
+
+.degreeDone {
+  border-color: var(--gold);
+}
+
+.degreeList {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.degreeList li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.degree--missing span:last-child {
+  color: var(--delete);
+}
+
+.degree--in_progress span:last-child,
+.degree--planned span:last-child {
+  color: var(--muted);
+}
+
+.degreeMappings {
+  margin-top: 24px;
+}
+

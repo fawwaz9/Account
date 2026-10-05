@@ -41,6 +41,8 @@ from app._database.models import (
     TuitionDeductionModel,
     PushSubscriptionModel,
     ImportModel,
+    CourseEquivalenceModel,
+    DegreeRequirementModel,
     GradingSchemeModel,
     SurveyResponseModel,
     SyllabusParseModel,
@@ -236,6 +238,12 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
     # twice in one run, and storage.put rightly refuses to overwrite.
     storage.delete(parse.object_name)
     storage.put(parse.object_name, f"%PDF-1.4 {marker} syllabus".encode(), "application/pdf")
+    # Degree audit (Phase 1 D31): a requirement the world's course meets, and
+    # a mapping from it, so the audit's read reaches both tables.
+    add(DegreeRequirementModel(id=new_id(), user_id=user_id, name=f"{marker} requirement", kind="credits",
+                               items=["CPSC"], credits_needed=3.0, shares=False, position=0))
+    add(CourseEquivalenceModel(id=new_id(), user_id=user_id, from_codes=[course.code],
+                               counts_as=["CPSC 110"], note=f"{marker} mapping"))
     # A question of the world's own, so the real one is still unanswered and
     # A's request to answer it reaches the write path instead of a 409.
     add(SurveyResponseModel(id=new_id(), user_id=user_id, question=f"{marker} question", answer="very"))

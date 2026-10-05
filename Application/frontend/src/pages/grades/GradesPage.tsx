@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import CourseList from "../../features/grades/components/CourseList";
 import AddCourseModal from "../../features/grades/components/AddCourseModal";
 import SyllabusModal from "../../features/intake/SyllabusModal";
@@ -227,6 +227,8 @@ export default function GradesPage() {
                 elective={summary.credits_elective}
               />
             )}
+
+            <Link to="/grades/degree" className="calButton degreeLink">Degree audit</Link>
 
             <GradeTrendChart points={summary?.term_history ?? []} />
 

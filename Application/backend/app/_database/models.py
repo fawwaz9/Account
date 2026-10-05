@@ -117,6 +117,8 @@ class UserModel(Base):
     survey_responses = relationship("SurveyResponseModel", cascade=cascade)
     imports = relationship("ImportModel", cascade=cascade)
     syllabus_parses = relationship("SyllabusParseModel", cascade=cascade)
+    degree_requirements = relationship("DegreeRequirementModel", cascade=cascade)
+    course_equivalences = relationship("CourseEquivalenceModel", cascade=cascade)
 
     @property
     def has_password(self) -> bool:
@@ -1410,3 +1412,52 @@ class GradingSchemeModel(Base):
     components = Column(JSON, nullable=False, default=list)
     position = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, nullable=False, default=utc_now)
+
+
+class DegreeRequirementModel(Base):
+    """One requirement of your programme, entered once (Phase 1 item 5, D31).
+
+    Two kinds. "courses": every item must be met, and an item may name
+    alternatives ("MATH 100 | MATH 180"). "credits": `credits_needed` from
+    courses matching any item, where an item is a code or a pattern
+    ("CPSC 3xx", "CPSC 300+", "300+", "CPSC"). Items are a JSON list: they are
+    always read and written whole, and nothing queries inside them.
+
+    A course counts toward one requirement unless the requirement `shares` --
+    breadth requirements usually overlap the major's.
+    """
+
+    __tablename__ = "degree_requirements"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    kind = Column(String, nullable=False)
+    items = Column(JSON, nullable=False, default=list)
+    credits_needed = Column(Float, nullable=True)
+    shares = Column(Boolean, nullable=False, default=False)
+    position = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+
+
+class CourseEquivalenceModel(Base):
+    """Courses you took that count as others, many-to-many (Phase 1 item 5, D31).
+
+    "COSC 111 + COSC 121 count as CPSC 110", or one course counting as three.
+    By code rather than by course row, so deleting and re-adding a course keeps
+    its mapping, and a mapping can be written before the course exists. Applies
+    once every source course is on your record -- done only when all of them
+    are -- and then stands in for them, so nothing counts twice. `credits` overrides the sources' total, for partial
+    credit.
+    """
+
+    __tablename__ = "course_equivalences"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    from_codes = Column(JSON, nullable=False, default=list)
+    counts_as = Column(JSON, nullable=False, default=list)
+    credits = Column(Float, nullable=True)
+    note = Column(String, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+

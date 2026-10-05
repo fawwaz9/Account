@@ -93,6 +93,13 @@ export const endpoints = {
     pending: (userId: string) => `survey/${userId}/pending`,
     responses: (userId: string) => `survey/${userId}/responses`,
   },
+  degree: {
+    audit: (userId: string) => `degree/${userId}`,
+    requirements: (userId: string) => `degree/${userId}/requirements`,
+    requirement: (userId: string, id: string) => `degree/${userId}/requirements/${id}`,
+    equivalences: (userId: string) => `degree/${userId}/equivalences`,
+    equivalence: (userId: string, id: string) => `degree/${userId}/equivalences/${id}`,
+  },
   intake: {
     status: (userId: string) => `intake/${userId}/status`,
     syllabus: (userId: string) => `intake/${userId}/syllabus`,

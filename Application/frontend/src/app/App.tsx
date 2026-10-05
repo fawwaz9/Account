@@ -34,6 +34,7 @@ import LoginPage from "../pages/LoginPage";
 const Dashboard = lazy(() => import("../pages/Dashboard"));
 const GradesPage = lazy(() => import("../pages/grades/GradesPage"));
 const CourseDetailPage = lazy(() => import("../pages/grades/CourseDetailPage"));
+const DegreePage = lazy(() => import("../pages/grades/DegreePage"));
 const CalendarPage = lazy(() => import("../pages/CalendarPage"));
 const TasksPage = lazy(() => import("../pages/TasksPage"));
 const JobsPage = lazy(() => import("../pages/JobsPage"));
@@ -66,6 +67,7 @@ export default function App() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/grades" element={<GradesPage />} />
               <Route path="/grades/courses/:courseId" element={<CourseDetailPage />} />
+              <Route path="/grades/degree" element={<DegreePage />} />
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/tasks" element={<TasksPage />} />
               <Route path="/jobs" element={<JobsPage />} />
