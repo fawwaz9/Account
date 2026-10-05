@@ -170,7 +170,9 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
         # every user's transactions still added up the same.
         id=new_id(), user_id=user_id, account_id=account.id, kind="expense", amount=-25.0,
         description=f"{marker} coffee", occurred_on=WORLD_DAY, category_id=category.id,
-        recurring_id=recurring_money.id,
+        # Not linked to the recurring rule: a linked row reads as today's
+        # occurrence already written, so the rule was never due, and a "run the
+        # due rules" that reached another user's rules had nothing to show.
     ))
     add(ShiftRecordModel(
         id=new_id(), user_id=user_id, event_id=shift_event.id, job_id=job.id, on_date=WORLD_DAY,

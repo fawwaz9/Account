@@ -357,11 +357,14 @@ def _request(route, method, path, variant, leaf, a, b, world_a, world_b, day, re
                 value = world_a[table]
         url = url.replace("{" + param + "}", str(value))
 
-    # Refs point at B's rows in every variant but own-read: on a foreign-user or
-    # foreign-objects case the body is incidental, but there is no reason to
-    # hand it A's ids and make those cases weaker.
     if refs_world is None:
-        refs_world = world_a if variant == "own-read" else world_b
+        # On foreign-objects and foreign-leaf the path object is the attack,
+        # so the body is A's own: with B's ids in the body too, the body's
+        # ownership checks refused the request before the path object was ever
+        # looked up, and an edit that would have reached B's row went unseen.
+        # (B's ids in a body are foreign-refs' job.)
+        own_body = variant in ("own-read", "foreign-objects", "foreign-leaf")
+        refs_world = world_a if own_body else world_b
     refs = _field_refs(refs_world, day)
     flat = get_flat_dependant(route.dependant)
 
