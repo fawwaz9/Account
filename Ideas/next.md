@@ -328,6 +328,9 @@ are the size of each job rather than an impression of it.
         and in the "Needs new storage" section below, so the module list read as
         though Budget had nothing left. It does. Account ordering, the other of
         the two, shipped 2026-10-03.)
+        
+        Add categories to transfers between accounts too, because they count 
+            towards planned spending so we have to record the categories.
 
 ### Grades x Budget (nothing else does this)
         A dollar figure next to a dropped course, since the deadline to drop with a refund is a date on the calendar.
