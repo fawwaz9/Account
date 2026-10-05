@@ -876,6 +876,36 @@ against a production-URL build.
 
 ---
 
+## "Get started" checklist on the dashboard -- SHIPPED 2026-10-04
+Phase 0 item 6, onboarding (Ideas/overhaul/phase0.md). Frontend only.
+
+Five steps, each a link straight to where it is done:
+- tell it your term
+- check your time zone
+- add courses
+- put something on your week
+- record some money
+
+Each is derived from data the dashboard already loads, so a step ticks itself
+off however the thing was added (the omnibox counts). Nothing about the list
+is stored.
+
+SHOWN ONLY ONCE EVERY SOURCE HAS ANSWERED SUCCESSFULLY. The steps are claims
+about what exists, so a slow or failed read must not tell someone to add the
+courses they have. This is the owner's no-empty-state-while-loading rule;
+removing the guard fails two tests.
+
+The time zone step is done when the saved zone matches the browser's: new
+accounts start on America/Regina, and "today" comes from it everywhere. Hide
+is remembered per user in localStorage, guarded, since this Node's jsdom has
+no localStorage and a private window may refuse it.
+
+It shows for anyone with an unfinished step, existing accounts included.
+
+LIVE: commit b1ceac5. The dashboard chunk and style-BS-dNUlC.css are identical
+to a production-URL build of that commit. The entry differs only by the Google
+client id, which the scratch build had no .env for.
+
 ## Keyboard shortcuts, and accounts you can reorder -- SHIPPED 2026-10-03
 Frontend only. No endpoint, no schema, no deploy gate.
 
