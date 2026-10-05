@@ -895,6 +895,12 @@ would have claimed "not set up"). Both are fixed (eb41226 frontend, 238c122
 `.strip()` on the key, each with a test that fails without it); the runbook
 command now prints without the newline. LIVE: revision account-api-00032-vxd. The
 scheduler's call returns 200; a call with no secret, or a wrong one, returns 403.
+SEND A TEST, ONE DEVICE (d081828, revision account-api-00033-8sx): pressed on the
+laptop it arrived on the phone too, because the test went to every device. The
+frontend now names its own endpoint, and the server sends there if it belongs to
+the caller (aiming at another user's device sends nothing; tested). With no
+endpoint it still sends to all, so either half could deploy first. Reminders
+still go to every device. The notification buttons were also made row-sized.
 
 ---
 
