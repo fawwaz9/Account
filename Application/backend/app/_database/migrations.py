@@ -18,8 +18,12 @@ from app._database.db import Base, engine
 # nothing.
 from app._database import models  # noqa: F401
 
-# table -> column -> DDL type, for columns added after the table's first release
-ADDED_COLUMNS: dict[str, dict[str, str]] = {
+# table -> column -> DDL type, for columns added after the table's first release.
+# A dict instead of a string gives the type per dialect, for the one kind of
+# column the two cannot share: a UUID, which SQLite stores as CHAR(32) and
+# Postgres as its own type. A CHAR(32) on Postgres would be the wrong type for
+# every comparison the models make against it.
+ADDED_COLUMNS: dict[str, dict[str, str | dict[str, str]]] = {
     "users": {
         "password_hash": "VARCHAR",
         "email_verified": "BOOLEAN NOT NULL DEFAULT 0",
@@ -82,6 +86,9 @@ ADDED_COLUMNS: dict[str, dict[str, str]] = {
         "category_id": "CHAR(32)",
         "recurring_id": "CHAR(32)",
         "course_id": "CHAR(32)",
+        # Phase 1 item 7: which CSV import wrote the row, so an import can be
+        # undone as one unit. The first UUID column this list adds on Postgres.
+        "import_id": {"sqlite": "CHAR(32)", "postgresql": "UUID"},
     },
 }
 
@@ -124,6 +131,8 @@ def ensure_schema() -> None:
 
         with engine.begin() as connection:
             for name, ddl in missing.items():
+                if isinstance(ddl, dict):
+                    ddl = ddl[engine.dialect.name]
                 # Identifiers come from the literal dict above, never user input.
                 connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
                 backfill = BACKFILLS.get((table, name))

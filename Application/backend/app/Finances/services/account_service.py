@@ -5,6 +5,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app._database.models import (
+    ImportModel,
     AccountCategoryLimitModel,
     AccountCategoryMonthLimitModel,
     AccountModel,
@@ -617,6 +618,14 @@ def delete_account(db: Session, user_id: uuid.UUID, account_id: uuid.UUID):
     db.query(BudgetTargetModel).filter(
         BudgetTargetModel.user_id == user_id,
         BudgetTargetModel.account_id == account_id,
+    ).delete(synchronize_session=False)
+
+    # Import records with nothing left in them: the transaction count above is
+    # zero, so every row an import wrote here is already gone, and the record
+    # would otherwise hold the account in place.
+    db.query(ImportModel).filter(
+        ImportModel.user_id == user_id,
+        ImportModel.account_id == account_id,
     ).delete(synchronize_session=False)
 
     # The account's category limits go with it. They are a foreign key, so

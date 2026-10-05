@@ -107,6 +107,7 @@ PATH_SOURCES = {
     "event_id": "events",
     "fund_id": "sinking_funds",
     "grade_id": "grades",
+    "import_id": "imports",
     "job_id": "jobs",
     "paycheque_id": "paycheques",
     "payment_id": "tuition_payments",
@@ -159,6 +160,18 @@ BODY_PATCHES: dict[tuple[str, str], list[dict]] = {
          "keys": {"p256dh": "BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4",
                   "auth": "BTBZMqHH6r4Tts7J_aSIgg"}},
     ],
+    # A real file and mapping, so the commit reaches the write path -- with B's
+    # account named in the body by the foreign-refs variant.
+    ("POST", "/api/finances/{user_id}/imports"): [{
+        "csv_text": "Date,Description,Amount\n2026-09-14,zzownera import,-4.50\n",
+        "mapping": {"has_header": True, "date": 0, "description": [1], "amount": 2,
+                    "debit": None, "credit": None, "date_order": "mdy", "invert": False},
+        "lines": [2],
+    }],
+    ("POST", "/api/finances/{user_id}/imports/preview"): [{
+        "csv_text": "Date,Description,Amount\n2026-09-14,zzownera import,-4.50\n",
+        "mapping": None,
+    }],
     ("POST", "/api/finances/{user_id}/subscriptions/confirm"): [
         {"instruction.kind": "expense", "instruction.to_account_id": None},
         {"instruction.kind": "transfer", "instruction.category_id": None},

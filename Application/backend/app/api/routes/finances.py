@@ -37,6 +37,8 @@ from app.Finances.services.forecast_service import forecast
 from app.Finances.schemas.forecast import CashFlowForecast
 from app.Finances.services.plan_service import plan
 from app.Finances.schemas.plan import AnnualPlan
+from app.Finances.services import import_service
+from app.Finances.schemas.importing import CommitRequest, ImportPreview, ImportSummary, PreviewRequest
 from app.Finances.services.subscription_service import confirm_subscription, find_subscriptions
 from app.Finances.schemas.budget import (
     BudgetSummary,
@@ -246,6 +248,54 @@ def get_forecast(user_id: VerifiedUserId, db: DBSession):
     if result is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
     return result
+
+
+@router.post(
+    "/{user_id}/imports/preview",
+    response_model=ImportPreview,
+    responses=responses["user_both"],
+)
+def preview_import(user_id: VerifiedUserId, request: PreviewRequest, db: DBSession):
+    """What a CSV would add to an account, duplicates flagged. Writes nothing."""
+    try:
+        result = import_service.preview(db, user_id, request.account_id, request.csv_text, request.mapping)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if result is None:
+        raise HTTPException(status_code=404, detail="Account not found")
+    return result
+
+
+@router.post(
+    "/{user_id}/imports",
+    response_model=ImportSummary,
+    status_code=201,
+    responses=responses["user_both"],
+)
+def commit_import(user_id: VerifiedUserId, request: CommitRequest, db: DBSession):
+    """Write the chosen lines, re-read from the same text and mapping as the preview."""
+    try:
+        result = import_service.commit(db, user_id, request)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if result is None:
+        raise HTTPException(status_code=404, detail="Account not found")
+    record_usage(db, user_id, CREATE, "budget")
+    return result
+
+
+@router.get("/{user_id}/imports", response_model=list[ImportSummary], responses=responses["user_404"])
+def list_imports(user_id: VerifiedUserId, db: DBSession):
+    return import_service.summaries(db, user_id)
+
+
+@router.delete("/{user_id}/imports/{import_id}", responses=responses["user_404"])
+def undo_import(user_id: VerifiedUserId, import_id: UUID, db: DBSession):
+    """Remove every row an import wrote, and the import itself."""
+    removed = import_service.undo(db, user_id, import_id)
+    if removed is None:
+        raise HTTPException(status_code=404, detail="Import not found")
+    return {"removed": removed}
 
 
 @router.get(

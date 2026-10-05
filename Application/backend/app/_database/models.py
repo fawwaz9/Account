@@ -115,6 +115,7 @@ class UserModel(Base):
     usage_events = relationship("UsageEventModel", cascade=cascade)
     push_subscriptions = relationship("PushSubscriptionModel", cascade=cascade)
     survey_responses = relationship("SurveyResponseModel", cascade=cascade)
+    imports = relationship("ImportModel", cascade=cascade)
 
     @property
     def has_password(self) -> bool:
@@ -310,6 +311,10 @@ class TransactionModel(Base):
     #: and what it cost each course is a Grades question answered from the
     #: per-credit rate rather than from rows in the ledger.
     course_id = Column(Uuid, ForeignKey("courses.id"), nullable=True)
+    #: The CSV import that wrote this row, if one did -- so the import can be
+    #: undone as one unit. Its own column: `group_id` already carries two
+    #: meanings and must not take a third.
+    import_id = Column(Uuid, ForeignKey("imports.id"), nullable=True, index=True)
 
     account = relationship("AccountModel", back_populates="transactions")
     category = relationship("SpendCategoryModel", back_populates="transactions")
@@ -1313,3 +1318,22 @@ Index(
     SurveyResponseModel.question,
     unique=True,
 )
+
+
+class ImportModel(Base):
+    """One CSV import into one account. Phase 1 item 7.
+
+    Exists so an import can be undone as a unit: every row it wrote carries its
+    id in `transactions.import_id`. The counts are what was written at the time;
+    what is still there is read from the rows themselves.
+    """
+
+    __tablename__ = "imports"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    account_id = Column(Uuid, ForeignKey("accounts.id"), nullable=False, index=True)
+    #: The file's name as the browser gave it, for "which import was that".
+    filename = Column(String, nullable=True)
+    row_count = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, nullable=False, default=utc_now)

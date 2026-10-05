@@ -40,6 +40,7 @@ from app._database.models import (
     TransactionModel,
     TuitionDeductionModel,
     PushSubscriptionModel,
+    ImportModel,
     SurveyResponseModel,
     TuitionPaymentModel,
     UsageEventModel,
@@ -201,6 +202,17 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
         p256dh="BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4",
         auth="BTBZMqHH6r4Tts7J_aSIgg",
     ))
+    # A CSV import with one row of its own, so undoing someone else's import
+    # has something of theirs to wrongly remove. Added directly, not through
+    # add(), which would overwrite the world's one "transactions" id.
+    imported = add(ImportModel(id=new_id(), user_id=user_id, account_id=account.id,
+                               filename=f"{marker}.csv", row_count=1))
+    imported_row = TransactionModel(
+        id=new_id(), user_id=user_id, account_id=account.id, kind="expense", amount=-4.5,
+        description=f"{marker} imported coffee", occurred_on=WORLD_DAY, import_id=imported.id,
+    )
+    db.add(imported_row)
+    ids["transactions_imported"] = imported_row.id
     # A question of the world's own, so the real one is still unanswered and
     # A's request to answer it reaches the write path instead of a 409.
     add(SurveyResponseModel(id=new_id(), user_id=user_id, question=f"{marker} question", answer="very"))
