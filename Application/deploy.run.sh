@@ -123,6 +123,16 @@ watch_run() {
     | cut -c1-400 | head -n 60 >&2 || true
   printf -- '----- last 60 lines -----\n' >&2
   tail -n 60 "$log" | cut -c1-400 >&2
+  # A job GitHub cancelled or never started (no runner, a timeout) has no step
+  # logs at all; its reason is in the job's outcome and annotations.
+  printf -- '----- jobs, and what GitHub said about them -----\n' >&2
+  gh api "repos/{owner}/{repo}/actions/runs/$id/jobs" \
+    --jq '.jobs[] | "\(.name): \(.conclusion // .status)"' >&2 || true
+  for job in $(gh api "repos/{owner}/{repo}/actions/runs/$id/jobs" \
+                 --jq '.jobs[] | select(.conclusion != "success" and .conclusion != "skipped") | .id' 2>/dev/null); do
+    gh api "repos/{owner}/{repo}/check-runs/$job/annotations" \
+      --jq '.[] | select(.annotation_level != "notice") | "  \(.annotation_level): \(.message)"' >&2 || true
+  done
   printf -- '----- end of log -----\n' >&2
   fail "$label failed for $SHORT. Summary: gh run view $id"
 }
