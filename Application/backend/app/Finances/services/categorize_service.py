@@ -1,0 +1,197 @@
+"""Suggesting a category for an expense: personal layers, cheapest first.
+
+Phase 1 item 8 (account-vision.md §13.10). Spending is habitual, so most of it
+can be categorised without a model at all. Three layers, tried in order, each
+only when the one before has nothing confident to say:
+
+1. **Your own merchant map.** Every expense you have already categorised is a
+   confirmation: "TIM HORTONS" went under Eating out before, so it does again.
+   Nothing to train -- the ledger is the map, so every categorisation you make
+   anywhere improves the next suggestion.
+2. **Curated keyword rules.** A short, hand-kept list of well-known Canadian
+   merchants and the category names they belong under, matched against the
+   names *you* use. Global, maintained by the developer, derived from no one.
+3. **Naive Bayes on your own history.** Merchant-name words against your
+   categories, for a merchant you have never categorised whose words you have.
+
+Below the confidence bar it suggests nothing: a wrong category erodes trust
+like a hallucinated syllabus weight, so "ask" beats "guess". The fourth layer
+(an LLM for never-seen merchants, cached into the map) and the shared pool wait
+for the provider work and for Phase 3 respectively. Nothing here reads another
+user's rows.
+"""
+
+import math
+import re
+import uuid
+from collections import Counter, defaultdict
+from dataclasses import dataclass
+
+from sqlalchemy.orm import Session
+
+from app._database.models import SpendCategoryModel, TransactionModel
+from app.Finances.services.forecast_service import merchant_key
+
+LEARNED, RULE, BAYES = "learned", "rule", "bayes"
+
+#: A merchant you have split between categories is only suggested when one of
+#: them holds this share of your past choices.
+MAP_AGREEMENT = 0.8
+#: Naive Bayes speaks only above this probability, and only with this much
+#: history to have learned from.
+BAYES_CONFIDENCE = 0.75
+BAYES_MIN_ROWS = 10
+
+#: keyword -> category names it belongs under, in preference order. Matched as
+#: whole words against the merchant name, most specific first ("uber eats"
+#: before "uber"). A contested merchant -- Costco is groceries for one person
+#: and household for the next -- is deliberately absent.
+RULES: list[tuple[str, tuple[str, ...]]] = [
+    ("uber eats", ("Eating out", "Restaurants", "Food", "Dining")),
+    ("skipthedishes", ("Eating out", "Restaurants", "Food", "Dining")),
+    ("doordash", ("Eating out", "Restaurants", "Food", "Dining")),
+    ("tim hortons", ("Eating out", "Coffee", "Restaurants", "Food")),
+    ("starbucks", ("Eating out", "Coffee", "Restaurants", "Food")),
+    ("blenz", ("Eating out", "Coffee", "Restaurants", "Food")),
+    ("mcdonald", ("Eating out", "Restaurants", "Food", "Dining")),
+    ("subway", ("Eating out", "Restaurants", "Food", "Dining")),
+    ("a&w", ("Eating out", "Restaurants", "Food", "Dining")),
+    ("safeway", ("Groceries", "Food")),
+    ("save on foods", ("Groceries", "Food")),
+    ("save-on-foods", ("Groceries", "Food")),
+    ("superstore", ("Groceries", "Food")),
+    ("no frills", ("Groceries", "Food")),
+    ("t&t", ("Groceries", "Food")),
+    ("whole foods", ("Groceries", "Food")),
+    ("sobeys", ("Groceries", "Food")),
+    ("loblaws", ("Groceries", "Food")),
+    ("freshco", ("Groceries", "Food")),
+    ("translink", ("Transportation", "Transport", "Travel")),
+    ("compass", ("Transportation", "Transport", "Travel")),
+    ("lyft", ("Transportation", "Transport", "Travel")),
+    ("uber", ("Transportation", "Transport", "Travel")),
+    ("evo", ("Transportation", "Transport", "Travel")),
+    ("modo", ("Transportation", "Transport", "Travel")),
+    ("esso", ("Transportation", "Gas", "Transport")),
+    ("shell", ("Transportation", "Gas", "Transport")),
+    ("petro canada", ("Transportation", "Gas", "Transport")),
+    ("petro-canada", ("Transportation", "Gas", "Transport")),
+    ("chevron", ("Transportation", "Gas", "Transport")),
+    ("impark", ("Transportation", "Parking", "Transport")),
+    ("easypark", ("Transportation", "Parking", "Transport")),
+    ("bc hydro", ("Utilities", "Bills")),
+    ("fortisbc", ("Utilities", "Bills")),
+    ("telus", ("Utilities", "Phone", "Bills")),
+    ("rogers", ("Utilities", "Phone", "Bills")),
+    ("koodo", ("Utilities", "Phone", "Bills")),
+    ("fido", ("Utilities", "Phone", "Bills")),
+    ("freedom mobile", ("Utilities", "Phone", "Bills")),
+    ("public mobile", ("Utilities", "Phone", "Bills")),
+    ("shoppers drug mart", ("Health/medical", "Health", "Pharmacy")),
+    ("london drugs", ("Health/medical", "Health", "Pharmacy")),
+    ("pharmacy", ("Health/medical", "Health", "Pharmacy")),
+    ("ubc bookstore", ("School fees", "School", "Education", "Books")),
+    ("goodlife", ("Sports", "Fitness", "Gym")),
+    ("sport chek", ("Sports", "Fitness")),
+    ("ikea", ("Home", "Household", "Furniture")),
+    ("home depot", ("Home", "Household")),
+    ("canadian tire", ("Home", "Household")),
+    ("netflix", ("Subscriptions", "Entertainment", "Personal")),
+    ("spotify", ("Subscriptions", "Entertainment", "Personal")),
+]
+
+
+@dataclass(frozen=True)
+class Suggestion:
+    category_id: uuid.UUID | None
+    source: str | None = None
+
+
+NONE = Suggestion(None)
+
+
+def _words(key: str) -> list[str]:
+    return [word for word in re.findall(r"[a-z&]+", key) if len(word) >= 2]
+
+
+def _rule_target(key: str, by_name: dict[str, uuid.UUID]) -> uuid.UUID | None:
+    padded = f" {key} "
+    for keyword, names in RULES:
+        if f" {keyword} " in padded:
+            for name in names:
+                if name.lower() in by_name:
+                    return by_name[name.lower()]
+            return None  # the right rule, but you have no such category
+    return None
+
+
+class Categorizer:
+    """Trained once per request from the user's own categorised expenses."""
+
+    def __init__(self, db: Session, user_id: uuid.UUID):
+        categories = (
+            db.query(SpendCategoryModel)
+            .filter(SpendCategoryModel.user_id == user_id, SpendCategoryModel.archived.is_(False))
+            .all()
+        )
+        self.active = {category.id for category in categories}
+        self.by_name = {category.name.lower(): category.id for category in categories}
+
+        rows = (
+            db.query(TransactionModel.description, TransactionModel.category_id)
+            .filter(
+                TransactionModel.user_id == user_id,
+                TransactionModel.kind == "expense",
+                TransactionModel.category_id.isnot(None),
+            )
+            .all()
+        )
+        self.map: dict[str, Counter] = defaultdict(Counter)
+        self.word_counts: dict[uuid.UUID, Counter] = defaultdict(Counter)
+        self.class_rows: Counter = Counter()
+        for description, category_id in rows:
+            if category_id not in self.active:
+                continue
+            key = merchant_key(description)
+            if not key:
+                continue
+            self.map[key][category_id] += 1
+            self.class_rows[category_id] += 1
+            self.word_counts[category_id].update(_words(key))
+        self.vocabulary = {word for counts in self.word_counts.values() for word in counts}
+        self.trained = sum(self.class_rows.values())
+
+    def suggest(self, description: str | None) -> Suggestion:
+        key = merchant_key(description)
+        if not key:
+            return NONE
+
+        seen = self.map.get(key)
+        if seen:
+            category_id, hits = seen.most_common(1)[0]
+            if hits / sum(seen.values()) >= MAP_AGREEMENT:
+                return Suggestion(category_id, LEARNED)
+
+        ruled = _rule_target(key, self.by_name)
+        if ruled is not None:
+            return Suggestion(ruled, RULE)
+
+        return self._bayes(key)
+
+    def _bayes(self, key: str) -> Suggestion:
+        words = [word for word in _words(key) if word in self.vocabulary]
+        if self.trained < BAYES_MIN_ROWS or not words:
+            return NONE
+        size = len(self.vocabulary)
+        scores = {}
+        for category_id, rows in self.class_rows.items():
+            counts = self.word_counts[category_id]
+            total = sum(counts.values())
+            score = math.log(rows / self.trained)
+            for word in words:
+                score += math.log((counts[word] + 1) / (total + size))
+            scores[category_id] = score
+        best = max(scores, key=scores.get)
+        peak = scores[best]
+        probability = 1 / sum(math.exp(score - peak) for score in scores.values())
+        return Suggestion(best, BAYES) if probability >= BAYES_CONFIDENCE else NONE

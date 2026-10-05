@@ -32,7 +32,7 @@ from datetime import date, timedelta
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app._database.models import AccountModel, ImportModel, TransactionModel
+from app._database.models import AccountModel, ImportModel, SpendCategoryModel, TransactionModel
 from app.Finances.schemas.importing import (
     MAX_ROWS,
     CommitRequest,
@@ -41,6 +41,7 @@ from app.Finances.schemas.importing import (
     ImportRow,
     ImportSummary,
 )
+from app.Finances.services.categorize_service import Categorizer
 from app.Finances.services.forecast_service import merchant_key
 from app.Finances.services.subscription_service import find_subscriptions
 from app.shared.money import money
@@ -357,6 +358,11 @@ def preview(
 
     parsed = read_rows(rows, used)
     mark_duplicates(db, user_id, account_id, parsed)
+    categorizer = Categorizer(db, user_id)
+    for row in parsed:
+        if row.status != ERROR and row.amount is not None and row.amount < 0:
+            suggestion = categorizer.suggest(row.description)
+            row.category_id, row.category_source = suggestion.category_id, suggestion.source
     fresh = [row for row in parsed if row.status == NEW]
     return ImportPreview(
         account_id=account_id,
@@ -387,6 +393,17 @@ def commit(db: Session, user_id: uuid.UUID, data: CommitRequest) -> ImportSummar
     if unreadable:
         raise ValueError(f"Line {unreadable[0]} couldn't be read: {by_line[unreadable[0]].reason}")
 
+    chosen = {line: category for line, category in data.categories.items() if category is not None}
+    if chosen:
+        allowed = {
+            row.id for row in db.query(SpendCategoryModel.id).filter(
+                SpendCategoryModel.user_id == user_id, SpendCategoryModel.archived.is_(False),
+            )
+        }
+        foreign = [line for line, category in chosen.items() if category not in allowed]
+        if foreign:
+            raise ValueError(f"Line {foreign[0]}: that category does not exist")
+
     record = ImportModel(
         id=uuid.uuid4(), user_id=user_id, account_id=data.account_id,
         filename=data.filename, row_count=len(wanted),
@@ -394,10 +411,13 @@ def commit(db: Session, user_id: uuid.UUID, data: CommitRequest) -> ImportSummar
     db.add(record)
     for line in wanted:
         row = by_line[line]
+        expense = row.amount < 0
         db.add(TransactionModel(
             id=uuid.uuid4(), user_id=user_id, account_id=data.account_id,
-            kind="income" if row.amount > 0 else "expense",
+            kind="expense" if expense else "income",
             amount=row.amount, description=row.description[:200], occurred_on=row.on_date,
+            # A category only labels money going out, as everywhere else.
+            category_id=chosen.get(line) if expense else None,
             import_id=record.id,
         ))
     db.commit()

@@ -47,6 +47,10 @@ class ImportRow(BaseModel):
     #: For a duplicate, the existing row it matches; for an error, why.
     duplicate_of: UUID | None = None
     reason: str | None = None
+    #: A suggested category for an expense (Phase 1 item 8), or null to ask.
+    category_id: UUID | None = None
+    #: learned | rule | bayes -- where the suggestion came from.
+    category_source: str | None = None
 
 
 class ImportPreview(BaseModel):
@@ -74,6 +78,11 @@ class CommitRequest(BaseModel):
     #: says the rows were.
     lines: list[int] = Field(..., min_length=1, max_length=MAX_ROWS)
     filename: str | None = Field(default=None, max_length=200)
+    #: Line -> category for the expenses, as confirmed in the preview. Keys are
+    #: line numbers as strings, since JSON objects key by string. A line left
+    #: out is written uncategorised; the server never applies a suggestion the
+    #: person did not keep.
+    categories: dict[int, UUID | None] = Field(default_factory=dict)
 
 
 class ImportSummary(BaseModel):
