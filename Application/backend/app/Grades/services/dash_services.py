@@ -307,15 +307,46 @@ def collect_attention(courses, default_target: float) -> list[AttentionItem]:
             result = course_result_grade(course)
             target = effective_target(course, default_target)
             if result is not None and result < target:
-                below.append(AttentionItem(
-                    kind="below_target", **common,
-                    message=f"at {result:g}% against a {target:g}% target",
-                ))
+                message = f"at {result:g}% against a {target:g}% target"
+                on_final = final_needed(course, target)
+                if on_final:
+                    message += f"; {on_final}"
+                below.append(AttentionItem(kind="below_target", **common, message=message))
 
         for problem in weight_problems(course):
             weights.append(AttentionItem(kind="weight_problem", **common, message=problem))
 
     return missing + below + weights
+
+
+def final_needed(course, target: float) -> str | None:
+    """What the final must do about a course below target, in words.
+
+    Phase 1 item 2: the figure already existed behind a modal; here it is where
+    the shortfall is reported. Nothing when the final is not still ahead -- no
+    final, a final already marked -- because then there is nothing it can do.
+    Built from the loaded course, like the rest of this function's callers: no
+    query of its own.
+    """
+    if not expects_a_final(course):
+        return None
+    if not course.category_weights.get(GradeCategory.FINAL.value, 0.0):
+        return None
+    if any(
+        grade.category == GradeCategory.FINAL.value and grade.score is not None
+        for grade in course.grades
+    ):
+        return None
+    try:
+        answer = calculate_required_final(None, course.user_id, course.id, target, course=course)
+    except ValueError:
+        return None
+    needed = answer.get("needed")
+    if needed is None or needed <= 0:
+        return None
+    if not answer.get("possible"):
+        return "out of reach even with 100% on the final"
+    return f"needs {needed:g}% on the final"
 
 
 def completed_credits_by_kind(courses) -> tuple[float, float]:

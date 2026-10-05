@@ -121,3 +121,50 @@ def test_an_archived_transfer_credit_counts_for_nothing(db, user):
 
     assert credits_by_state(courses) == (0.0, 0.0)
     assert calculate_cumulative_average(courses) == 0.0
+
+
+# ------------------------------------------------- below target, what next --
+# Phase 1 item 2: the Attention line now says what the final has to do.
+
+def _below(db, user, code="CPSC 221", **overrides):
+    from app._database.models import GradeModel
+    import uuid as _uuid
+
+    course = bucketed(make_course(db, user.id, code, target_grade=85.0, **overrides), CURRENT)
+    # Assignments 50%, all marked at 70%: average 70, final worth the other 50.
+    db.add(GradeModel(id=_uuid.uuid4(), course_id=course.id, name="A1", score=70.0, max_score=100.0,
+                      category="Assignment", weight=1.0))
+    db.commit()
+    db.refresh(course)
+    course.average = 70.0
+    return course
+
+
+def test_below_target_says_what_the_final_needs(db, user):
+    course = _below(db, user)
+    [item] = [i for i in collect_attention([course], 90.0) if i.kind == "below_target"]
+    # (85 - 70 x 0.5) / 0.5 = 100: reachable, exactly.
+    assert item.message == "at 70% against a 85% target; needs 100% on the final"
+
+
+def test_below_target_says_when_the_final_cannot_save_it(db, user):
+    course = _below(db, user)
+    course.target_grade = 90.0
+    [item] = [i for i in collect_attention([course], 90.0) if i.kind == "below_target"]
+    assert item.message.endswith("; out of reach even with 100% on the final")
+
+
+def test_below_target_says_nothing_of_a_final_already_marked_or_absent(db, user):
+    from app._database.models import GradeModel
+    import uuid as _uuid
+
+    marked = _below(db, user)
+    db.add(GradeModel(id=_uuid.uuid4(), course_id=marked.id, name="Final", score=60.0,
+                      max_score=100.0, category="Final", weight=1.0))
+    db.commit()
+    db.refresh(marked)
+    marked.average = 70.0
+    none = _below(db, user, code="CPSC 213", no_final=True)
+    for course in (marked, none):
+        [item] = [i for i in collect_attention([course], 90.0) if i.kind == "below_target"]
+        assert item.message == "at 70% against a 85% target"
