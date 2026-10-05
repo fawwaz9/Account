@@ -18,7 +18,8 @@ deployment on **2026-09-28**, including that traffic is on `LATEST`.
 | Database | Supabase project `kujxxairehpwhxhnkbct`, region `us-west-2`, Postgres 17.6 |
 | Backups | GitHub Actions artifacts, `Backup database` workflow, 90-day retention |
 | Secrets | Google Secret Manager: `jwt-secret`, `database-url` |
-| Current image | `…/backend:d081828` — revision `account-api-00033-8sx`, serving 100%. Connected as `account_app` (isolation ON), VAPID_PRIVATE_KEY and CRON_SECRET set. Send a test reaches only the device that pressed it. **Rolls back to 238c122 alone safely** (a test then reaches every device again). **Before rolling back to any image older than 9f1f3cb, switch DATABASE_URL back to `database-url` FIRST**: older APIs never set `app.user_id`, so as `account_app` they see no rows |
+| Current image | `…/backend:26db894` — revision `account-api-00034-54q`, serving 100% since 2026-10-05 21:59 UTC (Phase 1: forecast, year plan, paycheque check, CSV import, syllabus intake, grading schemes, course section, survey). Digest verified by the deploy. **Rolling back to `d081828` alone:** the schema can stay, since the six Phase 1 additions are new tables and nullable columns the older image never reads. The Phase 1 cards were built to hide on a failed read, so they disappear rather than break. But a course section typed in is silently dropped, so **prefer rolling back both halves** (Pages to `1992ff0`). This was reasoned from the code, not rehearsed |
+| Previous (Phase 0) | `…/backend:d081828` — revision `account-api-00033-8sx`. Connected as `account_app` (isolation ON), VAPID_PRIVATE_KEY and CRON_SECRET set. Send a test reaches only the device that pressed it. **Rolls back to 238c122 alone safely** (a test then reaches every device again). **Before rolling back to any image older than 9f1f3cb, switch DATABASE_URL back to `database-url` FIRST**: older APIs never set `app.user_id`, so as `account_app` they see no rows |
 | Previous (app code) | `…/backend:238c122` (`00032-vxd`): VAPID key stripped. Before it `9f1f3cb` (`00029`–`00031`), whose push returns 500 on the stored key; before that `be4f1d7` (`00028-jwz`) — needs the DATABASE_URL switch-back first |
 | Previous image | `…/backend:6b3dcce` — revisions `account-api-00022-vmx` and `00023-jzr`, the latter an allowlist change on the same image. **The last functionally different release** |
 | Deployer | `github-deployer@account-504419.iam.gserviceaccount.com`, via Workload Identity Federation (pool `github`, provider `github`). No key. Tokens only for `refs/heads/ship` of this repo. Roles: `artifactregistry.writer` on the `account` repo, `run.developer` on `account-api`, `iam.serviceAccountUser` on `account-api@…` |
@@ -499,8 +500,9 @@ browser console shows everything.
 > stays here is only what the top table cannot hold: the per-image notes on what
 > can and cannot be rolled back alone.
 >
-> Most recent schema change: `account_month_values`, applied 2026-10-01. `6b3dcce`
-> added no schema of its own.
+> Most recent schema change: Phase 1, applied 2026-10-05. It added four tables
+> (`survey_responses`, `imports`, `syllabus_parses`, `grading_schemes`) and two
+> nullable columns (`transactions.import_id`, `courses.section`), all additive.
 
 ### `da6ac93` cannot have its API rolled back on its own
 

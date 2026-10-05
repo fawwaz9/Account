@@ -884,6 +884,47 @@ production-URL build: 26 of 26 files.
 
 ---
 
+## Phase 1, the backend batch -- SHIPPED 2026-10-05
+Phase 1 of Ideas/overhaul (Ideas/overhaul/Phase 1/). Every decision is in
+phase1-decisions.md (D9-D24), the steps in phase1-runbook.md. Deployed in one
+batch: the owner applied the schema (four new tables, two nullable columns),
+then `ship` and `main` went out at `26db894`.
+
+- **Budget: "Where this is heading"** (D9). It shows the first day spending
+  accounts would cross $0, the runway at the recent pace, and the fastest
+  one-off categories, with every assumption listed. Card purchases count as
+  they happen.
+- **The year plan, and hours a week to a savings target** (D10).
+- **Paycheque check** (D11). It recomputes a cheque from your shifts, with BC
+  overtime and vacation pay, shows the arithmetic, and cites the rule.
+- **Bank CSV import** (D14, D15). Preview before writing, duplicates unticked,
+  category suggestions, and undo of the whole import.
+- **A course from its syllabus** (D16). The parse is checked and edited before
+  anything is created. Original files are kept in GCS when a bucket is set (D24).
+- **Alternative grading schemes,** compared beside the course's own grade (D18).
+- **The course section** (D22). A current course without one is in Attention.
+- **The omnibox suggests a category** (D17). Attention says what the final needs
+  (D13).
+- **Measurement for the phase gate** (D12). Visits that start from a push
+  notification are counted apart, and the "very disappointed" question is asked
+  once, after a week.
+
+THE DEPLOY WAITED OUT A GITHUB OUTAGE: two attempts were cancelled before a
+runner picked them up ("not acquired by Runner of type hosted"). The third, after
+Actions recovered, passed backup, schema gate, smoke test, digest check, health
+and CORS. The frontend went out through `Application/deploy.run.sh web`, its first
+real push.
+
+Not live yet: syllabus reading needs the AI key (runbook step 3), and keeping
+files needs the bucket (step 4). Until then the feature hides itself, and nothing
+breaks.
+
+LIVE: API `account-api-00034-54q` (digest-verified `26db894`); new routes answer
+401 against a 404 control; health ok; no errors or 5xx in its logs. Frontend
+`main` at `26db894`, matching a production build file by file (28 files).
+
+---
+
 ## Phase 0: isolation in the database, usage counts, push -- SHIPPED 2026-10-05
 Phase 0 of Ideas/overhaul (Ideas/overhaul/Phase 0/). Every decision, with its
 reasoning, is in phase0-decisions.md (D1-D11); the production steps are in
