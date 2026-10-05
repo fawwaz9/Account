@@ -275,6 +275,16 @@ def test_lookups_are_exact_not_patterns(worlds, app_session):
     assert email_taken(app_session, "rls-_@example.com") is False
 
 
+DEFINER_SIGNATURES = (
+    "account_user_id_by_email(text)",
+    "account_user_id_by_google_id(text)",
+    "account_email_taken(text, uuid)",
+    "account_expired_user_ids(timestamp)",
+    "account_release_push_endpoint(text)",
+    "account_users_with_unpushed_reminders(timestamp)",
+)
+
+
 def test_only_the_app_role_can_call_the_cross_user_functions(owner_engine):
     """They run with the owner's rights, so nobody else may call them.
 
@@ -284,6 +294,12 @@ def test_only_the_app_role_can_call_the_cross_user_functions(owner_engine):
     with owner_engine.begin() as conn:
         if not conn.execute(text("SELECT 1 FROM pg_roles WHERE rolname = 'rls_outsider'")).scalar():
             conn.execute(text("CREATE ROLE rls_outsider LOGIN PASSWORD 'outsider_test_only'"))
+        # Supabase's default privileges grant every new function to anon by
+        # name, which a REVOKE FROM PUBLIC does not touch. Model that grant,
+        # then install again: it must be taken away.
+        for fn in DEFINER_SIGNATURES:
+            conn.execute(text(f"GRANT EXECUTE ON FUNCTION {fn} TO rls_outsider"))
+    rls.install(owner_engine)
     url = make_url(TEST_DATABASE_URL).set(username="rls_outsider", password="outsider_test_only")
     outsider = create_engine(url, connect_args=connect_args_for(TEST_DATABASE_URL))
     try:

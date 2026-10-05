@@ -111,6 +111,28 @@ REVOKE ALL ON FUNCTION account_email_taken(text, uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_expired_user_ids(timestamp) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_release_push_endpoint(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_users_with_unpushed_reminders(timestamp) FROM PUBLIC;
+
+-- PUBLIC is not the only way in. Supabase's default privileges grant every new
+-- function to anon and authenticated by name, and its Data API lets anon call
+-- any of them. So: every definer function, every grantee but its owner and
+-- the app role.
+DO $$
+DECLARE r record;
+BEGIN
+    FOR r IN
+        SELECT p.oid::regprocedure AS fn, g.rolname
+        FROM pg_proc p
+        CROSS JOIN LATERAL aclexplode(p.proacl) a
+        JOIN pg_roles g ON g.oid = a.grantee
+        WHERE p.pronamespace = 'public'::regnamespace
+          AND p.prosecdef
+          AND left(p.proname, 8) = 'account_'
+          AND a.grantee <> p.proowner
+          AND g.rolname <> 'account_app'
+    LOOP
+        EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I', r.fn, r.rolname);
+    END LOOP;
+END $$;
 """
 
 
