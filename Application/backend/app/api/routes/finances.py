@@ -33,6 +33,8 @@ from app.Finances.services.sinking_service import (
     update_fund,
 )
 from app.Finances.services.safe_service import safe_to_spend
+from app.Finances.services.forecast_service import forecast
+from app.Finances.schemas.forecast import CashFlowForecast
 from app.Finances.services.subscription_service import confirm_subscription, find_subscriptions
 from app.Finances.schemas.budget import (
     BudgetSummary,
@@ -223,6 +225,25 @@ def remove_sinking_fund(user_id: VerifiedUserId, fund_id: UUID, db: DBSession):
 
     audit.deletion("sinking_fund", user_id=user_id, target_id=fund_id, detail=deleted.name)
     return deleted
+
+
+@router.get(
+    "/{user_id}/forecast",
+    response_model=CashFlowForecast,
+    responses=responses["user_404"],
+)
+def get_forecast(user_id: VerifiedUserId, db: DBSession):
+    """Where the spending accounts are heading, to the end of the term.
+
+    A daily projection from today's balance, the standing instructions, pay
+    from scheduled shifts, and the recent pace of one-off spending -- with the
+    first day it goes below zero, runway, the places one-off spending goes
+    most, and every assumption it rests on.
+    """
+    result = forecast(db, user_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+    return result
 
 
 @router.get(

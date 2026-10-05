@@ -30,7 +30,9 @@ from sqlalchemy.orm import sessionmaker
 
 import app.main
 from app._database.db import get_db
-from app._database.models import AccountModel, Base, CourseModel, SpendCategoryModel, TermBlackoutModel, UserModel
+from app._database.models import (
+    AccountModel, Base, CourseModel, SpendCategoryModel, TermBlackoutModel, TransactionModel, UserModel,
+)
 from app.Auth.services.session_service import create_access_token
 from app.shared.dates import user_today
 from tests import test_isolation as iso
@@ -43,6 +45,19 @@ A_ID = uuid.uuid5(uuid.NAMESPACE_URL, "account-isolation-world/user-a")
 INFLUENCERS = {
     name: uuid.uuid5(uuid.NAMESPACE_URL, f"account-isolation-world/b-influencer-{name}")
     for name in ("blackout", "account", "category", "course")
+}
+#: B's past rows. Everything in the seeded world is dated today, and some
+#: answers read only history (the forecast's pace, runway and run-rates); with
+#: no past rows, mutation testing removed the forecast's user filters unseen.
+#: B's history starts earlier than A's and shares A's merchant, so leaking any
+#: of it would move A's figures.
+B_HISTORY = {
+    name: uuid.uuid5(uuid.NAMESPACE_URL, f"account-isolation-world/b-history-{name}")
+    for name in ("income", "coffee-1", "coffee-2", "big")
+}
+A_HISTORY = {
+    name: uuid.uuid5(uuid.NAMESPACE_URL, f"account-isolation-world/a-history-{name}")
+    for name in ("income", "coffee-1", "coffee-2")
 }
 B_ID = uuid.uuid5(uuid.NAMESPACE_URL, "account-isolation-world/user-b")
 
@@ -63,11 +78,27 @@ def _build(with_b: bool):
     day = user_today(session, A_ID)
     world_a = seed_world(session, A_ID, iso.MARK_A, day)
     world_b = seed_world(session, B_ID, iso.MARK_B, day) if with_b else None
+
+    def past(row_id, user_id, account_id, kind, amount, days, description):
+        session.add(TransactionModel(
+            id=row_id, user_id=user_id, account_id=account_id, kind=kind, amount=amount,
+            description=description, occurred_on=day - timedelta(days=days),
+        ))
+
+    # A's history, the same in both runs.
+    past(A_HISTORY["income"], A_ID, world_a["accounts"], "income", 400.0, 30, f"{iso.MARK_A} history")
+    past(A_HISTORY["coffee-1"], A_ID, world_a["accounts"], "expense", -12.0, 3, f"{iso.MARK_A} coffee")
+    past(A_HISTORY["coffee-2"], A_ID, world_a["accounts"], "expense", -12.0, 10, f"{iso.MARK_A} coffee")
+    session.commit()
     if with_b:
         # Influencers: rows of B's placed where they would change A's answers
         # if they leaked into A's queries, but which A's identical world cannot
         # mask. A's weekly lecture falls on `day`; a break of B's over it would
         # take A's class off A's timetable.
+        past(B_HISTORY["income"], B_ID, world_b["accounts"], "income", 7000.0, 50, f"{iso.MARK_B} history")
+        past(B_HISTORY["coffee-1"], B_ID, world_b["accounts"], "expense", -12.0, 4, f"{iso.MARK_A} coffee")
+        past(B_HISTORY["coffee-2"], B_ID, world_b["accounts"], "expense", -12.0, 11, f"{iso.MARK_A} coffee")
+        past(B_HISTORY["big"], B_ID, world_b["accounts"], "expense", -900.0, 6, f"{iso.MARK_B} big spend")
         session.add(TermBlackoutModel(
             id=INFLUENCERS["blackout"],
             user_id=B_ID, label="zzvictimb influencer", starts_on=day - timedelta(days=1),
@@ -158,7 +189,10 @@ def test_b_cannot_influence_a(method, path, _no_push_network):
     )
     known = {str(i) for i in (A_ID, *world_a.values()) if isinstance(i, uuid.UUID)}
     known |= {i.hex for i in (A_ID, *world_a.values()) if isinstance(i, uuid.UUID)}
-    b_keys = {B_ID, *(v for v in world_b.values() if isinstance(v, uuid.UUID)), *INFLUENCERS.values()}
+    b_keys = {
+        B_ID, *(v for v in world_b.values() if isinstance(v, uuid.UUID)),
+        *INFLUENCERS.values(), *B_HISTORY.values(),
+    }
     b_course = world_b["courses"]
     token = create_access_token(A_ID, 0)
 
