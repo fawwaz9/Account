@@ -114,3 +114,26 @@
 .getStartedDone {
   color: var(--muted);
 }
+
+/* ===== Workload headline (Phase 1 item 3) ===== */
+
+.workloadHeadline p {
+  margin: 0;
+}
+
+p.workloadHeadline {
+  margin: 0;
+}
+
+.workloadOver {
+  color: var(--delete);
+  font-weight: 600;
+}
+
+/* Kept on the page rather than behind a (?): it changes how the figure above
+   should be read, which is the rule for text that stays. */
+.workloadCaveat {
+  margin-top: 4px !important;
+  font-size: 0.8rem;
+  color: var(--muted);
+}

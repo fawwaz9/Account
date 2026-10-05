@@ -3,6 +3,8 @@ import { useAuth } from "../app/auth/AuthContext";
 import { useDashboard } from "../features/grades/hooks/useDashboard";
 import { useBudgetGlance } from "../features/budget/hooks/useBudgetGlance";
 import { useTimeGlance } from "../features/calender/hooks/useTimeGlance";
+import { useWorkloadForecast } from "../features/calender/hooks/useWorkloadForecast";
+import WorkloadHeadline from "../features/calender/components/WorkloadHeadline";
 import { duration } from "../shared/utils/dateUtils";
 import { formatMoney } from "../features/budget/money";
 import GetStarted, { steps } from "../features/onboarding/GetStarted";
@@ -23,6 +25,7 @@ export default function Dashboard() {
     accounts, summary: budget, totalBalance, error: budgetError, loaded: budgetLoaded,
   } = useBudgetGlance();
   const { blocks: freeBlocks, load: weekLoad, loaded: weekLoaded } = useTimeGlance();
+  const forecast = useWorkloadForecast();
   // Nothing to say without a timetable, so the section stays away
   // rather than showing a row of zeroes.
   const hasWeek = Boolean(weekLoad && (weekLoad.booked_minutes > 0
@@ -125,6 +128,14 @@ export default function Dashboard() {
               </p>
             </div>
           )}
+        </section>
+      )}
+
+      {/* The rolling seven days, ahead of the calendar-week glance: "is there
+          time for what is coming" is the question a dashboard is opened for. */}
+      {forecast && forecast.taskCount > 0 && (
+        <section className="gradeSummary">
+          <WorkloadHeadline forecast={forecast} />
         </section>
       )}
 
