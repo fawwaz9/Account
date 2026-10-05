@@ -29,6 +29,11 @@ export default function Subscriptions({ nonce, onConfirmed }: SubscriptionsProps
   const [found, setFound] = useState<SubscriptionCandidate[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Per card: the last date it runs. Empty means ongoing. Asked because a rule
+  // with no end projects forever, and a lease or a term-length subscription
+  // has a natural one -- left out, it quietly corrupts every forecast
+  // (account-vision.md §13.9).
+  const [until, setUntil] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!user) return;
@@ -49,7 +54,7 @@ export default function Subscriptions({ nonce, onConfirmed }: SubscriptionsProps
     setBusy(candidate.description);
     setError(null);
     try {
-      await confirmSubscription(user.id, candidate);
+      await confirmSubscription(user.id, candidate, until[keyOf(candidate)] || null);
       setFound((current) => current.filter((row) => row !== candidate));
       onConfirmed();
     } catch (err) {
@@ -73,7 +78,7 @@ export default function Subscriptions({ nonce, onConfirmed }: SubscriptionsProps
 
       <ul className="subsList">
         {found.map((candidate) => (
-          <li key={candidate.occurrences[0]?.transaction_id ?? candidate.description} className="subsCard">
+          <li key={keyOf(candidate)} className="subsCard">
             <div className="subsHead">
               <span className="subsName">{candidate.description}</span>
               <span className="subsAmount">{formatMoney(candidate.median_amount)}</span>
@@ -88,6 +93,21 @@ export default function Subscriptions({ nonce, onConfirmed }: SubscriptionsProps
               <span className="small-text muted">
                 Next expected {dueLabel(candidate.next_expected_on)}
               </span>
+              <label className="subsUntil">
+                <span className="small-text muted">Until</span>
+                <input
+                  className="--input"
+                  type="date"
+                  min={candidate.next_expected_on}
+                  value={until[keyOf(candidate)] ?? ""}
+                  onChange={(event) => setUntil({ ...until, [keyOf(candidate)]: event.target.value })}
+                  disabled={busy !== null}
+                  aria-label={`${candidate.description} runs until`}
+                />
+                <span className="small-text muted">
+                  {until[keyOf(candidate)] ? "" : "ongoing"}
+                </span>
+              </label>
               <button
                 type="button"
                 className="calButton calButtonPrimary"
@@ -102,4 +122,8 @@ export default function Subscriptions({ nonce, onConfirmed }: SubscriptionsProps
       </ul>
     </section>
   );
+}
+
+function keyOf(candidate: SubscriptionCandidate): string {
+  return candidate.occurrences[0]?.transaction_id ?? candidate.description;
 }

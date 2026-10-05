@@ -1425,3 +1425,15 @@
   opacity: 0.5;
   transition: opacity 90ms ease-in;
 }
+
+/* "Until when?" on a found subscription: a date, or ongoing (§13.9). */
+.subsUntil {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.subsUntil input {
+  padding: 2px 4px;
+  font-size: 0.8rem;
+}

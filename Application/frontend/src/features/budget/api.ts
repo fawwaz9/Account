@@ -375,11 +375,16 @@ export async function fetchSubscriptions(userId: string) {
 
 export async function confirmSubscription(
   userId: string,
-  candidate: SubscriptionCandidate
+  candidate: SubscriptionCandidate,
+  /** The last date it runs, or null for ongoing (vision §13.9's "until when?"). */
+  until: string | null = null,
 ): Promise<RecurringTransaction> {
   return post<RecurringTransaction>(endpoints.finances.confirmSubscription(userId), {
     transaction_ids: candidate.occurrences.map((occurrence) => occurrence.transaction_id),
-    instruction: candidate.suggested,
+    instruction: {
+      ...candidate.suggested,
+      recurrence: { ...candidate.suggested.recurrence, until },
+    },
   });
 }
 
