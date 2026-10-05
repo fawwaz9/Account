@@ -415,3 +415,44 @@ export interface CourseNeedingFinalScore {
   needed_final_score: number | null;
   unfinished_categories: string[];
 }
+/* ===== Grading schemes (Phase 1 item 4) ===== */
+
+export interface SchemeComponent {
+  category: GradeCategory;
+  weight: number;
+  /** Leave out this many of the category's lowest marks. */
+  drop_lowest: number;
+  /** A category whose higher average stands in for this one. */
+  replace_with: GradeCategory | null;
+}
+
+export interface GradingScheme {
+  id: string;
+  course_id: string;
+  label: string;
+  components: SchemeComponent[];
+  created_at: string;
+}
+
+export interface SchemeLine {
+  category: GradeCategory;
+  weight: number;
+  average: number | null;
+  dropped: number;
+  replaced_by: GradeCategory | null;
+}
+
+export interface SchemeResult {
+  id: string | null;
+  label: string;
+  average: number;
+  lines: SchemeLine[];
+  /** The scheme as written, rules included: what the editor starts from. */
+  components: SchemeComponent[];
+}
+
+export interface SchemeComparison {
+  current: SchemeResult;
+  schemes: SchemeResult[];
+  best_id: string | null;
+}

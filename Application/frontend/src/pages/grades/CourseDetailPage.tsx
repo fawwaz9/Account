@@ -16,6 +16,7 @@ import EditCourseModal from "../../features/grades/components/EditCourseModal";
 import DeleteConfirmModal from "../../features/grades/components/DeleteConfirmModal";
 import RequiredFinalModal from "../../features/grades/components/RequiredFinalModal";
 import RequiredFinalPanel from "../../features/grades/components/RequiredFinalPanel";
+import GradingSchemes from "../../features/grades/components/GradingSchemes";
 import BulkGradesModal from "../../features/grades/components/BulkGradesModal";
 import { getErrorMessage } from "../../features/grades/components/AddCourseModal";
 import GradeCategoryColumn from "../../features/grades/components/GradeCategoryColumn";
@@ -292,6 +293,10 @@ export default function CourseDetailPage() {
               are read together. The row already collapses whatever is silent. */}
           <CheapestPath userId={user.id} courseId={courseId} nonce={reloadNonce} />
         </div>
+      )}
+
+      {user && course && (
+        <GradingSchemes userId={user.id} course={course} nonce={reloadNonce} />
       )}
 
       {courseId && course && (

@@ -895,3 +895,80 @@
 .requiredFinalTryAnother:hover {
   color: var(--gold);
 }
+
+/* ===== Other grading schemes (Phase 1 item 4) ===== */
+
+.gradingSchemes {
+  margin: 0 0 24px;
+}
+
+.gradingSchemes h2 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+}
+
+.gradingSchemes ul {
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+}
+
+.schemeRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.schemeRow details {
+  flex: 1 1 16rem;
+}
+
+.schemeRow summary {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  cursor: pointer;
+}
+
+.schemeBest summary strong {
+  color: var(--gold);
+}
+
+.schemeBadge {
+  color: var(--gold);
+}
+
+.schemeLines {
+  margin: 6px 0 0;
+  font-size: 0.8rem;
+  border-collapse: collapse;
+}
+
+.schemeLines th,
+.schemeLines td {
+  padding: 2px 10px 2px 0;
+  text-align: left;
+  font-weight: 400;
+}
+
+.schemeActions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.schemeEditor {
+  width: 100%;
+  margin: 10px 0;
+  font-size: 0.85rem;
+  border-collapse: collapse;
+}
+
+.schemeEditor th,
+.schemeEditor td {
+  padding: 3px 6px 3px 0;
+  text-align: left;
+}

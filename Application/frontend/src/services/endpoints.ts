@@ -15,6 +15,9 @@ export const endpoints = {
     blindSpots: (userId: string) => `grades/${userId}/category-blind-spots`,
     gradeBand: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/grade-band`,
     cheapestPath: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/cheapest-path`,
+    schemes: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/schemes`,
+    scheme: (userId: string, courseId: string, schemeId: string) =>
+      `grades/${userId}/courses/${courseId}/schemes/${schemeId}`,
     courseGrades: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/grades`,
     bulkGrades: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/grades/bulk`,
     gradeDetail: (userId: string, courseId: string, gradeId: string) => `grades/${userId}/courses/${courseId}/grades/${gradeId}`,

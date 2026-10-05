@@ -1,6 +1,9 @@
-import { get, post, patch, del } from "../../services/apiClient";
+import { get, post, patch, put, del } from "../../services/apiClient";
 import { endpoints } from "../../services/endpoints";
 import { CheapestPath,
+  GradingScheme,
+  SchemeComparison,
+  SchemeComponent,
   GradeBand,
   CategoryBlindSpot,
   CategoryWeightsUpdate,
@@ -128,4 +131,27 @@ export async function createGradesBulk(
   payload: GradeCreate[]
 ) {
   return post<Grade[]>(endpoints.grades.bulkGrades(userId, courseId), payload);
+}
+
+/* ===== Grading schemes ===== */
+
+export async function fetchSchemes(userId: string, courseId: string) {
+  return get<SchemeComparison>(endpoints.grades.schemes(userId, courseId));
+}
+
+export async function createScheme(
+  userId: string, courseId: string, body: { label: string; components: SchemeComponent[] },
+) {
+  return post<GradingScheme>(endpoints.grades.schemes(userId, courseId), body);
+}
+
+export async function updateScheme(
+  userId: string, courseId: string, schemeId: string, body: { label: string; components: SchemeComponent[] },
+) {
+  return put<GradingScheme>(endpoints.grades.scheme(userId, courseId, schemeId), body);
+}
+
+/** Remove an alternative scheme. Permanent, so it is confirmed first. */
+export async function deleteScheme(userId: string, courseId: string, schemeId: string) {
+  return del<{ deleted: boolean }>(endpoints.grades.scheme(userId, courseId, schemeId));
 }
