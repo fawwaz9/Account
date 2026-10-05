@@ -8,8 +8,9 @@
 #   ./Application/deploy.run.sh all  [--yes]  CI -> API -> frontend, stopping at the first failure
 #   ./Application/deploy.run.sh check-web     read-only: is the live site this commit's build?
 #
-# What it does is what was done by hand: push the commit, find the GitHub
-# Actions run for that exact commit, watch it to the end, and on failure print
+# What it does is what was done by hand: push the commit (its own branch first,
+# when GitHub does not have it yet, so CI runs), find the GitHub Actions run for
+# that exact commit, watch it to the end, and on failure print
 # the failed steps' logs (and keep them in Application/.deploy-logs/). The
 # frontend has no run to watch -- Cloudflare Pages builds it -- so instead the
 # live site is compared, file by file, against a production build of the same
@@ -25,6 +26,10 @@
 #     reversible moment.
 #   - Push `main` before `ship` in `all`: the frontend calls the new API, so the
 #     API goes first.
+#
+# A commit that changes only Markdown or Ideas/ gets no CI run (ci.yml ignores
+# those paths). It stands on CI's result for the newest commit beneath it that
+# changed anything else -- the code it ships is that commit's code.
 
 set -euo pipefail
 
@@ -34,6 +39,7 @@ SITE_URL="https://account-2a7.pages.dev"
 # same build. Both are public by nature: they ship in the page itself.
 GOOGLE_CLIENT_ID="210502804146-1388joi9e4g6ljtses6cs9aeec7lb5fh.apps.googleusercontent.com"
 RUN_APPEARS_SECONDS=120   # how long a pushed commit may take to show up as a run
+DOCS_RUN_SECONDS=30       # how long to look for a run on a docs-only commit
 PAGES_TIMEOUT_SECONDS=900 # how long Pages may take to serve the new build
 
 ROOT="$(git rev-parse --show-toplevel)"
@@ -91,11 +97,11 @@ fast_forward_of() {
 
 # ------------------------------------------------------- watching a run --
 
-# The run of <workflow file> for this exact commit, waiting for it to appear.
+# The run of <workflow file> for <commit>, waiting up to <seconds> for it to appear.
 find_run() {
-  local workflow="$1" waited=0 id
-  while [ "$waited" -lt "$RUN_APPEARS_SECONDS" ]; do
-    id="$(gh run list --workflow "$workflow" --commit "$SHA" --limit 1 \
+  local workflow="$1" commit="$2" seconds="$3" waited=0 id
+  while [ "$waited" -lt "$seconds" ]; do
+    id="$(gh run list --workflow "$workflow" --commit "$commit" --limit 1 \
           --json databaseId --jq '.[0].databaseId // empty' 2>/dev/null || true)"
     if [ -n "$id" ]; then echo "$id"; return 0; fi
     sleep 5; waited=$((waited + 5))
@@ -103,11 +109,12 @@ find_run() {
   return 1
 }
 
-# Watch a run to the end. On failure: the failed steps' logs, printed and kept.
+# Watch the run for <commit> (default: this one) to the end.
+# On failure: the failed steps' logs, printed and kept.
 watch_run() {
-  local workflow="$1" label="$2" id log
-  id="$(find_run "$workflow")" || return 3
-  say "$label: run $id for $SHORT"
+  local workflow="$1" label="$2" commit="${3:-$SHA}" id log
+  id="$(find_run "$workflow" "$commit" "$RUN_APPEARS_SECONDS")" || return 3
+  say "$label: run $id for ${commit:0:7}"
   echo "   $(gh run view "$id" --json url --jq .url)"
   if gh run watch "$id" --exit-status --interval 10 >/dev/null; then
     echo "   passed"
@@ -137,13 +144,43 @@ watch_run() {
   fail "$label failed for $SHORT. Summary: gh run view $id"
 }
 
-# CI runs on every push, but skips commits that change only docs.
+# CI starts when a branch is pushed, so the commit has to be on GitHub first.
+# Push it on its own branch -- never main or ship, since pushing those is the
+# deploy itself, and never with force.
+ensure_pushed() {
+  [ -n "$(git -C "$ROOT" branch -r --contains "$SHA" 2>/dev/null)" ] && return 0
+  local branch
+  branch="$(git -C "$ROOT" symbolic-ref -q --short HEAD || true)"
+  case "$branch" in
+    "") fail "$SHORT is on no branch and GitHub does not have it. Check out a branch first." ;;
+    main|ship) fail "GitHub does not have $SHORT, and pushing $branch is itself a deploy. Push it to another branch first (git push origin HEAD:refs/heads/<name>) so CI runs before anything ships." ;;
+  esac
+  confirm "GitHub does not have $SHORT yet. Push $branch so CI runs on it?"
+  say "Pushing $branch so CI runs on $SHORT"
+  git -C "$ROOT" push origin "$SHA:refs/heads/$branch" \
+    || fail "GitHub refused the push of $branch: it has commits this one lacks, or this branch was rebased. Push it by hand; this script never force-pushes."
+}
+
+# CI runs on every push, but skips commits that change only Markdown or Ideas/.
+# Such a commit stands on CI's result for the code beneath it: the newest
+# commit that changed anything else. CI runs only on the last commit of each
+# push, so that result may sit on any commit from there up to this one -- they
+# all hold the same code. A run on this commit itself is looked for first.
 wait_for_ci() {
-  local status=0
-  watch_run ci.yml CI || status=$?
+  ensure_pushed
+  local status=0 ci_sha="$SHA" code_sha c
+  code_sha="$(git -C "$ROOT" log -1 --format=%H "$SHA" -- . ':(exclude,glob)**/*.md' ':(exclude)Ideas')"
+  if [ "$code_sha" != "$SHA" ] && ! find_run ci.yml "$SHA" "$DOCS_RUN_SECONDS" >/dev/null; then
+    ci_sha="$code_sha"
+    for c in $(git -C "$ROOT" rev-list "$code_sha..$SHA^"); do
+      if find_run ci.yml "$c" 1 >/dev/null; then ci_sha="$c"; break; fi
+    done
+    say "CI: $SHORT changes only docs; it stands on CI's run for ${ci_sha:0:7}, which tested the same code (${code_sha:0:7})"
+  fi
+  watch_run ci.yml CI "$ci_sha" || status=$?
   if [ "$status" = 3 ]; then
-    say "CI: no run for $SHORT after ${RUN_APPEARS_SECONDS}s"
-    echo "   Has the commit been pushed? CI also skips commits that change only Markdown or Ideas/."
+    say "CI: no run for ${ci_sha:0:7} after ${RUN_APPEARS_SECONDS}s"
+    echo "   Is the CI workflow enabled, and did the push reach GitHub? $(gh run list --workflow ci.yml --limit 1 --json url --jq '.[0].url // empty' 2>/dev/null)"
     fail "no CI result to deploy on"
   fi
 }
