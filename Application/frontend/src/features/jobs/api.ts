@@ -13,6 +13,7 @@ import {
   ShiftOccurrence,
   ShiftRecordUpsert,
   ShiftScheduleCreate,
+  PayCheck,
 } from "./types";
 
 export async function fetchJobs(userId: string, includeArchived = false) {
@@ -101,6 +102,11 @@ export async function deletePaycheque(userId: string, paychequeId: string) {
 }
 
 /** Hours and money over a week, a month and the term, in one call. */
+/** A cheque against its shifts, BC overtime and vacation pay applied. */
+export async function checkPaycheque(userId: string, paychequeId: string) {
+  return get<PayCheck>(endpoints.jobs.paychequeCheck(userId, paychequeId));
+}
+
 export async function fetchEarnings(userId: string) {
   return get<EarningsSummary>(endpoints.jobs.earnings(userId));
 }

@@ -75,6 +75,8 @@ export const endpoints = {
     paychequePreview: (userId: string) => `jobs/${userId}/paycheques/preview`,
     paycheque: (userId: string, paychequeId: string) =>
       `jobs/${userId}/paycheques/${paychequeId}`,
+    paychequeCheck: (userId: string, paychequeId: string) =>
+      `jobs/${userId}/paycheques/${paychequeId}/check`,
   },
   omnibox: {
     /** GET previews which module a line goes to; POST files it there. */

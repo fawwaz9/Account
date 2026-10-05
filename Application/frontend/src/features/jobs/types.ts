@@ -270,3 +270,26 @@ export interface EarningsSummary {
   upcoming: UpcomingPay[];
   this_week: HoursAgainstClasses | null;
 }
+
+/** One line of a cheque check's arithmetic, with the rule it came from. */
+export interface PayLine {
+  label: string;
+  hours: number | null;
+  rate: number | null;
+  amount: number;
+  rule: string | null;
+}
+
+/** A cheque checked against its shifts, BC's pay rules applied (Phase 1 item 11). */
+export interface PayCheck {
+  paycheque_id: string;
+  status: "as_expected" | "as_expected_with_vacation" | "short" | "over" | "unclear" | "cannot_check";
+  summary: string;
+  actual_gross: number;
+  expected: number | null;
+  expected_with_vacation: number | null;
+  vacation_percent: number | null;
+  difference: number | null;
+  lines: PayLine[];
+  notes: string[];
+}

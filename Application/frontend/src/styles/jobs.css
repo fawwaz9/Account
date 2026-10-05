@@ -510,3 +510,74 @@
 .jobSplit .paySection {
   margin: 0;
 }
+
+/* ===== Cheque check (Phase 1 item 11) =====
+   Spans the row under it, so the working reads as part of the cheque. */
+
+.payActions {
+  display: flex;
+  gap: 6px;
+}
+
+.payCheck {
+  grid-column: 1 / -1;
+  margin: 4px 0 6px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--gold);
+  border-radius: 0 6px 6px 0;
+  background: rgba(212, 175, 55, 0.08);
+}
+
+.payCheckShort {
+  border-left-color: #e0685f;
+  background: rgba(224, 104, 95, 0.1);
+}
+
+.payCheckSummary {
+  margin: 0 0 6px;
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+
+.payCheckLines {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.payCheckLines th,
+.payCheckLines td {
+  padding: 3px 4px;
+  text-align: right;
+  vertical-align: top;
+  font-variant-numeric: tabular-nums;
+}
+
+.payCheckLines th {
+  text-align: left;
+  font-weight: 500;
+}
+
+.payCheckLines tfoot th,
+.payCheckLines tfoot td {
+  border-top: 1px solid var(--border);
+}
+
+/* The rule each figure comes from, under its label: cited, not hidden. */
+.payCheckRule {
+  display: block;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 400;
+}
+
+.payCheckNotes {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (max-width: 640px) {
+  .payRow .payActions { grid-area: action; justify-self: start; }
+  .payRow .payCheck { grid-column: 1 / -1; }
+}
