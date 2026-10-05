@@ -1725,3 +1725,16 @@
   padding: 6px 0;
   border-bottom: 1px solid var(--border);
 }
+
+/* A suggested category says so beside it, until it is changed. */
+.importCategory {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.importCategory select {
+  max-width: 11rem;
+  padding: 2px 4px;
+  font-size: 0.8rem;
+}

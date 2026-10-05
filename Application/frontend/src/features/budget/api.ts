@@ -400,10 +400,10 @@ export async function previewImport(
 /** Write the chosen lines; the server re-reads them from the same text and mapping. */
 export async function commitImport(
   userId: string, accountId: string, csvText: string, mapping: ImportMapping, lines: number[],
-  filename: string | null,
+  filename: string | null, categories: Record<number, string | null> = {},
 ) {
   return post<ImportSummary>(endpoints.finances.imports(userId), {
-    account_id: accountId, csv_text: csvText, mapping, lines, filename,
+    account_id: accountId, csv_text: csvText, mapping, lines, filename, categories,
   });
 }
 

@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Modal from "../../../shared/components/Modal";
-import { commitImport, previewImport } from "../api";
-import { ImportMapping, ImportPreview, ImportSummary } from "../types";
+import { commitImport, fetchCategories, previewImport } from "../api";
+import { ImportMapping, ImportPreview, ImportSummary, SpendCategory } from "../types";
 import { formatMoney } from "../money";
 
 interface ImportModalProps {
@@ -30,6 +30,21 @@ export default function ImportModal({ userId, accountId, accountName, onClose, o
   const [busy, setBusy] = useState<"reading" | "importing" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<ImportSummary | null>(null);
+  const [categories, setCategories] = useState<SpendCategory[]>([]);
+  // Line -> category, starting from each suggestion; what is here is what is sent.
+  const [chosen, setChosen] = useState<Record<number, string | null>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchCategories(userId)
+      .then((all) => {
+        if (!cancelled) setCategories(all.filter((category) => !category.archived));
+      })
+      .catch(() => {
+        if (!cancelled) setCategories([]);
+      });
+    return () => { cancelled = true; };
+  }, [userId]);
 
   async function read(csv: string, mapping: ImportMapping | null) {
     setBusy("reading");
@@ -39,6 +54,7 @@ export default function ImportModal({ userId, accountId, accountName, onClose, o
       setShown(result);
       // New rows start ticked; duplicates and unreadable lines do not.
       setTicked(new Set(result.rows.filter((row) => row.status === "new").map((row) => row.line)));
+      setChosen(Object.fromEntries(result.rows.map((row) => [row.line, row.category_id])));
     } catch (err) {
       setShown(null);
       setError(err instanceof Error && err.message ? err.message : "Couldn't read that file.");
@@ -65,9 +81,9 @@ export default function ImportModal({ userId, accountId, accountName, onClose, o
     setBusy("importing");
     setError(null);
     try {
-      const summary = await commitImport(
-        userId, accountId, text, shown.mapping, [...ticked].sort((a, b) => a - b), filename,
-      );
+      const lines = [...ticked].sort((a, b) => a - b);
+      const kept = Object.fromEntries(lines.map((line) => [line, chosen[line] ?? null]));
+      const summary = await commitImport(userId, accountId, text, shown.mapping, lines, filename, kept);
       setDone(summary);
       onImported(summary);
     } catch (err) {
@@ -142,6 +158,7 @@ export default function ImportModal({ userId, accountId, accountName, onClose, o
                   <th scope="col">Date</th>
                   <th scope="col">Description</th>
                   <th scope="col">Amount</th>
+                  <th scope="col">Category</th>
                   <th scope="col"></th>
                 </tr>
               </thead>
@@ -166,6 +183,27 @@ export default function ImportModal({ userId, accountId, accountName, onClose, o
                     <td>{row.description}</td>
                     <td className={row.amount !== null && row.amount < 0 ? "importOut" : undefined}>
                       {row.amount !== null ? formatMoney(row.amount) : ""}
+                    </td>
+                    <td>
+                      {row.amount !== null && row.amount < 0 && row.status !== "error" && (
+                        <span className="importCategory">
+                          <select
+                            className="--input"
+                            value={chosen[row.line] ?? ""}
+                            onChange={(event) => setChosen({ ...chosen, [row.line]: event.target.value || null })}
+                            disabled={busy !== null}
+                            aria-label={`Category for line ${row.line}`}
+                          >
+                            <option value="">None</option>
+                            {categories.map((category) => (
+                              <option key={category.id} value={category.id}>{category.name}</option>
+                            ))}
+                          </select>
+                          {row.category_id && chosen[row.line] === row.category_id && (
+                            <span className="small-text muted">suggested</span>
+                          )}
+                        </span>
+                      )}
                     </td>
                     <td className="small-text muted">{row.status === "new" ? "" : row.reason}</td>
                   </tr>

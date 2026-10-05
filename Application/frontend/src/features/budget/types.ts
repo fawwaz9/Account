@@ -731,6 +731,9 @@ export interface ImportRow {
   status: "new" | "duplicate" | "error";
   duplicate_of: string | null;
   reason: string | null;
+  /** A suggested category for an expense, or null to ask. */
+  category_id: string | null;
+  category_source: "learned" | "rule" | "bayes" | null;
 }
 
 export interface ImportPreview {

@@ -2,10 +2,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-const api = { previewImport: vi.fn(), commitImport: vi.fn() };
+const api = { previewImport: vi.fn(), commitImport: vi.fn(), fetchCategories: vi.fn() };
 vi.mock("../api", () => ({
   previewImport: (...a: unknown[]) => api.previewImport(...a),
   commitImport: (...a: unknown[]) => api.commitImport(...a),
+  fetchCategories: (...a: unknown[]) => api.fetchCategories(...a),
 }));
 
 import ImportModal from "./ImportModal";
@@ -21,11 +22,12 @@ const preview: ImportPreview = {
   date_order_assumed: false,
   rows: [
     { line: 2, on_date: "2026-10-01", description: "Coffee", amount: -4.5, status: "duplicate",
-      duplicate_of: "t1", reason: "Already in this account" },
+      duplicate_of: "t1", reason: "Already in this account", category_id: "c-eat", category_source: "rule" },
     { line: 3, on_date: "2026-10-02", description: "Pay", amount: 812.4, status: "new",
-      duplicate_of: null, reason: null },
+      duplicate_of: null, reason: null, category_id: null, category_source: null },
     { line: 4, on_date: null, description: "Bad", amount: null, status: "error",
-      duplicate_of: null, reason: "Couldn't read a date from \"soon\"" },
+      duplicate_of: null, reason: "Couldn't read a date from \"soon\"", category_id: null,
+      category_source: null },
   ],
   new_count: 1, duplicate_count: 1, error_count: 1, money_in: 812.4, money_out: 0,
 };
@@ -47,6 +49,12 @@ beforeEach(() => {
   api.previewImport.mockReset();
   api.commitImport.mockReset();
   api.previewImport.mockResolvedValue(preview);
+  api.fetchCategories.mockReset();
+  api.fetchCategories.mockResolvedValue([
+    { id: "c-eat", name: "Eating out", archived: false, position: 0 },
+    { id: "c-groc", name: "Groceries", archived: false, position: 1 },
+    { id: "c-old", name: "Old", archived: true, position: 2 },
+  ]);
 });
 afterEach(cleanup);
 
@@ -75,7 +83,9 @@ describe("ImportModal", () => {
     fireEvent.click(box(2));
     fireEvent.click(screen.getByRole("button", { name: "Import 2 rows" }));
     expect((await screen.findByRole("status")).textContent).toContain("2 rows added to Chequing");
-    expect(api.commitImport).toHaveBeenCalledWith("u1", "a1", CSV, preview.mapping, [2, 3], "oct.csv");
+    expect(api.commitImport).toHaveBeenCalledWith(
+      "u1", "a1", CSV, preview.mapping, [2, 3], "oct.csv", { 2: "c-eat", 3: null },
+    );
     expect(onImported).toHaveBeenCalled();
     expect(screen.getByText(/1 repeating charge looks like a subscription/)).toBeTruthy();
   });
@@ -113,5 +123,34 @@ describe("ImportModal", () => {
     show();
     await choose();
     expect(screen.getByText(/Every date reads both ways/)).toBeTruthy();
+  });
+});
+
+
+describe("ImportModal's categories", () => {
+  it("prefills each expense with its suggestion, and says it is one", async () => {
+    show();
+    await choose();
+    const picker = await screen.findByLabelText("Category for line 2") as HTMLSelectElement;
+    await waitFor(() => expect(picker.value).toBe("c-eat"));
+    expect(screen.getByText("suggested")).toBeTruthy();
+    expect(screen.queryByLabelText("Category for line 3")).toBeNull(); // money in
+    expect(screen.queryByRole("option", { name: "Old" })).toBeNull(); // archived
+  });
+
+  it("sends the category as changed, and drops the 'suggested' label", async () => {
+    api.commitImport.mockResolvedValue({ id: "i1", row_count: 1, subscription_candidates: 0 });
+    show();
+    await choose();
+    fireEvent.click(box(2));
+    await screen.findByRole("option", { name: "Groceries" });
+    fireEvent.change(screen.getByLabelText("Category for line 2"), { target: { value: "c-groc" } });
+    expect(screen.queryByText("suggested")).toBeNull();
+    fireEvent.click(box(3)); // untick the income line
+    fireEvent.click(screen.getByRole("button", { name: "Import 1 row" }));
+    await screen.findByRole("status");
+    expect(api.commitImport).toHaveBeenLastCalledWith(
+      "u1", "a1", CSV, preview.mapping, [2], "oct.csv", { 2: "c-groc" },
+    );
   });
 });
