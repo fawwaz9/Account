@@ -6,6 +6,7 @@ import {
   SinkingFundCreate,
   SinkingFundUpdate,
   SafeToSpend,
+  CashFlowForecast,
   SubscriptionCandidate,
   Account,
   AccountActivity,
@@ -365,6 +366,11 @@ export async function fetchTermBudget(userId: string) {
  */
 export async function fetchSafeToSpend(userId: string) {
   return get<SafeToSpend>(endpoints.finances.safeToSpend(userId));
+}
+
+/** Where the spending accounts are heading, to the end of the term. */
+export async function fetchForecast(userId: string) {
+  return get<CashFlowForecast>(endpoints.finances.forecast(userId));
 }
 
 /* ===== Subscription audit ===== */

@@ -619,3 +619,51 @@ export interface SubscriptionCandidate {
   /** Ready to submit as-is: confirming turns this straight into a standing instruction. */
   suggested: RecurringCreate;
 }
+
+/* ===== Cash-flow forecast (Phase 1 item 9) ===== */
+
+export interface ForecastPoint {
+  on_date: string;
+  balance: number;
+}
+
+export interface ForecastEvent {
+  on_date: string;
+  description: string;
+  /** Signed: negative is money leaving the spending accounts. */
+  amount: number;
+  source: "recurring" | "pay";
+  split: boolean;
+}
+
+export interface Runway {
+  liquid: number;
+  daily_burn: number;
+  lasts_until: string | null;
+}
+
+export interface MerchantRunRate {
+  merchant: string;
+  spent: number;
+  occurrences: number;
+  projected: number;
+}
+
+/** Where the spending accounts are heading. Every figure is a projection. */
+export interface CashFlowForecast {
+  starts_on: string;
+  ends_on: string;
+  ends_at_term_end: boolean;
+  starting_balance: number;
+  daily_spending: number;
+  spending_history_days: number;
+  points: ForecastPoint[];
+  events: ForecastEvent[];
+  negative_on: string | null;
+  lowest_balance: number;
+  lowest_on: string;
+  ending_balance: number;
+  runway: Runway | null;
+  run_rates: MerchantRunRate[];
+  assumptions: string[];
+}

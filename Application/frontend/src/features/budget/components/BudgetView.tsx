@@ -1,5 +1,6 @@
 import { useState } from "react";
 import SafeToSpend from "./SafeToSpend";
+import CashFlowForecast from "./CashFlowForecast";
 import NetWorth from "./NetWorth";
 import SinkingFunds from "./SinkingFunds";
 import Subscriptions from "./Subscriptions";
@@ -160,6 +161,10 @@ export default function BudgetView() {
             <SafeToSpend safe={safe} />
             <NetWorth figure={worth} />
           </div>
+
+          {/* Under the answers for now, because this is the answer for the
+              term: where the spending accounts are heading, and when. */}
+          <CashFlowForecast nonce={termNonce} />
 
           <Sectors
             accounts={accounts}

@@ -1437,3 +1437,94 @@
   padding: 2px 4px;
   font-size: 0.8rem;
 }
+
+/* ===== Where this is heading (Phase 1 item 9) =====
+   Directly under safe-to-spend and net worth: like them it answers a question
+   rather than recording one. Quieter than the safe figure's gold, because the
+   safe figure is the answer for now and this is the one for the term. */
+
+.forecastBlock {
+  margin: 0 0 22px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+}
+
+.forecastBlockOver {
+  border-color: var(--delete);
+}
+
+.forecastHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.forecastHead h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.forecastHeadline {
+  margin: 10px 0 8px;
+}
+
+.forecastBlockOver .forecastHeadline strong {
+  color: var(--delete);
+}
+
+.forecastSparkline {
+  display: block;
+  width: 100%;
+  height: 56px;
+  margin: 0 0 10px;
+  overflow: visible;
+}
+
+.forecastCurve {
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.forecastZero {
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.forecastCross {
+  fill: var(--delete);
+}
+
+.forecastLine {
+  margin: 0 0 8px;
+}
+
+.forecastRunRates ul,
+.forecastAssumptions ul {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.forecastRunRates li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 0;
+}
+
+.forecastAssumptions {
+  margin-top: 10px;
+}
+
+.forecastAssumptions li {
+  padding: 2px 0;
+  color: var(--muted);
+}
