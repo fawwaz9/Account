@@ -18,6 +18,8 @@ from app.Jobs.schemas.job import (
     ShiftScheduleCreate,
 )
 from app.Jobs.schemas.earnings import EarningsSummary
+from app.Jobs.schemas.paycheque import PayCheck
+from app.Jobs.services.paycheck_service import check_paycheque
 from app.Jobs.services.earnings_service import earnings_summary
 from app.Jobs.schemas.paycheque import (
     Paycheque,
@@ -274,6 +276,20 @@ def preview(
         raise HTTPException(status_code=404, detail="Job not found")
 
     return expected
+
+
+@router.get(
+    "/{user_id}/paycheques/{paycheque_id}/check",
+    response_model=PayCheck,
+    responses=JOB_404,
+)
+def check_single_paycheque(user_id: VerifiedUserId, paycheque_id: UUID, db: DBSession):
+    """This cheque against its shifts, BC overtime and vacation pay applied, with
+    every line of the arithmetic and the rule each comes from."""
+    result = check_paycheque(db, user_id, paycheque_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Paycheque not found")
+    return result
 
 
 @router.get(

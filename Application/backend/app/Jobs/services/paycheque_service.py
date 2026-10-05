@@ -43,6 +43,7 @@ from app.Jobs.schemas.paycheque import (
     PaychequeUpdate,
 )
 from app.Jobs.services.job_service import list_shifts, owned_job
+from app.Jobs.services.pay_rules import Worked, split
 from app.Tasks.services.task_service import user_exists
 from app.shared.money import money
 
@@ -106,10 +107,16 @@ def expected_for(
 
     expected: float | None
     if job.kind == JobKind.HOURLY.value:
-        earned = 0.0
-        for shift in mine:
-            rate = shift.rate_override or job.hourly_rate or 0.0
-            earned += shift.counted_minutes / 60 * rate
+        # BC overtime applied (pay_rules, ESA s.40): a 9-hour Tuesday paid as
+        # nine straight hours is exactly the shortfall this exists to catch.
+        # Vacation pay is not: whether it is on each cheque or held is the
+        # employer's choice, and the on-demand check covers both.
+        worked = [
+            Worked(shift.on_date, shift.counted_minutes,
+                   shift.rate_override or job.hourly_rate or 0.0, shift.scheduled_start)
+            for shift in mine if shift.counted_minutes > 0
+        ]
+        earned = sum(money(portion.amount) for portion in split(worked))
         expected = money(earned + on_cheque_tips)
     elif job.kind == JobKind.SALARIED.value:
         # The period amount is the prediction. Hours are what the job costs you,

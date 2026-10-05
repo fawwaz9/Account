@@ -147,3 +147,41 @@ class PaychequePreview(BaseModel):
     #: Tips paid through payroll, which are inside the gross rather than beside
     #: it. Cash tips are excluded: they never reach a cheque.
     on_cheque_tips: float = 0.0
+
+
+class PayLine(BaseModel):
+    """One line of the arithmetic, with the rule it came from."""
+
+    label: str
+    #: Null for a line that is not hours times a rate (tips, vacation pay).
+    hours: float | None = None
+    rate: float | None = None
+    amount: float
+    rule: str | None = None
+
+
+class PayCheck(BaseModel):
+    """A cheque checked against its shifts, BC's pay rules applied (Phase 1 item 11).
+
+    Computed on demand from the shifts as they are now -- unlike the stored
+    `expected_gross`, which keeps the verdict reached when the cheque was
+    recorded.
+    """
+
+    paycheque_id: UUID
+    #: as_expected | as_expected_with_vacation | short | over | unclear | cannot_check
+    status: str
+    #: One sentence, for the list: "Looks $38.00 short." Never certain.
+    summary: str
+    actual_gross: float
+    #: The hours, overtime and on-cheque tips, vacation pay not included.
+    expected: float | None = None
+    #: The same, with vacation pay paid on this cheque.
+    expected_with_vacation: float | None = None
+    vacation_percent: float | None = None
+    #: Positive: the cheque is larger. Measured against whichever expectation
+    #: the verdict is about.
+    difference: float | None = None
+    lines: list[PayLine] = Field(default_factory=list)
+    #: What was assumed, and what was not checked.
+    notes: list[str] = Field(default_factory=list)
