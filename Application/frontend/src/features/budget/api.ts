@@ -8,6 +8,9 @@ import {
   SafeToSpend,
   CashFlowForecast,
   AnnualPlan,
+  ImportMapping,
+  ImportPreview,
+  ImportSummary,
   SubscriptionCandidate,
   Account,
   AccountActivity,
@@ -381,6 +384,36 @@ export async function fetchPlan(userId: string, target?: number, until?: string)
   if (until) params.set("until", until);
   const query = params.toString();
   return get<AnnualPlan>(`${endpoints.finances.plan(userId)}${query ? `?${query}` : ""}`);
+}
+
+/* ===== CSV import ===== */
+
+/** What a CSV would add, duplicates flagged. Writes nothing. */
+export async function previewImport(
+  userId: string, accountId: string, csvText: string, mapping: ImportMapping | null = null,
+) {
+  return post<ImportPreview>(endpoints.finances.importPreview(userId), {
+    account_id: accountId, csv_text: csvText, mapping,
+  });
+}
+
+/** Write the chosen lines; the server re-reads them from the same text and mapping. */
+export async function commitImport(
+  userId: string, accountId: string, csvText: string, mapping: ImportMapping, lines: number[],
+  filename: string | null,
+) {
+  return post<ImportSummary>(endpoints.finances.imports(userId), {
+    account_id: accountId, csv_text: csvText, mapping, lines, filename,
+  });
+}
+
+export async function fetchImports(userId: string) {
+  return get<ImportSummary[]>(endpoints.finances.imports(userId));
+}
+
+/** Undo an import: removes every row it wrote. Permanent, so it is confirmed first. */
+export async function deleteImport(userId: string, importId: string) {
+  return del<{ removed: number }>(endpoints.finances.importOne(userId, importId));
 }
 
 /* ===== Subscription audit ===== */

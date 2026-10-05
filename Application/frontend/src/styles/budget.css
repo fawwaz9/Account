@@ -1606,3 +1606,122 @@
   gap: 12px;
   padding: 2px 0;
 }
+
+/* ===== CSV import (Phase 1 item 7) ===== */
+
+.importPanel {
+  width: min(880px, 100%);
+}
+
+.importFile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.importColumns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.importPick {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.importCheck {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-end;
+}
+
+.importWarn {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--gold);
+}
+
+.importCounts {
+  margin: 0 0 6px;
+}
+
+/* Its own scroll container: a long file scrolls here, never the page. */
+.importTable {
+  max-height: 46vh;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.importTable table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.importTable th,
+.importTable td {
+  padding: 4px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.importTable td:nth-child(3) {
+  white-space: normal;
+}
+
+.importOut {
+  color: var(--muted);
+}
+
+.importRowError td {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.importRowError td:last-child {
+  text-decoration: none;
+  color: var(--delete);
+}
+
+.importFooter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.accountImports {
+  margin: 18px 0;
+}
+
+.accountImports h2 {
+  font-size: 1rem;
+  margin: 0 0 6px;
+}
+
+.accountImports ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.accountImports li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}

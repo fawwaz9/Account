@@ -8,6 +8,8 @@ import InvestmentReturnPanel from "../../features/budget/components/InvestmentRe
 import TuitionModal from "../../features/budget/components/TuitionModal";
 import ProgressBar from "../../features/budget/components/ProgressBar";
 import RecordSpendModal from "../../features/budget/components/RecordSpendModal";
+import ImportModal from "../../features/budget/components/ImportModal";
+import AccountImports from "../../features/budget/components/AccountImports";
 import Transactions from "../../features/budget/components/Transactions";
 import WhereItWent from "../../features/budget/components/WhereItWent";
 import { useAccountActivity } from "../../features/budget/hooks/useAccountActivity";
@@ -53,6 +55,9 @@ export default function AccountDetailPage() {
     useAccountActivity(accountId);
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [recording, setRecording] = useState(false);
+  const [importing, setImporting] = useState(false);
+  // Bumped after an import, so the imports list reads again alongside the page.
+  const [importNonce, setImportNonce] = useState(0);
 
   /**
    * This account's limit for one category, or null to remove it.
@@ -130,6 +135,13 @@ export default function AccountDetailPage() {
                 onClick={() => setRecording(true)}
               >
                 Record spending
+              </button>
+              <button
+                type="button"
+                className="calButton"
+                onClick={() => setImporting(true)}
+              >
+                Import CSV
               </button>
 
             <input
@@ -232,7 +244,29 @@ export default function AccountDetailPage() {
               emptyMessage={`Nothing moved through this account in ${label}.`}
             />
           </section>
+
+          {user && accountId && (
+            <AccountImports
+              userId={user.id}
+              accountId={accountId}
+              nonce={importNonce}
+              onUndone={reload}
+            />
+          )}
         </>
+      )}
+
+      {importing && user && accountId && activity && (
+        <ImportModal
+          userId={user.id}
+          accountId={accountId}
+          accountName={activity.account_name}
+          onClose={() => setImporting(false)}
+          onImported={() => {
+            setImportNonce((n) => n + 1);
+            void reload();
+          }}
+        />
       )}
 
       <DeleteConfirmModal

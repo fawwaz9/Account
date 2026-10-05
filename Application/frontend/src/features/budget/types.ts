@@ -708,3 +708,53 @@ export interface AnnualPlan {
   goal: PlanGoal | null;
   assumptions: string[];
 }
+
+/* ===== CSV import (Phase 1 item 7) ===== */
+
+export interface ImportMapping {
+  has_header: boolean;
+  date: number;
+  description: number[];
+  amount: number | null;
+  debit: number | null;
+  credit: number | null;
+  date_order: "mdy" | "dmy";
+  invert: boolean;
+}
+
+export interface ImportRow {
+  line: number;
+  on_date: string | null;
+  description: string;
+  /** Signed: negative is money out. */
+  amount: number | null;
+  status: "new" | "duplicate" | "error";
+  duplicate_of: string | null;
+  reason: string | null;
+}
+
+export interface ImportPreview {
+  account_id: string;
+  mapping: ImportMapping;
+  columns: string[];
+  date_order_assumed: boolean;
+  rows: ImportRow[];
+  new_count: number;
+  duplicate_count: number;
+  error_count: number;
+  money_in: number;
+  money_out: number;
+}
+
+export interface ImportSummary {
+  id: string;
+  account_id: string;
+  account_name: string;
+  filename: string | null;
+  created_at: string;
+  row_count: number;
+  rows_remaining: number;
+  first_date: string | null;
+  last_date: string | null;
+  subscription_candidates: number | null;
+}
