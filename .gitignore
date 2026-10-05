@@ -31,3 +31,6 @@ Application/backend/data/testing-data-manifest.json
 # ---- OS / editor cruft ----
 .DS_Store
 *.swp
+
+# ---- Deploy logs (Application/deploy.run.sh keeps failed runs here) ----
+Application/.deploy-logs/
