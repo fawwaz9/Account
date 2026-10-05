@@ -10,6 +10,7 @@ from app.Notifications.schemas.push import (
     PushStatus,
     SubscriptionCreate,
     SubscriptionRemove,
+    TestRequest,
     TestResult,
 )
 from app.Notifications.services import push_service
@@ -41,8 +42,8 @@ def remove_subscription(user_id: VerifiedUserId, subscription: SubscriptionRemov
 
 
 @router.post("/{user_id}/test", response_model=TestResult)
-def send_test(user_id: VerifiedUserId, db: DBSession):
-    sent = push_service.send_test(db, user_id)
+def send_test(user_id: VerifiedUserId, db: DBSession, request: TestRequest | None = None):
+    sent = push_service.send_test(db, user_id, request.endpoint if request else None)
     if sent is None:
         raise HTTPException(status_code=503, detail="Notifications are not set up on the server yet")
     return TestResult(sent=sent)

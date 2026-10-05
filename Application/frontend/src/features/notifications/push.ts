@@ -19,8 +19,10 @@ export function pushStatus(userId: string) {
   return get<PushStatus>(endpoints.push.status(userId));
 }
 
-export function sendTestPush(userId: string) {
-  return post<{ sent: number }>(endpoints.push.test(userId), {});
+/** A test to this device alone: pressed on the laptop, it arrives on the laptop. */
+export async function sendTestPush(userId: string) {
+  const subscription = await currentSubscription();
+  return post<{ sent: number }>(endpoints.push.test(userId), { endpoint: subscription?.endpoint ?? null });
 }
 
 /** Whether this browser can do push at all, before asking anything. */

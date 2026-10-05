@@ -199,6 +199,21 @@ def test_the_test_button(db, user, client, _no_push_network):
     assert [endpoint for endpoint, _h, _b in _no_push_network] == [f"https://push.invalid/{user.email}/phone"]
 
 
+def test_a_test_goes_only_to_the_device_that_asked(db, user, client, _no_push_network):
+    """Pressed on the laptop, it arrives on the laptop -- not the phone too."""
+    device(db, user, "phone")
+    laptop = device(db, user, "laptop")
+    assert client.post(f"/api/push/{user.id}/test", json={"endpoint": laptop}).json() == {"sent": 1}
+    assert [endpoint for endpoint, _h, _b in _no_push_network] == [laptop]
+
+
+def test_a_test_cannot_be_aimed_at_another_users_device(db, user, client, _no_push_network):
+    other = make_user(db, email="other@example.com")
+    theirs = device(db, other, "phone")
+    assert client.post(f"/api/push/{user.id}/test", json={"endpoint": theirs}).json() == {"sent": 0}
+    assert _no_push_network == []
+
+
 def test_the_scheduler_door(db, user, monkeypatch):
     route = "/api/internal/reminders/dispatch"
     plain = TestClient(app.main.app)

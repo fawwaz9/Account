@@ -99,13 +99,18 @@ def unsubscribe(db: Session, user_id: uuid.UUID, endpoint: str) -> None:
     db.commit()
 
 
-def deliver(db: Session, user_id: uuid.UUID, payload: dict, keys: Vapid, sender: Sender) -> tuple[int, int]:
-    """Send ``payload`` to every device of ``user_id``. Returns (accepted, removed)."""
+def deliver(
+    db: Session, user_id: uuid.UUID, payload: dict, keys: Vapid, sender: Sender,
+    endpoint: str | None = None,
+) -> tuple[int, int]:
+    """Send ``payload`` to every device of ``user_id``, or to the one at
+    ``endpoint`` if it is theirs. Returns (accepted, removed)."""
     body = json.dumps(payload).encode()
     accepted = removed = 0
-    subscriptions = (
-        db.query(PushSubscriptionModel).filter(PushSubscriptionModel.user_id == user_id).all()
-    )
+    query = db.query(PushSubscriptionModel).filter(PushSubscriptionModel.user_id == user_id)
+    if endpoint is not None:
+        query = query.filter(PushSubscriptionModel.endpoint == endpoint)
+    subscriptions = query.all()
     for sub in subscriptions:
         try:
             headers, encrypted = request_for(sub.endpoint, sub.p256dh, sub.auth, body, keys)
@@ -128,8 +133,14 @@ def deliver(db: Session, user_id: uuid.UUID, payload: dict, keys: Vapid, sender:
     return accepted, removed
 
 
-def send_test(db: Session, user_id: uuid.UUID, sender: Sender | None = None) -> int | None:
-    """A notification to every device of this user. None when push is not set up."""
+def send_test(
+    db: Session, user_id: uuid.UUID, endpoint: str | None = None, sender: Sender | None = None,
+) -> int | None:
+    """A test notification to the device that asked for it, given its endpoint.
+
+    Without one -- a frontend older than this -- every device of the user.
+    None when push is not set up.
+    """
     keys = vapid()
     if keys is None:
         return None
@@ -137,7 +148,7 @@ def send_test(db: Session, user_id: uuid.UUID, sender: Sender | None = None) -> 
         "title": "Notifications are on",
         "body": "Reminders will reach this device even with the app closed.",
         "url": "/tasks",
-    }, keys, sender or default_sender)
+    }, keys, sender or default_sender, endpoint)
     return accepted
 
 

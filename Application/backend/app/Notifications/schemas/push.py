@@ -40,6 +40,11 @@ class SubscriptionRemove(BaseModel):
     endpoint: str = Field(..., max_length=1000)
 
 
+class TestRequest(BaseModel):
+    #: The device asking for the test. It goes there alone, not to every device.
+    endpoint: str | None = Field(default=None, max_length=1000)
+
+
 class PushStatus(BaseModel):
     #: Whether this server can send at all -- it needs its VAPID key.
     available: bool
