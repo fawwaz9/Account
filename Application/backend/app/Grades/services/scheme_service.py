@@ -35,68 +35,27 @@ from app.Grades.schemas.scheme import (
     SchemeResult,
     SchemeWrite,
 )
-from app.Grades.services.grade_service import MAX_COURSE_PERCENT, counts_toward_average, get_user_course
-from app.Grades.utils.enums import GradeCategory, is_additive
+from app.Grades.services.grade_service import course_grade, get_user_course
+from app.Grades.utils import scheme_math
+from app.Grades.utils.enums import GradeCategory
 
 
 def category_average(course, category: str, drop_lowest: int = 0) -> tuple[float | None, int]:
-    """(average, how many dropped), point-weighted like the course's own.
-
-    Null when nothing in the category is marked. The same filter and the same
-    formula as calculate_grade_category_average, so with nothing dropped the
-    two agree to the cent.
-    """
-    marked = [
-        g for g in course.grades
-        if g.category == category and g.score is not None and g.max_score > 0 and counts_toward_average(g)
-    ]
-    if not marked:
-        return None, 0
-    dropped = min(drop_lowest, len(marked) - 1)
-    if dropped:
-        marked = sorted(marked, key=lambda g: g.score / g.max_score)[dropped:]
-    total = sum(g.max_score for g in marked)
-    weighted = sum((g.score / g.max_score) * 100 * g.max_score for g in marked)
-    return round(weighted / total, 2), dropped
+    """(average, how many dropped) from what is marked. See scheme_math."""
+    return scheme_math.category_average(course, category, drop_lowest)
 
 
 def project(course, components: list[SchemeComponent], label: str, scheme_id=None) -> SchemeResult:
-    averages: dict[str, float | None] = {}
-    drops: dict[str, int] = {}
-    for c in components:
-        averages[c.category.value], drops[c.category.value] = category_average(course, c.category.value, c.drop_lowest)
-
-    lines: list[SchemeLine] = []
-    final_average: dict[str, float | None] = {}
-    for c in components:
-        value = averages[c.category.value]
-        replaced_by = None
-        if c.replace_with is not None and value is not None:
-            other = averages.get(c.replace_with.value)
-            if other is None:
-                other, _ = category_average(course, c.replace_with.value)
-            if other is not None and other > value:
-                value, replaced_by = other, c.replace_with
-        final_average[c.category.value] = value
-        lines.append(SchemeLine(
-            category=c.category, weight=c.weight, average=value,
-            dropped=drops[c.category.value], replaced_by=replaced_by,
-        ))
-
-    scoring = [c for c in components if not is_additive(c.category.value)
-               and final_average[c.category.value] is not None]
-    total_weight = sum(c.weight for c in scoring)
-    earned = 0.0
-    if total_weight > 0:
-        weighted = sum(final_average[c.category.value] * c.weight for c in scoring)
-        earned = weighted / min(total_weight, MAX_COURSE_PERCENT)
-    bonus = sum(
-        (final_average[c.category.value] or 0.0) * c.weight / 100.0
-        for c in components if is_additive(c.category.value) and c.weight > 0
+    """The live average under these components, with the working per category."""
+    average, lines = scheme_math.project(course, components)
+    return SchemeResult(
+        id=scheme_id, label=label, average=average, components=components,
+        lines=[
+            SchemeLine(category=l.category, weight=l.weight, average=l.average,
+                       dropped=l.dropped, replaced_by=l.replaced_by)
+            for l in lines
+        ],
     )
-    any_marked = any(value is not None for value in final_average.values())
-    average = min(round(earned + bonus, 2), MAX_COURSE_PERCENT) if any_marked else 0.0
-    return SchemeResult(id=scheme_id, label=label, average=average, lines=lines, components=components)
 
 
 def own_components(course) -> list[SchemeComponent]:
@@ -142,6 +101,7 @@ def compare(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> SchemeComp
     return SchemeComparison(
         current=current, schemes=results,
         best_id=best.id if best and best.average > current.average else None,
+        counting_id=course.counting_scheme_id,
     )
 
 
@@ -163,25 +123,56 @@ def create_scheme(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, data: S
 def update_scheme(
     db: Session, user_id: uuid.UUID, course_id: uuid.UUID, scheme_id: uuid.UUID, data: SchemeWrite,
 ) -> GradingScheme | None:
-    if get_user_course(db, user_id, course_id) is None:
+    course = get_user_course(db, user_id, course_id)
+    if course is None:
         return None
     row = _owned_scheme(db, course_id, scheme_id)
     if row is None:
         return None
     row.label = data.label.strip()
     row.components = [c.model_dump(mode="json") for c in data.components]
+    if course.counting_scheme_id == row.id:
+        # The grade is this scheme, so its new rules are the new grade.
+        db.flush()
+        course.average = course_grade(course)
     db.commit()
     db.refresh(row)
     return as_schema(row)
 
 
 def delete_scheme(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, scheme_id: uuid.UUID) -> bool:
-    if get_user_course(db, user_id, course_id) is None:
+    course = get_user_course(db, user_id, course_id)
+    if course is None:
         return False
-    deleted = (
-        db.query(GradingSchemeModel)
-        .filter(GradingSchemeModel.id == scheme_id, GradingSchemeModel.course_id == course_id)
-        .delete(synchronize_session=False)
-    )
+    row = _owned_scheme(db, course_id, scheme_id)
+    if row is None:
+        return False
+    counting = course.counting_scheme_id == row.id
+    db.delete(row)
+    if counting:
+        # Cleared in the same transaction as the delete: the grade goes back to
+        # the course's own weights, never to a scheme that no longer exists.
+        course.counting_scheme_id = None
+        db.flush()
+        db.expire(course, ["grading_schemes"])
+        course.average = course_grade(course)
     db.commit()
-    return bool(deleted)
+    return True
+
+
+def set_counting(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, scheme_id: uuid.UUID | None) -> SchemeComparison | None:
+    """Make a scheme the course's grade, or (None) put its own weights back.
+
+    None when the course is not the caller's, or the scheme is not this
+    course's -- a scheme is only ever reached through its course. Recomputes the
+    stored average in the same commit, so every screen moves together.
+    """
+    course = get_user_course(db, user_id, course_id)
+    if course is None:
+        return None
+    if scheme_id is not None and _owned_scheme(db, course_id, scheme_id) is None:
+        return None
+    course.counting_scheme_id = scheme_id
+    course.average = course_grade(course)
+    db.commit()
+    return compare(db, user_id, course_id)

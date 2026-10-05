@@ -228,6 +228,9 @@ class Course(CourseBase):
         default="current",
         description="past, current, or future, relative to the student's term",
     )
+    #: The grading scheme that is this course's grade, when one was picked
+    #: (Phase 1 D25). Null: the course's own weights are the grade.
+    counting_scheme_id: UUID | None = None
 
     class Config:
         from_attributes = True

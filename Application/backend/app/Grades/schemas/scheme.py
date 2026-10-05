@@ -72,3 +72,12 @@ class SchemeComparison(BaseModel):
     schemes: list[SchemeResult] = Field(default_factory=list)
     #: The scheme with the highest average, when one beats the course's own.
     best_id: UUID | None = None
+    #: The scheme picked as the course's grade (Phase 1 D25); null when the
+    #: course's own weights are the grade.
+    counting_id: UUID | None = None
+
+
+class CountingScheme(BaseModel):
+    """Which scheme is the course's grade. Null puts the course's own weights back."""
+
+    scheme_id: UUID | None = None

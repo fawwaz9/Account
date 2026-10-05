@@ -132,6 +132,8 @@ FIELD_SOURCES = {
     "fund_id": "sinking_funds",
     "transaction_id": "transactions",
     "paycheque_id": "paycheques",
+    # A scheme picked as a course's grade (Phase 1 D25).
+    "scheme_id": "grading_schemes",
 }
 
 #: Date parameters that open and close a window, by name.

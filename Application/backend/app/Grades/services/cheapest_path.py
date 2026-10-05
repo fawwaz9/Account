@@ -40,7 +40,7 @@ from app.Grades.schemas.cheapest_path import CheapestPath, RemainingItem
 from app.Grades.services.grade_service import (
     counts_toward_average,
     get_user_course,
-    project_average,
+    project_course,
 )
 from app.Grades.utils.enums import is_additive
 from app.Grades.utils.terms import effective_target
@@ -77,8 +77,8 @@ def rank_key(item: RemainingItem) -> tuple[int, float, float, str]:
 
 def item_leverage(course: CourseModel, grade: GradeModel) -> float:
     """How many points of final average this one item still controls."""
-    full = project_average(course, BASELINE, {grade.id: 1.0})
-    none = project_average(course, BASELINE, {grade.id: 0.0})
+    full = project_course(course, BASELINE, {grade.id: 1.0})
+    none = project_course(course, BASELINE, {grade.id: 0.0})
     return round(full - none, 2)
 
 
@@ -153,7 +153,7 @@ def cheapest_path(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> Chea
     # taken from the whole set would be describing items nobody can see.
     estimated = [item for item in shown if item.per_hour is not None]
 
-    best = project_average(course, 1.0)
+    best = project_course(course, 1.0)
     return CheapestPath(
         target=target,
         # The stored column, not a fresh calculation. Every write path

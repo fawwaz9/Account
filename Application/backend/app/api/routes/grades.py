@@ -3,7 +3,7 @@ from fastapi import APIRouter, Query
 from fastapi import HTTPException
 from app._database.dependencies import DBSession
 from app.Auth.services.access import VerifiedUserId
-from app.Grades.schemas.scheme import GradingScheme, SchemeComparison, SchemeWrite
+from app.Grades.schemas.scheme import CountingScheme, GradingScheme, SchemeComparison, SchemeWrite
 from app.Grades.services import scheme_service
 from app.Grades.schemas.course import CategoryWeightsUpdate, CourseCreate, Course, CourseDetail, CourseUpdate
 from app.shared.errors import error_course, error_grade, error_user, responses
@@ -269,6 +269,19 @@ def edit_scheme(user_id: VerifiedUserId, course_id: UUID, scheme_id: UUID, schem
     result = scheme_service.update_scheme(db, user_id, course_id, scheme_id, scheme)
     if result is None:
         raise HTTPException(status_code=404, detail="Scheme not found")
+    return result
+
+
+@router.put(
+    "/{user_id}/courses/{course_id}/counting-scheme",
+    response_model=SchemeComparison,
+    responses=responses["course_404"],
+)
+def set_counting_scheme(user_id: VerifiedUserId, course_id: UUID, choice: CountingScheme, db: DBSession):
+    """Pick the scheme that is the course's grade, or null for its own weights."""
+    result = scheme_service.set_counting(db, user_id, course_id, choice.scheme_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Course or scheme not found")
     return result
 
 

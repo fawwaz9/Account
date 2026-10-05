@@ -143,6 +143,13 @@ class CourseModel(Base):
     #: and a schedule belong to one section, not to the course code, so a
     #: current course without one is called out in Attention.
     section = Column(String, nullable=True)
+    #: The grading scheme that is this course's grade, when you picked one
+    #: (Phase 1 D25). Null: the course's own weights are the grade. No
+    #: database foreign key -- grading_schemes already points back at courses,
+    #: and like the other added `_id` columns the app keeps it honest:
+    #: scheme_service only sets a scheme of this course, and clears it before
+    #: that scheme is deleted.
+    counting_scheme_id = Column(Uuid, nullable=True)
     final_grade = Column(Float, default=0.0)
     # What you are aiming for in this course. Null falls back to the account
     # default, so a new course is measured against something without you

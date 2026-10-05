@@ -291,3 +291,30 @@ def test_the_band_agrees_with_the_live_average(db, user):
     band = calculate_grade_band(db, user.id, course.id)
 
     assert band["best"] == band["worst"] == calculate_current_average(course)
+
+
+def test_the_required_final_agrees_with_the_average_on_a_course_weighted_past_100(db, user):
+    """Assignments 50 + Final 60 = 110%: the average divides by 100, so must
+    the required final. A final of f gives (80 x 50 + 60f) / 100, so a target of
+    85 needs exactly 75. Divided by 110 instead, it asked for 89.17."""
+    from app._database.models import GradeModel
+    from app.Grades.services.grade_service import (
+        calculate_current_average,
+        calculate_required_final,
+        get_user_course,
+    )
+    from conftest import make_course
+    import uuid as _uuid
+
+    course = make_course(db, user.id, "CPSC 310", category_weights={"Assignment": 50.0, "Final": 60.0})
+    db.add(GradeModel(id=_uuid.uuid4(), course_id=course.id, name="A1", category="Assignment",
+                      score=80.0, max_score=100.0, weight=0.0))
+    db.commit()
+    course = get_user_course(db, user.id, course.id)
+    assert calculate_required_final(None, user.id, course.id, 85.0, course=course)["needed"] == 75.0
+
+    db.add(GradeModel(id=_uuid.uuid4(), course_id=course.id, name="Final", category="Final",
+                      score=75.0, max_score=100.0, weight=0.0))
+    db.commit()
+    db.expire_all()
+    assert calculate_current_average(get_user_course(db, user.id, course.id)) == 85.0

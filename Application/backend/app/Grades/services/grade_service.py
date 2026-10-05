@@ -10,24 +10,13 @@ from app.Grades.services.grade_schedule import (
     forget_block_times,
     sync_schedule_for_grade,
 )
-
-
-MAX_COURSE_PERCENT = 100.0
+# Re-exported: callers import both from here, as they always have.
+from app.Grades.utils.marks import MAX_COURSE_PERCENT, counts_toward_average  # noqa: F401
+from app.Grades.utils import scheme_math
 
 #: A grade may exceed its max -- bonus marks are real -- but not absurdly, so a
 #: slipped digit (150 out of 10) is still caught.
 MAX_SCORE_MULTIPLE = 2.0
-
-
-def counts_toward_average(grade) -> bool:
-    """Whether a grade is part of the arithmetic at all.
-
-    A dropped mark -- the two lowest quizzes, say -- stays on the course so it
-    can be seen and un-dropped later, but must not reach any average. One
-    predicate rather than `not g.excluded` scattered across six call sites,
-    because a single place that forgets it is a wrong grade shown confidently.
-    """
-    return not getattr(grade, "excluded", False)
 
 
 def score_exceeds_limit(score: float | None, max_score: float) -> bool:
@@ -75,7 +64,7 @@ def update_category_weights(db: Session, user_id: uuid.UUID, course_id: uuid.UUI
 
     updated_categories = {(c.value if isinstance(c, GradeCategory) else c) for c in weights}
     sync_grade_weights(course, updated_categories)
-    course.average = calculate_current_average(course)
+    course.average = course_grade(course)
 
     db.commit()
     db.refresh(course)
@@ -115,7 +104,7 @@ def add_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_data:
     db.flush()
     db.refresh(course)
 
-    course.average = calculate_current_average(course)
+    course.average = course_grade(course)
     # Inside this transaction, so a grade that fails to save leaves no task
     # behind for work that was never recorded.
     sync_schedule_for_grade(db, course, grade)
@@ -164,7 +153,7 @@ def add_grades_bulk(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade
 
         db.flush()
         db.refresh(course)
-        course.average = calculate_current_average(course)
+        course.average = course_grade(course)
         for grade in created:
             sync_schedule_for_grade(db, course, grade)
         db.commit()
@@ -251,7 +240,7 @@ def update_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id
     if grade.duration_minutes is not None and grade.due_time is None:
         raise ValueError("A length needs a start time to run from")
 
-    course.average = calculate_current_average(course)
+    course.average = course_grade(course)
     # Covers all four of the ways an edit moves the task: a renamed grade, a
     # moved deadline, a deadline removed, and a score arriving by edit rather
     # than through record_grade.
@@ -272,7 +261,7 @@ def delete_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id
     db.flush()
     db.refresh(course)
 
-    course.average = calculate_current_average(course)
+    course.average = course_grade(course)
     db.commit()
     return deleted_grade
 
@@ -302,7 +291,7 @@ def record_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id
         raise ValueError(f"Score cannot exceed {MAX_SCORE_MULTIPLE:g}x the max score")
 
     grade.score = score
-    course.average = calculate_current_average(course)
+    course.average = course_grade(course)
     # The score landing is what closes the task.
     sync_schedule_for_grade(db, course, grade)
     db.commit()
@@ -328,6 +317,45 @@ def bonus_contribution(course: CourseModel) -> float:
         contribution += calculate_grade_category_average(course, category) * weight / 100.0
 
     return contribution
+
+
+def counting_components(course: CourseModel):
+    """The components of the scheme picked as this course's grade, or None.
+
+    None when no scheme is picked -- and, defensively, when the id names no
+    scheme of this course, so a stale id falls back to the course's own weights
+    rather than to nothing.
+    """
+    scheme_id = getattr(course, "counting_scheme_id", None)
+    if scheme_id is None:
+        return None
+    from app.Grades.schemas.scheme import SchemeComponent
+
+    for scheme in course.grading_schemes:
+        if scheme.id == scheme_id:
+            return [SchemeComponent.model_validate(c) for c in scheme.components]
+    return None
+
+
+def course_grade(course: CourseModel) -> float:
+    """The course's grade: the picked scheme's average, or the course's own.
+
+    The one function every stored average is written through (Phase 1 D25), so
+    the dashboard, letter, GPA, cumulative and Attention -- which all read the
+    stored figure -- follow a picked scheme without knowing schemes exist.
+    """
+    components = counting_components(course)
+    if components is None:
+        return calculate_current_average(course)
+    return scheme_math.project(course, components)[0]
+
+
+def project_course(course: CourseModel, unmarked: float, overrides: dict | None = None) -> float:
+    """project_average, through the picked scheme when there is one."""
+    components = counting_components(course)
+    if components is None:
+        return project_average(course, unmarked, overrides)
+    return scheme_math.project(course, components, scheme_math.everywhere(components, unmarked), overrides)[0]
 
 
 def calculate_current_average(course: CourseModel) -> float:
@@ -520,16 +548,21 @@ def calculate_grade_band(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
     if course is None:
         raise ValueError("Course not found.")
 
-    best = project_average(course, 1.0)
-    worst = project_average(course, 0.0)
-    current = calculate_current_average(course)
+    best = project_course(course, 1.0)
+    worst = project_course(course, 0.0)
+    current = course_grade(course)
 
     outstanding = sum(
         1 for g in course.grades
         if g.score is None and g.max_score > 0 and counts_toward_average(g)
     )
+    components = counting_components(course)
+    weights = (
+        {c.category.value: c.weight for c in components} if components is not None
+        else course.category_weights
+    )
     empty_categories = [
-        category for category, weight in course.category_weights.items()
+        category for category, weight in weights.items()
         if weight > 0
         and not is_additive(category)
         and category_average_assuming(course, category, 1.0) is None
@@ -564,6 +597,10 @@ def calculate_required_final(
         course = get_user_course(db, user_id, course_id)
     if course is None:
         raise ValueError("Course not found.")
+
+    components = counting_components(course)
+    if components is not None:
+        return required_final_under_scheme(course, components, target_grade)
 
     weights = course.category_weights
     final_weight = weights.get(GradeCategory.FINAL.value, 0.0)
@@ -610,7 +647,12 @@ def calculate_required_final(
             and category not in graded_categories
         )
     ]
-    counted_weight = graded_weight + final_weight
+    # Capped like calculate_current_average's denominator: weight past 100 is
+    # bonus by another route, so it adds marks without enlarging what they are
+    # divided by. Uncapped, a course weighted 125% was told it needed 191% on
+    # the final when 96.16% brings its shown average to the target (Phase 1 D25,
+    # found by the counting-scheme invariant).
+    counted_weight = min(graded_weight + final_weight, MAX_COURSE_PERCENT)
     needed = (
         ((target_grade - banked_bonus) * counted_weight) - earned_weighted_sum
     ) / final_weight
@@ -618,6 +660,62 @@ def calculate_required_final(
         "needed": round(needed, 2),
         "possible": 0 <= needed <= 100,
         "unfinished_categories": unfinished_categories,
+    }
+
+
+#: How far the search for a required final looks, in percent. Past 100 is
+#: reported (as impossible) rather than clipped, as the formula does.
+REQUIRED_FINAL_CEILING = 1000.0
+
+
+def required_final_under_scheme(course: CourseModel, components, target_grade: float) -> dict:
+    """calculate_required_final's answer, under a picked scheme.
+
+    A scheme's drops and replacements make the course's average piecewise, so
+    instead of the closed formula this searches for the lowest final score that
+    reaches the target -- the average never falls as the final rises, which is
+    what makes the search sound. Asked the same way as the formula: every final
+    item scores the value tried, an empty final takes it whole, and categories
+    with nothing marked stay out, reported as unfinished.
+    """
+    final = GradeCategory.FINAL.value
+    final_component = next((c for c in components if c.category.value == final and c.weight > 0), None)
+    if final_component is None:
+        raise ValueError("Course has no final exam.")
+
+    final_ids = [g.id for g in course.grades if g.category == final and counts_toward_average(g)]
+
+    def average_with_final(percent: float) -> float:
+        fraction = percent / 100.0
+        return scheme_math.project(
+            course, components, {final: fraction}, {grade_id: fraction for grade_id in final_ids}, precise=True,
+        )[0]
+
+    if average_with_final(0.0) >= target_grade:
+        needed = 0.0
+    elif average_with_final(REQUIRED_FINAL_CEILING) < target_grade:
+        needed = REQUIRED_FINAL_CEILING
+    else:
+        low, high = 0.0, REQUIRED_FINAL_CEILING
+        for _ in range(60):
+            middle = (low + high) / 2
+            if average_with_final(middle) >= target_grade:
+                high = middle
+            else:
+                low = middle
+        needed = high
+
+    unfinished = [
+        c.category.value for c in components
+        if c.category.value != final
+        and not is_additive(c.category.value)
+        and c.weight > 0
+        and scheme_math.category_average(course, c.category.value)[0] is None
+    ]
+    return {
+        "needed": round(needed, 2),
+        "possible": 0 <= needed <= 100,
+        "unfinished_categories": unfinished,
     }
 
 
