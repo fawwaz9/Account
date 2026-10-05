@@ -107,3 +107,11 @@ def test_a_request_is_what_a_push_service_expects():
     assert headers["Authorization"].startswith("vapid t=")
     assert int(headers["TTL"]) > 0
     assert decrypt(body, private_key(UA_PRIVATE), b64url_decode(AUTH_SECRET)) == b'{"title":"x"}'
+
+
+def test_a_key_stored_with_a_trailing_newline_still_works():
+    """The runbook stored the key from print(), newline and all; production
+    refused it on every push request."""
+    private, public = generate_keys()
+    assert Vapid.from_settings(private + "\n", "https://example.com").public_key == public
+    assert Vapid.from_settings(f"  {private}\r\n", "https://example.com").public_key == public

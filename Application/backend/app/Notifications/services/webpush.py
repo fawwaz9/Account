@@ -94,8 +94,13 @@ class Vapid:
 
     @classmethod
     def from_settings(cls, private_key_b64: str, subject: str) -> "Vapid":
-        """From the raw 32-byte private scalar, base64url -- the usual VAPID form."""
-        scalar = int.from_bytes(b64url_decode(private_key_b64), "big")
+        """From the raw 32-byte private scalar, base64url -- the usual VAPID form.
+
+        Stripped first: a secret stored from ``print()`` or a text editor ends
+        in a newline, and base64 refuses it -- which took push down on its
+        first production day.
+        """
+        scalar = int.from_bytes(b64url_decode(private_key_b64.strip()), "big")
         return cls(ec.derive_private_key(scalar, ec.SECP256R1()), subject)
 
     @property
