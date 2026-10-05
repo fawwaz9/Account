@@ -327,6 +327,60 @@ SUITE_SYLLABUS = {
 }
 
 
+class FakeBucket:
+    """An in-memory stand-in for the syllabus bucket, speaking just enough of
+    the Cloud Storage JSON API for storage.py: upload (refusing to overwrite,
+    as ifGenerationMatch=0 does), download and delete. `fail` makes every
+    call answer that status, for the failure paths."""
+
+    class _Response:
+        def __init__(self, status_code, content=b""):
+            self.status_code, self.content = status_code, content
+
+    def __init__(self):
+        self.objects: dict[str, tuple[bytes, str]] = {}
+        self.calls: list[tuple[str, str]] = []
+        self.fail: int | None = None
+
+    def request(self, method, url, params=None, data=None, headers=None):
+        from urllib.parse import unquote
+
+        params = params or {}
+        if self.fail:
+            return self._Response(self.fail)
+        if method == "POST":
+            name = params["name"]
+            self.calls.append((method, name))
+            if params.get("ifGenerationMatch") == "0" and name in self.objects:
+                return self._Response(412)
+            self.objects[name] = (data, headers["Content-Type"])
+            return self._Response(200)
+        name = unquote(url.rsplit("/o/", 1)[1])
+        self.calls.append((method, name))
+        if name not in self.objects:
+            return self._Response(404)
+        if method == "GET":
+            return self._Response(200, self.objects[name][0])
+        if method == "DELETE":
+            del self.objects[name]
+            return self._Response(204)
+        raise AssertionError(method)
+
+
+@pytest.fixture(autouse=True)
+def _no_storage_network(monkeypatch):
+    """No test may reach real Cloud Storage. Configured, like the language
+    model, so keeping and serving files runs in every suite -- the isolation
+    and non-interference walks included."""
+    from app.config import settings
+    from app.Intake.services import storage
+
+    bucket = FakeBucket()
+    monkeypatch.setattr(settings, "SYLLABUS_BUCKET", "suite-bucket")
+    monkeypatch.setattr(storage, "_request", lambda method, url, **kw: bucket.request(method, url, **kw))
+    return bucket
+
+
 @pytest.fixture(autouse=True)
 def _no_llm_network(monkeypatch):
     """No test may reach a real language model.

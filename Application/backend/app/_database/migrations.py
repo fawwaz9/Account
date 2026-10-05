@@ -92,6 +92,13 @@ ADDED_COLUMNS: dict[str, dict[str, str | dict[str, str]]] = {
         # undone as one unit. The first UUID column this list adds on Postgres.
         "import_id": {"sqlite": "CHAR(32)", "postgresql": "UUID"},
     },
+    # Phase 1 D24. Production gets these with the table itself, which is new
+    # in the same batch; listed for a database that already made the table
+    # from an earlier draft of the model (a local one).
+    "syllabus_parses": {
+        "media_type": "VARCHAR",
+        "file_kept": "BOOLEAN NOT NULL DEFAULT false",
+    },
 }
 
 # Run once, immediately after the named column is first added, to give existing

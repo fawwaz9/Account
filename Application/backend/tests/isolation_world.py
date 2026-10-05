@@ -48,6 +48,8 @@ from app._database.models import (
     UsageEventModel,
 )
 
+from app.Intake.services import storage  # noqa: E402
+
 BYDAY = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"]
 
 
@@ -222,10 +224,18 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
                                         "replace_with": None}]))
     # An unapplied parse, so applying someone else's is an attempt to build a
     # course from their syllabus.
-    add(SyllabusParseModel(id=new_id(), user_id=user_id, filename=f"{marker}.pdf", provider="openai",
-                           model="suite-model", result={"course_code": f"{marker[:8]} 1",
-                                                        "course_name": f"{marker} syllabus",
-                                                        "assessments": []}))
+    # Behind the world's course, with its file kept in the suite's fake bucket
+    # and the marker inside it, so a download that served the wrong person's
+    # file would carry the other world's marker into the response.
+    parse = add(SyllabusParseModel(id=new_id(), user_id=user_id, course_id=course.id, filename=f"{marker}.pdf",
+                                   provider="openai", model="suite-model", media_type="application/pdf",
+                                   file_kept=True, result={"course_code": f"{marker[:8]} 1",
+                                                           "course_name": f"{marker} syllabus",
+                                                           "assessments": []}))
+    # Deleted first: test_noninterference builds the same world, same ids,
+    # twice in one run, and storage.put rightly refuses to overwrite.
+    storage.delete(parse.object_name)
+    storage.put(parse.object_name, f"%PDF-1.4 {marker} syllabus".encode(), "application/pdf")
     # A question of the world's own, so the real one is still unanswered and
     # A's request to answer it reaches the write path instead of a 409.
     add(SurveyResponseModel(id=new_id(), user_id=user_id, question=f"{marker} question", answer="very"))

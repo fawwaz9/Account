@@ -111,3 +111,13 @@ class ApplyResult(BaseModel):
 class IntakeStatus(BaseModel):
     #: False until a provider and key are configured on the server.
     available: bool
+
+
+class KeptSyllabus(BaseModel):
+    """A syllabus file kept behind a course (Phase 1 D24)."""
+
+    id: UUID
+    filename: str | None
+    media_type: str | None
+    created_at: datetime
+

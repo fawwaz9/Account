@@ -96,6 +96,8 @@ export const endpoints = {
     status: (userId: string) => `intake/${userId}/status`,
     syllabus: (userId: string) => `intake/${userId}/syllabus`,
     apply: (userId: string, parseId: string) => `intake/${userId}/syllabus/${parseId}/apply`,
+    courseSyllabi: (userId: string, courseId: string) => `intake/${userId}/courses/${courseId}/syllabi`,
+    file: (userId: string, parseId: string) => `intake/${userId}/syllabus/${parseId}/file`,
   },
   push: {
     status: (userId: string) => `push/${userId}/status`,

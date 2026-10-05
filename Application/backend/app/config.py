@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     #: Parses per person per day: every call costs money, and a cap is what
     #: keeps a stuck retry loop from costing much of it.
     LLM_PARSES_PER_DAY: int = Field(default=10, ge=1, le=200)
+    #: The private Cloud Storage bucket syllabi are kept in (Phase 1 D24).
+    #: Unset, a syllabus is read and its extraction kept, but not the file.
+    SYLLABUS_BUCKET: str | None = None
 
     model_config = SettingsConfigDict(env_file=ENV_FILE, extra="ignore")
 

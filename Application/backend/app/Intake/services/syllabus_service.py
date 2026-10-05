@@ -46,6 +46,7 @@ from app.Intake.schemas.syllabus import (
     SyllabusUpload,
 )
 from app.Intake.services import llm
+from app.Intake.services.kept_files import keep_file
 from app.shared.dates import user_today
 
 #: Weights are percentages; a syllabus rounds.
@@ -134,10 +135,11 @@ def parse(db: Session, user_id: uuid.UUID, upload: SyllabusUpload, *, transport=
     row = SyllabusParseModel(
         id=uuid.uuid4(), user_id=user_id, filename=upload.filename,
         provider=settings.LLM_PROVIDER, model=settings.LLM_MODEL_EXTRACT,
-        result=extract.model_dump(mode="json"),
+        result=extract.model_dump(mode="json"), media_type=upload.media_type,
     )
     db.add(row)
     db.commit()
+    keep_file(db, row, content)
     return ParseResult(id=row.id, extract=extract, warnings=check(extract, start, end), created_at=row.created_at)
 
 

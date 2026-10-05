@@ -118,3 +118,24 @@ export function put<T>(path: string, data: unknown) {
 export function del<T>(path: string) {
   return request<T>(path, { method: "DELETE" });
 }
+
+/**
+ * A file the API serves, as a Blob. The API's file routes need the same
+ * bearer token as everything else, so a plain link cannot fetch them.
+ */
+export async function getBlob(path: string): Promise<Blob> {
+  const response = await fetch(buildUrl(path), { method: "GET", headers: getAuthHeaders() });
+  if (response.status === 401) {
+    sessionStorage.removeItem("access_token");
+    window.location.href = "/login";
+    throw new Error("Session expired");
+  }
+  if (!response.ok) {
+    const text = await response.text();
+    let json: unknown = null;
+    try { json = text ? JSON.parse(text) : null; } catch { json = null; }
+    throw new Error(extractErrorMessage(json, `Request failed with status ${response.status}`));
+  }
+  return response.blob();
+}
+

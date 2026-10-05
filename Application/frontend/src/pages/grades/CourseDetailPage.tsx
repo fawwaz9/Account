@@ -17,6 +17,7 @@ import DeleteConfirmModal from "../../features/grades/components/DeleteConfirmMo
 import RequiredFinalModal from "../../features/grades/components/RequiredFinalModal";
 import RequiredFinalPanel from "../../features/grades/components/RequiredFinalPanel";
 import GradingSchemes from "../../features/grades/components/GradingSchemes";
+import KeptSyllabi from "../../features/intake/KeptSyllabi";
 import BulkGradesModal from "../../features/grades/components/BulkGradesModal";
 import { getErrorMessage } from "../../features/grades/components/AddCourseModal";
 import GradeCategoryColumn from "../../features/grades/components/GradeCategoryColumn";
@@ -271,6 +272,9 @@ export default function CourseDetailPage() {
       {course && (
         <CourseLinks links={course.links ?? []} onEdit={() => setLinksOpen(true)} />
       )}
+      {/* The original syllabus, when the course was built from one and the
+          file was kept. Renders nothing otherwise. */}
+      {user && courseId && <KeptSyllabi userId={user.id} courseId={courseId} />}
 
       {user && courseId && (
         <div className="courseInsights">

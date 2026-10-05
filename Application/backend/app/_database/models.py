@@ -1351,8 +1351,10 @@ class SyllabusParseModel(Base):
     Phase 1 item 1. Kept for two reasons: the daily cap counts these, and the
     no-change measure (account-vision.md §15) is read from them -- of the
     fields the parse produced, how many the person changed before confirming.
-    The document itself is not kept here (see the Phase 1 decisions on
-    storage); only what was extracted.
+
+    The document itself lives in the syllabus bucket when one is configured
+    (Phase 1 D24), as the object `object_name` gives -- named after this row's
+    id, so the row is always enough to find, serve or delete it.
     """
 
     __tablename__ = "syllabus_parses"
@@ -1370,6 +1372,15 @@ class SyllabusParseModel(Base):
     applied_at = Column(DateTime, nullable=True)
     fields_total = Column(Integer, nullable=True)
     fields_changed = Column(Integer, nullable=True)
+    #: What the uploaded file was, for serving it back.
+    media_type = Column(String, nullable=True)
+    #: True once the file is in the bucket. A failed upload leaves it False and
+    #: the parse still stands; the extraction is what the app runs on.
+    file_kept = Column(Boolean, nullable=False, default=False)
+
+    @property
+    def object_name(self) -> str:
+        return f"syllabi/{self.id}"
 
 
 class GradingSchemeModel(Base):

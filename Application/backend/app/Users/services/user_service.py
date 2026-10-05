@@ -1,3 +1,4 @@
+import logging
 from datetime import date, datetime, time, timedelta
 from uuid import UUID, uuid4
 
@@ -13,6 +14,8 @@ from app._database.identity import (
 )
 from app._database.models import CourseModel, UserModel, utc_now
 from app.Grades.utils.terms import suggest_first_year
+from app.Intake.services.storage import StorageError
+from app.Intake.services.kept_files import discard_files
 from app.Auth.schemas.credentials import RegisterRequest
 from app.Auth.services.signup_policy import may_sign_up
 from app.Auth.services.password_service import (
@@ -369,10 +372,22 @@ def purge_expired_users(db: Session, on_day: date | None = None) -> int:
     # cascade can only see -- and so only delete -- the rows of the user the
     # session is acting for, which is exactly the set that should go.
     expired = expired_user_ids(db, cutoff)
+    purged = 0
     for user_id in expired:
         act_as(db, user_id)
         user = get_user(db, user_id)
-        if user is not None:
-            db.delete(user)
-            db.commit()
-    return len(expired)
+        if user is None:
+            continue
+        # Kept syllabi first: they live outside the database, where no cascade
+        # reaches, and the rows are the only record of them. If storage cannot
+        # confirm the deletes, this account waits for the next purge rather
+        # than leave files nothing points to.
+        try:
+            discard_files(db, user_id)
+        except StorageError as exc:
+            logging.getLogger("audit").warning("purge of %s deferred: %s", user_id, exc)
+            continue
+        db.delete(user)
+        db.commit()
+        purged += 1
+    return purged

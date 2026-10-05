@@ -1,4 +1,4 @@
-import { get, post } from "../../services/apiClient";
+import { get, getBlob, post } from "../../services/apiClient";
 import { endpoints } from "../../services/endpoints";
 import { GradeCategory } from "../grades/types";
 
@@ -53,3 +53,19 @@ export function applySyllabus(
 ) {
   return post<ApplyResult>(endpoints.intake.apply(userId, parseId), body);
 }
+
+export interface KeptSyllabus {
+  id: string;
+  filename: string | null;
+  media_type: string | null;
+  created_at: string;
+}
+
+export function fetchCourseSyllabi(userId: string, courseId: string) {
+  return get<KeptSyllabus[]>(endpoints.intake.courseSyllabi(userId, courseId));
+}
+
+export function fetchSyllabusFile(userId: string, parseId: string) {
+  return getBlob(endpoints.intake.file(userId, parseId));
+}
+

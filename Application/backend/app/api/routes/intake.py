@@ -1,11 +1,20 @@
+import re
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 
 from app._database.dependencies import DBSession
 from app.Auth.services.access import VerifiedUserId
-from app.Intake.schemas.syllabus import ApplyRequest, ApplyResult, IntakeStatus, ParseResult, SyllabusUpload
-from app.Intake.services import llm
+from app.Intake.schemas.syllabus import (
+    ApplyRequest,
+    ApplyResult,
+    IntakeStatus,
+    KeptSyllabus,
+    ParseResult,
+    SyllabusUpload,
+)
+from app.Intake.services import llm, storage
+from app.Intake.services.kept_files import kept_files, read_kept_file
 from app.Intake.services.syllabus_service import RateLimited, apply, parse
 from app.Usage.services.usage_service import CREATE, record as record_usage
 
@@ -44,3 +53,36 @@ def apply_syllabus(user_id: VerifiedUserId, parse_id: UUID, confirmed: ApplyRequ
         raise HTTPException(status_code=404, detail="Parse not found")
     record_usage(db, user_id, CREATE, "grades")
     return result
+
+
+@router.get("/{user_id}/courses/{course_id}/syllabi", response_model=list[KeptSyllabus])
+def course_syllabi(user_id: VerifiedUserId, course_id: UUID, db: DBSession):
+    """The syllabus files kept behind a course, newest first. Empty when none were kept."""
+    return kept_files(db, user_id, course_id)
+
+
+@router.get("/{user_id}/syllabus/{parse_id}/file")
+def syllabus_file(user_id: VerifiedUserId, parse_id: UUID, db: DBSession):
+    """The original file, always as a download: never rendered by the API's own origin."""
+    try:
+        found = read_kept_file(db, user_id, parse_id)
+    except storage.StorageError as exc:
+        raise HTTPException(status_code=502, detail="Couldn't fetch the file from storage") from exc
+    if found is None:
+        raise HTTPException(status_code=404, detail="File not found")
+    row, content = found
+    return Response(
+        content=content,
+        media_type=row.media_type or "application/octet-stream",
+        headers={
+            "Content-Disposition": f'attachment; filename="{download_name(row.filename)}"',
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+def download_name(filename: str | None) -> str:
+    """The uploaded name, reduced to characters a header cannot be broken by."""
+    cleaned = re.sub(r"[^A-Za-z0-9._ -]", "_", filename or "")[:100].strip()
+    return cleaned or "syllabus"
+
