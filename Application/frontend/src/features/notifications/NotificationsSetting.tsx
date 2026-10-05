@@ -28,6 +28,7 @@ export default function NotificationsSetting({ userId }: { readonly userId: stri
   const [on, setOn] = useState<boolean | null>(null);
   const [busy, setBusy] = useState<Busy>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [checkFailed, setCheckFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -37,8 +38,9 @@ export default function NotificationsSetting({ userId }: { readonly userId: stri
         setStatus(next);
         setOn(here);
       })
+      // A failed check is said as one, never dressed up as "not set up".
       .catch(() => {
-        if (!cancelled) setStatus({ available: false, public_key: null, devices: 0 });
+        if (!cancelled) setCheckFailed(true);
       });
     return () => { cancelled = true; };
   }, [userId]);
@@ -88,7 +90,13 @@ export default function NotificationsSetting({ userId }: { readonly userId: stri
   }
 
   let control: React.ReactNode;
-  if (status === null || on === null) {
+  if (checkFailed) {
+    control = (
+      <span className="small-text" role="alert">
+        Couldn't check notifications. Reload the page to try again.
+      </span>
+    );
+  } else if (status === null || on === null) {
     control = <span className="small-text muted" role="status">Checking…</span>;
   } else if (needsHomeScreen()) {
     control = (

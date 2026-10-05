@@ -90,4 +90,12 @@ describe("NotificationsSetting", () => {
     expect(await screen.findByText("Not set up on the server yet.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Turn on/ })).toBeNull();
   });
+
+  it("says a failed check failed, instead of 'Checking…' forever or 'not set up'", async () => {
+    push.pushStatus.mockRejectedValue(new Error("500"));
+    render(<NotificationsSetting userId="u1" />);
+    expect((await screen.findByRole("alert")).textContent).toMatch(/Couldn't check notifications/);
+    expect(screen.queryByText("Checking…")).toBeNull();
+    expect(screen.queryByText("Not set up on the server yet.")).toBeNull();
+  });
 });
