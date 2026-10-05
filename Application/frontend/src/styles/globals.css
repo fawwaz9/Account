@@ -371,5 +371,15 @@ button:not(:disabled):active {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 6px;
+}
+
+/* Sized to the row, like the shift confirm button: the full .buttons padding
+   and margin made these the tallest thing in Settings. */
+.notificationSetting .buttons {
+  margin: 0;
+  padding: 3px 10px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  line-height: 1.3;
 }
