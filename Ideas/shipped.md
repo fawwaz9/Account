@@ -881,8 +881,13 @@ the app never used. Before this, anon could read every table through it.
 LIVE: 9f1f3cb on revision account-api-00029-29h (backup, schema gate 28/28, digest,
 health and CORS checked by the workflow); new routes answer 401 against a 404
 control. Frontend index-k4a8swTz.js; all 32 files byte-identical to a
-production-URL build. NOT YET: runbook step 5 (the connection switch that turns
-isolation on) and step 6 (push secrets and scheduler).
+production-URL build.
+ISOLATION ON 2026-10-05: the owner switched DATABASE_URL to `database-url-app`
+(revision account-api-00030-xmq, same image). In the first 206 requests as
+`account_app` -- password sign-in, every finance read, grades, jobs, calendar,
+account reorders, recurring runs and visit counts -- there was no failure but a
+favicon 404, and no permission or row-security error in the logs. NOT YET: step 6
+(push secrets and scheduler).
 
 ---
 
