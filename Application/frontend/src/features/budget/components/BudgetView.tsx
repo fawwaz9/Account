@@ -163,11 +163,6 @@ export default function BudgetView() {
             <NetWorth figure={worth} />
           </div>
 
-          {/* Under the answers for now, because this is the answer for the
-              term: where the spending accounts are heading, and when. */}
-          <CashFlowForecast nonce={termNonce} />
-          <YearPlan nonce={termNonce} />
-
           <Sectors
             accounts={accounts}
             onReorder={reorderAccounts}
@@ -235,6 +230,14 @@ export default function BudgetView() {
             onDelete={setStoppingRule}
             busy={ruleBusy}
           />
+
+          {/* Last, side by side: the outlook -- the term and the year -- read
+              after the working above it. Stacks on a narrow screen, and either
+              one fills the row when the other has nothing to show. */}
+          <div className="budgetOutlook">
+            <CashFlowForecast nonce={termNonce} />
+            <YearPlan nonce={termNonce} />
+          </div>
         </>
       )}
 

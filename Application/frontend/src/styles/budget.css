@@ -1840,3 +1840,21 @@
   font-weight: normal;
   max-width: 14rem;
 }
+
+/* The outlook, at the foot of the page: the term's forecast and the year's
+   plan side by side. Auto-fit rather than two fixed columns, so a panel that
+   renders nothing leaves its neighbour the whole row instead of a hole, and a
+   narrow screen stacks them. The row owns the gap, as .budgetTopRow does. */
+.budgetOutlook {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(460px, 100%), 1fr));
+  gap: 22px;
+  align-items: start;
+  margin: 22px 0 0;
+}
+
+.budgetOutlook > .forecastBlock,
+.budgetOutlook > .yearPlan {
+  margin: 0;
+  min-width: 0;
+}
