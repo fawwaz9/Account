@@ -59,6 +59,10 @@ ADDED_COLUMNS: dict[str, dict[str, str | dict[str, str]]] = {
         # no past prediction was ever saved, so there is none to recover.
         "projected_before_final": "FLOAT",
         "projected_on": "DATE",
+        # Phase 2 D11: a hand-picked catalogue course, or "none". Neither is
+        # backfilled: every existing course starts on automatic matching.
+        "catalogue_course_id": {"sqlite": "CHAR(32)", "postgresql": "UUID"},
+        "catalogue_unlinked": "BOOLEAN NOT NULL DEFAULT false",
     },
     "accounts": {
         # NOT "DEFAULT 0"/"DEFAULT 1" like the older booleans above. Postgres

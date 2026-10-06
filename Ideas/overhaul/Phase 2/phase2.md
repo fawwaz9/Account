@@ -79,11 +79,11 @@ Phase 2 is deployed.**
 | **A** | **The shared course catalogue** | **In progress** |
 | 1 | The policy for shared, read-only tables | **Built, not deployed** (D9). Proven on Postgres and mutation-checked |
 | 2 | Catalogue tables: courses and prerequisites | **Built, not deployed** (D10). Runbook step 1 is written |
-| 3 | Linking your courses to the catalogue | Not started. `course_lookup.code_parts` already normalises codes |
-| 4 | Your own prerequisites, and proposals | Not started |
+| 3 | Linking your courses to the catalogue | **Built, not deployed** (D11). Matched on read; your override stored |
+| 4 | Your own prerequisites, and proposals | **Built, not deployed** (D12) |
 | 5 | The syllabus reader picks up prerequisites | Not started. The reader exists (Phase 1 D16) |
-| 6 | Owner review: proposals into the catalogue | Not started. Auto-approval is planned, not built (D5) |
-| 7 | Prerequisites on the course page, met or not | Not started |
+| 6 | Owner review: proposals into the catalogue | **Built, not deployed** (D13). `scripts/catalogue_review.py`. Auto-approval is planned, not built (D5) |
+| 7 | Prerequisites on the course page, met or not | **Built, not deployed** (D12). Also warns when adding a future course |
 | 8 | UBC's permission, then a bulk import | Request drafted (`Ideas/overhaul/calender-request.md`); waits on UBC |
 | **B** | **The rest of the vision's Phase 2** | **Listed, not drafted** |
 | 9 | Shared tasks and events (group coursework) | Not started. No collaborator tables; tasks and events are per-user |

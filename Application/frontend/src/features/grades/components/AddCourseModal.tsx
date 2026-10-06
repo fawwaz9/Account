@@ -1,5 +1,6 @@
 import { useState } from "react";
 import AddCourseForm from "./AddCourseForm";
+import PrerequisiteWarning from "./PrerequisiteWarning";
 import { createCourse } from "../api";
 import { CourseCreate, GradeCategory, Semester } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
@@ -96,6 +97,9 @@ export default function AddCourseModal({
         onSubmit={handleSubmit}
         submitting={loading}
         error={error}
+        notice={user && (
+          <PrerequisiteWarning userId={user.id} code={form.code} year={form.year} semester={form.semester} />
+        )}
         onCancel={onClose}
         onReset={() => {
           setForm(defaultForm);

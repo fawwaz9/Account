@@ -8,6 +8,8 @@ import { trimNumber } from "../../shared/utils/numberUtils";
 import GradeBand from "../../features/grades/components/GradeBand";
 import CourseCost from "../../features/grades/components/CourseCost";
 import CourseLinks from "../../features/grades/components/CourseLinks";
+import CatalogueLine from "../../features/grades/components/CatalogueLine";
+import PrerequisitesPanel from "../../features/grades/components/PrerequisitesPanel";
 import CheapestPath from "../../features/grades/components/CheapestPath";
 import CourseLinksModal from "../../features/grades/components/CourseLinksModal";
 import AddGradeModal from "../../features/grades/components/AddGradeModal";
@@ -295,6 +297,8 @@ export default function CourseDetailPage() {
       {course && (
         <CourseLinks links={course.links ?? []} onEdit={() => setLinksOpen(true)} />
       )}
+      {user && courseId && <CatalogueLine userId={user.id} courseId={courseId} />}
+      {user && courseId && <PrerequisitesPanel userId={user.id} courseId={courseId} />}
       {/* The original syllabus, when the course was built from one and the
           file was kept. Renders nothing otherwise. */}
       {user && courseId && <KeptSyllabi userId={user.id} courseId={courseId} />}

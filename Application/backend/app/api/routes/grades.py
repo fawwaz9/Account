@@ -32,6 +32,11 @@ from app.Grades.services.grade_service import (
     update_grade,
 )
 from app.Grades.services.course_lookup import resolve_course
+from app.Grades.schemas.catalogue import CatalogueChoice, CatalogueCourse, CatalogueLink
+from app.Grades.services import catalogue_service, prerequisite_service
+from app.Grades.schemas.prerequisite import Kind, PrerequisitePreview, Prerequisites, RuleChecked, RuleText, RuleWrite
+from app.Grades.utils.enums import Semester
+from app.Grades.utils.prerequisites import RuleError, parse_text, render
 from app.Grades.schemas.cheapest_path import CheapestPath
 from app.Grades.services.cheapest_path import cheapest_path
 from app.Grades.services.dash_services import DEFAULT_TARGET_GRADE, get_dashboard
@@ -125,6 +130,85 @@ def resolve_course_from_text(
     if course is None:
         return {"course_id": None, "code": None, "name": None}
     return {"course_id": course.id, "code": course.code, "name": course.name}
+
+
+# The shared catalogue (Phase 2 item 3). Read-only from here: the API's role
+# cannot write it, and the routes sit under your own path like every other, so
+# the isolation walk covers them.
+@router.get("/{user_id}/catalogue", response_model=list[CatalogueCourse], responses=responses["user_404"])
+def search_catalogue(user_id: VerifiedUserId, db: DBSession, q: str = Query(default="", max_length=20)):
+    return catalogue_service.search(db, q)
+
+
+@router.get("/{user_id}/courses/{course_id}/catalogue", response_model=CatalogueLink,
+            responses=responses["course_404"])
+def get_catalogue_link(user_id: VerifiedUserId, course_id: UUID, db: DBSession):
+    link = catalogue_service.get_link(db, user_id, course_id)
+    if link is None:
+        raise HTTPException(status_code=404, detail=error_course["not_found"])
+    return link
+
+
+@router.put("/{user_id}/courses/{course_id}/catalogue", response_model=CatalogueLink,
+            responses=responses["course_404"])
+def set_catalogue_link(user_id: VerifiedUserId, course_id: UUID, choice: CatalogueChoice, db: DBSession):
+    try:
+        link = catalogue_service.set_link(db, user_id, course_id, choice)
+    except catalogue_service.CatalogueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if link is None:
+        raise HTTPException(status_code=404, detail=error_course["not_found"])
+    return link
+
+
+# Prerequisites (Phase 2 items 4 and 7): yours, the shared one, met or not.
+# Advisory -- nothing anywhere is refused because one is unmet (D3).
+@router.post("/{user_id}/prerequisites/check", response_model=RuleChecked, responses=responses["user_404"])
+def check_prerequisite_text(user_id: VerifiedUserId, body: RuleText):
+    """Read a typed rule back, so the page can show what will be saved."""
+    try:
+        rule = parse_text(body.text)
+    except RuleError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return RuleChecked(rule=rule, text=render(rule))
+
+
+@router.get("/{user_id}/prerequisites/preview", response_model=PrerequisitePreview, responses=responses["user_404"])
+def preview_prerequisites(user_id: VerifiedUserId, db: DBSession, code: str = Query(..., max_length=20),
+                          year: int = Query(..., ge=1, le=10), semester: Semester = Query(...)):
+    """The warning for a course you are about to add. Never a refusal (D3)."""
+    return prerequisite_service.preview(db, user_id, code, year, semester.value)
+
+
+@router.get("/{user_id}/courses/{course_id}/prerequisites", response_model=Prerequisites,
+            responses=responses["course_404"])
+def get_prerequisites(user_id: VerifiedUserId, course_id: UUID, db: DBSession):
+    found = prerequisite_service.prerequisites(db, user_id, course_id)
+    if found is None:
+        raise HTTPException(status_code=404, detail=error_course["not_found"])
+    return found
+
+
+@router.put("/{user_id}/courses/{course_id}/prerequisites", response_model=Prerequisites,
+            responses=responses["course_404"])
+def set_own_prerequisite(user_id: VerifiedUserId, course_id: UUID, body: RuleWrite, db: DBSession):
+    try:
+        found = prerequisite_service.set_own(db, user_id, course_id, body)
+    except RuleError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if found is None:
+        raise HTTPException(status_code=404, detail=error_course["not_found"])
+    return found
+
+
+@router.delete("/{user_id}/courses/{course_id}/prerequisites", response_model=Prerequisites,
+               responses=responses["course_404"])
+def delete_own_prerequisite(user_id: VerifiedUserId, course_id: UUID, db: DBSession,
+                            kind: Kind = Query(default="prerequisite")):
+    found = prerequisite_service.delete_own(db, user_id, course_id, kind)
+    if found is None:
+        raise HTTPException(status_code=404, detail=error_course["not_found"])
+    return found
 
 
 @router.get("/{user_id}/courses/{course_id}", response_model=CourseDetail, responses=responses["course_404"])

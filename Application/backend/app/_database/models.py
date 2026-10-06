@@ -131,6 +131,7 @@ class UserModel(Base):
     degree_requirements = relationship("DegreeRequirementModel", cascade=cascade)
     course_equivalences = relationship("CourseEquivalenceModel", cascade=cascade)
     saved_plans = relationship("SavedPlanModel", cascade=cascade)
+    prerequisite_proposals = relationship("PrerequisiteProposalModel", cascade=cascade)
 
     @property
     def has_password(self) -> bool:
@@ -164,6 +165,14 @@ class CourseModel(Base):
     #: scheme_service only sets a scheme of this course, and clears it before
     #: that scheme is deleted.
     counting_scheme_id = Column(Uuid, nullable=True)
+    #: The catalogue course you chose for this one by hand (Phase 2 D11). Null
+    #: means automatic: matched by campus and code each time it is read, so a
+    #: course links itself once the catalogue has it. No foreign key, like the
+    #: other added `_id` columns: a catalogue row that has gone reads as no
+    #: choice, and matching takes over.
+    catalogue_course_id = Column(Uuid, nullable=True)
+    #: You said this course has no catalogue course, so nothing is matched.
+    catalogue_unlinked = Column(Boolean, nullable=False, default=False)
     final_grade = Column(Float, default=0.0)
     #: Phase 1 D34. The course's grade just before the final was marked or the
     #: result entered -- the app's last real prediction -- and the day it stood.
@@ -208,6 +217,7 @@ class CourseModel(Base):
     events = relationship("EventModel", back_populates="course", cascade=cascade)
     tasks = relationship("TaskModel", back_populates="course", cascade=cascade)
     grading_schemes = relationship("GradingSchemeModel", cascade=cascade)
+    prerequisite_proposals = relationship("PrerequisiteProposalModel", cascade=cascade)
 
     @property
     def category_weights(self) -> dict[str, float]:
@@ -1609,3 +1619,47 @@ class CataloguePrerequisiteModel(Base):
     reviewed_at = Column(DateTime, nullable=False, default=utc_now)
 
     course = relationship("CatalogueCourseModel", back_populates="prerequisites")
+
+
+#: Where your own rule came from (Phase 2 item 4).
+PROPOSAL_SOURCES = ("syllabus", "typed")
+#: Where it stands in the owner's review (item 6). Pending until reviewed;
+#: editing it puts it back to pending.
+PROPOSAL_STATUSES = ("pending", "accepted", "rejected")
+
+
+class PrerequisiteProposalModel(Base):
+    """Your own prerequisite rule for one of your courses (Phase 2 item 4).
+
+    Per-user, and two things at once: it applies to you straight away -- your
+    version always wins for you (§13.19) -- and it is a proposal the owner's
+    review may turn into a shared catalogue row (item 6). Nobody else ever
+    reads it; the review reads counts, never names or ids.
+
+    `source_text` is the sentence from your own syllabus. It stays here, with
+    you: a shared row may carry the structured rule but never this wording
+    (D6). `session` is the calendar session the course was in ("2026W"), when
+    your first-year setting lets it be known.
+    """
+
+    __tablename__ = "prerequisite_proposals"
+    __table_args__ = (
+        UniqueConstraint("course_id", "kind", name="uq_prerequisite_proposal"),
+        CheckConstraint(_one_of("kind", PREREQUISITE_KINDS), name="ck_prerequisite_proposal_kind"),
+        CheckConstraint(_one_of("source", PROPOSAL_SOURCES), name="ck_prerequisite_proposal_source"),
+        CheckConstraint(_one_of("status", PROPOSAL_STATUSES), name="ck_prerequisite_proposal_status"),
+    )
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    course_id = Column(Uuid, ForeignKey("courses.id"), nullable=False, index=True)
+    kind = Column(String, nullable=False)
+    rule = Column(JSON, nullable=False)
+    note = Column(String, nullable=True)
+    source = Column(String, nullable=False)
+    source_text = Column(String, nullable=True)
+    session = Column(String, nullable=True)
+    status = Column(String, nullable=False, default="pending")
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+    updated_at = Column(DateTime, nullable=False, default=utc_now)
+    reviewed_at = Column(DateTime, nullable=True)

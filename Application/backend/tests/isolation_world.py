@@ -30,6 +30,7 @@ from app._database.models import (
     JobModel,
     PaychequeDeductionModel,
     PaychequeModel,
+    PrerequisiteProposalModel,
     RecurringTaskModel,
     RecurringTransactionModel,
     ReminderModel,
@@ -259,6 +260,11 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
                        starting_balance=4242.42,
                        months=[{"month": (day - timedelta(days=60)).replace(day=1).isoformat(),
                                 "money_in": 4242.42, "money_out": 4242.42, "end_balance": 4242.42}]))
+    # Phase 2 item 4: an own prerequisite rule on the world's course, with the
+    # marker in the private syllabus sentence a leak would carry.
+    add(PrerequisiteProposalModel(id=new_id(), user_id=user_id, course_id=course.id, kind="prerequisite",
+                                  rule={"course": "CPSC 110"}, note=f"{marker} note", source="syllabus",
+                                  source_text=f"{marker} syllabus sentence", session="2026W"))
     _ = (event, transaction, recurring_task)
 
     db.commit()
@@ -268,6 +274,14 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
     return ids
 
 
+#: Fixed, so two databases built for the same case hold the same shared rows
+#: (the non-interference walk), and so the walk can name one in a body.
+CATALOGUE_IDS = {
+    "catalogue_courses": uuid.uuid5(uuid.NAMESPACE_URL, "account-test/catalogue_courses"),
+    "catalogue_prerequisites": uuid.uuid5(uuid.NAMESPACE_URL, "account-test/catalogue_prerequisites"),
+}
+
+
 def seed_catalogue(db) -> dict[str, uuid.UUID]:
     """One row in every shared table, belonging to nobody (Phase 2 item 1).
 
@@ -275,11 +289,11 @@ def seed_catalogue(db) -> dict[str, uuid.UUID]:
     once beside both worlds. Present so a route that changed or deleted one is
     caught, and so a read of them is a read of something.
     """
-    course = CatalogueCourseModel(id=uuid.uuid4(), campus="UBCV", subject="CPSC", number="221",
+    course = CatalogueCourseModel(id=CATALOGUE_IDS["catalogue_courses"], campus="UBCV", subject="CPSC", number="221",
                                   title="Basic Algorithms and Data Structures", credits=4.0)
     db.add(course)
     db.flush()
-    rule = CataloguePrerequisiteModel(id=uuid.uuid4(), catalogue_course_id=course.id,
+    rule = CataloguePrerequisiteModel(id=CATALOGUE_IDS["catalogue_prerequisites"], catalogue_course_id=course.id,
                                       kind="prerequisite", session="2026W",
                                       rule={"all": [{"course": "UBCV CPSC 210"}]},
                                       source="reviewed-proposal")

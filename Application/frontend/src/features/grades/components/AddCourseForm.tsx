@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import {CourseCreate, Semester } from "../types"
 import CategoryWeights from "./CategoryWeights"
 import CourseFlags from "./CourseFlags";
@@ -10,6 +11,8 @@ interface AddCourseFormProps {
   readonly onReset?: () => void;
   readonly submitting: boolean;
   readonly error?: string | null;
+  /** Shown above the buttons: the prerequisite warning. Never disables them. */
+  readonly notice?: ReactNode;
 }
 
 export default function AddCourseForm({
@@ -20,6 +23,7 @@ export default function AddCourseForm({
   onReset,
   submitting,
   error,
+  notice,
 }: AddCourseFormProps) {
   // A real <form>, so the `required` attributes below actually run. These were
   // <div>s with a type="button" submit, which meant no constraint validation ever
@@ -210,6 +214,8 @@ export default function AddCourseForm({
         labelClass="categoryWeightLabel"
         inputClass="categoryWeightInput"
       />
+
+      {notice}
 
       {error && (
         <div className="space-y-1">

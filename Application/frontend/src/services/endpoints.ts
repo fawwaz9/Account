@@ -22,6 +22,12 @@ export const endpoints = {
     courseGrades: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/grades`,
     bulkGrades: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/grades/bulk`,
     gradeDetail: (userId: string, courseId: string, gradeId: string) => `grades/${userId}/courses/${courseId}/grades/${gradeId}`,
+    /** The shared catalogue (Phase 2 item 3): search, and one course's link. */
+    catalogue: (userId: string) => `grades/${userId}/catalogue`,
+    courseCatalogue: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/catalogue`,
+    /** Phase 2 items 4 and 7: yours, the shared one, met or not. */
+    prerequisites: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/prerequisites`,
+    checkPrerequisite: (userId: string) => `grades/${userId}/prerequisites/check`,
   },
   calendar: {
     /** Materialised occurrences for a window; takes ?start= and ?end=. */

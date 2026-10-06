@@ -477,3 +477,68 @@ export interface SchemeComparison {
   /** The scheme picked as the course's grade; null when its own weights are. */
   counting_id?: string | null;
 }
+
+/** A course as the school offers it: shared, the same for everyone (Phase 2). */
+export interface CatalogueCourse {
+  id: string;
+  campus: "UBCV" | "UBCO" | string;
+  subject: string;
+  number: string;
+  title: string | null;
+  credits: number | null;
+}
+
+/** chosen: you picked it. matched: automatic, by campus and code. none_chosen:
+ *  you said there is none. not_found: automatic, and nothing matches yet. */
+export interface CatalogueLink {
+  how: "chosen" | "matched" | "none_chosen" | "not_found";
+  course: CatalogueCourse | null;
+}
+
+export type CatalogueChoice =
+  | { mode: "auto" }
+  | { mode: "none" }
+  | { mode: "chosen"; catalogue_course_id: string };
+
+export type RuleStatus = "met" | "on_track" | "not_met";
+export type PrerequisiteKindName = "prerequisite" | "corequisite";
+
+export interface RuleResult {
+  status: RuleStatus;
+  text: string;
+  detail: string;
+  parts: RuleResult[];
+  /** "all" or "any" for a group; null for a single course or credit count. */
+  group: "all" | "any" | null;
+}
+
+/** One version of a rule. source: typed/syllabus are yours; reviewed and
+ *  ubc-calendar are the shared catalogue's. */
+export interface PrerequisiteSide {
+  source: "typed" | "syllabus" | "reviewed" | "ubc-calendar";
+  rule: Record<string, unknown>;
+  text: string;
+  note: string | null;
+  session: string | null;
+  source_text: string | null;
+  review: "pending" | "accepted" | "rejected" | null;
+  result: RuleResult;
+}
+
+export interface PrerequisiteKind {
+  kind: PrerequisiteKindName;
+  yours: PrerequisiteSide | null;
+  shared: PrerequisiteSide | null;
+  applies: "yours" | "shared" | null;
+}
+
+export interface Prerequisites {
+  course_id: string;
+  link: CatalogueLink;
+  kinds: PrerequisiteKind[];
+}
+
+export interface PrerequisitePreview {
+  catalogue: CatalogueCourse | null;
+  kinds: PrerequisiteKind[];
+}

@@ -37,7 +37,7 @@ from app.Auth.services.session_service import create_access_token
 from app.shared.dates import user_today
 from tests import test_isolation as iso
 from tests.conftest import TESTING_SQLITE, _make_engine
-from tests.isolation_world import seed_world, snapshot
+from tests.isolation_world import seed_catalogue, seed_world, snapshot
 
 pytestmark = pytest.mark.skipif(not TESTING_SQLITE, reason="compares two in-memory databases")
 
@@ -78,6 +78,8 @@ def _build(with_b: bool):
     day = user_today(session, A_ID)
     world_a = seed_world(session, A_ID, iso.MARK_A, day)
     world_b = seed_world(session, B_ID, iso.MARK_B, day) if with_b else None
+    # Shared rows belong to nobody, so both runs hold them, with the same ids.
+    seed_catalogue(session)
 
     def past(row_id, user_id, account_id, kind, amount, days, description):
         session.add(TransactionModel(

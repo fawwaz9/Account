@@ -1,6 +1,12 @@
 import { get, post, patch, put, del } from "../../services/apiClient";
 import { endpoints } from "../../services/endpoints";
 import { CheapestPath,
+  CatalogueChoice,
+  CatalogueCourse,
+  CatalogueLink,
+  PrerequisiteKindName,
+  PrerequisitePreview,
+  Prerequisites,
   GradingScheme,
   SchemeComparison,
   SchemeComponent,
@@ -161,3 +167,47 @@ export async function setCountingScheme(userId: string, courseId: string, scheme
   return put<SchemeComparison>(endpoints.grades.countingScheme(userId, courseId), { scheme_id: schemeId });
 }
 
+
+
+/* ===== The shared catalogue (Phase 2 item 3) ===== */
+
+export async function searchCatalogue(userId: string, query: string) {
+  return get<CatalogueCourse[]>(`${endpoints.grades.catalogue(userId)}?q=${encodeURIComponent(query)}`);
+}
+
+export async function fetchCatalogueLink(userId: string, courseId: string) {
+  return get<CatalogueLink>(endpoints.grades.courseCatalogue(userId, courseId));
+}
+
+export async function setCatalogueLink(userId: string, courseId: string, choice: CatalogueChoice) {
+  return put<CatalogueLink>(endpoints.grades.courseCatalogue(userId, courseId), choice);
+}
+
+
+/* ===== Prerequisites (Phase 2 items 4 and 7) ===== */
+
+export async function fetchPrerequisites(userId: string, courseId: string) {
+  return get<Prerequisites>(endpoints.grades.prerequisites(userId, courseId));
+}
+
+/** Your own rule for one kind, typed. Applies to you at once. */
+export async function saveOwnPrerequisite(
+  userId: string, courseId: string, body: { kind: PrerequisiteKindName; text: string; note: string | null },
+) {
+  return put<Prerequisites>(endpoints.grades.prerequisites(userId, courseId), body);
+}
+
+export async function deleteOwnPrerequisite(userId: string, courseId: string, kind: PrerequisiteKindName) {
+  return del<Prerequisites>(`${endpoints.grades.prerequisites(userId, courseId)}?kind=${kind}`);
+}
+
+/** Read a typed rule back, as it will be saved. Rejects with the reason. */
+export async function checkPrerequisiteText(userId: string, text: string) {
+  return post<{ rule: Record<string, unknown>; text: string }>(endpoints.grades.checkPrerequisite(userId), { text });
+}
+
+/** The shared rule for a course about to be added, against your record. */
+export async function previewPrerequisites(userId: string, code: string, year: number, semester: string) {
+  const query = new URLSearchParams({ code, year: String(year), semester });
+  return get<PrerequisitePreview>(`grades/${userId}/prerequisites/preview?${query}`);
+}

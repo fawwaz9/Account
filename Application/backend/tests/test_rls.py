@@ -33,7 +33,7 @@ from app._database import rls
 from app._database.identity import act_as, email_taken, user_id_by_email
 from app._database.models import AccountModel, Base, GradeModel, UserModel
 from app.shared.dates import user_today
-from tests.conftest import TEST_DATABASE_URL, TESTING_SQLITE, connect_args_for, make_user
+from tests.conftest import TEST_DATABASE_URL, TESTING_SQLITE, connect_args_for, make_course, make_user
 from tests.isolation_world import seed_catalogue, seed_world, snapshot
 
 pytestmark = pytest.mark.skipif(TESTING_SQLITE, reason="row-level security is Postgres-only")
@@ -512,3 +512,64 @@ def test_route_isolation_under_rls(worlds, app_engine, method, path, variant, le
             iso._check_status(method, path, variant, response)
     finally:
         app.main.app.dependency_overrides.clear()
+
+
+# --------------------------------------------------------------------------
+# The owner review script (Phase 2 item 6): the catalogue's only writer.
+# --------------------------------------------------------------------------
+
+def _review_module():
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    import catalogue_review
+    return catalogue_review
+
+
+def test_the_review_refuses_the_app_role(app_session):
+    review = _review_module()
+    with pytest.raises(review.Refused, match="the API's role"):
+        review.check_connection(app_session)
+
+
+def test_the_review_refuses_a_role_that_cannot_write_the_catalogue(owner_engine):
+    review = _review_module()
+    with owner_engine.begin() as conn:
+        if not conn.execute(text("SELECT 1 FROM pg_roles WHERE rolname = 'rls_outsider'")).scalar():
+            conn.execute(text("CREATE ROLE rls_outsider LOGIN PASSWORD 'outsider_test_only'"))
+    url = make_url(TEST_DATABASE_URL).set(username="rls_outsider", password="outsider_test_only")
+    outsider = create_engine(url, connect_args=connect_args_for(TEST_DATABASE_URL))
+    session = sessionmaker(bind=outsider)()
+    try:
+        with pytest.raises(review.Refused, match="cannot write"):
+            review.check_connection(session)
+    finally:
+        session.close()
+        outsider.dispose()
+
+
+def test_an_approval_by_the_owner_reaches_every_user_through_the_app_role(worlds, app_session):
+    from app.Grades.schemas.prerequisite import RuleWrite
+    from app.Grades.services.prerequisite_service import set_own
+
+    review = _review_module()
+    owner, a, b, world_a, world_b = worlds
+    review.check_connection(owner)
+    _truncate_catalogue(owner)
+    course = make_course(owner, a.id, "CPSC_V 313")
+    set_own(owner, a.id, course.id, RuleWrite(text="CPSC 213"), source="typed")
+    [group] = [g for g in review.pending_groups(owner) if g.rule == {"course": "CPSC 213"}]
+    review.approve(owner, group.id, session_name="2026W")
+
+    act_as(app_session, b.id)
+    rules = app_session.execute(text("SELECT rule FROM catalogue_prerequisites")).scalars().all()
+    assert {"course": "CPSC 213"} in rules
+    # B still cannot see A's proposal itself, only the reviewed rule.
+    assert app_session.execute(text("SELECT count(*) FROM prerequisite_proposals WHERE user_id = :a"),
+                               {"a": a.id}).scalar() == 0
+
+
+def _truncate_catalogue(owner):
+    owner.execute(text("DELETE FROM catalogue_prerequisites"))
+    owner.execute(text("DELETE FROM catalogue_courses"))
+    owner.commit()

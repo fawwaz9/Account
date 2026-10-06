@@ -66,7 +66,7 @@ from app.Auth.services.session_service import create_access_token
 from tests.conftest import make_user
 from app.shared.dates import user_today
 from app._database.rls import SHARED_READ_TABLES
-from tests.isolation_world import seed_catalogue, seed_world, snapshot
+from tests.isolation_world import CATALOGUE_IDS, seed_catalogue, seed_world, snapshot
 
 MARK_A = "zzownera"
 MARK_B = "zzvictimb"
@@ -203,6 +203,19 @@ BODY_PATCHES: dict[tuple[str, str], list[dict]] = {
     ("POST", "/api/degree/{user_id}/equivalences"): [{"from_codes": ["COSC 111"], "counts_as": ["CPSC 110"]}],
     ("PUT", "/api/degree/{user_id}/equivalences/{equivalence_id}"): [
         {"from_codes": ["COSC 111"], "counts_as": ["CPSC 110"]}],
+    # Every mode, so each write path runs: a chosen id (B's, under foreign-refs),
+    # and the two that carry none.
+    ("PUT", "/api/grades/{user_id}/courses/{course_id}/catalogue"): [
+        {"mode": "chosen"},
+        {"mode": "none", "catalogue_course_id": None},
+        {"mode": "auto", "catalogue_course_id": None},
+    ],
+    # A readable rule each way, so the write runs: typed, and as a tree.
+    ("PUT", "/api/grades/{user_id}/courses/{course_id}/prerequisites"): [
+        {"text": "CPSC 210 and one of MATH 200, MATH 217", "rule": None},
+        {"text": None, "rule": {"course": "CPSC 210"}},
+    ],
+    ("POST", "/api/grades/{user_id}/prerequisites/check"): [{"text": "CPSC 210"}],
     ("POST", "/api/finances/{user_id}/subscriptions/confirm"): [
         {"instruction.kind": "expense", "instruction.to_account_id": None},
         {"instruction.kind": "transfer", "instruction.category_id": None},
@@ -374,6 +387,9 @@ def _build(model: type[BaseModel], refs: dict[str, str]) -> dict:
 def _field_refs(world: dict[str, uuid.UUID], day: date) -> dict[str, str]:
     refs = {name: str(world[table]) for name, table in FIELD_SOURCES.items()}
     refs["accounts"] = str(world["accounts"])
+    # A shared row, the same in every world: naming it is never a foreign
+    # reference, and it is what a valid catalogue choice names.
+    refs["catalogue_course_id"] = str(CATALOGUE_IDS["catalogue_courses"])
     refs["__day__"] = day.isoformat()
     return refs
 

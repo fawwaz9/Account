@@ -251,3 +251,191 @@ such rule.
   their own table, and nothing queries inside a rule.
 - **A foreign key from `courses` now:** that is item 3, with its own
   non-interference test.
+
+## D11. Your course's catalogue link is computed when read; only your override is stored (2026-10-06)
+
+**What the plan said (fact F):** a nullable `courses.catalogue_course_id`,
+filled in on create and on applying a syllabus.
+
+**What I built instead:**
+- **The automatic link is a match, not a stored value.** Each time it's read,
+  the app matches your course by campus and code. A code with `_V` means UBC
+  Vancouver and `_O` means UBC Okanagan. A code with no campus suffix matches
+  only if exactly one campus offers it. An ambiguous code links nothing, the
+  same rule `course_lookup` uses.
+- **Only your own decision is stored,** in two new columns on `courses`:
+  - `catalogue_course_id`: a catalogue course you picked by hand.
+  - `catalogue_unlinked`: you said there is none.
+
+  Either one beats the match, and both survive a change to the course's code.
+
+**Why:** the catalogue starts empty. Nothing enters it until you approve
+something in the review (item 6). A link stored at create time would find
+nothing for every course made before that, and never update afterwards.
+Matching on read links your course the moment the catalogue gains it, and
+needs no write during a read.
+
+**The exit criterion still reads the same:** each current course is
+`matched` or `chosen`, or deliberately `none_chosen`.
+
+**If a catalogue course you picked is later deleted,** your choice falls back
+to matching, rather than leaving your course linked to nothing.
+
+**Routes,** all under your own path, so the isolation and non-interference
+walks cover them:
+- `GET /grades/{u}/catalogue?q=` searches by how people type a code (`cpsc 2`,
+  `221`, `cosc_o`).
+- `GET` and `PUT /grades/{u}/courses/{c}/catalogue` read and set the link.
+
+The course page gets a "Catalogue" line with Change, None of these, and Match
+by code.
+
+**Evidence:**
+- `tests/test_catalogue_link.py`, 26 tests. One of them reads every grade
+  figure before and after each kind of link: the dashboard, the course list,
+  each course's detail and the degree audit. All are identical.
+- Mutation check: all 5 removals were caught (ownership filter, ambiguity
+  rule, campus filter, the chosen course must exist, "none" beats the match).
+- `CatalogueLine.test.tsx`, 6 tests.
+
+**Correction, kept in place:** the first version of the "nothing moves" test
+read the degree audit from a route that doesn't exist. Both reads were the same
+404, so that comparison was vacuous. It now reads `/degree/{u}`, and every read
+must return 200.
+
+**Also fixed in the tests:** the shared catalogue rows now have fixed ids, and
+both non-interference databases hold them. The walk can then name a real
+catalogue course in the `chosen` body, so that write path actually runs.
+
+**What it costs:** one indexed catalogue query per link read, on the course
+page only. The course list doesn't read links.
+
+## D12. Your own prerequisites, the rule language, and met or not (items 4 and 7, 2026-10-06)
+
+Items 4 and 7 were built together, because the course page (7) is how your own
+rules (4) are entered and seen. The suggested order had 4 and 7 next to each
+other anyway.
+
+**Your rule, `prerequisite_proposals`:** an ordinary per-user table, so the
+existing policy generator covers it.
+- **One row per course and kind** (prerequisite or co-requisite). The tree
+  holds the whole condition.
+- **It applies to you at once,** and is also a proposal for the review (item
+  6). Editing it puts it back to "pending", because what a reviewer saw is no
+  longer what you hold.
+- **What else it keeps:** the session the course was in, as UBC names it
+  (`2026W`, `2027S`), when your first-year setting is filled in. And your
+  syllabus's own sentence, which stays with you. The plan already said this
+  (D6).
+
+**The rule language,** `app/Grades/utils/prerequisites.py` (fact D):
+- **The tree** is a course (optionally with a minimum grade), a credit count
+  (optionally by subject or level), and `all` / `any` groups. It is capped at
+  4 deep, 40 parts, and 12 per group.
+- **A typed form, because nobody types JSON.** For example: `CPSC 210 and one
+  of MATH 200, MATH 217`, `6 credits of MATH 1xx`, or `CPSC 210 with 64%`.
+  `or` binds tighter than `and`, and parentheses work. The page shows every
+  rule in the same form, and reading a rule back always gives the same tree.
+- **Anything a tree can't hold goes in the note.** Year standing and "or
+  permission" are examples. The text parser refuses such phrases with a
+  reason, rather than guessing.
+
+**Met, on track, or not met.** Your record is your courses plus equivalences,
+read with the degree audit's own statuses.
+- **A prerequisite counts only from a term before the course.** A co-requisite
+  may also be the same term, but a course never satisfies its own rule.
+- **On track** means something is in progress or planned before the course: it
+  will be met if it goes to plan.
+- **A minimum grade is checked when the result is known.** Transfer credit and
+  equivalences carry no grade, so they meet it.
+- **A course you didn't pass is not met,** and the detail says "not passed".
+- **Archived courses are left out,** as the degree audit leaves them out, so
+  the two pages never disagree.
+
+**The course page:**
+- **A Prerequisites panel.** Each part is ✓, … or ✗, in words as well as
+  colour, with why ("CPSC_V 210 done (82%)", "3 of 6 credits"). "Not met"
+  always reads "Not met, and exceptions are sometimes made" (D3).
+- **Yours comes first.** The shared version sits under it, folded, labelled
+  "Shared, reviewed" or "Shared, from the UBC calendar". Yours shows where it
+  stands in review.
+- **Removing yours asks first.** The existing check that every permanent
+  delete is confirmed caught that it didn't.
+
+**Adding a course to a current or future term** previews the shared rule its
+code matches. Where it's unmet, the dialog says so, and adds "You can still add
+it". The Add button is never disabled.
+
+**Which shared rule is used:** the latest one at or before the session your
+course was in. If none is that old, or the session is unknown, the latest one.
+That's fact C, applied to the course page.
+
+**Evidence:**
+- `tests/test_prerequisites.py`, 73 tests. They cover the language, met or not
+  in every case above, yours against the shared one, picking the session, a
+  transfer credit and an equivalence. One test edits, re-terms and grades a
+  course whose rule is unmet: nothing is refused (item 7's "Done when").
+- Mutation check: 12 removals. 11 were caught. The 12th ("a course doesn't
+  meet its own rule") was missed, so a test now covers it, and that mutation
+  was then caught.
+- Frontend: `PrerequisitesPanel.test.tsx` (7) and
+  `PrerequisiteWarning.test.tsx` (3).
+- The isolation and non-interference walks cover the four new routes.
+
+**Not done here:** reading prerequisites from a syllabus (item 5), and the
+review that shares a rule (item 6).
+
+## D13. The owner review is a script you run; it shows counts and shares only the tree (item 6, 2026-10-06)
+
+`scripts/catalogue_review.py`, built as the plan describes, with three details
+settled:
+
+**What a listing shows.** Pending proposals are grouped by course (campus,
+subject, number), kind and rule. The rule is compared as a normalised tree, not
+as wording.
+- **Each group shows how many different accounts proposed it.** Two proposals
+  by one account count once.
+- **No names, emails, ids, notes or syllabus wording appear.** A tree holds
+  only codes and numbers.
+- **It marks agreement and disagreement:** "N accounts agree", "disagrees with
+  another proposal", "same as the catalogue". It shows what the catalogue says
+  now beside them.
+
+**What an approval writes:**
+- **The catalogue course,** if it's missing.
+- **The rule,** marked `reviewed-proposal`, with **no note and no wording**.
+  Both are things a person typed, or their syllabus said, so neither is world
+  knowledge (D6).
+- **The session** is the most common one among the group's proposals. If none
+  says, the script asks for `--session`.
+- **An existing rule** for that course, kind and session is replaced only with
+  `--replace`.
+- **A code with no campus suffix** needs `--campus`.
+
+Every proposal in the group becomes accepted. A rejection leaves the rule
+applying to its author, as yours always does.
+
+**Stable group ids.** An id is a hash of the course, kind and rule, so the id a
+listing prints still names the same group when you approve it later.
+
+**Who may run it.** It refuses `account_app`, and any role that can't insert
+into the catalogue. On Supabase that leaves the tables' owner, the role the
+schema step runs as. It reads other users' proposals as the owner, which
+row-level security doesn't bind (D9), and prints only counts.
+
+**Evidence:**
+- `tests/test_catalogue_review.py`, 11 tests. They include the item's "Done
+  when":
+  - An approved rule reaches a user who proposed nothing.
+  - A rejected one stays with its author only.
+  - The listing contains no email, id, note or sentence.
+- `tests/test_rls.py`, 3 Postgres tests:
+  - The script refuses the app role.
+  - It refuses a role that can't write the catalogue.
+  - An owner's approval is read by another user through the app role, while
+    that user still can't see the proposal itself.
+- Mutation check: all 6 removals were caught (refuse the app role, refuse a
+  non-writer, count accounts not proposals, replace only when asked, pending
+  only, mark accepted).
+
+**Automatic approval stays unbuilt** (D5).
