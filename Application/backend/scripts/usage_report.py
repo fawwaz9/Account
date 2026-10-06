@@ -28,6 +28,12 @@ What it reports, and which gate each answers (account-vision.md §8, §11):
   accounts made after signup times started being recorded.
 * **Would you be disappointed** -- the Sean Ellis question's answers, counted
   (Phase 1 gate: at least three "very disappointed").
+* **The money room, unprompted** -- per week, people who opened Budget without
+  a notification sending them (Phase 1 gate: used weekly without prompting).
+* **Syllabus to term** -- from a syllabus read to its term confirmed, review
+  included (Phase 1 gate: under five minutes), and how many were confirmed
+  with nothing changed (§15's no-change rate). The clock starts once the read
+  has returned, so the read itself -- its own 60-second goal -- is not in it.
 """
 from __future__ import annotations
 
@@ -86,11 +92,16 @@ def collect(engine) -> dict:
         ).all()
         survey = models.SurveyResponseModel.__table__
         answers = conn.execute(select(survey.c.question, survey.c.answer)).all()
+        parses = models.SyllabusParseModel.__table__
+        parse_rows = conn.execute(
+            select(parses.c.created_at, parses.c.applied_at, parses.c.fields_total, parses.c.fields_changed)
+        ).all()
         table_counts = {
             table.name: conn.execute(select(func.count()).select_from(table)).scalar()
             for table in Base.metadata.sorted_tables
         }
-    return {"users": user_rows, "usage": usage_rows, "tables": table_counts, "answers": answers}
+    return {"users": user_rows, "usage": usage_rows, "tables": table_counts, "answers": answers,
+            "parses": parse_rows}
 
 
 def report(data: dict, weeks: int, today: date) -> list[str]:
@@ -131,7 +142,8 @@ def report(data: dict, weeks: int, today: date) -> list[str]:
                 first_create[row.user_id] = row.first_at
 
     out.append("")
-    out.append("WEEKLY  (week of | new accounts | active | 2+ rooms | 2+ rooms, one unprompted | back from last week)")
+    out.append("WEEKLY  (week of | new accounts | active | 2+ rooms | 2+ rooms, one unprompted | back from last week"
+               " | money room, unprompted)")
     previous = None
     for week in week_starts:
         people = active.get(week, set())
@@ -142,8 +154,9 @@ def report(data: dict, weeks: int, today: date) -> list[str]:
             if len(r) >= 2 and unprompted.get(week, {}).get(person)
         )
         back = f"{len(people & previous)}/{len(previous)}" if previous else "-"
+        money = sum(1 for visited in unprompted.get(week, {}).values() if "budget" in visited)
         out.append(f"  {week.isoformat()} | {new_by_week.get(week, 0):>3} | {len(people):>3} | "
-                   f"{universe:>3} | {strict:>3} | {back}")
+                   f"{universe:>3} | {strict:>3} | {back} | {money:>3}")
         previous = people
 
     out.append("")
@@ -173,6 +186,24 @@ def report(data: dict, weeks: int, today: date) -> list[str]:
                    f"declined to answer {counts['dismissed']}")
     else:
         out.append("  nobody has been asked yet (people are asked after 7 days of use)")
+
+    out.append("")
+    out.append("SYLLABUS TO TERM  (read to confirmed, review included; Phase 1 gate: under 5 min)")
+    parses = data.get("parses", [])
+    confirmed = [row for row in parses if row.applied_at is not None and row.applied_at >= row.created_at]
+    if confirmed:
+        taken = [(row.applied_at - row.created_at).total_seconds() / 60 for row in confirmed]
+        out.append(f"  {len(confirmed)} of {len(parses)} read were confirmed; median "
+                   f"{statistics.median(taken):.1f} min; under 5 min: {sum(1 for m in taken if m < 5)}")
+        counted = [row for row in confirmed if row.fields_total]
+        if counted:
+            untouched = sum(1 for row in counted if not row.fields_changed)
+            changed = sum(row.fields_changed or 0 for row in counted)
+            total = sum(row.fields_total for row in counted)
+            out.append(f"  confirmed with nothing changed: {untouched} of {len(counted)}; "
+                       f"fields changed in review: {changed} of {total}")
+    else:
+        out.append(f"  none confirmed yet ({len(parses)} read)")
 
     out.append("")
     out.append("ROWS PER TABLE  (a zero is a feature nobody has used)")

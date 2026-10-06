@@ -1096,3 +1096,25 @@ the 1st of each month, or both.
     nothing, the same as the forecast's pace.
   - Tuition counts as money out, because it left. The plan leaves tuition out,
     so the month says how much of the difference it explains.
+
+## D38. Every exit number prints from the usage report (2026-10-06)
+
+Item 13's "done when" was that every Phase 1 exit number prints from
+`scripts/usage_report.py`. Two did not, and both are now added. Neither needed
+a schema change, because the rows already held the data:
+
+- **The money room, unprompted.** A new last column in the weekly table counts
+  people who opened Budget that week other than from a notification. A
+  `prompted_visit` does not count.
+- **Syllabus to term.** A new section reports how many parses were confirmed,
+  the median minutes from read to confirmed, and how many took under five
+  minutes.
+  - It also reports how many were confirmed with nothing changed, plus fields
+    changed out of fields shown. That is §15's no-change rate for this confirm
+    screen.
+  - An add-only merge (D30) is timed but has no field counts, so it is not in
+    the no-change rate.
+
+The report stays aggregates only. Its existing test, that nothing printed
+identifies anyone, still holds. Three mutations were tried and all three were
+caught.

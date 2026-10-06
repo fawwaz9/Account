@@ -67,41 +67,47 @@ From §11. All must hold:
 - [ ] *(Testable from this phase, per §11)* The universe test: two different
       rooms in one week, with at least one visit unprompted.
 
-**Which of these can be read today:**
-- **Weekly retention and the universe test:** yes. `scripts/usage_report.py`
-  prints weekly actives, people using two or more rooms, and back-from-last-week.
-- **"Unprompted":** no. A visit is counted, but not why it happened. Visits
-  that start from a push notification can be told apart by the URL the
-  notification opens. Item 13 below adds that.
-- **"Very disappointed":** no. This is the Sean Ellis question, and needs a
-  one-question survey. Item 13 covers it.
-- **Syllabus to term in under five minutes:** not until item 1 exists. Measure
-  it from upload to confirmed parse.
+**All of them can now be read** from `scripts/usage_report.py` (D38), which
+the owner runs read-only against production:
+
+| Criterion | Where in the report |
+|---|---|
+| Syllabus to term in under five minutes | **SYLLABUS TO TERM**: the median time from read to confirmed, and how many were under five minutes. The read itself, with its 60-second goal, happens before the clock starts. |
+| Weekly retention of at least 40% | **WEEKLY**, "back from last week" |
+| At least 3 "very disappointed" | **WOULD YOU BE DISAPPOINTED** |
+| The money room used weekly without prompting | **WEEKLY**, "money room, unprompted" |
+| The universe test | **WEEKLY**, "2+ rooms, one unprompted" |
+
+The same section also shows the no-change rate on the syllabus confirm screen
+(§15).
+
+None of these can pass until real people use the app. That is the beta's job,
+not code's.
 
 ---
 
 ## Status at a glance (end of 2026-10-05)
 
-**The backend batch is LIVE since 2026-10-05** (`26db894`, `account-api-00034-54q`):
-every item marked **Built** below without "on `phase1-next`" is now deployed.
-**Built on `phase1-next`** = the next batch, waiting. Decision numbers point to
-`phase1-decisions.md`.
+**Live:** both earlier batches, the first since 2026-10-05 (`26db894`) and the
+second since 2026-10-06 (`81d099c`, `account-api-00036-qbx`). **Built on
+`phase1-loops`** means the review loops, which are waiting for their schema step
+and your go-ahead. Decision numbers point to `phase1-decisions.md`.
 
 | # | Item | Status |
 |---|---|---|
-| 1 | Document-intake pipeline, own syllabus | **Built** (D16). Needs the schema step and a provider key. Courses now carry a section (D22). Keeping the original file is built, in GCS (D24). Adding to an existing course: add-only, **built** on `phase1-next` (D27, D30); the canonical course table moved to Phase 2, Part A |
+| 1 | Document-intake pipeline, own syllabus | **Built** (D16). Needs the schema step and a provider key. Courses now carry a section (D22). Keeping the original file is built, in GCS (D24). Adding to an existing course, add-only: **live** (D27, D30). The canonical course table moved to Phase 2, Part A |
 | 2 | Surface existing projections | **Shipped** on the course page (D7). The Attention line's "needs X% on the final" is **built** (D13) |
-| 3 | Workload forecasting | **Shipped** (D8). The estimate-versus-actual loop is not built |
-| 4 | Multiple grading schemes | **Built**, additive (D18). Picking a scheme as the grade: **built** on `phase1-next` (D25, D29). Versioning: not wanted (D26) |
-| 5 | Degree audit and prerequisite graph | **Spike done** (D19). Prerequisites and the shared course table moved to Phase 2, Part A (`Ideas/overhaul/Phase 2/`, planned 2026-10-05); the audit itself builds on it |
+| 3 | Workload forecasting | **Shipped** (D8). The estimate-versus-actual loop: **built** on `phase1-loops` (D35, D36) |
+| 4 | Multiple grading schemes | **Built**, additive (D18). Picking a scheme as the grade: **live** (D25, D29). Versioning: not wanted (D26). Projection against result: **built** on `phase1-loops` (D34) |
+| 5 | Degree audit and prerequisite graph | **Spike done** (D19). Prerequisites and the shared course table moved to Phase 2, Part A (`Ideas/overhaul/Phase 2/`, planned 2026-10-05); the audit itself, from requirements you enter, is **live** (D31) |
 | 6 | Omnibox entry | **Built** (D17): suggests a category. The LLM fallback waits for the adapter's first live use |
 | 7 | CSV import and recurring detection | **Built** (D14). Needs the schema step. The "until when?" prompt is **shipped** (D21) |
 | 8 | Auto-categorisation, personal layers | **Built** (D15), in the import and the omnibox |
 | 9 | Foresight: forecast, runway, run-rate | **Built** (D9). Safe-to-spend-today already existed |
-| 10 | Annual planner and hours-to-goal solver | **Built** (D10). Plan versus actual is not built |
-| 11 | Paycheque verification and vacation pay | **Built** (D11). The second review loop is not built |
+| 10 | Annual planner and hours-to-goal solver | **Live** (D10). Plan versus actual: **built** on `phase1-loops` (D37) |
+| 11 | Paycheque verification and vacation pay | **Live** (D11). The second review loop ("were we right?"): offered, not chosen (D32) |
 | 12 | Cuts | **Closed:** `category_budgets` kept (D23), sinking funds kept as they are (D28) |
-| 13 | Measurement for this phase's gate | **Built** (D12). Needs the schema step |
+| 13 | Measurement for this phase's gate | **Live** (D12). Every exit number now prints from the usage report (D38) |
 | 14 | Unofficial transcript parsing | **Deferred** (D3) |
 | — | Click acknowledgement, the (?) sweep, reminders on the scheduler | **Done** before Phase 1 |
 

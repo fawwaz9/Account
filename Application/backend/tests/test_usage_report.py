@@ -17,7 +17,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.orm import sessionmaker
 
-from app._database.models import Base, SurveyResponseModel, UsageEventModel, UserModel
+from app._database.models import Base, SurveyResponseModel, SyllabusParseModel, UsageEventModel, UserModel
 from tests.conftest import TEST_DATABASE_URL, TESTING_SQLITE
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "usage_report.py"
@@ -61,10 +61,23 @@ def usage_db(tmp_path):
     # counts them, the vision's stricter one (one room unprompted) does not.
     use(people[2], "prompted_visit", "tasks")
     use(people[2], "prompted_visit", "calendar")
+    use(people[2], "prompted_visit", "budget")    # sent there by a notification: not "without prompting"
     session.add(SurveyResponseModel(id=uuid.uuid4(), user_id=people[0].id,
                                     question="disappointment", answer="very"))
     session.add(SurveyResponseModel(id=uuid.uuid4(), user_id=people[1].id,
                                     question="disappointment", answer="dismissed"))
+
+    def parse(person, minutes_to_confirm, total=None, changed=None):
+        read = signup + timedelta(hours=1)
+        session.add(SyllabusParseModel(
+            id=uuid.uuid4(), user_id=person.id, provider="openai", model="m", result={},
+            created_at=read, fields_total=total, fields_changed=changed,
+            applied_at=None if minutes_to_confirm is None else read + timedelta(minutes=minutes_to_confirm)))
+
+    parse(people[0], 3, total=10, changed=0)    # confirmed untouched, inside five minutes
+    parse(people[1], 8, total=10, changed=2)    # two fields corrected, over five
+    parse(people[1], 4)                          # added to a course: timed, no field counts
+    parse(people[2], None)                       # read, never confirmed
     session.commit()
     identities = [(p.id, p.email, p.name) for p in people]
     session.close()
@@ -79,8 +92,11 @@ def test_the_numbers(usage_db):
     this_week = [l for l in result.stdout.splitlines()
                  if l.strip().startswith((date.today() - timedelta(days=date.today().weekday())).isoformat())]
     assert this_week, result.stdout
-    # new 3 | active 3 | two rooms 2 | two rooms, one unprompted 1
-    assert [c.strip() for c in this_week[0].split("|")][1:5] == ["3", "3", "2", "1"]
+    # new 3 | active 3 | two rooms 2 | two rooms, one unprompted 1 | back - | money room unprompted 1
+    # (people[0] opened Budget on their own; people[2] only from a notification)
+    assert [c.strip() for c in this_week[0].split("|")][1:7] == ["3", "3", "2", "1", "-", "1"]
+    assert "3 of 4 read were confirmed; median 4.0 min; under 5 min: 2" in result.stdout
+    assert "confirmed with nothing changed: 1 of 2; fields changed in review: 2 of 20" in result.stdout
     assert "very 1 | somewhat 0 | not 0 | declined to answer 1" in result.stdout
     assert "median 16 min across 2 accounts; under 5 min: 1" in result.stdout
     assert "signed up, nothing created yet: 1" in result.stdout
