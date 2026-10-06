@@ -884,6 +884,31 @@ production-URL build: 26 of 26 files.
 
 ---
 
+## Counted accounts: one switch for net worth and every analytic -- SHIPPED 2026-10-06
+The owner's call (D39). Settings -> Financial lists every account with a
+checkbox, and the account's edit dialog says the same thing. An unticked
+account is treated as absent by every figure built from more than one account:
+- net worth and safe to spend
+- the forecast, runway and run-rates
+- the year plan and the plan against actual
+- the budget summary and the Dashboard
+- the term budget and course cost
+- the subscription finder and the standing-instruction totals
+
+Its card says "not counted", and its ledger stays. This reverses the earlier
+rule that net worth and safe to spend were kept apart. No schema change: the
+existing column is read in more places, through Finances/services/counted.py.
+The invariant test adds an unticked account of every kind and requires every
+figure to stay the same. 15 of 15 backend and 5 of 5 frontend mutations were
+caught.
+
+LIVE: API `account-api-00038-mzd` (digest-verified `abf61d9`) since 2026-10-06
+09:40 UTC. Health ok, routes 401 against a 404 control, no errors in the logs.
+Frontend `main` at `abf61d9`, matching a production build file by file
+(29 files).
+
+---
+
 ## Phase 1, the review loops -- SHIPPED 2026-10-06
 Decisions D34-D38 in phase1-decisions.md, steps in phase1-runbook.md ("The
 review loops"). The owner backed up and applied the schema (four nullable
