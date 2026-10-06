@@ -909,6 +909,10 @@ The four new routes answer 401 against a 404 control, health is ok, and the logs
 show no errors. Frontend `main` at `aaf93c4`, matching a production build file
 by file (29 files).
 
+Then, the owner's call: Budget's forecast and year plan moved to the foot of
+the page, side by side (`ff0b4f8`). Live at `2081f1a`, matching a build file
+by file; the live stylesheet carries the grid.
+
 ---
 
 ## Phase 1, the second batch -- SHIPPED 2026-10-05
