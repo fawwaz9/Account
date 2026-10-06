@@ -210,9 +210,8 @@ would want it).
 
 ## The second batch: DEPLOYED 2026-10-05 (`d81dfea` API, `606a11a` frontend)
 
-Live and verified; see shipped.md. One follow-up waits for a go-ahead: the
-syllabus-cap fix (`606a11a`) is on `main` but not on `ship`, so its API half is
-not deployed. It needs no schema step: `deploy.run.sh api` from `main`.
+Live and verified; see shipped.md. The syllabus-cap fix (`606a11a`) followed
+on the API as `account-api-00036-qbx` (`81d099c`).
 
 Rebased onto `main` on 2026-10-05 as `phase1-batch2` (the old `phase1-next`
 on GitHub is the pre-rebase copy, deleted once this is on `main`), so

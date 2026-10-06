@@ -912,8 +912,7 @@ failed at 03:04, after midnight UTC but still evening in Vancouver. The
 syllabus daily cap compared a UTC date with the student's local one, so every
 evening it counted nothing. It is fixed in `606a11a`, with tests in UTC-12 and
 UTC+14 that fail at any hour if it comes back. The frontend went out with it.
-The **API fix is not deployed**: it waits for the go-ahead. That is harmless for
-now, because syllabus reading needs the AI key, which is not set.
+The API half followed at 03:21 UTC as `account-api-00036-qbx` (`81d099c`).
 
 LIVE: API `account-api-00035-cvz` (digest-verified `d81dfea`). The new routes
 answer 401 against a 404 control, health is ok, and the logs show no errors.
