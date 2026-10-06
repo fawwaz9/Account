@@ -884,6 +884,44 @@ production-URL build: 26 of 26 files.
 
 ---
 
+## Phase 1, the second batch -- SHIPPED 2026-10-05
+Phase 1 of Ideas/overhaul. Decisions D25-D33 in phase1-decisions.md, steps in
+phase1-runbook.md ("Next batch"). The owner backed up and applied the schema
+(one nullable column, `courses.counting_scheme_id`; two new tables,
+`degree_requirements` and `course_equivalences`), then ran
+`deploy.run.sh api`.
+
+- **A grading scheme can count as the course's grade** (D25, D29), or the
+  course's own weights. The required-final figure no longer goes past 100% on
+  courses weighted over 100: one test course was told 191% when 96.16% would do.
+- **A syllabus can add to a course you already have** (D27, D30). It only adds,
+  and never changes or removes anything already there.
+- **The degree audit** (D31), at Grades → Degree audit. You enter the
+  requirements and course mappings once, and it shows what is done, in
+  progress, and missing.
+- **The purge reaches every table** (D33). It never deleted category limits or
+  month values, so their foreign keys would have refused the purge. The purge
+  runs at startup, so an API instance could not have started. That would have
+  been possible from about 2026-10-25. A refused purge now rolls back and
+  waits instead.
+- **`deploy.run.sh`** pushes the branch itself so CI runs, and a docs-only
+  commit uses the CI run of its code.
+
+CI CAUGHT A REAL BUG BY THE CLOCK: the same commit passed CI at 23:24 UTC and
+failed at 03:04, after midnight UTC but still evening in Vancouver. The
+syllabus daily cap compared a UTC date with the student's local one, so every
+evening it counted nothing. It is fixed in `606a11a`, with tests in UTC-12 and
+UTC+14 that fail at any hour if it comes back. The frontend went out with it.
+The **API fix is not deployed**: it waits for the go-ahead. That is harmless for
+now, because syllabus reading needs the AI key, which is not set.
+
+LIVE: API `account-api-00035-cvz` (digest-verified `d81dfea`). The new routes
+answer 401 against a 404 control, health is ok, and the logs show no errors.
+Frontend `main` at `606a11a`, matching a production build file by file
+(29 files).
+
+---
+
 ## Phase 1, the backend batch -- SHIPPED 2026-10-05
 Phase 1 of Ideas/overhaul (Ideas/overhaul/Phase 1/). Every decision is in
 phase1-decisions.md (D9-D24), the steps in phase1-runbook.md. Deployed in one
