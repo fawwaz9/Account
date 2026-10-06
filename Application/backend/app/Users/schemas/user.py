@@ -112,6 +112,9 @@ class UserPreferences(BaseModel):
     #: effect and its ownership check live in one call
     #: (PUT /jobs/{user_id}/cash-tip-account), not in a generic settings save.
     cash_tip_account_id: UUID | None = None
+    #: Phase 1 D36: scale the workload forecast's estimates by how long tasks
+    #: really take. Off until asked for; estimates themselves never change.
+    use_estimate_ratio: bool = False
 
     @field_validator("event_colors")
     @classmethod
@@ -175,6 +178,7 @@ class UserPreferencesPatch(BaseModel):
     min_free_block_minutes: int | None = Field(default=None, ge=5, le=240)
     #: Replaces the whole map when sent -- Settings always sends all of it.
     event_colors: dict[EventKind, str] | None = None
+    use_estimate_ratio: bool | None = None
 
     # Both validators pass `None` straight through. An explicit null means "no
     # opinion" here, and running the check on it would reject the one value that

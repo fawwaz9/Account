@@ -1022,3 +1022,77 @@ schema step, so it can ship ahead of the batch if the batch waits.
 relationships? A hand-ordered list is what left these tables out in the first
 place. Relationships plus a test that reads the metadata can't fall behind a
 new table.
+
+## D34. Grade loop: the result against the last projection before the final (yours, 2026-10-06)
+
+**Chosen:** compare the result with the projection as it stood just before
+the final was marked. **Offered, not chosen:** the halfway projection as well,
+or every projection drawn as a line.
+
+**How it is built:**
+- **Saved at the moment it stops being a prediction.** Two columns on
+  `courses`: `projected_before_final` and `projected_on`. They are written the
+  first time a write would end the forecast:
+  - the final exam (category `Final`) gets its first mark, or
+  - the course's `final_grade` is first set, for a course with no final or one
+    whose final was never entered.
+
+  The value is the course's grade as it stood just before that write: the
+  number the course page was showing.
+- **First time only.** Editing or re-entering the final later never overwrites
+  it, because the first value is the one that was a prediction.
+- **Only when something was marked.** With no marks at all there was no
+  projection, so nothing is saved.
+- **The result** is `final_grade`, the official grade you enter. The course
+  says: "Before the final we projected 83.0%. You got 82%."
+
+## D35. Task loop: actual time asked on completion, and a timer (yours, 2026-10-06)
+
+**Chosen:** both. **Offered, not chosen:** the question alone, or the timer
+alone.
+
+**How it is built:**
+- **Two columns on `tasks`:** `actual_minutes` and `timer_started_at`.
+- **The timer is stored on the server,** so it survives a reload or another
+  device. Stopping it adds the elapsed minutes to `actual_minutes`, and running
+  it twice adds up. A timer left running past 12 hours is not trusted: stopping
+  it records nothing and says so.
+- **Ticking off a task with an estimate** asks "How long did it take?", with
+  quick picks (as estimated, half, 1.5×, 2×, or type it). The timer's total
+  fills it in when one ran. Skipping leaves it blank, and a blank counts for
+  nothing.
+
+## D36. The estimate ratio: shown, and offered for the workload forecast (yours, 2026-10-06)
+
+**Chosen:** show it and offer to apply it. **Offered, not chosen:** show only,
+or apply automatically.
+
+**How it is built:**
+- **The ratio** is the total actual time over the total estimated time, across
+  completed tasks that have both, from the last 90 days. A total, not an
+  average of ratios: a 5-minute task that took 15 should not weigh as much as a
+  5-hour one.
+- **Shown once at least 5 tasks have both numbers.**
+- **"Use it in the workload forecast"** is a preference, off by default. When
+  on, the week-load estimate is scaled by the ratio, and the forecast says so.
+- **Estimates are never rewritten.** Turning it off undoes it completely.
+
+## D37. Plan loop: a plan counts as set when you save it (yours, 2026-10-06)
+
+**Chosen:** "Save as my plan". **Offered, not chosen:** saved automatically on
+the 1st of each month, or both.
+
+**How it is built:**
+- **A new table, `saved_plans`.** Each save is a new row and is never
+  overwritten, holding the plan's monthly rows as they stood.
+- **Each finished month compares with the latest plan saved before it began.**
+  A plan saved mid-March starts counting from April. Its March row only covers
+  the days after it was saved, so comparing it with all of March would be
+  unfair.
+- **Actuals come from the ledger, by the plan's own definitions:**
+  - Liquid money is spending, savings and emergency accounts. Transfers between
+    them net to nothing.
+  - Card purchases count when they happen, and paying the card off counts for
+    nothing, the same as the forecast's pace.
+  - Tuition counts as money out, because it left. The plan leaves tuition out,
+    so the month says how much of the difference it explains.

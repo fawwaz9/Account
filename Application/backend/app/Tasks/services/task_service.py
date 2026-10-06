@@ -30,8 +30,10 @@ from app.Tasks.schemas.task import (
     TaskCreate,
     TaskSnooze,
     TaskUpdate,
+    TimerStop,
 )
 from app.Users.services.user_service import get_preferences
+from app.Tasks.services.estimates_service import start_timer, stop_clock
 from app.shared.dates import user_today
 
 #: How far below target a course has to be for each band, in percentage points.
@@ -281,11 +283,36 @@ def set_done(task: TaskModel, done: bool) -> None:
     """
     task.done = done
     if done:
+        stop_clock(task)  # a finished task keeps its timed minutes, not a running clock
         task.completed_at = utc_now()
         task.archived = True
     else:
         task.completed_at = None
         task.archived = False
+
+
+def start_task_timer(db: Session, user_id: uuid.UUID, task_id: uuid.UUID):
+    task = get_task(db, user_id, task_id)
+    if task is None:
+        return None
+    start_timer(task)
+    db.commit()
+    db.refresh(task)
+    return attach_course_code(task, course_codes(db, user_id))
+
+
+def stop_task_timer(db: Session, user_id: uuid.UUID, task_id: uuid.UUID) -> TimerStop | None:
+    task = get_task(db, user_id, task_id)
+    if task is None:
+        return None
+    added, discarded = stop_clock(task)
+    db.commit()
+    db.refresh(task)
+    return TimerStop(
+        task=attach_course_code(task, course_codes(db, user_id)),
+        added_minutes=added,
+        discarded=discarded,
+    )
 
 
 def snooze_task(

@@ -5,6 +5,7 @@ the app already knows, laid out month by month as a running balance -- then
 solved backwards into the weekly hours a target needs.
 """
 from datetime import date
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -52,3 +53,41 @@ class AnnualPlan(BaseModel):
     #: Present when a target was asked for and an hourly job can price it.
     goal: Goal | None = None
     assumptions: list[str] = Field(default_factory=list)
+
+
+# --- plan against actual (Phase 1 D37) ---------------------------------------
+
+class SavedPlan(BaseModel):
+    """A saved plan's identity; its rows are compared, not shown again."""
+
+    id: UUID
+    saved_on: date
+    starts_on: date
+    ends_on: date
+
+    class Config:
+        from_attributes = True
+
+
+class MonthReview(BaseModel):
+    """One finished month: what the plan said, and what happened."""
+
+    month: date
+    #: The day the plan this month is compared with was saved.
+    plan_saved_on: date
+    planned_in: float
+    planned_out: float
+    planned_end: float
+    actual_in: float
+    actual_out: float
+    actual_end: float
+    #: Tuition paid this month. Part of `actual_out`; the plan leaves tuition
+    #: out, so this much of any overspend is that and not the pace.
+    tuition_out: float = 0.0
+
+
+class PlanReview(BaseModel):
+    #: The newest saved plan; null when none has been saved.
+    latest: SavedPlan | None = None
+    #: Finished months with a plan saved before they began, oldest first.
+    months: list[MonthReview] = Field(default_factory=list)

@@ -98,6 +98,8 @@ class TaskUpdate(BaseModel):
     #: Checking a task sets `completed_at`; unchecking clears it.
     done: bool | None = None
     archived: bool | None = None
+    #: How long it actually took (Phase 1 D35). Null clears it.
+    actual_minutes: int | None = Field(default=None, ge=1, le=MAX_ESTIMATED_MINUTES)
 
 
 class Task(TaskBase):
@@ -106,6 +108,10 @@ class Task(TaskBase):
     completed_at: datetime | None = None
     archived: bool = False
     created_at: datetime | None = None
+    #: Phase 1 D35: what it actually took, and when a running timer started
+    #: (UTC, null when none runs).
+    actual_minutes: int | None = None
+    timer_started_at: datetime | None = None
     #: Set when this task was raised from a dated grade. It closes itself when
     #: that grade's score lands -- and only ever in that direction, since
     #: finishing the work and having it marked are different facts. The client
@@ -134,3 +140,28 @@ class Task(TaskBase):
 
     class Config:
         from_attributes = True
+
+
+class TimerStop(BaseModel):
+    """What stopping a timer did."""
+
+    task: Task
+    #: Minutes the stop added to `actual_minutes`; 0 when it recorded nothing.
+    added_minutes: int = 0
+    #: True when the timer had run too long to trust, so nothing was recorded.
+    discarded: bool = False
+
+
+class EstimateRatio(BaseModel):
+    """How long tasks really take against what was estimated (Phase 1 D36)."""
+
+    #: Total actual over total estimated; null until enough tasks have both.
+    ratio: float | None = None
+    #: Completed tasks in the window with both numbers.
+    tasks: int = 0
+    #: How many are needed before a ratio is shown.
+    needed: int
+    estimated_minutes: int = 0
+    actual_minutes: int = 0
+    #: Whether the workload forecast is using it.
+    applied: bool = False

@@ -39,8 +39,14 @@ class WeekLoad(BaseModel):
     work_minutes: int = 0
     #: The part that is a class, a lab or a discussion.
     class_minutes: int = 0
-    #: Minutes you estimated against tasks due in the window.
+    #: Minutes you estimated against tasks due in the window -- scaled by
+    #: `estimate_ratio` when that is set.
     estimated_minutes: int = 0
+    #: The estimates as typed, before any scaling.
+    typed_estimated_minutes: int = 0
+    #: How long tasks really take against their estimates, when the student
+    #: asked for the forecast to use it (Phase 1 D36). Null: not applied.
+    estimate_ratio: float | None = None
     task_count: int = 0
     #: Tasks with no estimate, so the number above can be read honestly.
     unestimated_tasks: int = 0

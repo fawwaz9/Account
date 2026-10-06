@@ -1,4 +1,6 @@
 import uuid
+from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 from sqlalchemy.orm import Session, joinedload
 from app._database.models import CourseModel, CourseCategoryWeightModel, GradeModel
@@ -13,6 +15,7 @@ from app.Grades.services.grade_schedule import (
 # Re-exported: callers import both from here, as they always have.
 from app.Grades.utils.marks import MAX_COURSE_PERCENT, counts_toward_average  # noqa: F401
 from app.Grades.utils import scheme_math
+from app.shared.dates import user_today
 
 #: A grade may exceed its max -- bonus marks are real -- but not absurdly, so a
 #: slipped digit (150 out of 10) is still caught.
@@ -83,6 +86,7 @@ def add_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_data:
     if course is None:
         return None
 
+    before = forecast_before(course)
     weights = course.category_weights
     category_value = grade_data.category.value if isinstance(grade_data.category, GradeCategory) else grade_data.category
 
@@ -105,6 +109,7 @@ def add_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_data:
     db.refresh(course)
 
     course.average = course_grade(course)
+    keep_projection(course, before, user_today(db, user_id))
     # Inside this transaction, so a grade that fails to save leaves no task
     # behind for work that was never recorded.
     sync_schedule_for_grade(db, course, grade)
@@ -124,6 +129,7 @@ def add_grades_bulk(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade
     if course is None:
         return None
 
+    before = forecast_before(course)
     weights = course.category_weights
     created: list[GradeModel] = []
 
@@ -154,6 +160,7 @@ def add_grades_bulk(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade
         db.flush()
         db.refresh(course)
         course.average = course_grade(course)
+        keep_projection(course, before, user_today(db, user_id))
         for grade in created:
             sync_schedule_for_grade(db, course, grade)
         db.commit()
@@ -198,6 +205,7 @@ def update_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id
     # student took it away" and "the grade never had one" look identical
     # afterwards, and they call for opposite things on the calendar.
     had_time = grade.due_time is not None
+    before = forecast_before(course)
 
     for key, value in update_data.items():
         setattr(grade, key, value)
@@ -241,6 +249,7 @@ def update_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id
         raise ValueError("A length needs a start time to run from")
 
     course.average = course_grade(course)
+    keep_projection(course, before, user_today(db, user_id))
     # Covers all four of the ways an edit moves the task: a renamed grade, a
     # moved deadline, a deadline removed, and a score arriving by edit rather
     # than through record_grade.
@@ -290,8 +299,10 @@ def record_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id
     if score_exceeds_limit(score, grade.max_score):
         raise ValueError(f"Score cannot exceed {MAX_SCORE_MULTIPLE:g}x the max score")
 
+    before = forecast_before(course)
     grade.score = score
     course.average = course_grade(course)
+    keep_projection(course, before, user_today(db, user_id))
     # The score landing is what closes the task.
     sync_schedule_for_grade(db, course, grade)
     db.commit()
@@ -335,6 +346,47 @@ def counting_components(course: CourseModel):
         if scheme.id == scheme_id:
             return [SchemeComponent.model_validate(c) for c in scheme.components]
     return None
+
+
+@dataclass(frozen=True)
+class Forecast:
+    """The course's grade as it stood before a write, and whether it was still a forecast."""
+    grade: float | None  # None: nothing marked, so nothing was projected
+    ended: bool
+
+
+def final_is_marked(course: CourseModel) -> bool:
+    return any(
+        g.category == GradeCategory.FINAL.value and g.score is not None and counts_toward_average(g)
+        for g in course.grades
+    )
+
+
+def forecast_ended(course: CourseModel) -> bool:
+    """The final is marked or the official result is in: no longer a prediction."""
+    return final_is_marked(course) or bool(course.final_grade and course.final_grade > 0)
+
+
+def forecast_before(course: CourseModel) -> Forecast:
+    """Read before a write that might end the forecast (Phase 1 D34)."""
+    marked = any(
+        g.score is not None and g.max_score > 0 and counts_toward_average(g) and not is_additive(g.category)
+        for g in course.grades
+    )
+    return Forecast(course_grade(course) if marked else None, forecast_ended(course))
+
+
+def keep_projection(course: CourseModel, before: Forecast, today: date) -> None:
+    """Keep the last projection before the final, the first time a write ends the forecast.
+
+    Only the first time: a final re-entered later must not replace the number
+    that was a real prediction with one that was not.
+    """
+    if course.projected_before_final is not None or before.grade is None or before.ended:
+        return
+    if forecast_ended(course):
+        course.projected_before_final = round(before.grade, 2)
+        course.projected_on = today
 
 
 def course_grade(course: CourseModel) -> float:

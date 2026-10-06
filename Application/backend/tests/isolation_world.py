@@ -42,6 +42,7 @@ from app._database.models import (
     PushSubscriptionModel,
     ImportModel,
     CourseEquivalenceModel,
+    SavedPlanModel,
     DegreeRequirementModel,
     GradingSchemeModel,
     SurveyResponseModel,
@@ -247,6 +248,14 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
     # A question of the world's own, so the real one is still unanswered and
     # A's request to answer it reaches the write path instead of a 409.
     add(SurveyResponseModel(id=new_id(), user_id=user_id, question=f"{marker} question", answer="very"))
+    # A saved year plan (Phase 1 D37) with a month already finished, so the
+    # review reads it -- and with the marker in a field the review never shows,
+    # so a leak would be found by its number instead.
+    add(SavedPlanModel(id=new_id(), user_id=user_id, saved_on=day - timedelta(days=90),
+                       starts_on=day - timedelta(days=90), ends_on=day + timedelta(days=200),
+                       starting_balance=4242.42,
+                       months=[{"month": (day - timedelta(days=60)).replace(day=1).isoformat(),
+                                "money_in": 4242.42, "money_out": 4242.42, "end_balance": 4242.42}]))
     _ = (event, transaction, recurring_task)
 
     db.commit()

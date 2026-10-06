@@ -16,10 +16,13 @@ from app.Grades.services.grade_service import (
     calculate_grade_category_average,
     category_points,
     calculate_letter_grade,
+    forecast_before,
+    keep_projection,
     update_category_weights as apply_category_weights,
 )
 from app.Grades.utils.enums import SEMESTER_ORDER
 from app.Grades.utils.terms import course_result_grade, term_bucket
+from app.shared.dates import user_today
 
 
 def courses_with_marks(db: Session, user_id: uuid.UUID) -> set[uuid.UUID]:
@@ -218,8 +221,10 @@ def update_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, data: C
     # url without re-reading their keys.
     update_data.pop("links", None)
 
+    before = forecast_before(course)
     for key, value in update_data.items():
         setattr(course, key, value)
+    keep_projection(course, before, user_today(db, user_id))
 
     if data.links is not None:
         # Assigned whole, and that is the point rather than a style choice.

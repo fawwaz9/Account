@@ -231,6 +231,10 @@ class Course(CourseBase):
     #: The grading scheme that is this course's grade, when one was picked
     #: (Phase 1 D25). Null: the course's own weights are the grade.
     counting_scheme_id: UUID | None = None
+    #: The last projection before the final, and the day it stood (Phase 1
+    #: D34). Set by the server only: not on CourseUpdate.
+    projected_before_final: float | None = None
+    projected_on: date | None = None
 
     class Config:
         from_attributes = True

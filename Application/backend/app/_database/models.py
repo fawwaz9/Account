@@ -129,6 +129,7 @@ class UserModel(Base):
     syllabus_parses = relationship("SyllabusParseModel", cascade=cascade)
     degree_requirements = relationship("DegreeRequirementModel", cascade=cascade)
     course_equivalences = relationship("CourseEquivalenceModel", cascade=cascade)
+    saved_plans = relationship("SavedPlanModel", cascade=cascade)
 
     @property
     def has_password(self) -> bool:
@@ -163,6 +164,11 @@ class CourseModel(Base):
     #: that scheme is deleted.
     counting_scheme_id = Column(Uuid, nullable=True)
     final_grade = Column(Float, default=0.0)
+    #: Phase 1 D34. The course's grade just before the final was marked or the
+    #: result entered -- the app's last real prediction -- and the day it stood.
+    #: Written once, by the server; the course page sets it against the result.
+    projected_before_final = Column(Float, nullable=True)
+    projected_on = Column(Date, nullable=True)
     # What you are aiming for in this course. Null falls back to the account
     # default, so a new course is measured against something without you
     # having to fill it in.
@@ -593,6 +599,12 @@ class TaskModel(Base):
     #: What you think it will take. Summing these is what turns "7 tasks" into
     #: "23 hours", so a week can be seen to be over-committed in advance.
     estimated_minutes = Column(Integer, nullable=True)
+    #: Phase 1 D35. How long it actually took, from the question on completion
+    #: or the timer. Null is "not said", which counts for nothing.
+    actual_minutes = Column(Integer, nullable=True)
+    #: When the running timer started (UTC); null when none is running. Kept on
+    #: the server so a timer survives a reload or a second device.
+    timer_started_at = Column(DateTime, nullable=True)
     #: Free-text labels, as a JSON list. Coursework is categorised by its
     #: course code instead.
     tags = Column(JSON, nullable=False, default=list)
@@ -1436,6 +1448,29 @@ class GradingSchemeModel(Base):
     components = Column(JSON, nullable=False, default=list)
     position = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, nullable=False, default=utc_now)
+
+
+class SavedPlanModel(Base):
+    """A year plan as it stood when the student saved it (Phase 1 D37).
+
+    Each save is a new row, never overwritten: a finished month is compared with
+    the plan that was in force before it began, so replacing an old plan would
+    rewrite the comparison for every month it covered.
+    """
+
+    __tablename__ = "saved_plans"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    saved_at = Column(DateTime, nullable=False, default=utc_now)
+    #: The student's own date when it was saved: what "before March began" is
+    #: measured against.
+    saved_on = Column(Date, nullable=False)
+    starts_on = Column(Date, nullable=False)
+    ends_on = Column(Date, nullable=False)
+    starting_balance = Column(Float, nullable=False)
+    #: The plan's monthly rows: [{month, money_in, money_out, end_balance}].
+    months = Column(JSON, nullable=False, default=list)
 
 
 class DegreeRequirementModel(Base):

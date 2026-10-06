@@ -20,6 +20,7 @@ CLASS_KIND_VALUES = {kind.value for kind in CLASS_KINDS}
 from app.Calendar.schemas.load import CrunchStrip, CrunchWeek, FreeBlock, WeekLoad
 from app.Calendar.services.event_service import list_occurrences
 from app.Tasks.services.task_service import list_tasks
+from app.Tasks.services.estimates_service import estimate_ratio
 from app.Users.services.user_service import get_preferences
 from app.shared.dates import user_now, user_today
 
@@ -183,8 +184,13 @@ def week_load(
             classes += minutes
 
     tasks = list_tasks(db, user_id, start=window_start, end=window_end) or []
-    estimated = sum(task.estimated_minutes or 0 for task in tasks)
+    typed = sum(task.estimated_minutes or 0 for task in tasks)
     unestimated = sum(1 for task in tasks if not task.estimated_minutes)
+    # Phase 1 D36: scaled by how long tasks really take, when asked for. The
+    # typed total goes alongside, so the forecast can say what it did.
+    ratio = estimate_ratio(db, user_id)
+    applied = ratio.ratio if ratio.applied else None
+    estimated = round(typed * applied) if applied else typed
 
     return WeekLoad(
         starts_on=window_start,
@@ -193,6 +199,8 @@ def week_load(
         work_minutes=work,
         class_minutes=classes,
         estimated_minutes=estimated,
+        typed_estimated_minutes=typed,
+        estimate_ratio=applied,
         task_count=len(tasks),
         unestimated_tasks=unestimated,
         event_count=events,

@@ -26,11 +26,13 @@ from app.Tasks.services.reminder_service import (
     update_reminder,
 )
 from app.Tasks.schemas.task import (
+    EstimateRatio,
     SnoozeRequest,
     Task,
     TaskCreate,
     TaskSnooze,
     TaskUpdate,
+    TimerStop,
 )
 from app.Tasks.schemas.timing import CompletionTiming
 from app.Tasks.services.recurring_task_service import (
@@ -50,9 +52,12 @@ from app.Tasks.services.task_service import (
     list_tasks,
     snooze_history,
     snooze_task,
+    start_task_timer,
+    stop_task_timer,
     update_task,
     wake_task,
 )
+from app.Tasks.services.estimates_service import estimate_ratio
 from app.Tasks.services.timing_service import completion_timing
 from app.shared import audit
 from app.shared.errors import error_user, responses
@@ -368,6 +373,41 @@ def get_task_timing(user_id: VerifiedUserId, db: DBSession):
         raise HTTPException(status_code=404, detail=error_user["not_found"])
 
     return timing
+
+
+@router.get(
+    "/{user_id}/tasks/estimates",
+    response_model=EstimateRatio,
+    responses=responses["user_404"],
+)
+def get_estimate_ratio(user_id: VerifiedUserId, db: DBSession):
+    """How long tasks really take against their estimates (Phase 1 D36).
+
+    Above `/tasks/{task_id}` for the same reason as `/tasks/timing`.
+    """
+    return estimate_ratio(db, user_id)
+
+
+@router.post("/{user_id}/tasks/{task_id}/timer/start", response_model=Task, responses=TASK_BOTH)
+def start_timer_on_task(user_id: VerifiedUserId, task_id: UUID, db: DBSession):
+    """Start timing a task. Starting one already running changes nothing."""
+    try:
+        task = start_task_timer(db, user_id, task_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task
+
+
+@router.post("/{user_id}/tasks/{task_id}/timer/stop", response_model=TimerStop, responses=TASK_404)
+def stop_timer_on_task(user_id: VerifiedUserId, task_id: UUID, db: DBSession):
+    """Stop it, adding the minutes to the time it took -- unless it ran past
+    twelve hours, which is a forgotten timer and records nothing."""
+    stopped = stop_task_timer(db, user_id, task_id)
+    if stopped is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return stopped
 
 
 @router.get("/{user_id}/tasks/{task_id}", response_model=Task, responses=TASK_404)

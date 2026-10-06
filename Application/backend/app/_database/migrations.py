@@ -55,6 +55,10 @@ ADDED_COLUMNS: dict[str, dict[str, str | dict[str, str]]] = {
         "section": "VARCHAR",
         # Phase 1 D25: the scheme that counts, when one was picked.
         "counting_scheme_id": {"sqlite": "CHAR(32)", "postgresql": "UUID"},
+        # Phase 1 D34: the last projection before the final. Not backfilled:
+        # no past prediction was ever saved, so there is none to recover.
+        "projected_before_final": "FLOAT",
+        "projected_on": "DATE",
     },
     "accounts": {
         # NOT "DEFAULT 0"/"DEFAULT 1" like the older booleans above. Postgres
@@ -82,6 +86,9 @@ ADDED_COLUMNS: dict[str, dict[str, str | dict[str, str]]] = {
         "priority": "INTEGER NOT NULL DEFAULT 3",
         "snoozed_until": "DATE",
         "occurrence_date": "DATE",
+        # Phase 1 D35: the time it actually took, and a running timer.
+        "actual_minutes": "INTEGER",
+        "timer_started_at": "TIMESTAMP",
     },
     "recurring_tasks": {
         "priority": "INTEGER NOT NULL DEFAULT 3",

@@ -36,7 +36,8 @@ from app.Finances.services.safe_service import safe_to_spend
 from app.Finances.services.forecast_service import forecast
 from app.Finances.schemas.forecast import CashFlowForecast
 from app.Finances.services.plan_service import plan
-from app.Finances.schemas.plan import AnnualPlan
+from app.Finances.schemas.plan import AnnualPlan, PlanReview, SavedPlan
+from app.Finances.services.plan_review_service import review as plan_review, save_plan
 from app.Finances.services import import_service
 from app.Finances.schemas.importing import CommitRequest, ImportPreview, ImportSummary, PreviewRequest
 from app.Finances.services.subscription_service import confirm_subscription, find_subscriptions
@@ -318,6 +319,30 @@ def get_plan(
     if result is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
     return result
+
+
+@router.post(
+    "/{user_id}/plan/saved",
+    response_model=SavedPlan,
+    responses=responses["user_404"],
+)
+def keep_plan(user_id: VerifiedUserId, db: DBSession):
+    """Save the plan as it stands, to compare the coming months with (Phase 1
+    D37). A new row each time; an earlier plan is never replaced."""
+    saved = save_plan(db, user_id)
+    if saved is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+    return saved
+
+
+@router.get(
+    "/{user_id}/plan/review",
+    response_model=PlanReview,
+    responses=responses["user_404"],
+)
+def get_plan_review(user_id: VerifiedUserId, db: DBSession):
+    """Each finished month against the plan saved before it began."""
+    return plan_review(db, user_id)
 
 
 @router.get(
