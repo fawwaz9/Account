@@ -1858,3 +1858,28 @@
   margin: 0;
   min-width: 0;
 }
+
+/* ===== Counted accounts (Phase 1 D39) =====
+   The list in Settings → Financial, and the card's tag for an unticked one. */
+
+.countedAccounts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 16px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.countedAccounts legend {
+  margin-bottom: 6px;
+  padding: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+/* Dashed rather than filled: an absence, not another kind. */
+.sectorUncounted {
+  background: transparent;
+  border: 1px dashed var(--muted);
+}

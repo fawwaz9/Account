@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -67,12 +67,17 @@ vi.mock("../services/authClient", () => ({
   setPassword: vi.fn().mockResolvedValue({ access_token: "t" }),
 }));
 
+const updateAccount = vi.fn();
+const SPENDING = { id: "a1", name: "Spending", kind: "spending", income_share: 60,
+  archived: false, position: 0, counts_toward_net_worth: true, balance: 100, role_locked: false };
+// An unticked account (D39), added only by the tests about counting, so the
+// cash-tip picker's option count elsewhere is unchanged.
+const LENT = { id: "a2", name: "Lent to Sam", kind: "other", income_share: 0,
+  archived: false, position: 1, counts_toward_net_worth: false, balance: 50, role_locked: false };
+let accountsFixture: object[] = [SPENDING];
 vi.mock("../features/budget/api", () => ({
-  fetchAccounts: vi.fn().mockResolvedValue([
-    { id: "a1", name: "Spending", kind: "spending", income_share: 60,
-      archived: false, position: 0, counts_toward_net_worth: true,
-      balance: 100, role_locked: false },
-  ]),
+  fetchAccounts: vi.fn(() => Promise.resolve(accountsFixture)),
+  updateAccount: (...args: unknown[]) => updateAccount(...args),
   fetchCategories: vi.fn().mockResolvedValue([
     { id: "c1", name: "Groceries", archived: false, position: 0 },
   ]),
@@ -93,7 +98,7 @@ vi.mock("../features/calender/api", () => ({
 
 import SettingsPage from "./SettingsPage";
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); accountsFixture = [SPENDING]; });
 beforeEach(() => vi.clearAllMocks());
 
 function tabs() {
@@ -560,6 +565,33 @@ describe("the financial tab", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Income split" }));
 
-    await waitFor(() => expect(screen.getByLabelText(/Spending/)).toBeDefined());
+    await waitFor(() => expect(within(screen.getByRole("dialog")).getByLabelText(/Spending/)).toBeDefined());
+  });
+
+  it("lists every account with whether it counts, and saves a tick at once", async () => {
+    accountsFixture = [SPENDING, LENT];
+    updateAccount.mockReset().mockResolvedValue({});
+    render(<SettingsPage />);
+    fireEvent.click(screen.getByRole("tab", { name: "Financial" }));
+
+    const group = await screen.findByRole("group", { name: /Counted accounts/ });
+    const spending = within(group).getByRole("checkbox", { name: "Spending" }) as HTMLInputElement;
+    const lent = within(group).getByRole("checkbox", { name: "Lent to Sam" }) as HTMLInputElement;
+    expect([spending.checked, lent.checked]).toEqual([true, false]);
+
+    fireEvent.click(spending);
+    await waitFor(() => expect(updateAccount).toHaveBeenCalledWith("u1", "a1", { counts_toward_net_worth: false }));
+    expect((await within(group).findByRole("status")).textContent).toBe("Spending no longer counts.");
+  });
+
+  it("says when a tick could not be saved", async () => {
+    accountsFixture = [SPENDING, LENT];
+    updateAccount.mockReset().mockRejectedValue(new Error("Account not found"));
+    render(<SettingsPage />);
+    fireEvent.click(screen.getByRole("tab", { name: "Financial" }));
+
+    const group = await screen.findByRole("group", { name: /Counted accounts/ });
+    fireEvent.click(within(group).getByRole("checkbox", { name: "Lent to Sam" }));
+    expect((await within(group).findByRole("alert")).textContent).toBe("Account not found");
   });
 });

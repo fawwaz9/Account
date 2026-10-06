@@ -192,6 +192,11 @@ export default function Sectors({ accounts, onEdit, onAdd, onReorder }: SectorsP
               <span className="sectorName">
                 {account.name}
                 <span className="sectorKindLabel">{KIND_LABELS[account.kind] ?? account.kind}</span>
+                {/* Unticked in Settings: out of net worth and every figure
+                    (D39). Said on the card, or the switch is invisible here. */}
+                {account.counts_toward_net_worth === false && (
+                  <span className="sectorKindLabel sectorUncounted">not counted</span>
+                )}
               </span>
               <span className="sectorBalance">
                 {formatMoney(worthOf(account))}

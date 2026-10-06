@@ -28,6 +28,8 @@ interface RecurringProps {
   readonly onEdit: (rule: RecurringTransaction) => void;
   readonly onDelete: (rule: RecurringTransaction) => void;
   readonly busy: boolean;
+  /** Accounts unticked in Settings (D39): their charges stay listed, out of the totals. */
+  readonly uncounted?: ReadonlySet<string>;
 }
 
 /**
@@ -47,9 +49,13 @@ export default function Recurring({
   onEdit,
   onDelete,
   busy,
+  uncounted,
 }: RecurringProps) {
-  const committed = upcoming.reduce((total, charge) => total + charge.signed_amount, 0);
-  const leaving = upcoming
+  // The totals are an analytic, so an unticked account's charges leave them;
+  // the list below still shows every rule, since the rules are records.
+  const counted = upcoming.filter((charge) => !(charge.account_id && uncounted?.has(charge.account_id)));
+  const committed = counted.reduce((total, charge) => total + charge.signed_amount, 0);
+  const leaving = counted
     .filter((charge) => charge.signed_amount < 0)
     .reduce((total, charge) => total + charge.signed_amount, 0);
 

@@ -5,6 +5,7 @@ import { getErrorMessage } from "../../grades/components/AddCourseModal";
 import { useAuth } from "../../../app/auth/AuthContext";
 import Modal from "../../../shared/components/Modal";
 import HelpTip from "../../../shared/components/HelpTip";
+import { COUNTED_HELP, COUNTED_LABEL } from "../counting";
 
 interface EditAccountModalProps {
   readonly account: Account | null;
@@ -201,9 +202,8 @@ export default function EditAccountModal({
           </span>
         </div>
 
-        {/* Available on every kind. Turning it off for a spending account does
-            not change safe-to-spend: what you are worth and what you can spend
-            before payday are different questions. */}
+        {/* Available on every kind. One switch for net worth and every
+            analytic (D39); the same words as the list in Settings. */}
         <div className="settingsToggle">
           <input
             id="account-counts"
@@ -212,12 +212,8 @@ export default function EditAccountModal({
             onChange={(event) => setCounts(event.target.checked)}
           />
           <span className="labelWithTip">
-            <label htmlFor="account-counts">Count toward net worth</label>
-            <HelpTip label="When to turn this off">
-              Turn it off for money that is not really yours — money you have lent out,
-              or a pot you hold for someone else. It leaves the headline figure without
-              hiding the account.
-            </HelpTip>
+            <label htmlFor="account-counts">{COUNTED_LABEL}</label>
+            <HelpTip label="When to turn this off">{COUNTED_HELP}</HelpTip>
           </span>
         </div>
 

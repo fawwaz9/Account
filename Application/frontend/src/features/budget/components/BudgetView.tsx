@@ -229,6 +229,7 @@ export default function BudgetView() {
             onEdit={(rule) => { setEditingRule(rule); setAddingRule(true); }}
             onDelete={setStoppingRule}
             busy={ruleBusy}
+            uncounted={new Set(accounts.filter((a) => a.counts_toward_net_worth === false).map((a) => a.id))}
           />
 
           {/* Last, side by side: the outlook -- the term and the year -- read

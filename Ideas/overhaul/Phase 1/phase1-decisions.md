@@ -1118,3 +1118,52 @@ a schema change, because the rows already held the data:
 The report stays aggregates only. Its existing test, that nothing printed
 identifies anyone, still holds. Three mutations were tried and all three were
 caught.
+
+## D39. One switch per account for net worth and every analytic (yours, 2026-10-06)
+
+**Your words:** "let a user pick the accounts he wants to contribute to his
+networth and to all analytics."
+
+**Chosen:**
+- **One switch per account, for both.** Offered, not chosen: two switches,
+  "net worth" and "analytics", set separately.
+- **Set from a list in Settings → Financial, and from the account's edit
+  dialog.** Offered, not chosen: the Settings list only.
+
+**This reverses an earlier rule.** Until now `counts_toward_net_worth` reached
+net worth only, deliberately: "what am I worth" and "what can I spend" were
+kept apart, and a test pinned it. That test now says the opposite.
+`Ideas/next.md` still describes the old rule; it is your file, so I left it.
+
+**What "unticked" means.** Every figure built from more than one account treats
+the account as absent:
+- net worth
+- safe to spend: spendable balances, committed charges, and sinking-fund
+  earmarks paid from it
+- the forecast: the spending pace and history window, runway, run-rates
+- the year plan, and the plan against actual
+- the budget summary, its by-category totals and the Dashboard tiles
+- the term budget
+- course cost
+- the subscription finder
+- the standing-instruction totals
+
+What stays as it is:
+- **Recording.** Its ledger, its page, deposits into it, and its card,
+  which now says "not counted".
+- **A transfer between a counted and an unticked account** still counts,
+  because the money really left or arrived.
+- **The income share.** Pay landing in an unticked account does leave what
+  counts.
+
+**How it is built:**
+- **No schema change.** The column keeps its name, since renaming a Postgres
+  column buys nothing a reader sees.
+- **One place reads it:** `Finances/services/counted.py`, as a subquery, so a
+  query adds one filter and no extra round trip.
+
+**Tests:**
+- **The invariant test** (`tests/test_counted_accounts.py`) adds an unticked
+  account with activity of every kind (spending, savings and debt) and requires
+  every figure to be unchanged. Ticking it back on must move every figure.
+- **Mutation-checked:** 15 of 15 backend filters and 5 of 5 frontend checks.

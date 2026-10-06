@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../app/auth/AuthContext";
 import { setPassword } from "../services/authClient";
 import { updateAcademicStatus, updatePreferences } from "../services/currentUserClient";
-import { fetchAccounts, fetchCategories } from "../features/budget/api";
+import { fetchAccounts, fetchCategories, updateAccount } from "../features/budget/api";
+import { COUNTED_HELP } from "../features/budget/counting";
 import { Account, SpendCategory } from "../features/budget/types";
 import IncomeSplitModal from "../features/budget/components/IncomeSplitModal";
 import BlackoutsModal from "../features/calender/components/BlackoutsModal";
@@ -149,6 +150,10 @@ export default function SettingsPage() {
   const [savingTip, setSavingTip] = useState(false);
   const [tipMessage, setTipMessage] = useState<string | null>(null);
   const [tipError, setTipError] = useState<string | null>(null);
+  // Which accounts count (D39): the one being saved, and what happened.
+  const [countingId, setCountingId] = useState<string | null>(null);
+  const [countMessage, setCountMessage] = useState<string | null>(null);
+  const [countError, setCountError] = useState<string | null>(null);
   const [categories, setCategories] = useState<SpendCategory[]>([]);
   const [splitOpen, setSplitOpen] = useState(false);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
@@ -317,6 +322,23 @@ export default function SettingsPage() {
    * that write for themselves -- and says what happened, because choosing can
    * file tips that were waiting, which is money moving into an account.
    */
+  /** Tick or untick one account: in or out of net worth and every figure (D39). */
+  async function handleCounted(account: Account, counts: boolean) {
+    if (!user) return;
+    setCountingId(account.id);
+    setCountMessage(null);
+    setCountError(null);
+    try {
+      await updateAccount(user.id, account.id, { counts_toward_net_worth: counts });
+      setCountMessage(counts ? `${account.name} counts again.` : `${account.name} no longer counts.`);
+      await loadMoneyBits();
+    } catch (err) {
+      setCountError(err instanceof Error ? err.message : "Could not save that");
+    } finally {
+      setCountingId(null);
+    }
+  }
+
   async function handleTipAccount(next: string) {
     if (!user) return;
     const previous = tipAccount;
@@ -841,6 +863,31 @@ export default function SettingsPage() {
                 The income split needs accounts to divide between. Add one on the
                 Budget page and it appears here.
               </p>
+            )}
+
+            {/* One switch per account for net worth and every analytic (D39).
+                Saved on each tick, like the cash-tip picker below; the same
+                words as the account's edit dialog. */}
+            {activeAccounts.length > 0 && (
+              <fieldset className="countedAccounts">
+                <legend className="labelWithTip">
+                  <span>Counted accounts</span>
+                  <HelpTip label="What counting an account means">{COUNTED_HELP}</HelpTip>
+                </legend>
+                {activeAccounts.map((account) => (
+                  <label key={account.id} className="settingsToggle">
+                    <input
+                      type="checkbox"
+                      checked={account.counts_toward_net_worth !== false}
+                      disabled={countingId !== null}
+                      onChange={(event) => void handleCounted(account, event.target.checked)}
+                    />
+                    {account.name}
+                  </label>
+                ))}
+                {countError && <p className="loginError" role="alert">{countError}</p>}
+                {countMessage && <p className="loginSuccess" role="status">{countMessage}</p>}
+              </fieldset>
             )}
 
             <div className="loginField">
