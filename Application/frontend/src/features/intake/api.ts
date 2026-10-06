@@ -12,6 +12,22 @@ export interface Assessment {
   date_tba: boolean;
 }
 
+/** Prerequisites as the syllabus states them (Phase 2 item 5). `text` is the
+ *  rule in the typed form, empty when the reader couldn't make one; `sentence`
+ *  is the syllabus's own words, which stay with you. */
+export interface ExtractedRule {
+  rule: Record<string, unknown> | null;
+  text: string;
+  note: string | null;
+  sentence: string | null;
+}
+
+/** A rule as confirmed on the check screen. Left out, nothing is filed. */
+export interface ConfirmedRule {
+  text: string;
+  note: string | null;
+}
+
 export interface SyllabusExtract {
   course_code: string;
   course_name: string;
@@ -19,6 +35,8 @@ export interface SyllabusExtract {
   professor: string | null;
   assessments: Assessment[];
   multiple_schemes: boolean;
+  prerequisites?: ExtractedRule | null;
+  corequisites?: ExtractedRule | null;
 }
 
 export interface ParseResult {
@@ -49,7 +67,7 @@ export function applySyllabus(
   userId: string,
   parseId: string,
   body: { course_code: string; course_name: string; section: string | null; professor: string | null; credits: number;
-    assessments: Assessment[] },
+    assessments: Assessment[]; prerequisites?: ConfirmedRule; corequisites?: ConfirmedRule },
 ) {
   return post<ApplyResult>(endpoints.intake.apply(userId, parseId), body);
 }
@@ -85,12 +103,18 @@ export interface AddPreview {
   weight_notes: { category: GradeCategory; syllabus: number; course: number }[];
   unweighted: GradeCategory[];
   section_offer: string | null;
+  prerequisites?: ExtractedRule | null;
+  corequisites?: ExtractedRule | null;
+  /** Your own rule for the course now, which confirming would replace. */
+  own_prerequisites?: string | null;
+  own_corequisites?: string | null;
 }
 
 export interface AddResult {
   added: number;
   skipped: number;
   section_set: boolean;
+  rules_filed?: number;
 }
 
 export function previewAdd(userId: string, parseId: string, courseId: string) {
@@ -99,7 +123,8 @@ export function previewAdd(userId: string, parseId: string, courseId: string) {
 
 export function addToCourse(
   userId: string, parseId: string, courseId: string,
-  body: { rows: { name: string; category: GradeCategory; due_date: string | null }[]; set_section: boolean },
+  body: { rows: { name: string; category: GradeCategory; due_date: string | null }[]; set_section: boolean;
+    prerequisites?: ConfirmedRule; corequisites?: ConfirmedRule },
 ) {
   return post<AddResult>(endpoints.intake.addTo(userId, parseId, courseId), body);
 }

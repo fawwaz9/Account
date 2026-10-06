@@ -146,3 +146,49 @@ describe("SyllabusModal", () => {
     expect((await screen.findByRole("alert")).textContent).toBe("You already have a course CPSC 221");
   });
 });
+
+describe("SyllabusModal: prerequisites (Phase 2 item 5)", () => {
+  const withRules = {
+    ...parsed,
+    extract: {
+      ...parsed.extract,
+      assessments: parsed.extract.assessments.map((a) => (a.name === "Final" ? { ...a, weight: 50 } : a)),
+      prerequisites: { rule: {}, text: "CPSC 210 and MATH 200", note: "Third-year standing",
+                       sentence: "Pre-reqs: CPSC 210, MATH 200." },
+      corequisites: null,
+    },
+  };
+
+  it("shows what the syllabus says, editable, with its own words", async () => {
+    api.readSyllabus.mockResolvedValue(withRules);
+    show();
+    await choose();
+    expect((screen.getByLabelText("Prerequisites") as HTMLInputElement).value).toBe("CPSC 210 and MATH 200");
+    expect(screen.getByText("Pre-reqs: CPSC 210, MATH 200.")).toBeTruthy();
+    expect(screen.queryByLabelText("Co-requisites")).toBeNull();
+  });
+
+  it("files what you confirm", async () => {
+    api.readSyllabus.mockResolvedValue(withRules);
+    api.applySyllabus.mockResolvedValue({ course_id: "c9", grades_created: 5, fields_total: 1, fields_changed: 0 });
+    show();
+    await choose();
+    fireEvent.change(screen.getByLabelText("Prerequisites"), { target: { value: "CPSC 213" } });
+    fireEvent.click(create());
+    await waitFor(() => expect(api.applySyllabus).toHaveBeenCalled());
+    const body = api.applySyllabus.mock.calls[0][2];
+    expect(body.prerequisites).toEqual({ text: "CPSC 213", note: "Third-year standing" });
+    expect(body.corequisites).toBeUndefined();
+  });
+
+  it("files nothing for a field you clear", async () => {
+    api.readSyllabus.mockResolvedValue(withRules);
+    api.applySyllabus.mockResolvedValue({ course_id: "c9", grades_created: 5, fields_total: 1, fields_changed: 0 });
+    show();
+    await choose();
+    fireEvent.change(screen.getByLabelText("Prerequisites"), { target: { value: "  " } });
+    fireEvent.click(create());
+    await waitFor(() => expect(api.applySyllabus).toHaveBeenCalled());
+    expect(api.applySyllabus.mock.calls[0][2].prerequisites).toBeUndefined();
+  });
+});

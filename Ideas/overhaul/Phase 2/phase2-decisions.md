@@ -439,3 +439,48 @@ row-level security doesn't bind (D9), and prints only counts.
   only, mark accepted).
 
 **Automatic approval stays unbuilt** (D5).
+
+## D14. The syllabus reader picks up prerequisites, and files only what you confirm (item 5, 2026-10-06)
+
+**What changed in the reader:**
+- **The prompt asks for prerequisites and co-requisites.** Each comes as a
+  tree in the rule language (D12), a note for what a tree can't say, and the
+  syllabus's own sentence, copied. It also asks for prerequisites only as the
+  syllabus states them, never what the course usually requires.
+- **Reading is lenient, like the rest of the extract.** A tree that doesn't
+  hold up becomes empty, and its sentence is kept. The check screen then says
+  "couldn't be read as a rule; type them in, or leave them out".
+- **Nothing more is sent.** It is still only the syllabus and the term's dates.
+  `test_what_is_sent_carries_nothing_about_the_person` still passes.
+
+**The check screen** shows each rule the syllabus states, in the typed form,
+editable, with a note field and the syllabus's sentence quoted beneath.
+- **Confirming files a rule as yours,** with source `syllabus` and the sentence
+  kept beside it, privately (D6).
+- **Clearing a field files nothing.** That's the reader's existing rule:
+  nothing becomes a record without confirmation (Phase 1 D16).
+- **A rule that can't be read is refused** before anything is built (422).
+
+**Adding a syllabus to a course you already have** (Phase 1 D27) offers the
+same rules.
+- **Where you have your own rule, the field starts empty,** and says "Yours
+  stays: … Type a rule here to replace it". A syllabus never quietly replaces
+  your rule.
+- **Where you have none,** the field starts with what the syllabus says.
+
+**Not counted in the no-change measure.** The measure is about assessments
+(§15), and adding rule fields would change what earlier parses' figures mean.
+
+**Evidence:**
+- `tests/test_syllabus_prerequisites.py`, 17 tests. One end-to-end test runs
+  read, confirm and owner approval: the shared row holds the tree with no note
+  and no sentence.
+- Mutation check: all 5 removals were caught (files only what was confirmed,
+  the sentence kept with you, a confirmation must read, the extracted tree is
+  checked, apply files at all).
+- The isolation and non-interference walks now send a confirmed rule through
+  both syllabus routes.
+- Frontend: 5 new tests across `SyllabusModal` and `SyllabusAddModal`.
+
+**Still bound by the owner's rule** on personal documents: no real syllabus
+goes to a model until that rule is decided. Every test uses the fake adapter.

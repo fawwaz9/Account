@@ -81,11 +81,11 @@ Phase 2 is deployed.**
 | 2 | Catalogue tables: courses and prerequisites | **Built, not deployed** (D10). Runbook step 1 is written |
 | 3 | Linking your courses to the catalogue | **Built, not deployed** (D11). Matched on read; your override stored |
 | 4 | Your own prerequisites, and proposals | **Built, not deployed** (D12) |
-| 5 | The syllabus reader picks up prerequisites | Not started. The reader exists (Phase 1 D16) |
+| 5 | The syllabus reader picks up prerequisites | **Built, not deployed** (D14). Files only what you confirm |
 | 6 | Owner review: proposals into the catalogue | **Built, not deployed** (D13). `scripts/catalogue_review.py`. Auto-approval is planned, not built (D5) |
 | 7 | Prerequisites on the course page, met or not | **Built, not deployed** (D12). Also warns when adding a future course |
 | 8 | UBC's permission, then a bulk import | Request drafted (`Ideas/overhaul/calender-request.md`); waits on UBC |
-| **B** | **The rest of the vision's Phase 2** | **Listed, not drafted** |
+| **B** | **The rest of the vision's Phase 2** | **Drafted 2026-10-06; waiting on your answers (Q1–Q5)** |
 | 9 | Shared tasks and events (group coursework) | Not started. No collaborator tables; tasks and events are per-user |
 | 10 | Accountability partners | Not started |
 | 11 | Team sport and intramurals | Not started. No team, league or game tables |
@@ -333,25 +333,288 @@ answer decides how much of 4 to 6 an import later replaces.
 shares any, so the network effect comes last. The other order puts shared
 writes ahead of the review that makes them safe.
 
-## Part B: the rest of Phase 2 (listed, to be drafted)
+## Part B: the rest of Phase 2 (drafted 2026-10-06, for you to read before any of it is built)
 
-Each needs the full template treatment (facts to settle, "Done when", trust
-cost) before its work starts. Their vision text is §4 Phase 2. Noted now,
-because it shapes the draft:
-- **Item 9 is the sharpest isolation case in the plan** (§5.6): write access to
-  another user's row, through a membership table whose membership only the
-  owner can change. It reuses nothing from Part A's read-only policy except the
-  habit of proving it on Postgres.
-- **Item 12 does not ship before the rate limiter is fixed,** which means
-  trusting one specific forwarded position from Cloud Run, never a raw
-  `X-Forwarded-For`.
-- **Item 13's collection path ships here** so Phase 3 has something to
-  aggregate. That aggregate is a job-written table, the §5.6 rule.
+Checked against the code on `phase2` (`b5be61d`). Part A's items 1–7 are
+built, and Part A's policy is the base everything below extends. **Nothing in
+Part B is built.** The questions at the end decide its order.
+
+### Cross-cutting facts to settle before building Part B
+
+**B1. The first write across users: membership, not ownership.** Items 9, 10
+and 11 each let one person's row be seen, and in 9 and 11 changed, by someone
+who doesn't own it. §5.6 sets the pattern: an explicit membership table, with
+membership writable only by the owner.
+- **The generator gets a fifth shape, by name only, like Part A's allowlist.**
+  A row is yours if you own it, or if a membership row says you are on it.
+  Reads and member-allowed writes use the second test. Changing the
+  membership list itself uses only the first.
+- **The recursion trap.** A policy on `tasks` that reads `task_members`, whose
+  own policy reads `tasks`, makes Postgres fail with "infinite recursion
+  detected in policy". The usual fix is a `SECURITY DEFINER` function that
+  answers yes or no ("is the caller a member of this task?"), the same pattern
+  as the Phase 0 sign-in lookups. It is proven on Postgres, with the Supabase
+  grants modelled, as Part A was.
+- **What a member may do is listed per table,** not "everything". On a shared
+  task, a member may tick it done and edit its text. Only the owner may delete
+  it or change who is on it.
+
+**B2. One way for two people to connect: an invite link.** It is shared by 9,
+10 and 11.
+- **The invite is an unguessable token.** The inviter sends the link
+  themselves, by text or group chat. Opening it while signed in asks "join X's
+  task?" (or partnership, or team), and accepting creates the membership.
+- **Rejected: invite by email address.** It needs an email service the app
+  doesn't have. Worse, "no account with that address" tells the inviter who
+  uses the app, which is the disclosure §5.6 forbids. A link reveals nothing,
+  and works for someone who hasn't signed up yet. That person signs up through
+  the link, which is the growth loop.
+- **Tokens expire** (7 days), are single-use for a partnership and multi-use
+  for a team, and can be revoked by the inviter. They are looked up through a
+  definer function that returns only what the invite is for.
+
+**B3. What one member sees of another: a display name, never an email.** Today
+`users` is readable only by its own row. Members need each other's names, so
+either a definer function returns names for the caller's own memberships
+only, or the name is copied onto the membership row when joining. **My
+recommendation is the copy:** it's simpler to prove, and a rename updating
+everywhere doesn't matter at this scale.
+
+**B4. When a member is deleted.** Their memberships go with them, by purge
+cascade. **When the owner is deleted, the shared task goes for everyone.** The
+alternative, handing it to a member, is a transfer of ownership nobody asked
+for. **This is your call** (question Q3).
+
+**B5. The tests that must grow.**
+- **The isolation world gains a shared object between A and B.** The
+  invariant becomes "B sees exactly what A shared with B, and changes only what
+  a member may".
+- **The route walk gains a variant:** a member trying an owner-only action.
+- **The non-interference walk** compares A's answers with and without B as a
+  member.
+
+### 9. Shared tasks and events (group coursework)
+
+**What** (§4, §5.1, §5.6). Add a collaborator to a task or a calendar event,
+and it appears for everyone on it. Anyone on it can tick it done.
+
+**What exists:** tasks and events are strictly per-user (`user_id`, no
+collaborators). Recurring tasks materialise per user, and reminders push per
+user.
+
+**Facts to settle:**
+- **What is shared:** one-off tasks and one-off events only, to start. A
+  repeating rule shared across people multiplies every edge case the
+  repeating-edits work fixed (Phase 1).
+- **"Done" is shared:** one tick closes it for everyone. Per-person done is the
+  other choice; one tick fits group work.
+- **Whose reminders?** Each member sets their own. A shared task carries no
+  reminder of its own.
+- **Grades never shared:** a task linked to a graded assessment stays linked
+  only for its owner. A member's copy shows the task, never the grade.
+
+**Trust cost:** high. It is the first write by one user to another's row. It
+waits for B1's policy, proven on Postgres and mutation-checked, before any
+route exists.
+
+**Done when:**
+- A member sees and can complete a shared task. A non-member gets nothing: not
+  in a list, not by id, not by a guessed id.
+- A member cannot delete it or change its members. The route walk proves both,
+  on Postgres, as the app role.
+- Removing a member removes their access at once.
+
+### 10. Accountability partners (completion, not outcomes)
+
+**What** (§4). Share a weekly completion percentage or a streak with one
+friend. Never grades, never money: outcomes are excluded by the vision's own
+rule (§13.7, "explicitly not building").
+
+**What exists:** the task completion data, per user. Nothing shared.
+
+**Facts to settle:**
+- **The figure:** tasks done on time this week, as a percentage, plus a streak
+  of weeks above your own goal. It is computed by a job into a partnership row,
+  never read across users at request time (the §5.6 rule).
+- **Either partner can end it at any time,** and the other sees only "ended".
+- **What is shared is opt-in and listed on the invite.** Nothing more is ever
+  added without asking again.
+
+**Trust cost:** low. It is read-only, two people, and figures you chose to
+share. **It's the smallest feature that needs B2,** so it's the right place to
+prove invites before shared writes depend on them.
+
+**Done when:** a partner sees exactly the agreed figure. Ending it removes the
+partner's access at once. The figure comes from the job-written row, which
+the route walk shows.
+
+### 11. Team sport and intramurals
+
+**What** (§4, §15). Create a team, invite teammates, and anyone records a game
+score. Everyone sees results and standings, and a teammate confirms a score
+before it counts.
+
+**What exists:** nothing. There are no team, league, game or organisation
+tables.
+
+**Facts to settle:**
+- **The narrowest model:**
+  - `teams`, plus `team_members` (B1).
+  - `games`: team, opponent as text, date, scores, recorded-by, confirmed-by.
+  - **No leagues or organisations yet,** the §5.3 tree included. Standings are
+    per team, across its own games. Leagues wait until two teams want to play
+    each other inside the app.
+- **Per-sport stat templates:** none in the first cut, only scores.
+- **Confirmation:** a score counts once a second member confirms it. A
+  disputed score shows both.
+- **Captain:** the creator owns membership (B1). A second captain is a later
+  question.
+
+**Trust cost:** medium. It's B1's pattern again, on new tables with no
+history to protect.
+
+**Done when:**
+- A five-person team records and confirms a game in under 30 seconds on a
+  phone.
+- A non-member sees nothing of the team.
+- The route walk proves members can't change membership.
+
+### 12. Open signup, with affiliation verified later
+
+**What** (§4, §6, §9.1). Anyone can register, not only the invited addresses
+in `ALLOWED_SIGNUP_EMAILS`.
+
+**What exists:**
+- **Signup is gated** by the allowlist (`signup_policy.py`), on both the
+  password path and the Google path.
+- **Email verification exists only for Google accounts.** Google vouches for
+  the address, and there is no verification email.
+- **Account deletion exists,** with a grace period and purge.
+- **The rate limiter keys on the peer address.** Behind Cloud Run that is the
+  proxy, so the limiter is effectively global (`client_of` in
+  `api/routes/auth.py`).
+
+**It splits in two, and the first part is a safety fix worth doing anyway:**
+- **12a. The rate limiter keyed per client.** Trust exactly one forwarded
+  position: the entry Cloud Run's front end appends, read from the right,
+  never a raw `X-Forwarded-For`. **Facts to settle:** which position Google's
+  front end guarantees, confirmed against Cloud Run's documentation and a
+  logged request. A test sends a forged header and shows it doesn't win.
+- **12b. Opening signup:**
+  - a verification email for password accounts, which needs an email service:
+    a new provider, a secret and a cost
+  - a cap on new accounts per client per day
+  - your decision to remove the allowlist (an owner step)
+
+**Trust cost:** high, and the vision says so: it opens the attack surface
+earlier, with more support load on one person. **This is the item to overrule
+if the appetite isn't there.** The rest of the phase stands without it.
+
+**Done when:**
+- **12a:** two clients are throttled separately, and a forged header can't
+  reset a client's budget. Both are tested, and both are read from production
+  logs after the deploy.
+- **12b:** a stranger can register, verify and use the app. An unverified
+  account can't do anything that reaches another person (invites, teams).
+
+### 13. End-of-term flow: course ratings and anonymous grade contributions
+
+**What** (§13.7). One "rate your term" screen after grades post: 4–5
+questions per finished course. Also an opt-in "add my final grade to the
+course's distribution".
+
+**What exists:** finished courses and final grades (per user), the catalogue
+(Part A) to key ratings on, and the survey table pattern (Phase 1 D12).
+
+**Facts to settle:**
+- **Anonymity that holds.** A contribution must not be traceable to its author
+  in the stored aggregate. But each person must contribute once per course and
+  be able to withdraw.
+  - **My proposal:** your own row records that you contributed (per-user,
+    private). The aggregate is written by a job into a shared, job-only table
+    keyed by catalogue course and term (§5.6), with a cohort floor before
+    anything is shown (Phase 3). The job, not a request, does the counting.
+  - **Withdrawing** removes your row, and the next job run recounts.
+- **When it asks:** the term's end plus about two weeks for grades.
+- **Nothing is shown in Phase 2.** Collection only. The distributions are
+  Phase 3.
+
+**Trust cost:** medium. Grades are the most sensitive data in the app, and
+"anonymous" is a promise that has to be true in the schema, not only on the
+screen.
+
+**Done when:**
+- A contribution exists only as your private "contributed" mark and a count
+  inside the job's table.
+- No route returns any aggregate.
+- A test shows the job's table can't be traced back to a person, even by
+  anyone holding the database.
+
+### 14. Shift-versus-exam conflict flags, and the tax packet
+
+**What** (§13.11, §13.12). Two single-user builds:
+- **Conflict flags:** a shift that overlaps or crowds an exam or a final
+  (from the calendar) is flagged on both pages.
+- **The tax packet:** a year's employment income, deductions and tips,
+  gathered from what you've recorded, as one printable page.
+
+**What exists:**
+- Shifts, jobs and paycheques with their deductions (Phase 1 D11).
+- Exams as calendar events, from grades and the syllabus.
+- Nothing that checks one against the other, and no yearly roll-up.
+
+**Facts to settle:**
+- **"Crowds":** a shift within N hours before an exam (my default: 12). That
+  is a setting, not a constant.
+- **The tax packet uses only what you recorded.** Reading a T4 is a personal
+  document, so it waits on your rule about sending those to a model.
+  Recorded paycheques already carry the figures.
+- **It is labelled as a summary for your own records, not tax advice.**
+
+**Trust cost:** low. It's single-user and reads existing data.
+
+**Done when:**
+- A shift the night before a final is flagged on the Jobs page and the
+  calendar.
+- The packet's totals equal the sum of your recorded paycheques for the year
+  (a test).
+
+### Suggested order for Part B
+
+1. **12a, the rate limiter.** A known safety gap, small, and needed before
+   anything opens up. It's worth doing even if 12b never ships.
+2. **14, conflicts and the tax packet.** Single-user, low risk, and useful now.
+   It needs nothing from B1 or B2.
+3. **10, accountability partners.** It proves invites (B2) on a read-only
+   feature.
+4. **9, shared tasks.** The first shared write (B1), on proven invites.
+5. **11, teams.** B1 again, on fresh tables.
+6. **13, end-of-term collection.** It reuses the job-written-table pattern.
+   It needs to be live before the first term ends after it ships, so it moves
+   earlier if December comes first.
+7. **12b, open signup.** Last, once everything a stranger could reach has its
+   policy.
+
+**The trade this order makes:** the growth features (11 and 12b) come last,
+so more users arrive later. In exchange, every shared write lands on a proven
+policy and a proven invite. The vision's order puts teams first because they
+are the acquisition loop. That's question Q1.
 
 ## Open questions
 
-All five from the first draft are answered (D1, D5–D7, and the calendar
-request). None are open for Part A.
+Part A has none open. Part B's, all yours:
+- **Q1. The order.** Mine is above: safety (12a) and single-user (14) first,
+  then partners, tasks, teams, collection, and signup last. The vision leads
+  with teams as the acquisition loop. Which comes first?
+- **Q2. Invites by link (B2) rather than by email address?** Links need no
+  email service and reveal nothing about who uses the app.
+- **Q3. When the owner of a shared task deletes their account,** does the task
+  go for everyone (my default), or pass to a member?
+- **Q4. Open signup (12b) at all in Phase 2?** It needs an email provider (a
+  new service, secret and cost), and the vision names it the item to overrule.
+  12a ships either way.
+- **Q5. The tax packet from recorded paycheques only,** until your rule on
+  personal documents decides T4s?
 
 ## What the vision says that has since moved
 

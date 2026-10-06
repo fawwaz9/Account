@@ -1092,3 +1092,18 @@
   border-radius: 4px;
   background: rgba(224, 160, 48, 0.08);
 }
+
+/* Phase 2 item 5: the prerequisites a syllabus states, on its check screen. */
+.syllabusRules {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid #1f2a44;
+  border-radius: 8px;
+}
+
+.syllabusRule {
+  display: grid;
+  gap: 6px;
+}

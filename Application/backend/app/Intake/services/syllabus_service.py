@@ -29,7 +29,10 @@ from datetime import date
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app._database.models import CourseModel, SyllabusParseModel, UserModel, utc_now
+from app._database.models import CourseModel, PrerequisiteProposalModel, SyllabusParseModel, UserModel, utc_now
+from app.Grades.schemas.prerequisite import RuleWrite
+from app.Grades.services.prerequisite_service import set_own
+from app.Grades.utils.prerequisites import render
 from app.config import settings
 from app.Grades.schemas.course import CourseCreate
 from app.Grades.schemas.grade import GradeCreate
@@ -44,6 +47,7 @@ from app.Intake.schemas.syllabus import (
     AddRequest,
     AddResult,
     ApplyRequest,
+    ConfirmedRule,
     ApplyResult,
     ProposedRow,
     WeightNote,
@@ -91,14 +95,24 @@ def prompt(term_start: date | None, term_end: date | None) -> str:
       "due_date": "YYYY-MM-DD", or null if no date is given,
       "date_tba": true if it is scheduled later (a final exam set by the registrar), else false
     }}
-  ]
+  ],
+  "prerequisites": null if the syllabus states none, else {{
+    "rule": RULE, or null if it cannot be written as one,
+    "note": "what RULE cannot say, e.g. third-year standing or permission of the instructor", or null,
+    "sentence": "the syllabus's own sentence about prerequisites, copied exactly"
+  }},
+  "corequisites": the same shape, for courses to be taken at the same time, or null
 }}
+RULE is one of: {{"course": "CPSC 210"}}, optionally with "min_grade": 64 for a minimum percentage;
+{{"credits": 6, "subject": "MATH", "level": 100}} for a number of credits, subject and level optional;
+{{"all": [RULE, ...]}}; {{"any": [RULE, ...]}}.
 Rules:
 - One entry per distinct graded item or group; if the schedule lists dated items of a group
   separately (Assignment 1 due Sep 26, Assignment 2 due Oct 10), give each its own entry and
   split the group's weight evenly between them.
 - If there is more than one grading scheme, extract only the first and set multiple_schemes.
 - Bonus or extra credit uses the category Bonus.
+- Prerequisites only as the syllabus states them; never from what the course usually requires.
 - {term}"""
 
 
@@ -175,7 +189,29 @@ def check(extract: SyllabusExtract, term_start: date | None, term_end: date | No
             warnings.append(f"{a.name} is dated {a.due_date.isoformat()}, outside the term.")
     if extract.multiple_schemes:
         warnings.append("The syllabus offers more than one grading scheme; only the first was read.")
+    for label, found in (("prerequisites", extract.prerequisites), ("co-requisites", extract.corequisites)):
+        if found is not None and found.rule is None and found.sentence:
+            warnings.append(f"The syllabus's {label} couldn't be read as a rule; type them in, or leave them out.")
     return warnings
+
+
+def file_rules(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, extract: SyllabusExtract,
+               prerequisites: ConfirmedRule | None, corequisites: ConfirmedRule | None) -> int:
+    """File the rules the person confirmed as their own (Phase 2 item 5).
+
+    Only what was sent: a kind left out files nothing. Marked as from the
+    syllabus, with the syllabus's sentence kept beside it -- with them, never
+    shared. Returns how many were filed.
+    """
+    filed = 0
+    for kind, confirmed, found in (("prerequisite", prerequisites, extract.prerequisites),
+                                   ("corequisite", corequisites, extract.corequisites)):
+        if confirmed is None:
+            continue
+        set_own(db, user_id, course_id, RuleWrite(kind=kind, text=confirmed.text, note=confirmed.note),
+                source="syllabus", source_text=found.sentence if found else None)
+        filed += 1
+    return filed
 
 
 FIELDS = ("name", "category", "weight", "count", "due_date", "date_tba")
@@ -263,7 +299,9 @@ def apply(db: Session, user_id: uuid.UUID, parse_id: uuid.UUID, confirmed: Apply
         delete_course(db, user_id, course.id)
         raise
 
-    total, changed = changes(SyllabusExtract.model_validate(row.result), confirmed)
+    extract = SyllabusExtract.model_validate(row.result)
+    file_rules(db, user_id, course.id, extract, confirmed.prerequisites, confirmed.corequisites)
+    total, changed = changes(extract, confirmed)
     row.course_id, row.applied_at = course.id, utc_now()
     row.fields_total, row.fields_changed = total, changed
     db.commit()
@@ -358,7 +396,13 @@ def preview_add(db: Session, user_id: uuid.UUID, parse_id: uuid.UUID, course_id:
         key=lambda c: c.value,
     )
     offer = extract.section.strip() if extract.section and not course.section else None
-    return AddPreview(rows=rows, weight_notes=notes, unweighted=unweighted, section_offer=offer or None)
+    own = {
+        p.kind: render(p.rule) for p in db.query(PrerequisiteProposalModel).filter(
+            PrerequisiteProposalModel.user_id == user_id, PrerequisiteProposalModel.course_id == course.id)
+    }
+    return AddPreview(rows=rows, weight_notes=notes, unweighted=unweighted, section_offer=offer or None,
+                      prerequisites=extract.prerequisites, corequisites=extract.corequisites,
+                      own_prerequisites=own.get("prerequisite"), own_corequisites=own.get("corequisite"))
 
 
 def add_to_course(
@@ -400,7 +444,10 @@ def add_to_course(
 
     if new:
         add_grades_bulk(db, user_id, course.id, new)  # commits, with the section
+    filed = file_rules(db, user_id, course.id, SyllabusExtract.model_validate(row.result),
+                       request.prerequisites, request.corequisites)
     row.course_id, row.applied_at = course.id, utc_now()
     db.commit()
-    return AddResult(added=len(new), skipped=len(request.rows) - len(new), section_set=section_set)
+    return AddResult(added=len(new), skipped=len(request.rows) - len(new), section_set=section_set,
+                     rules_filed=filed)
 

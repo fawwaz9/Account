@@ -89,3 +89,31 @@ describe("SyllabusAddModal", () => {
     expect((await screen.findByRole("alert")).textContent).toContain("today's limit");
   });
 });
+
+describe("SyllabusAddModal: prerequisites (Phase 2 item 5)", () => {
+  const stated = { rule: {}, text: "CPSC 210", note: null, sentence: "Prerequisite: CPSC 210." };
+
+  it("fills in the syllabus's rule when you have none, and files it", async () => {
+    api.previewAdd.mockResolvedValue({ ...preview, prerequisites: stated, own_prerequisites: null });
+    api.addToCourse.mockResolvedValue({ added: 2, skipped: 0, section_set: true, rules_filed: 1 });
+    show();
+    await choose();
+    expect((screen.getByLabelText("Prerequisites") as HTMLInputElement).value).toBe("CPSC 210");
+    fireEvent.click(screen.getByRole("button", { name: /Add 2 assessments/ }));
+    await waitFor(() => expect(api.addToCourse).toHaveBeenCalled());
+    expect(api.addToCourse.mock.calls[0][3].prerequisites).toEqual({ text: "CPSC 210", note: null });
+    expect(await screen.findByText(/kept the prerequisites as yours/)).toBeTruthy();
+  });
+
+  it("never replaces yours unless you type the replacement", async () => {
+    api.previewAdd.mockResolvedValue({ ...preview, prerequisites: stated, own_prerequisites: "CPSC 213" });
+    api.addToCourse.mockResolvedValue({ added: 2, skipped: 0, section_set: true, rules_filed: 0 });
+    show();
+    await choose();
+    expect((screen.getByLabelText("Prerequisites") as HTMLInputElement).value).toBe("");
+    expect(screen.getByText("Yours stays: CPSC 213. Type a rule here to replace it.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Add 2 assessments/ }));
+    await waitFor(() => expect(api.addToCourse).toHaveBeenCalled());
+    expect(api.addToCourse.mock.calls[0][3].prerequisites).toBeUndefined();
+  });
+});

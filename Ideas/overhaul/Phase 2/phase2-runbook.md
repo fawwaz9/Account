@@ -18,6 +18,7 @@ Tell me when UBC answers.
 | Item 3: linking your courses to the catalogue (D11) | on `phase2` | **New columns `courses.catalogue_course_id` (UUID), `courses.catalogue_unlinked` (boolean, default false)** |
 | Items 4 and 7: your own prerequisites, met or not (D12) | on `phase2` | **New table `prerequisite_proposals`** (per-user; the usual policy) |
 | Item 6: the owner review script (D13) | on `phase2` | None. A script you run, step R below |
+| Item 5: the syllabus reader picks up prerequisites (D14) | on `phase2` | None |
 
 ### 1. Apply the schema (adds two tables; nothing is dropped or rewritten)
 

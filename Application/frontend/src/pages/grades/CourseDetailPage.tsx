@@ -39,6 +39,8 @@ export default function CourseDetailPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadNonce, setReloadNonce] = useState(0);
+  // Bumped when a syllabus may have filed prerequisite rules, to refetch them.
+  const [rulesNonce, setRulesNonce] = useState(0);
   const [addGradeCategory, setAddGradeCategory] = useState<GradeCategory | null>(null);
   const [editGrade, setEditGrade] = useState<Grade | null>(null);
   const [editingCourse, setEditingCourse] = useState(false);
@@ -298,7 +300,8 @@ export default function CourseDetailPage() {
         <CourseLinks links={course.links ?? []} onEdit={() => setLinksOpen(true)} />
       )}
       {user && courseId && <CatalogueLine userId={user.id} courseId={courseId} />}
-      {user && courseId && <PrerequisitesPanel userId={user.id} courseId={courseId} />}
+      {/* Keyed, so rules a syllabus just filed show at once. */}
+      {user && courseId && <PrerequisitesPanel key={rulesNonce} userId={user.id} courseId={courseId} />}
       {/* The original syllabus, when the course was built from one and the
           file was kept. Renders nothing otherwise. */}
       {user && courseId && <KeptSyllabi userId={user.id} courseId={courseId} />}
@@ -463,7 +466,7 @@ export default function CourseDetailPage() {
           userId={user.id}
           courseId={courseId}
           onClose={() => setAddingSyllabus(false)}
-          onAdded={refreshCourse}
+          onAdded={() => { void refreshCourse(); setRulesNonce((n) => n + 1); }}
         />
       )}
 

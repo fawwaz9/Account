@@ -2,9 +2,10 @@
 from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.Grades.utils.enums import GradeCategory
+from app.Grades.utils.prerequisites import RuleError, parse_text, render, validate
 
 #: A syllabus is a few pages. The cap is about the wrong file, not abuse.
 MAX_FILE_BYTES = 8 * 1024 * 1024
@@ -48,6 +49,44 @@ class ExtractedAssessment(BaseModel):
             return None
 
 
+class ExtractedRule(BaseModel):
+    """Prerequisites as the model read them (Phase 2 item 5). Lenient like the
+    rest: a tree that does not hold up becomes None and ``text`` empty, and the
+    person types the rule on the check screen. ``sentence`` is the syllabus's
+    own words -- kept with the person, never shared (D6)."""
+
+    rule: dict | None = None
+    text: str = ""
+    note: str | None = Field(default=None, max_length=300)
+    sentence: str | None = Field(default=None, max_length=500)
+
+    @field_validator("note", "sentence", mode="before")
+    @classmethod
+    def _trim(cls, value):
+        if not isinstance(value, str):
+            return None
+        value = value.strip()
+        return value[:500] or None
+
+    @model_validator(mode="after")
+    def _readable(self):
+        try:
+            self.rule = validate(self.rule) if self.rule is not None else None
+        except RuleError:
+            self.rule = None
+        self.text = render(self.rule) if self.rule is not None else ""
+        return self
+
+
+def _rule_or_none(value):
+    """A model answer that is not an object, or says nothing, is no rule."""
+    if not isinstance(value, dict):
+        return None
+    if not any(value.get(key) for key in ("rule", "note", "sentence")):
+        return None
+    return value
+
+
 class SyllabusExtract(BaseModel):
     course_code: str = Field(default="", max_length=20)
     course_name: str = Field(default="", max_length=100)
@@ -59,6 +98,28 @@ class SyllabusExtract(BaseModel):
     #: True when the syllabus offers more than one grading scheme. Only the
     #: first is extracted for now; this says so rather than hiding it.
     multiple_schemes: bool = False
+    #: Phase 2 item 5: what the syllabus says must come before, and alongside.
+    prerequisites: ExtractedRule | None = None
+    corequisites: ExtractedRule | None = None
+
+    @field_validator("prerequisites", "corequisites", mode="before")
+    @classmethod
+    def _rules(cls, value):
+        return _rule_or_none(value)
+
+
+class ConfirmedRule(BaseModel):
+    """A rule as the person confirmed it on the check screen, in the typed form."""
+
+    text: str = Field(..., min_length=1, max_length=300)
+    note: str | None = Field(default=None, max_length=300)
+
+    @model_validator(mode="after")
+    def _readable(self):
+        parse_text(self.text)  # RuleError is a ValueError: a 422 naming the problem
+        if self.note is not None:
+            self.note = self.note.strip() or None
+        return self
 
 
 class SyllabusUpload(BaseModel):
@@ -97,6 +158,10 @@ class ApplyRequest(BaseModel):
     year: int | None = Field(default=None, ge=1, le=10)
     semester: str | None = None
     assessments: list[ApplyAssessment] = Field(..., min_length=1, max_length=80)
+    #: Filed as your own rules (Phase 2 item 5) -- only when sent. Leaving one
+    #: out files nothing: nothing becomes a record without confirmation.
+    prerequisites: ConfirmedRule | None = None
+    corequisites: ConfirmedRule | None = None
 
 
 class ApplyResult(BaseModel):
@@ -153,6 +218,12 @@ class AddPreview(BaseModel):
     unweighted: list[GradeCategory] = Field(default_factory=list)
     #: The syllabus's section, offered only when the course has none.
     section_offer: str | None = None
+    #: What the syllabus says the course requires (Phase 2 item 5), and your
+    #: own rule for it now, which confirming would replace.
+    prerequisites: ExtractedRule | None = None
+    corequisites: ExtractedRule | None = None
+    own_prerequisites: str | None = None
+    own_corequisites: str | None = None
 
 
 class AddRow(BaseModel):
@@ -165,6 +236,8 @@ class AddRequest(BaseModel):
     rows: list[AddRow] = Field(..., max_length=200)
     #: Fill in the course's empty section from the syllabus.
     set_section: bool = False
+    prerequisites: ConfirmedRule | None = None
+    corequisites: ConfirmedRule | None = None
 
 
 class AddResult(BaseModel):
@@ -172,4 +245,6 @@ class AddResult(BaseModel):
     #: Rows sent that the course already had by the time they arrived.
     skipped: int
     section_set: bool = False
+    #: Prerequisite rules filed as yours (Phase 2 item 5).
+    rules_filed: int = 0
 

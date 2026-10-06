@@ -193,7 +193,12 @@ BODY_PATCHES: dict[tuple[str, str], list[dict]] = {
         "credits": 3.0, "professor": None,
         "assessments": [{"name": "Final", "category": "Final", "weight": 100.0, "count": 1,
                          "due_date": None, "date_tba": True}],
+        # Phase 2 item 5: a confirmed rule, so the filing path runs too.
+        "prerequisites": {"text": "CPSC 210", "note": "zzownera note"},
     }],
+    ("POST", "/api/intake/{user_id}/syllabus/{parse_id}/add-to/{course_id}"): [
+        {"rows": [{"name": "zzownera added", "category": "Quiz"}], "prerequisites": {"text": "CPSC 210"}},
+    ],
     ("POST", "/api/degree/{user_id}/requirements"): [{
         "name": "zzownera requirement", "kind": "credits", "items": ["CPSC"], "credits_needed": 3.0,
     }],

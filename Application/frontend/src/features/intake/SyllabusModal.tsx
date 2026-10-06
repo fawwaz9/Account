@@ -3,6 +3,7 @@ import Modal from "../../shared/components/Modal";
 import { GradeCategory } from "../grades/types";
 import { applySyllabus, Assessment, ParseResult, readSyllabus } from "./api";
 import { asBase64 } from "./file";
+import SyllabusRules, { confirmedRules, draftsFrom, RuleDrafts } from "./SyllabusRules";
 
 interface SyllabusModalProps {
   readonly userId: string;
@@ -32,6 +33,7 @@ export default function SyllabusModal({ userId, onClose, onBuilt }: SyllabusModa
   const [professor, setProfessor] = useState("");
   const [credits, setCredits] = useState("3");
   const [rows, setRows] = useState<Assessment[]>([]);
+  const [rules, setRules] = useState<RuleDrafts>(draftsFrom({}));
 
   async function choose(file: File | undefined) {
     if (!file) return;
@@ -47,6 +49,7 @@ export default function SyllabusModal({ userId, onClose, onBuilt }: SyllabusModa
       setSection(result.extract.section ?? "");
       setProfessor(result.extract.professor ?? "");
       setRows(result.extract.assessments);
+      setRules(draftsFrom(result.extract));
     } catch (err) {
       setError(err instanceof Error && err.message ? err.message : "Couldn't read that syllabus.");
     } finally {
@@ -77,6 +80,10 @@ export default function SyllabusModal({ userId, onClose, onBuilt }: SyllabusModa
         professor: professor.trim() || null,
         credits: Number(credits) || 3,
         assessments: rows.map((row) => ({ ...row, name: row.name.trim() })),
+        ...confirmedRules(rules, {
+          prerequisites: Boolean(parsed.extract.prerequisites),
+          corequisites: Boolean(parsed.extract.corequisites),
+        }),
       });
       onBuilt(result.course_id);
     } catch (err) {
@@ -201,6 +208,8 @@ export default function SyllabusModal({ userId, onClose, onBuilt }: SyllabusModa
               due_date: null, date_tba: false }])}>
             Add a row
           </button>
+
+          <SyllabusRules found={parsed.extract} drafts={rules} onChange={setRules} />
 
           <div className="importFooter">
             <span className={`small-text${adds ? "" : " syllabusOff"}`} role="status">

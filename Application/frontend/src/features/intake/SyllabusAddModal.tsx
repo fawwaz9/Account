@@ -1,4 +1,5 @@
 import { useState } from "react";
+import SyllabusRules, { confirmedRules, RuleDrafts } from "./SyllabusRules";
 import Modal from "../../shared/components/Modal";
 import { addToCourse, AddPreview, AddResult, previewAdd, readSyllabus } from "./api";
 import { asBase64 } from "./file";
@@ -27,6 +28,9 @@ export default function SyllabusAddModal({ userId, courseId, onClose, onAdded }:
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [setSection, setSetSection] = useState(true);
   const [done, setDone] = useState<AddResult | null>(null);
+  const [rules, setRules] = useState<RuleDrafts>({
+    prerequisites: { text: "", note: "" }, corequisites: { text: "", note: "" },
+  });
 
   async function choose(file: File | undefined) {
     if (!file) return;
@@ -39,6 +43,14 @@ export default function SyllabusAddModal({ userId, courseId, onClose, onAdded }:
       setParseId(parsed.id);
       setPreview(result);
       setPicked(new Set(result.rows.flatMap((row, index) => (row.exists ? [] : [index]))));
+      // Filled in from the syllabus only where you have no rule of your own:
+      // yours is never replaced unless you type the replacement.
+      setRules({
+        prerequisites: { text: result.own_prerequisites ? "" : result.prerequisites?.text ?? "",
+                         note: result.own_prerequisites ? "" : result.prerequisites?.note ?? "" },
+        corequisites: { text: result.own_corequisites ? "" : result.corequisites?.text ?? "",
+                        note: result.own_corequisites ? "" : result.corequisites?.note ?? "" },
+      });
     } catch (err) {
       setError(err instanceof Error && err.message ? err.message : "Couldn't read that syllabus.");
     } finally {
@@ -62,10 +74,10 @@ export default function SyllabusAddModal({ userId, courseId, onClose, onAdded }:
         .filter((_, index) => picked.has(index))
         .map(({ name, category, due_date }) => ({ name, category, due_date }));
       const result = await addToCourse(userId, parseId, courseId, {
-        rows, set_section: Boolean(preview.section_offer) && setSection,
+        rows, set_section: Boolean(preview.section_offer) && setSection, ...chosenRules,
       });
       setDone(result);
-      if (result.added > 0 || result.section_set) onAdded();
+      if (result.added > 0 || result.section_set || (result.rules_filed ?? 0) > 0) onAdded();
     } catch (err) {
       setError(err instanceof Error && err.message ? err.message : "Couldn't add to the course.");
     } finally {
@@ -74,7 +86,10 @@ export default function SyllabusAddModal({ userId, courseId, onClose, onAdded }:
   }
 
   const sectionChange = Boolean(preview?.section_offer) && setSection;
-  const nothing = picked.size === 0 && !sectionChange;
+  const chosenRules = confirmedRules(rules, {
+    prerequisites: Boolean(preview?.prerequisites), corequisites: Boolean(preview?.corequisites),
+  });
+  const nothing = picked.size === 0 && !sectionChange && Object.keys(chosenRules).length === 0;
 
   return (
     <Modal title="Add from a syllabus" onClose={onClose} panelClassName="syllabusPanel">
@@ -83,7 +98,8 @@ export default function SyllabusAddModal({ userId, courseId, onClose, onAdded }:
           <p role="status">
             {done.added === 1 ? "Added 1 assessment" : `Added ${done.added} assessments`}
             {done.skipped > 0 ? ` (${done.skipped} already on the course, left as they were)` : ""}
-            {done.section_set ? ", and set the section" : ""}.
+            {done.section_set ? ", and set the section" : ""}
+            {(done.rules_filed ?? 0) > 0 ? ", and kept the prerequisites as yours" : ""}.
           </p>
           <div className="flex justify-end gap-3 pt-4">
             <button type="button" className="buttons" onClick={onClose}>Done</button>
@@ -143,6 +159,8 @@ export default function SyllabusAddModal({ userId, courseId, onClose, onAdded }:
               Set this course&apos;s section to {preview.section_offer}
             </label>
           )}
+          <SyllabusRules found={preview} drafts={rules} onChange={setRules}
+            own={{ prerequisites: preview.own_prerequisites, corequisites: preview.own_corequisites }} />
           <div className="importFooter">
             <span className="small-text" role="status">Nothing already on the course is changed.</span>
             <button type="button" className="buttons" onClick={add} disabled={busy !== null || nothing}>
