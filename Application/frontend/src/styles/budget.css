@@ -1811,3 +1811,32 @@
   flex-wrap: wrap;
   gap: 6px;
 }
+
+/* ===== The plan against what happened (Phase 1 D37) =====
+   Inside the year plan, under the plan it saves. Each cell is what happened,
+   with the plan's figure small beneath it, so the eye reads the real number
+   first. */
+
+.planVsActual {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.planVsActualHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.planVsActualPlanned,
+.planVsActualNote {
+  display: block;
+}
+
+.planVsActualNote {
+  white-space: normal;
+  font-weight: normal;
+  max-width: 14rem;
+}

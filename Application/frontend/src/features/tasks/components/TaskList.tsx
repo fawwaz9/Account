@@ -11,6 +11,8 @@ interface TaskListProps {
   readonly onPriority: (task: Task, priority: number) => void;
   readonly onSnooze: (task: Task) => void;
   readonly onWake: (task: Task) => void;
+  /** Start or stop a task's timer. Without it, rows show no timer control. */
+  readonly onTimer?: (task: Task) => void;
   readonly busy: boolean;
   readonly emptyMessage?: string;
   /**
@@ -35,6 +37,7 @@ export default function TaskList({
   onPriority,
   onSnooze,
   onWake,
+  onTimer,
   busy,
   emptyMessage = "Nothing here.",
   loading = false,
@@ -76,6 +79,7 @@ export default function TaskList({
               onPriority={onPriority}
               onSnooze={onSnooze}
               onWake={onWake}
+              onTimer={onTimer}
               busy={busy}
             />
           ))}

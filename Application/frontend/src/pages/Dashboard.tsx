@@ -157,7 +157,9 @@ export default function Dashboard() {
             {weekLoad.estimated_minutes > 0 && (
               <div className="statBlock">
                 <span className="statValue">{duration(weekLoad.estimated_minutes)}</span>
-                <span className="statLabel">Estimated work</span>
+                <span className="statLabel">
+                  Estimated work{weekLoad.estimate_ratio != null && ` (× ${weekLoad.estimate_ratio.toFixed(2)})`}
+                </span>
               </div>
             )}
           </div>

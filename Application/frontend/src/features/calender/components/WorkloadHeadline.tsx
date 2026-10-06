@@ -32,6 +32,14 @@ export default function WorkloadHeadline({ forecast }: { readonly forecast: Work
         in your study hours.
         {over && <span className="workloadOver"> More work than free time.</span>}
       </p>
+      {/* Said whenever it applies: the figure is not what was typed, and a
+          number that changed without saying so is one nobody can check. */}
+      {forecast.estimateRatio != null && (
+        <p className="workloadCaveat">
+          Your estimates ({duration(forecast.typedMinutes ?? 0) || "0h"}) × {forecast.estimateRatio.toFixed(2)}, how long
+          tasks have really been taking. Turn it off on Tasks.
+        </p>
+      )}
       {unestimatedTasks > 0 && (
         <p className="workloadCaveat">
           {unestimatedTasks} of {tasks} {unestimatedTasks === 1 ? "has" : "have"} no estimate, so

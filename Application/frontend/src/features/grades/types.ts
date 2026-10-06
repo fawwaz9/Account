@@ -19,6 +19,13 @@ export interface Course {
   /** The section you are in ("101"); a syllabus belongs to one section. */
   section: string | null;
   final_grade: number;
+  /**
+   * The course's grade just before the final was marked or the result
+   * entered: the app's last real prediction, kept to set against the result.
+   * Server-set; null when there was nothing to predict from.
+   */
+  projected_before_final?: number | null;
+  projected_on?: string | null;
   /** null uses the account default from Settings */
   target_grade: number | null;
   category_weights: Partial<Record<GradeCategory, number>>;

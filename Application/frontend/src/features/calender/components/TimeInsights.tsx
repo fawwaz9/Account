@@ -95,7 +95,10 @@ export default function TimeInsights({
               <span>{duration(load.booked_minutes)} booked</span>
             )}
             {load.estimated_minutes > 0 && (
-              <span>{duration(load.estimated_minutes)} estimated</span>
+              <span>
+                {duration(load.estimated_minutes)} estimated
+                {load.estimate_ratio != null && ` (yours × ${load.estimate_ratio.toFixed(2)})`}
+              </span>
             )}
             <span>
               {load.task_count} {load.task_count === 1 ? "task" : "tasks"}

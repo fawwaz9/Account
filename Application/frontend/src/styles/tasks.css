@@ -970,3 +970,99 @@
 .taskEditActions .calFormActions {
   margin-top: 0;
 }
+
+/* ===== The review loop (Phase 1 D35, D36) =====
+   The timer borrows .taskEdit's shape, for the same reason .taskEdit borrows
+   .taskSnooze's: three controls side by side must be one size. */
+
+.taskTimer {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin-top: 1px;
+  padding: 4px 9px;
+  border: 1px solid #1f2a44;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: 0.15s ease;
+}
+
+.taskTimer:hover:not(:disabled),
+.taskTimer[aria-pressed="true"] {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.taskTimer:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.taskTagTimer {
+  background: rgba(212, 175, 55, 0.16);
+  color: var(--gold);
+}
+
+.taskActual {
+  opacity: 0.85;
+}
+
+.howLong,
+.estimateRatio {
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid #1f2a44;
+  border-radius: 12px;
+}
+
+.estimateRatio {
+  margin-top: 12px;
+}
+
+.howLongQuestion {
+  margin: 0 0 10px;
+}
+
+.howLongPicks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.howLongTyped {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.howLongTyped label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.howLongTyped input {
+  width: 7rem;
+}
+
+.howLongSkip {
+  margin-left: auto;
+}
+
+.estimateRatioApply {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 0.85rem;
+}

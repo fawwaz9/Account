@@ -60,6 +60,10 @@ export const endpoints = {
     dismissReminder: (userId: string, reminderId: string) =>
       `tasks/${userId}/reminders/${reminderId}/dismiss`,
     snoozes: (userId: string, taskId: string) => `tasks/${userId}/tasks/${taskId}/snoozes`,
+    /** Declared above /tasks/{task_id} on the server, like `timing`. */
+    estimates: (userId: string) => `tasks/${userId}/tasks/estimates`,
+    timerStart: (userId: string, taskId: string) => `tasks/${userId}/tasks/${taskId}/timer/start`,
+    timerStop: (userId: string, taskId: string) => `tasks/${userId}/tasks/${taskId}/timer/stop`,
   },
   jobs: {
     list: (userId: string) => `jobs/${userId}/jobs`,
@@ -119,6 +123,9 @@ export const endpoints = {
     safeToSpend: (userId: string) => `finances/${userId}/safe-to-spend`,
     forecast: (userId: string) => `finances/${userId}/forecast`,
     plan: (userId: string) => `finances/${userId}/plan`,
+    /** POST keeps the plan as it stands; each save is a new row. */
+    planSaved: (userId: string) => `finances/${userId}/plan/saved`,
+    planReview: (userId: string) => `finances/${userId}/plan/review`,
     imports: (userId: string) => `finances/${userId}/imports`,
     importPreview: (userId: string) => `finances/${userId}/imports/preview`,
     importOne: (userId: string, importId: string) => `finances/${userId}/imports/${importId}`,

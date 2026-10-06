@@ -709,6 +709,34 @@ export interface AnnualPlan {
   assumptions: string[];
 }
 
+/* ===== The plan against what happened (Phase 1 D37) ===== */
+
+export interface SavedPlan {
+  id: string;
+  saved_on: string;
+  starts_on: string;
+  ends_on: string;
+}
+
+/** One finished month, compared with the newest plan saved before it began. */
+export interface MonthReview {
+  month: string;
+  plan_saved_on: string;
+  planned_in: number;
+  planned_out: number;
+  planned_end: number;
+  actual_in: number;
+  actual_out: number;
+  actual_end: number;
+  /** Part of actual_out. The plan leaves tuition out, so this much of a gap is that. */
+  tuition_out: number;
+}
+
+export interface PlanReview {
+  latest: SavedPlan | null;
+  months: MonthReview[];
+}
+
 /* ===== CSV import (Phase 1 item 7) ===== */
 
 export interface ImportMapping {

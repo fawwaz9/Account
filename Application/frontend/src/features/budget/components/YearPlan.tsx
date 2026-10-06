@@ -3,6 +3,7 @@ import { fetchPlan } from "../api";
 import { AnnualPlan, PlanGoal } from "../types";
 import { formatMoney } from "../money";
 import { useAuth } from "../../../app/auth/AuthContext";
+import PlanVsActual from "./PlanVsActual";
 
 interface YearPlanProps {
   /** Bumped by the page when something changes, to refetch. */
@@ -135,6 +136,10 @@ export default function YearPlan({ nonce }: YearPlanProps) {
 
       {error && <p className="small-text error" role="alert">{error}</p>}
       {asked && <GoalAnswer goal={planned.goal} endsOn={planned.ends_on} />}
+
+      {/* Under the plan it saves: the plan is recomputed on every read, so
+          only a saved copy can be compared with what happened. */}
+      {userId && <PlanVsActual userId={userId} nonce={nonce} />}
 
       <details className="forecastAssumptions">
         <summary className="small-text muted">How this is worked out</summary>

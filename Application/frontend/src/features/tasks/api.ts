@@ -2,6 +2,7 @@ import { del, get, patch, post } from "../../services/apiClient";
 import { endpoints } from "../../services/endpoints";
 import {
   CompletionTiming,
+  EstimateRatio,
   QuickCapturePreview,
   QuickCaptureResult,
   RecurringTask,
@@ -15,6 +16,7 @@ import {
   TaskCreate,
   TaskSnooze,
   TaskUpdate,
+  TimerStop,
 } from "./types";
 
 interface TaskQuery {
@@ -79,6 +81,26 @@ export async function fetchSnoozes(userId: string, taskId: string) {
 /** How early or late work has been finished lately. */
 export async function fetchTaskTiming(userId: string) {
   return get<CompletionTiming>(endpoints.tasks.timing(userId));
+}
+
+/** How long it actually took. Null clears it. */
+export async function setActualMinutes(userId: string, taskId: string, minutes: number | null) {
+  return updateTask(userId, taskId, { actual_minutes: minutes });
+}
+
+/** Start timing. Starting one already running changes nothing. */
+export async function startTimer(userId: string, taskId: string) {
+  return post<Task>(endpoints.tasks.timerStart(userId, taskId), {});
+}
+
+/** Stop timing, adding the minutes -- unless it ran past twelve hours. */
+export async function stopTimer(userId: string, taskId: string) {
+  return post<TimerStop>(endpoints.tasks.timerStop(userId, taskId), {});
+}
+
+/** How long tasks really take against their estimates. */
+export async function fetchEstimateRatio(userId: string) {
+  return get<EstimateRatio>(endpoints.tasks.estimates(userId));
 }
 
 /* ===== Reminders ===== */

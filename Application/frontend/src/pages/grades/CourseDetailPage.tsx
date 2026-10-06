@@ -17,6 +17,7 @@ import DeleteConfirmModal from "../../features/grades/components/DeleteConfirmMo
 import RequiredFinalModal from "../../features/grades/components/RequiredFinalModal";
 import RequiredFinalPanel from "../../features/grades/components/RequiredFinalPanel";
 import GradingSchemes from "../../features/grades/components/GradingSchemes";
+import ProjectionReview from "../../features/grades/components/ProjectionReview";
 import KeptSyllabi from "../../features/intake/KeptSyllabi";
 import SyllabusAddModal from "../../features/intake/SyllabusAddModal";
 import { intakeStatus } from "../../features/intake/api";
@@ -288,6 +289,9 @@ export default function CourseDetailPage() {
       {/* Above the insights row, not inside CourseCost: that panel hides
           itself when the course has cost nothing, which would take the links
           with it on exactly the courses you have not spent anything on yet. */}
+      {/* The last projection before the final, against the result. Renders
+          nothing until the course has both. */}
+      {course && <ProjectionReview course={course} />}
       {course && (
         <CourseLinks links={course.links ?? []} onEdit={() => setLinksOpen(true)} />
       )}

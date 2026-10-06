@@ -168,7 +168,12 @@ export interface WeekLoad {
   starts_on: string;
   ends_on: string;
   booked_minutes: number;
+  /** Scaled by `estimate_ratio` when that is set. */
   estimated_minutes: number;
+  /** The estimates as typed, before any scaling. */
+  typed_estimated_minutes?: number;
+  /** How long tasks really take against their estimates, when the forecast uses it. */
+  estimate_ratio?: number | null;
   task_count: number;
   unestimated_tasks: number;
   event_count: number;

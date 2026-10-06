@@ -23,17 +23,25 @@ import {
   createTask,
   deleteRepeating,
   deleteTask,
+  fetchEstimateRatio,
   fetchTaskTiming,
+  setActualMinutes,
   setTaskDone,
+  startTimer,
+  stopTimer,
   updateTask,
   wakeTask,
 } from "../features/tasks/api";
 import {
   CompletionTiming,
+  EstimateRatio,
   RecurringTask,
   Task,
   TaskCreate,
 } from "../features/tasks/types";
+import HowLongPrompt from "../features/tasks/components/HowLongPrompt";
+import EstimateRatioCard from "../features/tasks/components/EstimateRatioCard";
+import { updatePreferences } from "../services/currentUserClient";
 import { fetchCourses } from "../features/grades/api";
 import { Course } from "../features/grades/types";
 import { useAuth } from "../app/auth/AuthContext";
@@ -73,6 +81,12 @@ export default function TasksPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [editingRule, setEditingRule] = useState<RecurringTask | null>(null);
   const [addingRule, setAddingRule] = useState(false);
+  // The review loop (Phase 1 D35, D36): the task just ticked off, waiting on
+  // "how long did it take?", and how estimates have been running.
+  const [asking, setAsking] = useState<Task | null>(null);
+  const [ratio, setRatio] = useState<EstimateRatio | null>(null);
+  const [ratioNonce, setRatioNonce] = useState(0);
+  const [timerNote, setTimerNote] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -97,6 +111,19 @@ export default function TasksPage() {
 
     return () => { mounted = false; };
   }, [user, tasks]);
+
+  // Same trigger, plus an answer to "how long" or the switch, neither of which
+  // reloads the list.
+  useEffect(() => {
+    if (!user) return;
+
+    let mounted = true;
+    fetchEstimateRatio(user.id)
+      .then((next) => { if (mounted) setRatio(next); })
+      .catch(() => { if (mounted) setRatio(null); });
+
+    return () => { mounted = false; };
+  }, [user, tasks, ratioNonce]);
 
   // Grouped by how soon, not by course: the question this page answers is
   // "what now", and a course grouping answers "what eventually".
@@ -147,7 +174,12 @@ export default function TasksPage() {
     setJustChecked((prev) => new Set(prev).add(task.id));
     const linger = new Promise((resolve) => setTimeout(resolve, DONE_LINGER_MS));
     try {
-      await withBusy(() => setTaskDone(user.id, task.id, true), "Could not update the task");
+      await withBusy(async () => {
+        const finished = await setTaskDone(user.id, task.id, true);
+        // Asked only where there is an estimate to compare with. The server's
+        // copy, so a timer it just stopped is the first answer offered.
+        if (finished.estimated_minutes) setAsking(finished);
+      }, "Could not update the task");
     } finally {
       await linger;
       // Cleared whether the save worked or not: on failure the reload has already
@@ -155,6 +187,34 @@ export default function TasksPage() {
       // losing the animation.
       setJustChecked((prev) => withoutId(prev, task.id));
     }
+  }
+
+  async function handleTimer(task: Task) {
+    if (!user) return;
+    setTimerNote(null);
+    await withBusy(async () => {
+      if (!task.timer_started_at) {
+        await startTimer(user.id, task.id);
+        return;
+      }
+      const stopped = await stopTimer(user.id, task.id);
+      if (stopped.discarded) {
+        setTimerNote(`The timer on "${task.title}" ran past 12 hours, so it recorded nothing.`);
+      }
+    }, "Could not change the timer");
+  }
+
+  async function handleHowLong(minutes: number) {
+    if (!user || !asking) return;
+    await setActualMinutes(user.id, asking.id, minutes);
+    setAsking(null);
+    setRatioNonce((n) => n + 1);
+  }
+
+  async function handleApplyRatio(on: boolean) {
+    if (!user) return;
+    await updatePreferences(user.id, { use_estimate_ratio: on });
+    setRatioNonce((n) => n + 1);
   }
 
   async function handleDelete(task: Task) {
@@ -216,6 +276,7 @@ export default function TasksPage() {
 
       {error && <p className="calError">{error}</p>}
       {actionError && <p className="calError">{actionError}</p>}
+      {timerNote && <p className="calError" role="alert">{timerNote}</p>}
       {loading && <p className="calMuted" role="status">Loading…</p>}
 
       {/*
@@ -233,8 +294,18 @@ export default function TasksPage() {
       */}
       <div className="taskGrid">
         <div className="taskCol">
+          {/* First, while it is still fresh: the question waits for an answer
+              or a skip, and holds nothing else up. */}
+          {asking && (
+            <div className="taskSlot taskSlot--howlong">
+              <HowLongPrompt key={asking.id} task={asking} onAnswer={handleHowLong}
+                             onSkip={() => setAsking(null)} />
+            </div>
+          )}
+
           <div className="taskSlot taskSlot--stats">
             <CompletionTimingBlock timing={timing} />
+            <EstimateRatioCard ratio={ratio} onApply={handleApplyRatio} />
           </div>
 
           <div className="taskSlot taskSlot--capture">
@@ -251,6 +322,7 @@ export default function TasksPage() {
               onPriority={handlePriority}
               onSnooze={setSnoozing}
               onWake={handleWake}
+              onTimer={handleTimer}
               busy={busy}
               emptyMessage="Nothing overdue."
               loading={stale}
@@ -267,6 +339,7 @@ export default function TasksPage() {
               onPriority={handlePriority}
               onSnooze={setSnoozing}
               onWake={handleWake}
+              onTimer={handleTimer}
               busy={busy}
               emptyMessage="Nothing without a date."
               loading={stale}
@@ -322,6 +395,7 @@ export default function TasksPage() {
               onPriority={handlePriority}
               onSnooze={setSnoozing}
               onWake={handleWake}
+              onTimer={handleTimer}
               busy={busy}
               emptyMessage="Clear for a fortnight."
               loading={stale}

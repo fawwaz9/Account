@@ -49,6 +49,31 @@ export interface Task {
   snooze_count: number;
   /** Why it was last pushed back, so a blocked task says so on its own row. */
   last_snooze_reason: string | null;
+  /** How long it actually took: the answer on completion, or the timer's total. */
+  actual_minutes?: number | null;
+  /** When the running timer started (UTC); null when none runs. Kept by the server. */
+  timer_started_at?: string | null;
+}
+
+/** Mirrors TimerStop in app/Tasks/schemas/task.py. */
+export interface TimerStop {
+  task: Task;
+  /** Minutes the stop added; 0 when it recorded nothing. */
+  added_minutes: number;
+  /** The timer ran past twelve hours, so nothing was recorded. */
+  discarded: boolean;
+}
+
+/** How long tasks really take against their estimates (Phase 1 D36). */
+export interface EstimateRatio {
+  /** Total actual over total estimated; null until `needed` tasks have both. */
+  ratio: number | null;
+  tasks: number;
+  needed: number;
+  estimated_minutes: number;
+  actual_minutes: number;
+  /** Whether the workload forecast is using it. */
+  applied: boolean;
 }
 
 export interface SnoozeRequest {
@@ -150,6 +175,8 @@ export const PRIORITY_LABELS: Record<number, string> = {
 export type TaskUpdate = Partial<TaskCreate> & {
   done?: boolean;
   archived?: boolean;
+  /** Null clears it. */
+  actual_minutes?: number | null;
 };
 
 /* ===== Repeating tasks ===== */

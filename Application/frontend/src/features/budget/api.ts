@@ -8,6 +8,8 @@ import {
   SafeToSpend,
   CashFlowForecast,
   AnnualPlan,
+  PlanReview,
+  SavedPlan,
   ImportMapping,
   ImportPreview,
   ImportSummary,
@@ -384,6 +386,16 @@ export async function fetchPlan(userId: string, target?: number, until?: string)
   if (until) params.set("until", until);
   const query = params.toString();
   return get<AnnualPlan>(`${endpoints.finances.plan(userId)}${query ? `?${query}` : ""}`);
+}
+
+/** Keep the plan as it stands, to compare the coming months with. Never replaces one. */
+export async function savePlan(userId: string) {
+  return post<SavedPlan>(endpoints.finances.planSaved(userId), {});
+}
+
+/** Each finished month against the plan saved before it began. */
+export async function fetchPlanReview(userId: string) {
+  return get<PlanReview>(endpoints.finances.planReview(userId));
 }
 
 /* ===== CSV import ===== */

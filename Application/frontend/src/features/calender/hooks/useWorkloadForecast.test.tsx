@@ -26,6 +26,8 @@ describe("useWorkloadForecast", () => {
     await waitFor(() => expect(result.current).not.toBeNull());
     expect(result.current).toEqual({
       estimatedMinutes: 300, taskCount: 4, unestimatedTasks: 1, freeMinutes: 255,
+      // Not scaled: the load carried no ratio, and the typed total is the figure.
+      estimateRatio: null, typedMinutes: 300,
     });
     const window = ["u1", today(), addDays(today(), 6)];
     expect(api.fetchWeekLoad).toHaveBeenCalledWith(...window);

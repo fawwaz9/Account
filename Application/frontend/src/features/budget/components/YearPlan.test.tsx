@@ -3,7 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 const fetchPlan = vi.fn();
-vi.mock("../api", () => ({ fetchPlan: (...a: unknown[]) => fetchPlan(...a) }));
+// The plan-against-actual section under the plan reads too; it has its own tests.
+vi.mock("../api", () => ({
+  fetchPlan: (...a: unknown[]) => fetchPlan(...a),
+  fetchPlanReview: () => Promise.resolve({ latest: null, months: [] }),
+  savePlan: () => Promise.resolve({}),
+}));
 vi.mock("../../../app/auth/AuthContext", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
 
 import YearPlan from "./YearPlan";

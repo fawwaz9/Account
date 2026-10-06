@@ -28,7 +28,16 @@ interface TaskItemProps {
   readonly onPriority: (task: Task, priority: number) => void;
   readonly onSnooze: (task: Task) => void;
   readonly onWake: (task: Task) => void;
+  readonly onTimer?: (task: Task) => void;
   readonly busy: boolean;
+}
+
+/** "since 14:05", in the viewer's own clock; the server keeps the start in UTC. */
+function timerSince(startedAt: string): string {
+  // Stored naive in UTC, so it usually arrives with no offset; without the Z,
+  // the browser would read it as local time and be hours out.
+  const stamp = /(?:[zZ]|[+-]\d\d:?\d\d)$/.test(startedAt) ? startedAt : `${startedAt}Z`;
+  return new Date(stamp).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 }
 
 /**
@@ -46,6 +55,7 @@ export default function TaskItem({
   onPriority,
   onSnooze,
   onWake,
+  onTimer,
   busy,
 }: TaskItemProps) {
   const overdue = !task.done && task.due_date !== null && daysBetween(today(), task.due_date) < 0;
@@ -115,6 +125,16 @@ export default function TaskItem({
             </span>
           )}
           {estimate && <span className="taskEstimate">{estimate}</span>}
+          {/* What it actually took, once said: beside the estimate so the two
+              read as a pair. */}
+          {task.actual_minutes != null && (
+            <span className="taskEstimate taskActual">took {duration(task.actual_minutes)}</span>
+          )}
+          {task.timer_started_at && (
+            <span className="taskTag taskTagTimer" role="status">
+              timing since {timerSince(task.timer_started_at)}
+            </span>
+          )}
           {/* A task the gradebook owns closes itself when the score lands, so
               saying where it came from explains why it cannot be deleted here. */}
           {task.grade_id && <span className="taskTag taskTagAuto">from grades</span>}
@@ -145,6 +165,19 @@ export default function TaskItem({
       >
         Edit
       </button>
+
+      {!task.done && onTimer && (
+        <button
+          type="button"
+          className="taskTimer"
+          onClick={() => onTimer(task)}
+          disabled={busy}
+          aria-pressed={Boolean(task.timer_started_at)}
+          aria-label={`${task.timer_started_at ? "Stop timing" : "Time"} ${task.title}`}
+        >
+          {task.timer_started_at ? "Stop" : "Time"}
+        </button>
+      )}
 
       {!task.done && (
         <button

@@ -12,6 +12,12 @@ export interface WorkloadForecast {
   unestimatedTasks: number;
   /** Usable free time inside the study window, time already gone excluded. */
   freeMinutes: number;
+  /**
+   * When the estimate is scaled by how long tasks really take (Phase 1 D36):
+   * the ratio, and the estimates as typed. Null: not scaled.
+   */
+  estimateRatio?: number | null;
+  typedMinutes?: number;
 }
 
 /**
@@ -44,6 +50,8 @@ export function useWorkloadForecast() {
           taskCount: load.task_count,
           unestimatedTasks: load.unestimated_tasks,
           freeMinutes: blocks.reduce((total, block) => total + block.minutes, 0),
+          estimateRatio: load.estimate_ratio ?? null,
+          typedMinutes: load.typed_estimated_minutes ?? load.estimated_minutes,
         });
       })
       .catch(() => {
