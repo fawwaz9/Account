@@ -152,6 +152,7 @@ def liquid_accounts(db: Session, user_id: uuid.UUID) -> dict[uuid.UUID, float]:
             AccountModel.user_id == user_id,
             AccountModel.archived.is_(False),
             AccountModel.kind.in_(LIQUID_KINDS),
+            AccountModel.counts_toward_net_worth.is_(True),
         )
         .all()
     )

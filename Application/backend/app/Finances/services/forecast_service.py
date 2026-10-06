@@ -60,6 +60,7 @@ from app.Jobs.services.earnings_service import (
 from app.Jobs.services.job_service import list_shifts
 from app.shared.dates import user_today
 from app.shared.money import money
+from app.Finances.services.counted import on_counted_accounts
 
 #: How far back "recent" spending reaches. Eight weeks: long enough that one
 #: big weekend does not set the pace for a term, short enough to follow a
@@ -172,7 +173,11 @@ def days_of_history(db: Session, user_id: uuid.UUID, anchor: date) -> int:
     """
     first = (
         db.query(TransactionModel.occurred_on)
-        .filter(TransactionModel.user_id == user_id, TransactionModel.occurred_on < anchor)
+        .filter(
+            TransactionModel.user_id == user_id,
+            TransactionModel.occurred_on < anchor,
+            on_counted_accounts(user_id),
+        )
         .order_by(TransactionModel.occurred_on.asc())
         .first()
     )
@@ -191,7 +196,7 @@ def debt_account_ids(db: Session, user_id: uuid.UUID) -> set[uuid.UUID]:
     rows = (
         db.query(AccountModel.id)
         .filter(AccountModel.user_id == user_id, AccountModel.archived.is_(False),
-                AccountModel.kind == "debt")
+                AccountModel.kind == "debt", AccountModel.counts_toward_net_worth.is_(True))
         .all()
     )
     return {row.id for row in rows}
@@ -228,6 +233,8 @@ def one_off_expenses(
         if not account_ids:
             return []
         query = query.filter(TransactionModel.account_id.in_(account_ids))
+    else:
+        query = query.filter(on_counted_accounts(user_id))  # every account that counts (D39)
     return [row for row in query.all() if row.id not in excluded]
 
 
@@ -454,6 +461,7 @@ def runway(
             AccountModel.user_id == user_id,
             AccountModel.archived.is_(False),
             AccountModel.kind.in_(LIQUID_KINDS),
+            AccountModel.counts_toward_net_worth.is_(True),
         )
         .all()
     )
@@ -467,6 +475,7 @@ def runway(
             TransactionModel.kind.in_(("income", "expense")),
             TransactionModel.occurred_on >= anchor - timedelta(days=history_days),
             TransactionModel.occurred_on < anchor,
+            on_counted_accounts(user_id),
         )
         .all()
     )

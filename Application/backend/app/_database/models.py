@@ -288,15 +288,16 @@ class AccountModel(Base):
     #: Archived accounts keep their history but stop being offered.
     archived = Column(Boolean, nullable=False, default=False)
     position = Column(Integer, nullable=False, default=0)
-    #: Whether this balance reaches the net worth figure. Defaults to counting,
-    #: and any account may turn it off -- the student owns the data and knows
-    #: why a pot should not count. Money lent out is the obvious case, being
-    #: money someone else is holding, but a joint account or one held for
-    #: somebody else are just as real and no rule here could anticipate them.
+    #: Whether this account counts -- toward net worth *and* every analytic:
+    #: safe to spend, the forecast, the year plan, spending summaries (Phase 1
+    #: D39, the owner's call; until then it was net worth only). Defaults to
+    #: counting, and any account may turn it off -- the student owns the data
+    #: and knows why a pot should not count: money lent out, a joint account,
+    #: one held for somebody else. Unticked, the analytics treat it as absent;
+    #: its ledger and page stay. Read through Finances/services/counted.py.
     #:
-    #: Independent of `kind`, deliberately. Excluding a spending account from
-    #: net worth does not stop safe-to-spend counting it: "what am I worth" and
-    #: "what can I spend now" are different questions.
+    #: Independent of `kind`: any kind may be unticked. The column keeps its old
+    #: name because renaming a Postgres column buys nothing a reader sees.
     counts_toward_net_worth = Column(
         Boolean, nullable=False, default=True, server_default="1"
     )

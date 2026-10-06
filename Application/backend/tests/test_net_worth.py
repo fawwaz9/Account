@@ -148,26 +148,27 @@ def test_an_account_can_be_created_already_excluded(db, user, savings):
     assert created.counts_toward_net_worth is False
 
 
-def test_excluding_a_spending_account_does_not_change_what_is_safe_to_spend(db, user):
-    """Two different questions, and they must not be coupled.
+def test_excluding_a_spending_account_takes_it_out_of_what_is_safe_to_spend(db, user):
+    """One switch, both questions (Phase 1 D39, the owner's call).
 
-    "What am I worth" and "what can I spend before payday" have different
-    answers, so a pot left out of the first is still cash in hand for the
-    second. Wiring net worth into safe-to-spend would make one setting quietly
-    change two figures.
+    Until D39 this test pinned the opposite: net worth and safe-to-spend kept
+    apart. The owner chose one per-account switch for net worth and every
+    analytic, so an unticked spending account is no longer cash in hand here
+    either. tests/test_counted_accounts.py holds every other analytic to it.
     """
     import datetime
     from app.Finances.services.safe_service import safe_to_spend
 
     spending = make_account(db, user.id, "Chequing", kind="spending")
     put(db, user, spending, 900.00)
-    before = safe_to_spend(db, user.id, on_day=datetime.date(2026, 10, 14)).safe_now
+    day = datetime.date(2026, 10, 14)
+    assert safe_to_spend(db, user.id, on_day=day).safe_now == pytest.approx(900.00, abs=CENT)
 
     update_account(db, user.id, spending.id, AccountUpdate(counts_toward_net_worth=False))
 
-    after = safe_to_spend(db, user.id, on_day=datetime.date(2026, 10, 14)).safe_now
-    assert after == pytest.approx(before, abs=CENT)
-    assert after == pytest.approx(900.00, abs=CENT)
+    after = safe_to_spend(db, user.id, on_day=day)
+    assert after.safe_now == pytest.approx(0.00, abs=CENT)
+    assert after.accounts == []
 
 
 # ------------------------------------------------------------------ edges --

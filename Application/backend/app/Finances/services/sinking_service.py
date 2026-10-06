@@ -44,6 +44,7 @@ from app.Finances.schemas.transaction import TransactionKind
 from app.Tasks.services.task_service import user_exists
 from app.shared.dates import user_today
 from app.shared.money import money
+from app.Finances.services.counted import uncounted_accounts
 
 
 # Every function that produces a figure takes an `on_day`. The monthly amount
@@ -351,6 +352,8 @@ def unfunded_total(db: Session, user_id: uuid.UUID, anchor: date) -> float:
         .filter(
             SinkingFundModel.user_id == user_id,
             SinkingFundModel.archived.is_(False),
+            # Paid from an unticked account, it is no claim on what counts (D39).
+            SinkingFundModel.from_account_id.notin_(uncounted_accounts(user_id)),
         )
         .all()
     )

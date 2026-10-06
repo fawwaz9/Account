@@ -35,13 +35,12 @@ from app.Jobs.services.job_service import next_pay_on
 from app.Tasks.services.task_service import user_exists
 from app.shared.dates import user_today
 from app.shared.money import money
+from app.Finances.services.counted import uncounted_account_ids
 
 #: Account kinds whose balance is money you can spend.
 #:
-#: This is the one place `accounts.kind` drives behaviour rather than styling.
-#: If per-account control is ever wanted, the answer is an explicit
-#: `counts_as_spendable` column -- not more meaning loaded onto `kind`, which is
-#: how `group_id` ended up carrying two.
+#: Per-account control is `counts_toward_net_worth` (Phase 1 D39): an unticked
+#: spending account leaves this figure along with every other analytic.
 SPENDABLE_KINDS = frozenset({"spending"})
 
 
@@ -84,6 +83,7 @@ def spendable_accounts(db: Session, user_id: uuid.UUID) -> list[SpendableAccount
             AccountModel.user_id == user_id,
             AccountModel.archived.is_(False),
             AccountModel.kind.in_(SPENDABLE_KINDS),
+            AccountModel.counts_toward_net_worth.is_(True),
         )
         .all()
     )
@@ -128,7 +128,12 @@ def safe_to_spend(db: Session, user_id: uuid.UUID, on_day: date | None = None):
     # Only money leaving. An incoming standing instruction inside the window is
     # money that has not arrived, and belongs in `safe_soon` at most -- counting
     # it here would be the optimism this figure exists to avoid.
-    leaving = [charge for charge in charges if charge.signed_amount < 0]
+    # A charge paid from an unticked account is no claim on what counts (D39).
+    uncounted = uncounted_account_ids(db, user_id)
+    leaving = [
+        charge for charge in charges
+        if charge.signed_amount < 0 and charge.account_id not in uncounted
+    ]
     committed = money(sum(-charge.signed_amount for charge in leaving))
 
     # This month's sinking-fund contributions that are still promises. A

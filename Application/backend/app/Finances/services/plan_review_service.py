@@ -112,8 +112,12 @@ def review(db: Session, user_id: uuid.UUID, on_day: date | None = None) -> PlanR
 
 def actuals(db: Session, user_id: uuid.UUID, first: date, last: date) -> dict[date, dict[str, float]]:
     """Money in, out, tuition, and the closing liquid balance, per month from `first` to `last`."""
+    # Accounts that count (D39). An unticked one is as if absent: its own rows
+    # are skipped, and money moved to it counts as leaving.
     kinds = dict(
-        db.query(AccountModel.id, AccountModel.kind).filter(AccountModel.user_id == user_id).all()
+        db.query(AccountModel.id, AccountModel.kind)
+        .filter(AccountModel.user_id == user_id, AccountModel.counts_toward_net_worth.is_(True))
+        .all()
     )
     liquid = {account for account, kind in kinds.items() if kind in LIQUID_KINDS}
     debt = {account for account, kind in kinds.items() if kind == "debt"}

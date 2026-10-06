@@ -27,6 +27,7 @@ from app.Finances.schemas.budget import (
 )
 from app.Finances.utils.limits import effective_category_limit, planned_for_account
 from app.Finances.schemas.transaction import TransactionKind
+from app.Finances.services.counted import on_counted_accounts
 
 #: Seeded once so the first expense has somewhere to go.
 DEFAULT_CATEGORIES = [
@@ -333,7 +334,11 @@ def get_budget_summary(db: Session, user_id: uuid.UUID, month: date):
     start, end = month_bounds(month)
     accounts = (
         db.query(AccountModel)
-        .filter(AccountModel.user_id == user_id, AccountModel.archived.is_(False))
+        .filter(
+            AccountModel.user_id == user_id,
+            AccountModel.archived.is_(False),
+            AccountModel.counts_toward_net_worth.is_(True),  # D39
+        )
         .all()
     )
 
@@ -426,6 +431,7 @@ def get_budget_summary(db: Session, user_id: uuid.UUID, month: date):
             TransactionModel.kind == TransactionKind.EXPENSE.value,
             TransactionModel.occurred_on >= start,
             TransactionModel.occurred_on <= end,
+            on_counted_accounts(user_id),  # D39
         )
         .group_by(TransactionModel.category_id)
         .all()

@@ -33,6 +33,7 @@ from app.Finances.schemas.subscription import (
 from app.Finances.services.recurring_service import create_rule
 from app.Tasks.services.task_service import user_exists
 from app.shared.money import money
+from app.Finances.services.counted import on_counted_accounts
 
 #: A trailing reference number -- "NETFLIX.COM 8842119", "Spotify #33012" -- is
 #: how a payment processor tells two charges apart, not part of the merchant's
@@ -133,6 +134,7 @@ def find_subscriptions(db: Session, user_id: uuid.UUID) -> list[SubscriptionCand
             TransactionModel.user_id == user_id,
             TransactionModel.kind == EXPENSE,
             TransactionModel.recurring_id.is_(None),
+            on_counted_accounts(user_id),  # D39
         )
         .order_by(TransactionModel.occurred_on)
         .all()

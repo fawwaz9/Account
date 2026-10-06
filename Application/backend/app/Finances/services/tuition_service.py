@@ -42,6 +42,7 @@ from app.Finances.services.transaction_service import (
 )
 from app.Grades.utils.terms import CURRENT, calendar_year_of, term_bucket, term_dates
 from app.shared.dates import user_today
+from app.Finances.services.counted import on_counted_accounts
 
 
 def current_term(db: Session, user_id: uuid.UUID) -> tuple[int | None, str | None]:
@@ -263,6 +264,7 @@ def course_cost(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> Course
             TransactionModel.user_id == user_id,
             TransactionModel.course_id == course_id,
             TransactionModel.kind == TransactionKind.EXPENSE.value,
+            on_counted_accounts(user_id),  # D39
         )
         .all()
     )
@@ -483,6 +485,7 @@ def term_budget(db: Session, user_id: uuid.UUID, today: date | None = None) -> T
             # Transfers move money between pots without spending it, so counting
             # them would double the total and call a savings top-up an expense.
             TransactionModel.kind != TransactionKind.TRANSFER.value,
+            on_counted_accounts(user_id),  # D39
         )
         .all()
     )
