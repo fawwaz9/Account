@@ -13,6 +13,7 @@ from datetime import date, datetime, time, timedelta, timezone
 
 from sqlalchemy import select
 
+from app._database.rls import SHARED_READ_TABLES
 from app._database.models import (
     AccountCategoryLimitModel,
     AccountCategoryMonthLimitModel,
@@ -20,6 +21,8 @@ from app._database.models import (
     AccountMonthValueModel,
     Base,
     BudgetTargetModel,
+    CatalogueCourseModel,
+    CataloguePrerequisiteModel,
     CourseCategoryWeightModel,
     CourseModel,
     EventModel,
@@ -260,8 +263,33 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
 
     db.commit()
 
-    missing = {t.name for t in Base.metadata.sorted_tables} - set(ids) - {"users"}
+    missing = {t.name for t in Base.metadata.sorted_tables} - set(ids) - {"users"} - SHARED_READ_TABLES
     assert not missing, f"the world has nothing in: {sorted(missing)}"
+    return ids
+
+
+def seed_catalogue(db) -> dict[str, uuid.UUID]:
+    """One row in every shared table, belonging to nobody (Phase 2 item 1).
+
+    Not part of a user's world: shared rows have no owner, so they are seeded
+    once beside both worlds. Present so a route that changed or deleted one is
+    caught, and so a read of them is a read of something.
+    """
+    course = CatalogueCourseModel(id=uuid.uuid4(), campus="UBCV", subject="CPSC", number="221",
+                                  title="Basic Algorithms and Data Structures", credits=4.0)
+    db.add(course)
+    db.flush()
+    rule = CataloguePrerequisiteModel(id=uuid.uuid4(), catalogue_course_id=course.id,
+                                      kind="prerequisite", session="2026W",
+                                      rule={"all": [{"course": "UBCV CPSC 210"}]},
+                                      source="reviewed-proposal")
+    db.add(rule)
+    # Read before the commit: after it, touching an attribute refreshes the row
+    # and leaves a transaction open holding a lock that blocks rls.install.
+    ids = {"catalogue_courses": course.id, "catalogue_prerequisites": rule.id}
+    db.commit()
+    missing = SHARED_READ_TABLES - set(ids)
+    assert not missing, f"the catalogue seed has nothing in: {sorted(missing)}"
     return ids
 
 

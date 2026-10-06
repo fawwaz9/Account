@@ -65,7 +65,8 @@ from app._database.db import get_db
 from app.Auth.services.session_service import create_access_token
 from tests.conftest import make_user
 from app.shared.dates import user_today
-from tests.isolation_world import seed_world, snapshot
+from app._database.rls import SHARED_READ_TABLES
+from tests.isolation_world import seed_catalogue, seed_world, snapshot
 
 MARK_A = "zzownera"
 MARK_B = "zzvictimb"
@@ -516,6 +517,12 @@ def _check(before, after, b, world_b, response, sent: str):
                 if any(s in text for s in b_strings):
                     problems.append(f"CROSS-LINK: {table}.{column} of a changed row points at B's data")
 
+    # Shared rows belong to nobody, so no request may change them at all --
+    # only the owner-run review script writes them (Phase 2 D9).
+    for table in SHARED_READ_TABLES:
+        if after.get(table) != before.get(table):
+            problems.append(f"SHARED WRITE: a request changed {table}")
+
     if response.status_code >= 500:
         problems.append(f"CRASH: {response.status_code} {response.text[:200]}")
     return problems
@@ -548,6 +555,7 @@ def two_worlds(db):
     day = user_today(db, a.id)
     world_a = seed_world(db, a.id, MARK_A, day)
     world_b = seed_world(db, b.id, MARK_B, day)
+    seed_catalogue(db)
     return a, b, world_a, world_b, day
 
 
@@ -651,5 +659,6 @@ def test_every_route_is_covered():
 def test_the_world_covers_every_table(db, user):
     from app._database.models import Base
     world = seed_world(db, user.id, MARK_B, user_today(db, user.id))
-    tables = {t.name for t in Base.metadata.sorted_tables} - {"users"}
+    tables = {t.name for t in Base.metadata.sorted_tables} - {"users"} - SHARED_READ_TABLES
     assert tables <= set(world)
+    assert SHARED_READ_TABLES <= set(seed_catalogue(db))

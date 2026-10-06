@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime, timezone
 from sqlalchemy import (
-    Column, String, Float, Boolean, Integer, ForeignKey, Date, DateTime, Time, Index, JSON
+    CheckConstraint, Column, String, Float, Boolean, Integer, ForeignKey, Date, DateTime, Time,
+    Index, JSON, UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import Uuid
@@ -1521,3 +1522,90 @@ class CourseEquivalenceModel(Base):
     note = Column(String, nullable=True)
     created_at = Column(DateTime, nullable=False, default=utc_now)
 
+
+
+# --------------------------------------------------------------------------
+# Shared tables (Phase 2 Part A). Not per-user: every signed-in user reads
+# them and no request writes them. rls.SHARED_READ_TABLES names each one, and
+# only the owner-run review script, connected as the tables' owner, can write.
+# --------------------------------------------------------------------------
+
+#: The campuses a catalogue course can belong to (Phase 2 D7). A plain value,
+#: not the vision's organizations tree, until leagues need one.
+CAMPUSES = ("UBCV", "UBCO")
+PREREQUISITE_KINDS = ("prerequisite", "corequisite")
+#: Where a catalogue fact came from. `ubc-calendar` only once UBC has agreed
+#: in writing (Phase 2 D2).
+CATALOGUE_SOURCES = ("reviewed-proposal", "ubc-calendar")
+
+
+def _one_of(column: str, values: tuple[str, ...]) -> str:
+    return f"{column} IN ({', '.join(repr(v) for v in values)})"
+
+
+class CatalogueCourseModel(Base):
+    """A course as the school offers it, one row for everyone (Phase 2 item 2).
+
+    Keyed by campus, subject and number. `subject` is stored without a campus
+    suffix ("CPSC", not "CPSC_V"): the campus column says it, and
+    course_lookup.code_parts already drops the underscore when matching.
+    """
+
+    __tablename__ = "catalogue_courses"
+    __table_args__ = (
+        UniqueConstraint("campus", "subject", "number", name="uq_catalogue_course"),
+        CheckConstraint(_one_of("campus", CAMPUSES), name="ck_catalogue_course_campus"),
+    )
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    campus = Column(String, nullable=False)
+    subject = Column(String, nullable=False)
+    number = Column(String, nullable=False)
+    title = Column(String, nullable=True)
+    credits = Column(Float, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+
+    prerequisites = relationship(
+        "CataloguePrerequisiteModel", back_populates="course", cascade=cascade
+    )
+
+
+class CataloguePrerequisiteModel(Base):
+    """What a catalogue course requires, for one calendar session (Phase 2 item 2).
+
+    `rule` is an AND/OR tree over course keys, "one of" groups and credit
+    thresholds; `note` holds what a tree cannot (year standing, "or permission
+    of the instructor"). One row per course, kind and session, because the
+    tree holds the whole condition.
+
+    `source_text` is the calendar's own sentence, and only a `ubc-calendar` row
+    may carry one: a reviewed proposal comes from someone's syllabus, whose
+    wording stays with them (Phase 2 D6). The check constraint holds that, so a
+    review script that forgot would be refused by the database.
+    """
+
+    __tablename__ = "catalogue_prerequisites"
+    __table_args__ = (
+        UniqueConstraint("catalogue_course_id", "kind", "session", name="uq_catalogue_prerequisite"),
+        CheckConstraint(_one_of("kind", PREREQUISITE_KINDS), name="ck_catalogue_prerequisite_kind"),
+        CheckConstraint(_one_of("source", CATALOGUE_SOURCES), name="ck_catalogue_prerequisite_source"),
+        CheckConstraint(
+            "source = 'ubc-calendar' OR source_text IS NULL",
+            name="ck_catalogue_prerequisite_private_wording",
+        ),
+    )
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    catalogue_course_id = Column(
+        Uuid, ForeignKey("catalogue_courses.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    kind = Column(String, nullable=False)
+    #: The calendar session the rule is from, as "2026W" or "2026S" (fact C).
+    session = Column(String, nullable=False)
+    rule = Column(JSON, nullable=False)
+    note = Column(String, nullable=True)
+    source = Column(String, nullable=False)
+    source_text = Column(String, nullable=True)
+    reviewed_at = Column(DateTime, nullable=False, default=utc_now)
+
+    course = relationship("CatalogueCourseModel", back_populates="prerequisites")

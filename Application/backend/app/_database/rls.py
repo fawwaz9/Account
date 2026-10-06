@@ -19,6 +19,11 @@ Postgres refuse to return them, whatever the query says.
   table with a ``user_id`` column (yours if it carries your id), or a child
   reached through exactly one parent that has one (yours if its parent is).
   A table that is none of these makes ``policy_statements`` raise.
+* The one exception is by name: ``SHARED_READ_TABLES``, world knowledge such as
+  the course catalogue (Phase 2 item 1). Every identified caller may read them,
+  and the app role can write none of them -- refused twice, by a SELECT-only
+  grant and by a policy that covers SELECT alone. Only the tables' owner writes
+  them, through an owner-run script.
 * The few questions that cross users are ``SECURITY DEFINER`` functions that
   answer with an id or a boolean, never with rows.
 
@@ -48,6 +53,20 @@ logger = logging.getLogger("app.rls")
 #: only GRANTs to it, and only if it exists.
 APP_ROLE = "account_app"
 POLICY = "account_isolation"
+
+#: Tables that belong to nobody: every signed-in user reads them, no request
+#: writes them (Phase 2 D9). By name, so an ownerless table still raises
+#: unless someone decided, here, that it is shared.
+SHARED_READ_TABLES = frozenset({"catalogue_courses", "catalogue_prerequisites"})
+
+#: Who may read a shared row: anyone the API has identified. Not ``true``, so an
+#: un-identified query still sees nothing -- the same fail-closed rule as every
+#: other table, at no cost, since every catalogue read is inside a request.
+SHARED_PREDICATE = "account_current_user() IS NOT NULL"
+
+#: Everything a grant can carry on a table besides SELECT. Revoked from the app
+#: role on shared tables, so a grant left from an earlier shape is taken back.
+WRITE_PRIVILEGES = "INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER"
 
 #: The functions the application calls. The schema gate checks they exist,
 #: because an API that calls one before it is created cannot sign anyone in.
@@ -154,6 +173,32 @@ def _owner_parent(table: Table) -> tuple[str, str, Table] | None:
     return candidates[0] if len(candidates) == 1 else None
 
 
+def is_shared(table: Table) -> bool:
+    """Whether ``table`` is on the shared list -- and if it is, that it is shaped
+    like one.
+
+    A table with an owner on the list would hand every user's rows in it to
+    everyone, so naming one raises rather than quietly sharing it.
+    """
+    if table.name not in SHARED_READ_TABLES:
+        return False
+    if table.name == "users" or "user_id" in table.columns or _owner_parent(table) is not None:
+        raise ValueError(
+            f"Table {table.name!r} is listed in SHARED_READ_TABLES but has an owner. "
+            "Shared tables hold world knowledge; a table with a user_id is per-user."
+        )
+    return True
+
+
+def _check_shared_list() -> None:
+    """Every shared name is a real table. A typo would leave the real table
+    raising -- loud, but for the wrong reason -- and the list claiming a share
+    that does not exist."""
+    unknown = SHARED_READ_TABLES - set(Base.metadata.tables)
+    if unknown:
+        raise ValueError(f"SHARED_READ_TABLES names tables no model builds: {sorted(unknown)}")
+
+
 def owner_predicate(table: Table) -> str:
     """The SQL condition under which a row of ``table`` belongs to the caller."""
     if table.name == "users":
@@ -176,8 +221,20 @@ def owner_predicate(table: Table) -> str:
 
 def policy_statements() -> list[str]:
     """Every statement that puts the policies in place. Idempotent."""
+    _check_shared_list()
     statements = []
     for table in Base.metadata.sorted_tables:
+        if is_shared(table):
+            statements += [
+                f"ALTER TABLE {table.name} ENABLE ROW LEVEL SECURITY",
+                f"DROP POLICY IF EXISTS {POLICY} ON {table.name}",
+                # FOR SELECT and nothing else. Under row-level security a
+                # command with no policy is refused, so this alone stops every
+                # write -- the grant below stops them a second time.
+                f"CREATE POLICY {POLICY} ON {table.name} FOR SELECT TO {APP_ROLE} "
+                f"USING ({SHARED_PREDICATE})",
+            ]
+            continue
         predicate = owner_predicate(table)
         statements += [
             f"ALTER TABLE {table.name} ENABLE ROW LEVEL SECURITY",
@@ -198,12 +255,15 @@ def grant_statements() -> list[str]:
     don't build (production still holds one left by a rollback) gets no policy,
     so a grant on it would hand the app role every user's rows in it.
     """
+    tables = Base.metadata.sorted_tables
     return [
         "GRANT USAGE ON SCHEMA public TO " + APP_ROLE,
         *(
             f"GRANT SELECT, INSERT, UPDATE, DELETE ON {table.name} TO {APP_ROLE}"
-            for table in Base.metadata.sorted_tables
+            for table in tables
+            if not is_shared(table)
         ),
+        *(statement for table in tables if is_shared(table) for statement in _shared_grants(table)),
         "GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_current_user() TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_user_id_by_email(text) TO " + APP_ROLE,
@@ -212,6 +272,38 @@ def grant_statements() -> list[str]:
         "GRANT EXECUTE ON FUNCTION account_expired_user_ids(timestamp) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_release_push_endpoint(text) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_users_with_unpushed_reminders(timestamp) TO " + APP_ROLE,
+    ]
+
+
+def _shared_grants(table: Table) -> list[str]:
+    """SELECT to the app role, and nothing to anyone else.
+
+    Everyone else, not only PUBLIC: Supabase's default privileges grant every
+    new table to anon and authenticated by name (Phase 0 D11), with TRUNCATE
+    among them, which row-level security does not cover. So every grantee but
+    the owner and the app role loses everything, the way the definer functions
+    are locked down above.
+    """
+    name = table.name
+    return [
+        f"REVOKE ALL ON {name} FROM PUBLIC",
+        f"""DO $$
+DECLARE r record;
+BEGIN
+    FOR r IN
+        SELECT DISTINCT g.rolname
+        FROM pg_class c
+        CROSS JOIN LATERAL aclexplode(c.relacl) a
+        JOIN pg_roles g ON g.oid = a.grantee
+        WHERE c.oid = 'public.{name}'::regclass
+          AND a.grantee <> c.relowner
+          AND g.rolname <> '{APP_ROLE}'
+    LOOP
+        EXECUTE format('REVOKE ALL ON public.{name} FROM %I', r.rolname);
+    END LOOP;
+END $$""",
+        f"REVOKE {WRITE_PRIVILEGES} ON {name} FROM {APP_ROLE}",
+        f"GRANT SELECT ON {name} TO {APP_ROLE}",
     ]
 
 

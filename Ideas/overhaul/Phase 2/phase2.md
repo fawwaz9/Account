@@ -69,13 +69,16 @@ used:
 **Measurable today:** none. The four from §11 need teams, open signup and
 partnerships, none of which exist. Part A's are tests and page checks.
 
-## Status at a glance (2026-10-05)
+## Status at a glance (2026-10-06)
+
+Work is on the `phase2` branch, cut from `main` at `5c2cc43`. **Nothing from
+Phase 2 is deployed.**
 
 | # | Item | Status |
 |---|---|---|
-| **A** | **The shared course catalogue** | **Planned** |
-| 1 | The policy for shared, read-only tables | Not started. `rls.owner_predicate` refuses such a table on purpose |
-| 2 | Catalogue tables: courses and prerequisites | Not started |
+| **A** | **The shared course catalogue** | **In progress** |
+| 1 | The policy for shared, read-only tables | **Built, not deployed** (D9). Proven on Postgres and mutation-checked |
+| 2 | Catalogue tables: courses and prerequisites | **Built, not deployed** (D10). Runbook step 1 is written |
 | 3 | Linking your courses to the catalogue | Not started. `course_lookup.code_parts` already normalises codes |
 | 4 | Your own prerequisites, and proposals | Not started |
 | 5 | The syllabus reader picks up prerequisites | Not started. The reader exists (Phase 1 D16) |

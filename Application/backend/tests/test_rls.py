@@ -34,7 +34,7 @@ from app._database.identity import act_as, email_taken, user_id_by_email
 from app._database.models import AccountModel, Base, GradeModel, UserModel
 from app.shared.dates import user_today
 from tests.conftest import TEST_DATABASE_URL, TESTING_SQLITE, connect_args_for, make_user
-from tests.isolation_world import seed_world, snapshot
+from tests.isolation_world import seed_catalogue, seed_world, snapshot
 
 pytestmark = pytest.mark.skipif(TESTING_SQLITE, reason="row-level security is Postgres-only")
 
@@ -83,6 +83,7 @@ def worlds(owner_engine):
         day = user_today(session, a.id)
         world_a = seed_world(session, a.id, "zzownera", day)
         world_b = seed_world(session, b.id, "zzvictimb", day)
+        seed_catalogue(session)
         yield session, a, b, world_a, world_b
     finally:
         session.close()
@@ -111,6 +112,9 @@ def _rows_owned(snap, user_id, world):
     owned["course_category_weights"] = {
         pk for pk, row in weights.items() if row["course_id"] == world["courses"]
     }
+    # Shared rows are everyone's to read.
+    for table in rls.SHARED_READ_TABLES:
+        owned[table] = set(snap[table])
     return owned
 
 
@@ -121,7 +125,7 @@ def _rows_owned(snap, user_id, world):
 def test_every_table_has_row_security_and_a_policy(owner_engine):
     with owner_engine.connect() as conn:
         rows = conn.execute(text(
-            "SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity, p.roles "
+            "SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity, p.roles, p.cmd "
             "FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
             "LEFT JOIN pg_policies p ON p.tablename = c.relname AND p.policyname = :policy "
             "WHERE n.nspname = 'public' AND c.relkind = 'r'"
@@ -131,6 +135,9 @@ def test_every_table_has_row_security_and_a_policy(owner_engine):
         row = by_table[table.name]
         assert row.relrowsecurity, f"{table.name}: row level security is off"
         assert row.roles == [rls.APP_ROLE], f"{table.name}: policy is for {row.roles}"
+        # Shared tables are read, never written: a policy for SELECT alone.
+        expected = "SELECT" if table.name in rls.SHARED_READ_TABLES else "ALL"
+        assert row.cmd == expected, f"{table.name}: policy covers {row.cmd}, not {expected}"
         # Not forced: forcing would bind the owner, which is what today's API
         # connects as, and it would see nothing. See rls.py.
         assert not row.relforcerowsecurity, f"{table.name}: FORCE would lock the owner out"
@@ -178,11 +185,119 @@ def test_the_app_role_cannot_change_the_schema(app_session):
 
 
 # --------------------------------------------------------------------------
+# Shared tables (Phase 2 item 1): read by everyone identified, written by no
+# one but their owner.
+# --------------------------------------------------------------------------
+
+SHARED_PRIVILEGES = ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER")
+
+
+def _privileges(conn, role, table):
+    return {
+        p for p in SHARED_PRIVILEGES
+        if conn.execute(text("SELECT has_table_privilege(:r, :t, :p)"),
+                        {"r": role, "t": table, "p": p}).scalar()
+    }
+
+
+def test_the_app_role_may_only_read_shared_tables(owner_engine):
+    with owner_engine.connect() as conn:
+        for table in sorted(rls.SHARED_READ_TABLES):
+            assert _privileges(conn, rls.APP_ROLE, table) == {"SELECT"}, table
+
+
+def test_a_write_grant_left_on_a_shared_table_is_taken_back(owner_engine):
+    """A grant from an earlier shape of the table, or made by hand, must not survive install."""
+    table = sorted(rls.SHARED_READ_TABLES)[0]
+    with owner_engine.begin() as conn:
+        conn.execute(text(f"GRANT ALL ON {table} TO {rls.APP_ROLE}"))
+    rls.install(owner_engine)
+    with owner_engine.connect() as conn:
+        assert _privileges(conn, rls.APP_ROLE, table) == {"SELECT"}
+
+
+@pytest.mark.parametrize("statement", [
+    "INSERT INTO catalogue_courses (id, campus, subject, number, created_at) "
+    "VALUES (gen_random_uuid(), 'UBCV', 'PLNT', '101', now())",
+    "UPDATE catalogue_courses SET title = 'planted'",
+    "DELETE FROM catalogue_prerequisites",
+    "TRUNCATE catalogue_prerequisites",
+    "UPDATE catalogue_prerequisites SET rule = '{}'",
+])
+def test_the_app_role_cannot_write_a_shared_table(worlds, app_session, statement):
+    owner, a, *_ = worlds
+    act_as(app_session, a.id)
+    before = snapshot(owner)
+    with pytest.raises(ProgrammingError, match="permission denied"):
+        app_session.execute(text(statement))
+    app_session.rollback()
+    after = snapshot(owner)
+    for table in rls.SHARED_READ_TABLES:
+        assert after[table] == before[table] and after[table], table
+
+
+def test_every_identified_user_reads_the_same_shared_rows(worlds, app_session):
+    owner, a, b, _, _ = worlds
+    everything = snapshot(owner)
+    for person in (a, b):
+        act_as(app_session, person.id)
+        for table in sorted(rls.SHARED_READ_TABLES):
+            seen = set(app_session.execute(text(f"SELECT id FROM {table}")).scalars())
+            assert seen == set(everything[table]) and seen, table
+        app_session.rollback()
+
+
+SUPABASE_ROLES = ("anon", "authenticated")
+
+
+def test_supabase_default_grants_on_a_shared_table_are_taken_away(owner_engine):
+    """Supabase grants every new table to anon and authenticated by name, with
+    TRUNCATE among the privileges -- and TRUNCATE ignores row-level security.
+
+    Modelled here, as plain Postgres has neither role: grant them everything,
+    install again, and they must be left with nothing.
+    """
+    with owner_engine.begin() as conn:
+        for role in SUPABASE_ROLES:
+            if not conn.execute(text("SELECT 1 FROM pg_roles WHERE rolname = :r"), {"r": role}).scalar():
+                conn.execute(text(f"CREATE ROLE {role} NOLOGIN"))
+        for table in rls.SHARED_READ_TABLES:
+            conn.execute(text(f"GRANT ALL ON {table} TO PUBLIC"))
+            for role in SUPABASE_ROLES:
+                conn.execute(text(f"GRANT ALL ON {table} TO {role}"))
+    rls.install(owner_engine)
+    with owner_engine.connect() as conn:
+        for table in sorted(rls.SHARED_READ_TABLES):
+            for role in SUPABASE_ROLES:
+                assert _privileges(conn, role, table) == set(), f"{role} on {table}"
+
+
+def test_a_stray_login_cannot_read_or_write_a_shared_table(owner_engine):
+    with owner_engine.begin() as conn:
+        if not conn.execute(text("SELECT 1 FROM pg_roles WHERE rolname = 'rls_outsider'")).scalar():
+            conn.execute(text("CREATE ROLE rls_outsider LOGIN PASSWORD 'outsider_test_only'"))
+        conn.execute(text("GRANT ALL ON catalogue_courses TO rls_outsider"))
+    rls.install(owner_engine)
+    url = make_url(TEST_DATABASE_URL).set(username="rls_outsider", password="outsider_test_only")
+    outsider = create_engine(url, connect_args=connect_args_for(TEST_DATABASE_URL))
+    try:
+        for statement in ("SELECT count(*) FROM catalogue_courses", "TRUNCATE catalogue_courses"):
+            with outsider.connect() as conn:
+                with pytest.raises(ProgrammingError, match="permission denied"):
+                    conn.execute(text(statement))
+    finally:
+        outsider.dispose()
+
+
+# --------------------------------------------------------------------------
 # Reads: nothing without an identity, exactly your own rows with one.
 # --------------------------------------------------------------------------
 
 def test_no_identity_sees_no_rows_at_all(worlds, app_session):
+    owner = worlds[0]
     for table in Base.metadata.sorted_tables:
+        # Not vacuous: the rows are there, for the owner.
+        assert owner.execute(text(f"SELECT count(*) FROM {table.name}")).scalar(), table.name
         count = app_session.execute(text(f"SELECT count(*) FROM {table.name}")).scalar()
         assert count == 0, f"{table.name}: {count} rows visible with no identity set"
 
