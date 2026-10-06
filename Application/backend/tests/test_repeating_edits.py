@@ -13,6 +13,7 @@ from app._database.models import TaskModel
 from app.Calendar.schemas.event import Frequency, Recurrence, Weekday
 from app.Tasks.schemas.recurring_task import RecurringTaskCreate, RecurringTaskUpdate
 from app.Tasks.services import recurring_task_service as svc
+from app.shared.dates import user_today
 
 
 def daily_rule(db, user, *, starts_on=None, title="Take out the bins"):
@@ -20,7 +21,7 @@ def daily_rule(db, user, *, starts_on=None, title="Take out the bins"):
     return svc.create_rule(db, user.id, RecurringTaskCreate(
         title=title, notes=None, due_time=None, estimated_minutes=None,
         course_id=None, tags=[],
-        starts_on=starts_on or datetime.date.today() - datetime.timedelta(days=3),
+        starts_on=starts_on or user_today(db, user.id) - datetime.timedelta(days=3),
         recurrence=Recurrence(freq=Frequency.DAILY, interval=1, byday=[],
                               until=None, count=None),
         active=True,
@@ -32,7 +33,7 @@ def weekly_rule(db, user, day: Weekday):
     return svc.create_rule(db, user.id, RecurringTaskCreate(
         title="Readings", notes=None, due_time=None, estimated_minutes=None,
         course_id=None, tags=[],
-        starts_on=datetime.date.today() - datetime.timedelta(days=28),
+        starts_on=user_today(db, user.id) - datetime.timedelta(days=28),
         recurrence=Recurrence(freq=Frequency.WEEKLY, interval=1, byday=[day],
                               until=None, count=None),
         active=True,
@@ -61,7 +62,7 @@ def test_a_completed_occurrence_keeps_what_it_said(db, user):
     db.commit()
 
     finished = next(t for t in rows(db, rule)
-                    if t.due_date < datetime.date.today())
+                    if t.due_date < user_today(db, user.id))
     finished.done = True
     finished.archived = True
     finished.completed_at = datetime.datetime.now(datetime.timezone.utc)
@@ -82,7 +83,7 @@ def test_an_overdue_occurrence_still_follows_the_rule(db, user):
 
     svc.update_rule(db, user.id, rule.id, RecurringTaskUpdate(title="Bins out"))
 
-    overdue = [t for t in rows(db, rule) if t.due_date < datetime.date.today()]
+    overdue = [t for t in rows(db, rule) if t.due_date < user_today(db, user.id)]
     assert overdue, "fixture should have written occurrences in the past"
     assert {task.title for task in overdue} == {"Bins out"}
 
@@ -111,7 +112,7 @@ def test_moving_the_weekday_clears_the_old_future_dates(db, user):
         recurrence=Recurrence(freq=Frequency.WEEKLY, interval=1,
                               byday=[Weekday.TH], until=None, count=None)))
 
-    future = [t for t in rows(db, rule) if t.due_date >= datetime.date.today()]
+    future = [t for t in rows(db, rule) if t.due_date >= user_today(db, user.id)]
     assert future, "the new weekday should have been written"
     # 0 = Monday, 3 = Thursday
     assert {task.due_date.weekday() for task in future} == {3}
@@ -128,14 +129,14 @@ def test_moving_the_weekday_does_not_disturb_the_past(db, user):
     rule = weekly_rule(db, user, Weekday.MO)
     svc.materialise(db, user.id, rule)
     db.commit()
-    before = [t.due_date for t in rows(db, rule) if t.due_date < datetime.date.today()]
+    before = [t.due_date for t in rows(db, rule) if t.due_date < user_today(db, user.id)]
     assert before, "fixture should have written occurrences in the past"
 
     svc.update_rule(db, user.id, rule.id, RecurringTaskUpdate(
         recurrence=Recurrence(freq=Frequency.WEEKLY, interval=1,
                               byday=[Weekday.TH], until=None, count=None)))
 
-    after = [t.due_date for t in rows(db, rule) if t.due_date < datetime.date.today()]
+    after = [t.due_date for t in rows(db, rule) if t.due_date < user_today(db, user.id)]
     assert sorted(after) == sorted(before)
 
 
@@ -145,7 +146,7 @@ def test_a_new_rule_still_catches_up_on_the_recent_past(db, user):
     svc.materialise(db, user.id, rule)
     db.commit()
 
-    past = [t.due_date for t in rows(db, rule) if t.due_date < datetime.date.today()]
+    past = [t.due_date for t in rows(db, rule) if t.due_date < user_today(db, user.id)]
     assert past, "a rule starting four weeks back should catch up recent dates"
 
 

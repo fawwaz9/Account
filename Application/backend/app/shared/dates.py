@@ -26,7 +26,7 @@ makes it agree with any clock the function chooses -- including a wrong one.
 """
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy.orm import Session
@@ -72,6 +72,23 @@ def local_today(user: UserModel | None, at: datetime | None = None) -> date:
     constant.
     """
     return local_now(user, at).date()
+
+
+def local_day_in_utc(user: UserModel | None, day: date) -> tuple[datetime, datetime]:
+    """When the student's calendar `day` starts and ends, in UTC, naive to match
+    stored timestamps (`utc_now`). For counting rows stamped in UTC by the
+    student's own day.
+
+    `func.date(created_at) == today` does not do this: it compares a UTC date
+    with a local one, and west of Greenwich they are a day apart every evening.
+    """
+    zone = zone_of(user)
+    start = datetime.combine(day, time.min, tzinfo=zone)
+    end = datetime.combine(day + timedelta(days=1), time.min, tzinfo=zone)
+    return (
+        start.astimezone(timezone.utc).replace(tzinfo=None),
+        end.astimezone(timezone.utc).replace(tzinfo=None),
+    )
 
 
 # --------------------------------------------------------------------------

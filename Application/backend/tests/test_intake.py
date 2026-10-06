@@ -21,6 +21,7 @@ from app.Grades.services.course_service import delete_course
 from app.Intake.schemas.syllabus import ApplyAssessment, ApplyRequest, SyllabusExtract, SyllabusUpload
 from app.Intake.services import llm, syllabus_service
 from app.Intake.services.syllabus_service import RateLimited, apply, changes, check, parse, prompt
+from app.shared.dates import local_day_in_utc, local_today
 from tests.conftest import SUITE_SYLLABUS, make_user
 
 PDF = base64.b64encode(b"%PDF-1.4 a syllabus").decode()
@@ -135,12 +136,34 @@ def test_bad_files_are_refused_before_anything_is_sent(db, termed, _no_llm_netwo
     assert _no_llm_network == []
 
 
-def test_the_daily_cap(db, termed, monkeypatch):
+# At any hour, one of these is on a different date from UTC. The cap once
+# compared `created_at`'s UTC date with the student's local one, so it counted
+# nothing every evening in Vancouver -- and failed CI only when CI ran then.
+FAR_ZONES = ["Etc/GMT+12", "Pacific/Kiritimati"]
+
+
+@pytest.mark.parametrize("zone", FAR_ZONES)
+def test_the_daily_cap(db, termed, monkeypatch, zone):
+    termed.preferences = {**(termed.preferences or {}), "timezone": zone}
+    db.commit()
     monkeypatch.setattr(settings, "LLM_PARSES_PER_DAY", 2)
     parse(db, termed.id, upload())
     parse(db, termed.id, upload())
     with pytest.raises(RateLimited):
         parse(db, termed.id, upload())
+
+
+@pytest.mark.parametrize("zone", FAR_ZONES)
+def test_yesterdays_parses_do_not_count(db, termed, monkeypatch, zone):
+    termed.preferences = {**(termed.preferences or {}), "timezone": zone}
+    db.commit()
+    monkeypatch.setattr(settings, "LLM_PARSES_PER_DAY", 1)
+    first = parse(db, termed.id, upload())
+    day_starts, _ = local_day_in_utc(termed, local_today(termed))
+    row = db.query(SyllabusParseModel).filter(SyllabusParseModel.id == first.id).one()
+    row.created_at = day_starts - datetime.timedelta(seconds=1)  # the last second of yesterday
+    db.commit()
+    parse(db, termed.id, upload())  # not refused
 
 
 def test_another_users_parses_do_not_count_toward_my_cap(db, termed, monkeypatch):

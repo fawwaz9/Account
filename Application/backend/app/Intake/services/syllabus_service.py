@@ -53,7 +53,7 @@ from app.Intake.schemas.syllabus import (
 )
 from app.Intake.services import llm
 from app.Intake.services.kept_files import keep_file
-from app.shared.dates import user_today
+from app.shared.dates import local_day_in_utc, local_today
 
 #: Weights are percentages; a syllabus rounds.
 WEIGHT_TOLERANCE = 0.5
@@ -121,16 +121,21 @@ def parse(db: Session, user_id: uuid.UUID, upload: SyllabusUpload, *, transport=
     if not llm.configured():
         raise llm.NotConfigured
 
-    today = user_today(db, user_id)
+    # The student's own day, as the UTC span it covers: `created_at` is UTC.
+    user = db.query(UserModel).filter(UserModel.id == user_id).first()
+    day_starts, day_ends = local_day_in_utc(user, local_today(user))
     used_today = (
         db.query(func.count(SyllabusParseModel.id))
-        .filter(SyllabusParseModel.user_id == user_id, func.date(SyllabusParseModel.created_at) == today)
+        .filter(
+            SyllabusParseModel.user_id == user_id,
+            SyllabusParseModel.created_at >= day_starts,
+            SyllabusParseModel.created_at < day_ends,
+        )
         .scalar()
     )
     if used_today >= settings.LLM_PARSES_PER_DAY:
         raise RateLimited
 
-    user = db.query(UserModel).filter(UserModel.id == user_id).first()
     span = term_dates(user.current_semester, user.current_school_year, user.first_year_calendar_year)
     start, end = span if span else (None, None)
     raw = llm.extract_document(
