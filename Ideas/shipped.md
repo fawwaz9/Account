@@ -884,6 +884,33 @@ production-URL build: 26 of 26 files.
 
 ---
 
+## Phase 1, the review loops -- SHIPPED 2026-10-06
+Decisions D34-D38 in phase1-decisions.md, steps in phase1-runbook.md ("The
+review loops"). The owner backed up and applied the schema (four nullable
+columns, one new table), then ran `deploy.run.sh all`.
+
+- **The projection against the result** (D34). When a course's final is marked
+  or its result entered, the grade from just before is kept. The course page
+  then says "before the final, we projected 83.0%. You got 82%".
+- **How long it actually took** (D35). Every open task has a server-side timer.
+  Ticking off a task with an estimate asks the question, with the timer's total
+  offered first. A timer left running past 12 hours records nothing.
+- **The estimate ratio** (D36). It is the total actual time over the total
+  estimated, shown from 5 tasks. A switch lets the workload forecast use it, and
+  everywhere the forecast shows its estimate, it says when it is scaled.
+- **The plan against each month** (D37). "Save as my plan" keeps a copy, never
+  overwritten. Each finished month is compared with the plan saved before it
+  began, with tuition named.
+- **Every Phase 1 exit number prints from the usage report** (D38). The new ones
+  are the money room unprompted and syllabus to term, with its no-change rate.
+
+LIVE: API `account-api-00037-9p8` (digest-verified `aaf93c4`) since 2026-10-06 06:56 UTC.
+The four new routes answer 401 against a 404 control, health is ok, and the logs
+show no errors. Frontend `main` at `aaf93c4`, matching a production build file
+by file (29 files).
+
+---
+
 ## Phase 1, the second batch -- SHIPPED 2026-10-05
 Phase 1 of Ideas/overhaul. Decisions D25-D33 in phase1-decisions.md, steps in
 phase1-runbook.md ("Next batch"). The owner backed up and applied the schema

@@ -305,7 +305,9 @@ Either half alone loses no data, but each degrades:
 - **Frontend alone:** a scheme someone picked still counts on the API, but the
   older course page neither says so nor offers a way to change it.
 
-## The review loops (built on `phase1-loops`, waiting for your go-ahead)
+## The review loops: DEPLOYED 2026-10-06 (`aaf93c4`, `account-api-00037-9p8`)
+
+Live and verified; see shipped.md.
 
 | What | Commit | Schema change |
 |---|---|---|
