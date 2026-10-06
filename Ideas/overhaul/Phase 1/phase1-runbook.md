@@ -304,3 +304,81 @@ Either half alone loses no data, but each degrades:
   fix goes too, so the 2026-10-25 date above applies again.
 - **Frontend alone:** a scheme someone picked still counts on the API, but the
   older course page neither says so nor offers a way to change it.
+
+## The review loops (built on `phase1-loops`, waiting for your go-ahead)
+
+| What | Commit | Schema change |
+|---|---|---|
+| The three loops' backend (D34–D37) | `58004f2` | **New columns** `courses.projected_before_final`, `courses.projected_on`, `tasks.actual_minutes`, `tasks.timer_started_at`; **new table `saved_plans`** |
+| Their frontend | `56880a4` | None |
+
+### 0. Back up, then apply the schema
+
+Run **Backup database** (Actions → Run workflow) and wait for it to pass. Then:
+
+```sh
+git checkout phase1-loops
+cd Application/backend
+set -a; source ../.env; set +a
+DATABASE_URL="$SUPABASE_DATABASE_URL" .venv/bin/python -m app._database.schema
+```
+
+**What this adds:**
+- On `courses`: `projected_before_final FLOAT` and `projected_on DATE`. Both are
+  nullable and not backfilled, because no past prediction was ever saved, so
+  there is none to recover. A course finished before this has no
+  "we projected" line, and that is correct.
+- On `tasks`: `actual_minutes INTEGER` and `timer_started_at TIMESTAMP`. Both
+  are nullable, and existing tasks read "not said" and "no timer".
+- The `saved_plans` table, with an index on `user_id`, row security, a policy on
+  `user_id`, and `account_app`'s grant. It is empty until you press
+  "Save as my plan".
+
+Nothing is dropped, rewritten or backfilled.
+
+**Verify** in the SQL editor:
+- This returns four rows:
+  `SELECT table_name, column_name, data_type FROM information_schema.columns WHERE (table_name, column_name) IN (('courses','projected_before_final'), ('courses','projected_on'), ('tasks','actual_minutes'), ('tasks','timer_started_at'));`
+- This returns `t`:
+  `SELECT relrowsecurity FROM pg_class WHERE relname = 'saved_plans';`
+- This returns at least 1:
+  `SELECT count(*) FROM pg_policies WHERE tablename = 'saved_plans';`
+
+**Undo:** not needed. The columns are nullable and the table is new, and the
+live API reads none of them.
+
+### 1. Deploy, API then frontend
+
+```sh
+./Application/deploy.run.sh all
+```
+
+**Use `all`, not `api` alone.** It deploys the API before the frontend, and
+that order matters: the new frontend calls the new routes. Against the current
+API its timer and "Save as my plan" fail with an error, and its new cards stay
+empty. Nothing breaks, but nothing works either.
+
+**Verify:**
+- Without sign-in, `/api/tasks/<your id>/tasks/estimates` and
+  `/api/finances/<your id>/plan/review` answer 401, against a 404 for a made-up
+  route.
+- Signed in:
+  - **Tasks:** an open task shows **Time**. Start it, then **Stop**, and the row
+    says "took 1m". Ticking off a task with an estimate asks "How long did it
+    take?".
+  - **Budget:** **Save as my plan** says when the comparison starts.
+  - **Courses:** a course whose final you mark from now on shows "we
+    projected …" once you enter its result.
+- No errors in the logs.
+
+**Rollback: both halves together.** Cloud Run goes back to the current revision
+(see ROLLBACK.md, "Current image"), and Pages to the deployment before this
+one. The schema stays, because the older API never reads the new columns or the
+table.
+- **The API alone** degrades exactly as described under step 1.
+- **The frontend alone** loses no data. What was saved stays in the database
+  until it is redeployed:
+  - timers already started
+  - answers to "how long"
+  - saved plans
+  - projections
