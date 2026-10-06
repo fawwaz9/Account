@@ -144,12 +144,31 @@ watch_run() {
   fail "$label failed for $SHORT. Summary: gh run view $id"
 }
 
+# The newest commit at or below <commit> that changes anything but docs --
+# Markdown or Ideas/, which ci.yml skips. Its code is the code a commit ships.
+code_beneath() {
+  git -C "$ROOT" log -1 --format=%H "$1" -- . ':(exclude,glob)**/*.md' ':(exclude)Ideas'
+}
+
+on_github() {
+  [ -n "$(git -C "$ROOT" branch -r --contains "$1" 2>/dev/null)" ]
+}
+
 # CI starts when a branch is pushed, so the commit has to be on GitHub first.
 # Push it on its own branch -- never main or ship, since pushing those is the
 # deploy itself, and never with force.
+#
+# Unless everything GitHub lacks is docs: then CI has nothing new to test, the
+# code beneath already has its run, and the commit can go straight to the
+# deploy -- the case of a shipped.md entry committed on main after a deploy.
 ensure_pushed() {
-  [ -n "$(git -C "$ROOT" branch -r --contains "$SHA" 2>/dev/null)" ] && return 0
-  local branch
+  on_github "$SHA" && return 0
+  local code_sha branch
+  code_sha="$(code_beneath "$SHA")"
+  if [ "$code_sha" != "$SHA" ] && on_github "$code_sha"; then
+    say "GitHub does not have $SHORT, but it adds only docs to ${code_sha:0:7}, which it has: nothing new for CI"
+    return 0
+  fi
   branch="$(git -C "$ROOT" symbolic-ref -q --short HEAD || true)"
   case "$branch" in
     "") fail "$SHORT is on no branch and GitHub does not have it. Check out a branch first." ;;
@@ -168,9 +187,13 @@ ensure_pushed() {
 # all hold the same code. A run on this commit itself is looked for first.
 wait_for_ci() {
   ensure_pushed
-  local status=0 ci_sha="$SHA" code_sha c
-  code_sha="$(git -C "$ROOT" log -1 --format=%H "$SHA" -- . ':(exclude,glob)**/*.md' ':(exclude)Ideas')"
-  if [ "$code_sha" != "$SHA" ] && ! find_run ci.yml "$SHA" "$DOCS_RUN_SECONDS" >/dev/null; then
+  local status=0 ci_sha="$SHA" code_sha c own_run=1
+  code_sha="$(code_beneath "$SHA")"
+  # A commit GitHub has never seen has no run of its own to wait for.
+  if [ "$code_sha" != "$SHA" ]; then
+    if ! on_github "$SHA" || ! find_run ci.yml "$SHA" "$DOCS_RUN_SECONDS" >/dev/null; then own_run=0; fi
+  fi
+  if [ "$own_run" = 0 ]; then
     ci_sha="$code_sha"
     for c in $(git -C "$ROOT" rev-list "$code_sha..$SHA^"); do
       if find_run ci.yml "$c" 1 >/dev/null; then ci_sha="$c"; break; fi
