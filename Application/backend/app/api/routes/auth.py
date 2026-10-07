@@ -5,6 +5,7 @@ from app.Auth.dependencies import CurrentUser
 from app.Auth.schemas.credentials import LoginRequest, RegisterRequest, SetPasswordRequest
 from app.Auth.schemas.token import GoogleAuthRequest, TokenResponse
 from app.Auth.services.google_auth_service import GoogleUnavailable, verify_google_token
+from app.Auth.services.client_address import client_of
 from app.Auth.services.login_throttle import (
     account_key,
     per_account,
@@ -17,20 +18,6 @@ from app.shared.errors import error_auth, responses
 from app.Users.services import user_service
 
 router = APIRouter()
-
-
-def client_of(request: Request) -> str:
-    """Who is calling, for throttling and for the audit log.
-
-    `request.client.host` is the peer address. Behind a reverse proxy every
-    caller looks like the proxy, which would make the per-client limiter
-    effectively global -- so if this is ever deployed behind one, that proxy has
-    to be trusted and its forwarded-for header read here instead. Deliberately
-    *not* reading the header today: an unvalidated `X-Forwarded-For` is
-    attacker-controlled, and trusting it would hand anyone an unlimited supply of
-    fresh throttle keys.
-    """
-    return request.client.host if request.client else "unknown"
 
 
 @router.post("/google", response_model=TokenResponse)

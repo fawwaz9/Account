@@ -484,3 +484,88 @@ same rules.
 
 **Still bound by the owner's rule** on personal documents: no real syllabus
 goes to a model until that rule is decided. Every test uses the fake adapter.
+
+## D15. Part B's order: safety and single-user first, signup last (yours, 2026-10-07)
+
+**What I asked (Q1):** my order, or the vision's, which leads with teams as
+the acquisition loop. **Your answer:** "your order seems good".
+
+So Part B runs:
+1. 12a, the rate limiter
+2. 14, conflict flags and the tax packet
+3. 10, partners
+4. 9, shared tasks
+5. 11, teams
+6. 13, end-of-term collection
+7. 12b, open signup, if it ships (Q4)
+
+**The trade, as priced in the draft:** the growth features come last, so more
+users arrive later. In exchange, every shared write lands on a policy and an
+invite that are already proven. Item 13 moves earlier if a term's end comes
+first.
+
+## D16. People connect by invite link, not by email address (yours, 2026-10-07)
+
+**Q2, your answer:** "yes". An invite is an unguessable token in a link that
+the inviter sends themselves (B2). It needs no email service, and it never
+reveals whether an address has an account. Tokens expire after 7 days, the
+inviter can revoke them, and they are looked up through a definer function
+that returns only what the invite is for.
+
+## D17. A shared task goes when its owner's account goes (yours, 2026-10-07)
+
+**Q3, your answer:** "yes it goes away". When an owner's account is purged,
+their shared tasks and events are deleted for every member, by the same
+cascade that deletes everything else they own. A member's account going
+removes only their membership. **Rejected:** passing the task to a member,
+which is an ownership transfer nobody asked for.
+
+## D18. The rate limiter reads one trusted forwarded entry, behind a switch you flip after a logged check (item 12a, 2026-10-07)
+
+**The problem:** the limiters key on the peer address, and behind Cloud Run
+that is the platform's proxy. So sign-in and sign-up throttling is one budget
+shared by everyone (vision §4).
+
+**What decides the fix:** which `X-Forwarded-For` entry can be trusted. Each
+proxy appends the address it saw, so a caller can write anything at the left
+end, and only the right end is written by Google's front end.
+- **Google's own page** on request headers says only that the first entry is
+  "generally" the client, which is the forgeable end.
+- **The one public report** of a Cloud Run deployment
+  ([markgoho/mbu#296](https://github.com/markgoho/mbu/issues/296)) reasons the
+  same way, but never logged a real request.
+
+**So the code doesn't guess the number of proxies. It reads it from a setting,
+and the setting is confirmed against production:**
+- **`TRUSTED_PROXY_HOPS`:** count that many entries in from the right and use
+  that one. Never the leftmost, never "the first public address".
+  `client_address.py` replaces `client_of` in `auth.py`.
+- **`0`, the default, ignores the header,** exactly as before. So deploying the
+  code changes nothing.
+- **Anything that doesn't hold up falls back to the peer:** no header, too few
+  entries, or an entry that isn't an IP address. Falling back can only merge
+  callers into the shared budget, never hand anyone a fresh one.
+- **You set `1` on Cloud Run, then send one sign-in carrying a forged header.**
+  The audit line's `client=` must equal Cloud Run's own logged `remoteIp` for
+  that request, and must not be the forged address. If it's wrong, set it back
+  to `0`, which is instant. If it shows a Google address instead, the front end
+  appends a second entry, and the answer is `2`. Runbook, 12a batch.
+
+**Rejected:**
+- **Trusting the leftmost entry,** the common mistake. It gives an unlimited
+  supply of fresh throttle keys.
+- **Hard-coding `1`.** Unconfirmed, it is either right or a silent bypass, and
+  a setting confirmed in production costs nothing more.
+
+**Evidence:** `tests/test_client_address.py`, 13 tests, through the real
+sign-in route:
+- With the switch on, two callers get two budgets.
+- A new forged address on every request still hits the same budget.
+- With the switch off, behaviour is unchanged.
+- Mutation check: all 4 removals were caught (rightmost not leftmost, must be
+  an IP address, off means ignored, too few entries falls back).
+
+**Unchanged, and still stated in `login_throttle.py`:** the limiters live in
+each instance's memory. With up to 3 instances, a caller's budget is at most
+three times the limit. That is acceptable before open signup, and to revisit
+if 12b ships.

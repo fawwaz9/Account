@@ -53,6 +53,15 @@ class Settings(BaseSettings):
     #: Unset, a syllabus is read and its extraction kept, but not the file.
     SYLLABUS_BUCKET: str | None = None
 
+    #: How many proxies in front of the API append to X-Forwarded-For, counted
+    #: from the right (Phase 2 item 12a). 0, the default, ignores the header and
+    #: keys the rate limiters on the peer address -- which on Cloud Run is the
+    #: platform's proxy, so every caller shares one budget. 1 trusts the entry
+    #: Google's front end appends, the one a caller cannot write. Set only after
+    #: a forged-header request shows the right address in the logs; setting it
+    #: back to 0 is the rollback. See Ideas/overhaul/Phase 2/phase2-runbook.md.
+    TRUSTED_PROXY_HOPS: int = Field(default=0, ge=0, le=3)
+
     model_config = SettingsConfigDict(env_file=ENV_FILE, extra="ignore")
 
 

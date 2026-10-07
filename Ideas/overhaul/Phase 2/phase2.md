@@ -85,11 +85,11 @@ Item 8 waits on UBC. Part B is drafted and waiting on your answers.
 | 6 | Owner review: proposals into the catalogue | **Deployed 2026-10-07** (D13). `scripts/catalogue_review.py`. Auto-approval is planned, not built (D5) |
 | 7 | Prerequisites on the course page, met or not | **Deployed 2026-10-07** (D12). Also warns when adding a future course |
 | 8 | UBC's permission, then a bulk import | Request drafted (`Ideas/overhaul/calender-request.md`); waits on UBC |
-| **B** | **The rest of the vision's Phase 2** | **Drafted 2026-10-06; waiting on your answers (Q1–Q5)** |
+| **B** | **The rest of the vision's Phase 2** | **Drafted 2026-10-06; order decided (D15). 12a in progress** |
 | 9 | Shared tasks and events (group coursework) | Not started. No collaborator tables; tasks and events are per-user |
 | 10 | Accountability partners | Not started |
 | 11 | Team sport and intramurals | Not started. No team, league or game tables |
-| 12 | Open signup, with affiliation verified later | Not started. **Gate:** the rate limiter is still global (`client_of` returns the peer, which is Cloud Run's proxy) |
+| 12 | Open signup, with affiliation verified later | **12a built, not deployed** (D18): per-caller throttling behind `TRUSTED_PROXY_HOPS`. 12b waits on Q4 |
 | 13 | End-of-term flow: ratings and anonymous grade contributions | Not started |
 | 14 | Shift-versus-exam conflict flags, and the tax packet | Not started |
 
@@ -602,19 +602,12 @@ are the acquisition loop. That's question Q1.
 
 ## Open questions
 
-Part A has none open. Part B's, all yours:
-- **Q1. The order.** Mine is above: safety (12a) and single-user (14) first,
-  then partners, tasks, teams, collection, and signup last. The vision leads
-  with teams as the acquisition loop. Which comes first?
-- **Q2. Invites by link (B2) rather than by email address?** Links need no
-  email service and reveal nothing about who uses the app.
-- **Q3. When the owner of a shared task deletes their account,** does the task
-  go for everyone (my default), or pass to a member?
+Part A has none open. Part B: Q1–Q3 are answered (D15–D17). Still yours:
 - **Q4. Open signup (12b) at all in Phase 2?** It needs an email provider (a
   new service, secret and cost), and the vision names it the item to overrule.
   12a ships either way.
 - **Q5. The tax packet from recorded paycheques only,** until your rule on
-  personal documents decides T4s?
+  personal documents decides T4s? This decides item 14, next after 12a.
 
 ## What the vision says that has since moved
 

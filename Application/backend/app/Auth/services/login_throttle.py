@@ -21,9 +21,8 @@ the proxy, not the caller -- so on a platform like Cloud Run these limiters
 collapse towards a single shared budget rather than one per person. That is not
 useless (an unbounded loop still stops) but it is a different thing from what
 runs locally, and the registration ceiling below is chosen with it in mind. The
-fix is to read a *trusted* forwarded-for header, which is a decision about the
-specific proxy and is deliberately not made here; see `client_of` in
-`api/routes/auth.py`.
+fix reads the one forwarded-for entry the trusted proxy wrote, switched by
+`TRUSTED_PROXY_HOPS`: see `Auth/services/client_address.py` (Phase 2 D18).
 """
 
 import threading

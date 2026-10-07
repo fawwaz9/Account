@@ -137,3 +137,76 @@ proposals' status stays "accepted":
 ```sql
 DELETE FROM catalogue_prerequisites WHERE id = '<row id>';
 ```
+
+## The 12a batch: the rate limiter per caller (D18). NOT YET RUN
+
+| What | Commits | Schema change |
+|---|---|---|
+| Item 12a: `TRUSTED_PROXY_HOPS` and `client_address.py` | on `phase2` | None |
+
+### 1. Deploy the API (reversible; the live app doesn't notice)
+
+```sh
+git checkout phase2
+./Application/deploy.run.sh all
+```
+
+With `TRUSTED_PROXY_HOPS` unset, the new code ignores `X-Forwarded-For`, so
+throttling behaves exactly as before. There is no frontend change; `all` also
+brings `main` level with the docs.
+
+**Verify, the negative control first.** Send one sign-in with a forged header:
+
+```sh
+curl -s -o /dev/null -w '%{http_code}\n' -X POST https://account-api-210502804146.us-west1.run.app/api/auth/login \
+  -H 'Content-Type: application/json' -H 'X-Forwarded-For: 203.0.113.7' \
+  -d '{"email":"xff-check@example.invalid","password":"not-the-password"}'
+```
+
+It answers `401`. Then read the audit line:
+
+```sh
+gcloud logging read 'resource.labels.service_name="account-api" AND textPayload:"xff-check@example.invalid"' \
+  --project account-504419 --limit 1 --format='value(textPayload)'
+```
+
+It ends `client=169.254...`, the platform's proxy. That's today's shared
+budget.
+
+**Undo:** the previous revision, per `Ideas/ROLLBACK.md`.
+
+### 2. Flip the switch (yours: a Cloud Run setting; instant to undo)
+
+```sh
+gcloud run services update account-api --region us-west1 --project account-504419 \
+  --update-env-vars TRUSTED_PROXY_HOPS=1
+```
+
+This makes a new revision with the same image. Later deploys keep the
+setting, because `gcloud run deploy --image` leaves environment variables
+alone.
+
+**Verify.** Send the same request as in step 1, then read both the audit line
+and Cloud Run's own record of it:
+
+```sh
+gcloud logging read 'resource.labels.service_name="account-api" AND textPayload:"xff-check@example.invalid"' \
+  --project account-504419 --limit 1 --format='value(textPayload)'
+gcloud logging read 'resource.labels.service_name="account-api" AND httpRequest.requestUrl:"/api/auth/login"' \
+  --project account-504419 --limit 1 --format='value(httpRequest.remoteIp)'
+```
+
+**What the result means:**
+- **Pass:** the `client=` in the first equals the `remoteIp` in the second.
+  That is your own address. It is neither `203.0.113.7` nor `169.254…`.
+- **`client=203.0.113.7`:** the switch is reading the forgeable end. Undo it
+  at once (below). The code is wrong, and I need to know.
+- **`client=` is a Google address** (`35.191…` or `130.211…`): the front end
+  appends a second entry. Set `TRUSTED_PROXY_HOPS=2` and check again.
+
+**Undo:** instant.
+
+```sh
+gcloud run services update account-api --region us-west1 --project account-504419 \
+  --remove-env-vars TRUSTED_PROXY_HOPS
+```
