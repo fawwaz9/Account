@@ -328,7 +328,9 @@ on a larger base.
     from version one** rather than after the first dispute.
   - Game scores and standings need **no exertion score**, which is why the
     maintenance-heavy fitness integrations wait for Phase 3.
-- **Open signup, with affiliation verified later.** Phase 0's isolation is the gate and it
+- **Open signup, with affiliation verified later.** *(Pushed back out of Phase 2 by the owner,
+  2026-10-07: `Ideas/overhaul/Phase 2/phase2-decisions.md` D19. Its rate-limiter gate, 12a,
+  still ships in Phase 2.)* Phase 0's isolation is the gate and it
   has already been passed by this point, so what remains is operational: email
   verification, abuse detection and an account-removal path (§6).
   - **Gate, not a line item: the per-client rate limiter is global today.** `client_of()`
@@ -725,7 +727,7 @@ secrecy.
 - **What is the abandon condition?** Every phase has an entry gate and none has an exit
   (§12.20).
 - **What rule governs sending personal documents (transcripts, pay stubs, T4s) to an LLM
-  provider?** Open — and it blocks transcript parsing, which is deferred out of Phase 1
+  provider?** *(T4s are out of scope altogether, 2026-10-07, Phase 2 D20.)* Open — and it blocks transcript parsing, which is deferred out of Phase 1
   until it is decided (§13.20, 2026-10-05). Syllabi are course documents, not personal
   ones, and are unaffected.
 - Data residency for LLM processing. — **Decided 2026-10-05:** not pinned during the
@@ -1249,7 +1251,7 @@ already carry the AMS health & dental plan with its opt-outable fee — don't le
 the money room double-count it as a job benefit.)
 
 **Tax packet.** Year-end export: total earned, tax/CPP/EI paid, per-employer
-breakdown for the T4s, tuition amounts for the credit. Seasonal, and the kind of
+breakdown from your recorded paycheques (T4 reading scrapped, Phase 2 D20), tuition amounts for the credit. Seasonal, and the kind of
 feature that gets recommended to friends.
 
 **Earnings-goal progress.** Tie into the hours-to-goal solver (§13.4): "you need
@@ -1286,7 +1288,9 @@ was added 2026-10-04 — §13.20):
   planner's income curve.
 - Pay stubs → paycheque verification (gross, deductions, vacation-pay line,
   reconciled against expected pay).
-- T4s → tax packet (employer totals, tax/CPP/EI).
+- ~~T4s → tax packet (employer totals, tax/CPP/EI).~~ *Scrapped by the owner, 2026-10-07
+  (Phase 2 D20): a T4 is the most personal document there is, and privacy law weighs on
+  it. The tax packet is built from recorded paycheques only.*
 The verification pattern carries over: show what was extracted, confirm-or-edit
 before it becomes the record; unverified parses never publish. Anomaly flags
 ("pay rate missing," "start date in the past"). Amended documents versioned like
@@ -2131,7 +2135,7 @@ build high-impact × high-feasibility first. Cost detail lives in §15; decision
 | Accountability partners | High | High | Share streak / weekly completion % with a friend. Needs two users. Completion, never grades. |
 | End-of-term flow | High | Med | One post-grades screen: ratings + anonymous grade contribution. The intake P3's aggregates depend on. |
 | Shift-vs-exam conflicts | High | Med | Flag shifts overlapping finals or study blocks at log time, not the night before. |
-| Tax packet | High | Med | Year-end export: earnings, deductions, per-employer T4 breakdown, tuition amounts. Seasonal and shareable. |
+| Tax packet | High | Med | Year-end export: earnings, deductions, per-employer breakdown from recorded paycheques (no T4 reading, Phase 2 D20), tuition amounts. Seasonal and shareable. |
 
 ### Phase 3 — density pays (the network features switch on)
 

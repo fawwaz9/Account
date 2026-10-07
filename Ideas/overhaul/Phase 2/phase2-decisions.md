@@ -569,3 +569,41 @@ sign-in route:
 each instance's memory. With up to 3 instances, a caller's budget is at most
 three times the limit. That is acceptable before open signup, and to revisit
 if 12b ships.
+
+## D19. Open signup is pushed out of Phase 2 (yours, 2026-10-07)
+
+**Q4, your answer:** "no push back". Item 12b, open signup with its
+verification email and email provider, does not ship in Phase 2. **12a, the
+rate limiter, still ships** (D18), because it fixes throttling for the people
+already here.
+
+**What it costs:** the Phase 2 exit criterion "registrations from outside the
+invited group retaining at week two" can't be met without open signup. Per the
+template, it stays unticked with this decision as the reason. It isn't failed.
+The invite links (D16) still bring people in: an invited address can sign up
+as today, through `ALLOWED_SIGNUP_EMAILS`.
+
+**Note for the invite links:** someone who opens an invite and whose address
+isn't on the list can't create an account. When item 10 is built, the invite
+page has to say that plainly, rather than fail. Adding invited addresses to
+the list stays your step.
+
+**The vision is edited to match:** a marked note on §4's open-signup bullet.
+
+## D20. T4s are scrapped; the tax packet uses only what you record (yours, 2026-10-07)
+
+**Q5, your answer:** "yes and we should probably scrap t4s. its the most
+personal document and the privacy laws."
+
+So:
+- **The app never reads, stores or sends a T4,** to a model or anywhere else.
+  That also takes them out of the open question on personal documents (vision
+  §10).
+- **The tax packet (item 14) is built from your recorded paycheques,** shifts
+  and tips. Its per-employer totals are sums of what you entered.
+- **It says so on the page:** "From what you recorded. Check it against your
+  T4s; this is not tax advice."
+
+**The vision is edited to match:** §10's open question, §13.11's tax packet,
+§13.12's document list (struck through, with the reason), and the atlas row.
+There's a backup of the vision in the scratchpad.

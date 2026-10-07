@@ -45,7 +45,7 @@ The rules that apply directly:
 
 From §11, unchanged:
 - [ ] ≥5 active teams playing real games with same-day score logging
-- [ ] registrations from outside the invited group retaining at week two
+- [ ] registrations from outside the invited group retaining at week two (**deferred with open signup, your call: D19**)
 - [ ] an accountability partnership surviving a month
 - [ ] moderation load inside a few hours a week
 
@@ -89,7 +89,7 @@ Item 8 waits on UBC. Part B is drafted and waiting on your answers.
 | 9 | Shared tasks and events (group coursework) | Not started. No collaborator tables; tasks and events are per-user |
 | 10 | Accountability partners | Not started |
 | 11 | Team sport and intramurals | Not started. No team, league or game tables |
-| 12 | Open signup, with affiliation verified later | **12a built, not deployed** (D18): per-caller throttling behind `TRUSTED_PROXY_HOPS`. 12b waits on Q4 |
+| 12 | Open signup, with affiliation verified later | **12a built, not deployed** (D18): per-caller throttling behind `TRUSTED_PROXY_HOPS`. 12b pushed out of Phase 2 (D19) |
 | 13 | End-of-term flow: ratings and anonymous grade contributions | Not started |
 | 14 | Shift-versus-exam conflict flags, and the tax packet | Not started |
 
@@ -602,14 +602,12 @@ are the acquisition loop. That's question Q1.
 
 ## Open questions
 
-Part A has none open. Part B: Q1–Q3 are answered (D15–D17). Still yours:
-- **Q4. Open signup (12b) at all in Phase 2?** It needs an email provider (a
-  new service, secret and cost), and the vision names it the item to overrule.
-  12a ships either way.
-- **Q5. The tax packet from recorded paycheques only,** until your rule on
-  personal documents decides T4s? This decides item 14, next after 12a.
+None. Part B's five are answered: D15–D17, D19 (open signup pushed out of Phase 2) and D20 (T4s scrapped).
 
 ## What the vision says that has since moved
+
+- **§4 put open signup in Phase 2.** It is pushed out (D19); 12a, its rate-limiter gate, stays.
+- **§13.11–§13.12 had the tax packet read T4s.** T4s are scrapped (D20); the packet sums recorded paycheques.
 
 - **§4 put the canonical course table in Phase 1.** It is now Phase 2 Part A
   (this draft), and the vision is edited to match.
