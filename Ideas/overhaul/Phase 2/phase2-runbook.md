@@ -1,7 +1,7 @@
 # Phase 2 — production runbook
 
-Written for: you. **Nothing here has been run.** Each step is written as the
-work it deploys is built, per the template. Part A deploys as one batch once its
+Written for: you. **Part A is deployed (2026-10-07).** Each step is written as
+the work it deploys is built, per the template. Part A deploys as one batch once its
 items are built and you say "deploy". The steps below grow with each item. A new
 role for automatic approval (D5) would come later.
 
@@ -10,7 +10,14 @@ role for automatic approval (D5) would come later.
 The draft and who to send it to are in `Ideas/overhaul/calender-request.md`.
 Tell me when UBC answers.
 
-## The Part A batch: NOT YET RUN
+## The Part A batch: DEPLOYED 2026-10-07 (`11925ac`, `account-api-00039-vmr`)
+
+Done in order: the backup (run 37556774219), step 1 (yours), then
+`deploy.run.sh all`. The schema gate passed, reporting row-level security on
+for 38 of 38 tables. The 6 new routes answer 401 against a 404 control. The
+live site matches the build (29 files). **Still to confirm:** checks 1 and 2
+from step 1 (empty tables; only `account_app | SELECT` on the catalogue).
+Their results weren't recorded.
 
 | What | Commits | Schema change |
 |---|---|---|

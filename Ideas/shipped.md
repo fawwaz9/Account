@@ -884,6 +884,46 @@ production-URL build: 26 of 26 files.
 
 ---
 
+## Phase 2 Part A: the shared course catalogue and prerequisites -- SHIPPED 2026-10-07
+The first table every user reads and nobody owns (`Ideas/overhaul/Phase 2/`, D9-D14).
+- **The policy:** `rls.SHARED_READ_TABLES` gets a SELECT-only policy that still
+  needs an identity, and a SELECT-only grant. Every other grantee is revoked,
+  including Supabase's anon and authenticated, because TRUNCATE ignores
+  row-level security. The API cannot write the catalogue at all.
+- **The catalogue:** `catalogue_courses` and `catalogue_prerequisites`. Only a
+  `ubc-calendar` row may carry source wording, held by a check constraint.
+- **Linking:** each course is matched to the catalogue by campus and code when
+  read. Your override, a course or "none", is stored in two new columns on
+  `courses`. Linking moves no grade, average or credit.
+- **Your prerequisites:** typed (`CPSC 210 and one of MATH 200, MATH 217`, `6
+  credits of MATH 1xx`, `CPSC 210 with 64%`), stored per-user in
+  `prerequisite_proposals`, and applying to you at once.
+- **Met or not:** a panel on the course page says met, on track or not met
+  per part, labelled by source. "Not met" always adds "exceptions are
+  sometimes made"; nothing is ever blocked. Adding a future course previews
+  the shared rule.
+- **From a syllabus:** the reader picks up prerequisites. Only what you confirm
+  is filed, and the syllabus's sentence stays with you.
+- **The owner review:** `scripts/catalogue_review.py` lists proposals as counts
+  of accounts and shares the rule tree alone. It runs only as the tables'
+  owner and refuses the app role.
+
+Proven on Postgres. 49 guard mutations were caught, and one gap they found
+gained a test. The isolation, non-interference and RLS walks cover the 7 new
+routes.
+
+**Not live:** nothing is in the shared catalogue until the owner approves
+something with the review script. Item 8, a UBC calendar import, waits on
+UBC's answer.
+
+LIVE: API `account-api-00039-vmr` (digest-verified `11925ac`) since 2026-10-07
+04:58 UTC. The schema step was the owner's. The gate reports row-level
+security on for 38 of 38 tables. Health ok, the 6 new routes 401 against a 404
+control, no errors in the new revision's logs. Frontend `main` at `11925ac`,
+matching a production build file by file (29 files).
+
+---
+
 ## Counted accounts: one switch for net worth and every analytic -- SHIPPED 2026-10-06
 The owner's call (D39). Settings -> Financial lists every account with a
 checkbox, and the account's edit dialog says the same thing. An unticked

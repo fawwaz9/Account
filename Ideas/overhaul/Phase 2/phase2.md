@@ -51,19 +51,19 @@ From §11, unchanged:
 
 Added for Part A, because a shared table needs its boundary proven before it is
 used:
-- [ ] **The catalogue policy is proven on Postgres:**
+- [x] **The catalogue policy is proven on Postgres** (2026-10-06, D9: `test_rls.py`, all six database mutations caught; live 2026-10-07 with row-level security on for 38 of 38 tables):
   - every signed-in user can read the catalogue
   - the API's role cannot insert, update or delete it
   - `anon` and `authenticated` get nothing, including through Supabase's
     default grants
   - the generator still refuses any table that is neither per-user nor on the
     shared list
-- [ ] **One person's entry cannot reach another person before review.** A test
-  walks every route.
+- [x] **One person's entry cannot reach another person before review.** A test
+  walks every route. (2026-10-06, D12/D13: the isolation and non-interference walks, and `test_one_persons_rule_never_reaches_another`.)
 - [ ] **Each of your current courses is linked to a catalogue course, or
-  deliberately to none.** Linking moves no grade, average or credit.
-- [ ] **The course page shows prerequisites as met or not met,** labelled by
-  source, with nothing blocked.
+  deliberately to none.** Linking moves no grade, average or credit. (The "moves nothing" half is proven, D11. The linking needs catalogue rows, which arrive as you approve proposals, or a "none" from you per course.)
+- [x] **The course page shows prerequisites as met or not met,** labelled by
+  source, with nothing blocked. (Live 2026-10-07, D12: `test_an_unmet_rule_blocks_nothing`.)
 - [ ] **UBC has answered the calendar request,** and the answer is recorded.
 
 **Measurable today:** none. The four from §11 need teams, open signup and
@@ -71,19 +71,19 @@ partnerships, none of which exist. Part A's are tests and page checks.
 
 ## Status at a glance (2026-10-06)
 
-Work is on the `phase2` branch, cut from `main` at `5c2cc43`. **Nothing from
-Phase 2 is deployed.**
+**Part A, items 1–7, is deployed** (2026-10-07: `11925ac`, `account-api-00039-vmr`).
+Item 8 waits on UBC. Part B is drafted and waiting on your answers.
 
 | # | Item | Status |
 |---|---|---|
-| **A** | **The shared course catalogue** | **In progress** |
-| 1 | The policy for shared, read-only tables | **Built, not deployed** (D9). Proven on Postgres and mutation-checked |
-| 2 | Catalogue tables: courses and prerequisites | **Built, not deployed** (D10). Runbook step 1 is written |
-| 3 | Linking your courses to the catalogue | **Built, not deployed** (D11). Matched on read; your override stored |
-| 4 | Your own prerequisites, and proposals | **Built, not deployed** (D12) |
-| 5 | The syllabus reader picks up prerequisites | **Built, not deployed** (D14). Files only what you confirm |
-| 6 | Owner review: proposals into the catalogue | **Built, not deployed** (D13). `scripts/catalogue_review.py`. Auto-approval is planned, not built (D5) |
-| 7 | Prerequisites on the course page, met or not | **Built, not deployed** (D12). Also warns when adding a future course |
+| **A** | **The shared course catalogue** | **Deployed, except item 8 (waits on UBC)** |
+| 1 | The policy for shared, read-only tables | **Deployed 2026-10-07** (D9). Proven on Postgres and mutation-checked |
+| 2 | Catalogue tables: courses and prerequisites | **Deployed 2026-10-07** (D10). Runbook step 1 is written |
+| 3 | Linking your courses to the catalogue | **Deployed 2026-10-07** (D11). Matched on read; your override stored |
+| 4 | Your own prerequisites, and proposals | **Deployed 2026-10-07** (D12) |
+| 5 | The syllabus reader picks up prerequisites | **Deployed 2026-10-07** (D14). Files only what you confirm |
+| 6 | Owner review: proposals into the catalogue | **Deployed 2026-10-07** (D13). `scripts/catalogue_review.py`. Auto-approval is planned, not built (D5) |
+| 7 | Prerequisites on the course page, met or not | **Deployed 2026-10-07** (D12). Also warns when adding a future course |
 | 8 | UBC's permission, then a bulk import | Request drafted (`Ideas/overhaul/calender-request.md`); waits on UBC |
 | **B** | **The rest of the vision's Phase 2** | **Drafted 2026-10-06; waiting on your answers (Q1–Q5)** |
 | 9 | Shared tasks and events (group coursework) | Not started. No collaborator tables; tasks and events are per-user |
