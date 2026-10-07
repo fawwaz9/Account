@@ -20,6 +20,8 @@ import EditTaskModal from "../features/tasks/components/EditTaskModal";
 import { fetchCourses } from "../features/grades/api";
 import { Course } from "../features/grades/types";
 import { useAuth } from "../app/auth/AuthContext";
+import ShiftConflictsPanel from "../features/jobs/components/ShiftConflictsPanel";
+import "../styles/jobs.css";
 import { addDays, monthLabel, shortDate, today, weekLabel } from "../shared/utils/dateUtils";
 import { useShortcut } from "../shared/hooks/useShortcut";
 import "../styles/calendar.css";
@@ -203,6 +205,9 @@ export default function CalendarPage() {
       </header>
 
       {error && <p className="calError">{error}</p>}
+      {/* Phase 2 item 14: a shift that runs into, or crowds, an exam. Silent
+          when there is none. */}
+      {user && <ShiftConflictsPanel userId={user.id} nonce={insightNonce} />}
       {actionError && <p className="calError">{actionError}</p>}
 
       {view === "month" ? (

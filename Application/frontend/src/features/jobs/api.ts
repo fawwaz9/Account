@@ -14,6 +14,8 @@ import {
   ShiftRecordUpsert,
   ShiftScheduleCreate,
   PayCheck,
+  ShiftConflicts,
+  TaxPacket,
 } from "./types";
 
 export async function fetchJobs(userId: string, includeArchived = false) {
@@ -141,3 +143,17 @@ export async function chooseCashTipAccount(userId: string, accountId: string | n
   return put<CashTipAccountResult>(endpoints.jobs.cashTipAccount(userId), { account_id: accountId });
 }
 
+
+/** Shifts that run into, or crowd, an exam (Phase 2 item 14). */
+export async function fetchShiftConflicts(userId: string, start?: string, end?: string) {
+  const query = new URLSearchParams();
+  if (start) query.set("start", start);
+  if (end) query.set("end", end);
+  const suffix = query.toString() ? `?${query}` : "";
+  return get<ShiftConflicts>(`jobs/${userId}/shift-conflicts${suffix}`);
+}
+
+/** A calendar year's employment income, from recorded paycheques only. */
+export async function fetchTaxPacket(userId: string, calendarYear: number) {
+  return get<TaxPacket>(`jobs/${userId}/tax-packet?calendar_year=${calendarYear}`);
+}

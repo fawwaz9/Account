@@ -21,6 +21,10 @@ from app.Jobs.schemas.earnings import EarningsSummary
 from app.Jobs.schemas.paycheque import PayCheck
 from app.Jobs.services.paycheck_service import check_paycheque
 from app.Jobs.services.earnings_service import earnings_summary
+from app.Jobs.schemas.conflict import ShiftConflicts
+from app.Jobs.schemas.tax_packet import TaxPacket
+from app.Jobs.services.conflict_service import shift_conflicts
+from app.Jobs.services.tax_packet_service import tax_packet
 from app.Jobs.schemas.paycheque import (
     Paycheque,
     PaychequeCreate,
@@ -56,6 +60,31 @@ router = APIRouter()
 
 JOB_404 = {404: {"description": "Job not found"}}
 JOB_BOTH = {**JOB_404, 400: {"description": "Invalid job data"}}
+
+
+# Phase 2 item 14 (D21): shifts against exams, and the year's tax packet.
+@router.get("/{user_id}/shift-conflicts", response_model=ShiftConflicts, responses=responses["user_404"])
+def get_shift_conflicts(user_id: VerifiedUserId, db: DBSession,
+                        start: date | None = Query(default=None), end: date | None = Query(default=None)):
+    if start and end and end < start:
+        raise HTTPException(status_code=400, detail="The window ends before it starts")
+    if start and end and (end - start).days > 366:
+        raise HTTPException(status_code=400, detail="A window cannot be longer than a year")
+    found = shift_conflicts(db, user_id, start, end)
+    if found is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+    return found
+
+
+@router.get("/{user_id}/tax-packet", response_model=TaxPacket, responses=responses["user_404"])
+def get_tax_packet(user_id: VerifiedUserId, db: DBSession,
+                   calendar_year: int = Query(..., ge=2000, le=2100)):
+    """``calendar_year``, not ``year``: everywhere else in the API a year is a
+    school year (1-10), and the two must never be mistaken for each other."""
+    found = tax_packet(db, user_id, calendar_year)
+    if found is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+    return found
 
 
 @router.get("/{user_id}/jobs", response_model=list[Job], responses=responses["user_404"])

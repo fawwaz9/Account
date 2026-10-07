@@ -607,3 +607,52 @@ So:
 **The vision is edited to match:** §10's open question, §13.11's tax packet,
 §13.12's document list (struck through, with the reason), and the atlas row.
 There's a backup of the vision in the scratchpad.
+
+## D21. Shifts near exams, and the tax packet from recorded pay (item 14, 2026-10-07)
+
+**Shift-versus-exam flags.** `conflict_service` reads the calendar's own
+occurrences, so it agrees with what the calendar shows: repeating shifts,
+skipped dates and blackouts included. It writes nothing; Jobs reading the
+calendar is the allowed direction (§13.11).
+- **Overlap:** a shift shares any time with a midterm or final.
+- **Crowds:** a shift ends before the exam, but by less than your buffer.
+  - The buffer is a new preference, "Keep clear before an exam", default 12
+    hours, in Settings under Calendar. 0 flags only real overlaps.
+  - It is stored in the preferences JSON, so there is no schema change.
+- **Overnight shifts** (22:00–02:00) end the next morning.
+- **Untimed items:**
+  - An exam with no time is taken to start at 08:00, the earliest a UBC exam
+    sits.
+  - A shift with no times runs all day.
+  - Both can only flag more, never hide a clash.
+- **Only exams are checked.** Lectures, labs, deadlines and your own events
+  near a shift are not flagged.
+- **Shown on the Jobs page and the Calendar page,** as one "Shifts near exams"
+  panel looking 60 days ahead. It says nothing when there is nothing to flag.
+  It is a page-level panel rather than a mark on each card in the month and
+  week grids, which say the same thing at a fraction of the wiring.
+
+**The tax packet.** One calendar year, from recorded paycheques (by the date
+the cheque arrived), shift tips, and tuition payments (by their own payment
+date). Never from a T4 (D20).
+- **Per employer:**
+  - gross pay and the number of cheques
+  - deductions, sorted by name into income tax, CPP and EI; anything else
+    keeps its own name
+  - net pay, cash tips, and tips through payroll
+- **Totals,** plus tuition paid.
+- **It says:** "Check it against your T4s and your school's tuition slip; this
+  is a summary for your records, not tax advice."
+- **The year defaults to last year before May,** when people are filing.
+- **The route takes `calendar_year`, not `year`,** because everywhere else in
+  the API a year is a school year (1–10). The isolation walk was taught the
+  new name.
+
+**Evidence:**
+- `tests/test_shift_conflicts.py`, 25 tests. One checks that the packet's
+  totals equal the year's recorded paycheques, with cheques from the years
+  either side excluded (the item's "Done when").
+- Mutation check: 9 removals. 8 were caught. The 9th ("only exams count") was
+  missed, so a test now covers it, and that mutation was then caught.
+- Frontend: 5 tests across the two panels. The existing Settings test that
+  pins which keys each tab saves now includes `exam_buffer_hours`.

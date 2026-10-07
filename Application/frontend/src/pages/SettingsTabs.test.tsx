@@ -258,7 +258,7 @@ describe("each tab saves only its own preferences", () => {
     await waitFor(() => expect(updatePreferences).toHaveBeenCalled());
     const sent = updatePreferences.mock.calls[0][1] as Record<string, unknown>;
     expect(Object.keys(sent).sort()).toEqual(
-      ["event_colors", "min_free_block_minutes", "study_day_end", "study_day_start", "timezone"],
+      ["event_colors", "exam_buffer_hours", "min_free_block_minutes", "study_day_end", "study_day_start", "timezone"],
     );
     expect(updateAcademicStatus).not.toHaveBeenCalled();
   });

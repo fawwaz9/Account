@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import JobCard from "../features/jobs/components/JobCard";
 import JobModal from "../features/jobs/components/JobModal";
 import ShiftList from "../features/jobs/components/ShiftList";
@@ -15,6 +15,8 @@ import { useAuth } from "../app/auth/AuthContext";
 import { useShortcut } from "../shared/hooks/useShortcut";
 import "../styles/calendar.css";
 import "../styles/jobs.css";
+import ShiftConflictsPanel from "../features/jobs/components/ShiftConflictsPanel";
+import TaxPacketPanel from "../features/jobs/components/TaxPacketPanel";
 
 /**
  * The jobs page.
@@ -30,6 +32,10 @@ export default function JobsPage() {
   const { user } = useAuth();
   const [showArchived, setShowArchived] = useState(false);
   const { jobs, shifts, paycheques, earnings, loading, error, reload } = useJobs(showArchived);
+  // Bumped whenever shifts or paycheques reload, so the conflict and tax
+  // panels refetch with them (Phase 2 item 14).
+  const [conflictNonce, setConflictNonce] = useState(0);
+  useEffect(() => { setConflictNonce((n) => n + 1); }, [shifts, paycheques]);
 
   const [editing, setEditing] = useState<Job | null>(null);
   const [adding, setAdding] = useState(false);
@@ -108,6 +114,8 @@ export default function JobsPage() {
       {error && <p className="calError">{error}</p>}
       {loading && jobs.length === 0 && <p className="calMuted" role="status">Loading…</p>}
 
+      {user && <ShiftConflictsPanel userId={user.id} nonce={conflictNonce} />}
+
       <Earnings earnings={earnings} />
 
       {!loading && jobs.length === 0 ? (
@@ -153,6 +161,8 @@ export default function JobsPage() {
           />
         </div>
       )}
+
+      {user && jobs.length > 0 && <TaxPacketPanel userId={user.id} nonce={conflictNonce} />}
 
       <JobModal
         open={adding}

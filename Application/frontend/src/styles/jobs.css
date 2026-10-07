@@ -581,3 +581,59 @@
   .payRow .payActions { grid-area: action; justify-self: start; }
   .payRow .payCheck { grid-column: 1 / -1; }
 }
+
+/* Phase 2 item 14: shifts near exams, and the tax packet, on the Jobs page. */
+.shiftConflicts {
+  margin: 0 0 18px;
+  padding: 10px 14px;
+  border-left: 3px solid var(--warning, #e0a030);
+  border-radius: 6px;
+  background: rgba(224, 160, 48, 0.08);
+}
+
+.shiftConflicts h2 {
+  font-size: 1rem;
+  margin: 0 0 6px;
+}
+
+.shiftConflicts ul {
+  margin: 0 0 6px;
+  padding-left: 1.1em;
+}
+
+.shiftConflict--overlap {
+  font-weight: 600;
+}
+
+.taxPacket {
+  margin: 22px 0;
+}
+
+.taxEmployer h3 {
+  font-size: 0.95rem;
+  margin: 12px 0 4px;
+}
+
+.taxLines {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 16px;
+  max-width: 460px;
+  margin: 0;
+}
+
+.taxLine {
+  display: contents;
+}
+
+.taxLines dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.taxTotals {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid #1f2a44;
+}

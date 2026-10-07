@@ -293,3 +293,58 @@ export interface PayCheck {
   lines: PayLine[];
   notes: string[];
 }
+
+/** Phase 2 item 14: a shift against an exam. overlap: it runs into the exam;
+ *  crowds: it ends less than your buffer before the exam starts. */
+export interface ShiftConflict {
+  kind: "overlap" | "crowds";
+  shift_event_id: string;
+  shift_on: string;
+  shift_start: string | null;
+  shift_end: string | null;
+  job_id: string | null;
+  job_name: string | null;
+  exam_event_id: string;
+  exam_title: string;
+  exam_kind: string;
+  exam_on: string;
+  exam_start: string | null;
+  course_code: string | null;
+  hours_between: number;
+}
+
+export interface ShiftConflicts {
+  buffer_hours: number;
+  conflicts: ShiftConflict[];
+}
+
+export interface DeductionLine {
+  kind: "income_tax" | "cpp" | "ei" | "other";
+  label: string;
+  amount: number;
+}
+
+export interface EmployerYear {
+  job_name: string;
+  employer: string | null;
+  paycheques: number;
+  gross: number;
+  deductions: DeductionLine[];
+  net: number;
+  cash_tips: number;
+  other_tips: number;
+}
+
+/** A year's employment income from what you recorded -- never from a T4 (D20). */
+export interface TaxPacket {
+  year: number;
+  employers: EmployerYear[];
+  gross: number;
+  income_tax: number;
+  cpp: number;
+  ei: number;
+  other_deductions: number;
+  net: number;
+  cash_tips: number;
+  tuition_paid: number;
+}

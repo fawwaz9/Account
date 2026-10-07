@@ -357,6 +357,10 @@ def _sample(annotation, name: str, refs: dict[str, str]):
         if issubclass(inner, bool):
             return False
         if issubclass(inner, int):
+            # A calendar year (the tax packet) is the world's own year, so the
+            # read covers the world's rows; any other int is a small count.
+            if name == "calendar_year":
+                return date.fromisoformat(refs["__day__"]).year
             return 1
         if issubclass(inner, float):
             return 1.0

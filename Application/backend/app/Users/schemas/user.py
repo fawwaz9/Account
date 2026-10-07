@@ -115,6 +115,9 @@ class UserPreferences(BaseModel):
     #: Phase 1 D36: scale the workload forecast's estimates by how long tasks
     #: really take. Off until asked for; estimates themselves never change.
     use_estimate_ratio: bool = False
+    #: Phase 2 item 14: a shift ending less than this many hours before an
+    #: exam is flagged as crowding it. 0 flags only real overlaps.
+    exam_buffer_hours: int = Field(default=12, ge=0, le=48)
 
     @field_validator("event_colors")
     @classmethod
@@ -179,6 +182,7 @@ class UserPreferencesPatch(BaseModel):
     #: Replaces the whole map when sent -- Settings always sends all of it.
     event_colors: dict[EventKind, str] | None = None
     use_estimate_ratio: bool | None = None
+    exam_buffer_hours: int | None = Field(default=None, ge=0, le=48)
 
     # Both validators pass `None` straight through. An explicit null means "no
     # opinion" here, and running the check on it would reject the one value that

@@ -138,11 +138,12 @@ proposals' status stays "accepted":
 DELETE FROM catalogue_prerequisites WHERE id = '<row id>';
 ```
 
-## The 12a batch: the rate limiter per caller (D18). NOT YET RUN
+## The 12a and 14 batch: the rate limiter per caller (D18), shifts near exams and the tax packet (D21). NOT YET RUN
 
 | What | Commits | Schema change |
 |---|---|---|
 | Item 12a: `TRUSTED_PROXY_HOPS` and `client_address.py` | on `phase2` | None |
+| Item 14: shift conflicts, the tax packet, the exam-buffer preference | on `phase2` | None (the preference lives in the existing JSON) |
 
 ### 1. Deploy the API (reversible; the live app doesn't notice)
 
@@ -152,8 +153,14 @@ git checkout phase2
 ```
 
 With `TRUSTED_PROXY_HOPS` unset, the new code ignores `X-Forwarded-For`, so
-throttling behaves exactly as before. There is no frontend change; `all` also
-brings `main` level with the docs.
+throttling behaves exactly as before. The frontend gains:
+- the "Shifts near exams" panel, on Jobs and Calendar
+- the tax packet, on Jobs
+- "Keep clear before an exam", in Settings, under Calendar
+
+**Also verify:** `/api/jobs/<id>/shift-conflicts` and
+`/api/jobs/<id>/tax-packet?calendar_year=2026` answer 401 against a 404
+control. Then open Jobs: the tax packet shows this year's recorded cheques.
 
 **Verify, the negative control first.** Send one sign-in with a forged header:
 

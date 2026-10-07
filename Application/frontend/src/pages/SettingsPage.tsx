@@ -111,6 +111,7 @@ export default function SettingsPage() {
   const [studyStart, setStudyStart] = useState(clockValue(user?.preferences?.study_day_start, "08:00"));
   const [studyEnd, setStudyEnd] = useState(clockValue(user?.preferences?.study_day_end, "22:00"));
   const [minBlock, setMinBlock] = useState(String(user?.preferences?.min_free_block_minutes ?? 30));
+  const [examBuffer, setExamBuffer] = useState(String(user?.preferences?.exam_buffer_hours ?? 12));
   // Stored value only. Seeding this from `guessedZone()` would mean that
   // opening Settings in another city silently repointed every reminder on the
   // next Calendar save -- a save changing something nobody asked it to, which
@@ -191,6 +192,7 @@ export default function SettingsPage() {
     setStudyStart(clockValue(user.preferences?.study_day_start, "08:00"));
     setStudyEnd(clockValue(user.preferences?.study_day_end, "22:00"));
     setMinBlock(String(user.preferences?.min_free_block_minutes ?? 30));
+    setExamBuffer(String(user.preferences?.exam_buffer_hours ?? 12));
     setZone(user.preferences?.timezone ?? DEFAULT_ZONE);
     setColors(user.preferences?.event_colors ?? {});
     setTipAccount(user.preferences?.cash_tip_account_id ?? "");
@@ -298,6 +300,7 @@ export default function SettingsPage() {
         study_day_start: studyStart,
         study_day_end: studyEnd,
         min_free_block_minutes: Number(minBlock),
+        exam_buffer_hours: Number(examBuffer),
         // The whole map, always: the API replaces it, so a kind put back to its
         // default is absent here and therefore removed there.
         event_colors: colors,
@@ -772,6 +775,25 @@ export default function SettingsPage() {
                 <HelpTip label="What the minimum block is for">
                   A gap shorter than this is walking time rather than study time, so it is
                   left out of the free blocks the calendar offers.
+                </HelpTip>
+              </div>
+
+              <div className="loginField">
+                <label htmlFor="exam-buffer">Keep clear before an exam</label>
+                <input
+                  id="exam-buffer"
+                  className="loginInput"
+                  type="number"
+                  min={0}
+                  max={48}
+                  value={examBuffer}
+                  onChange={(event) => setExamBuffer(event.target.value)}
+                  required
+                />
+                <span className="loginHint">Hours</span>
+                <HelpTip label="What keeping clear before an exam does">
+                  A shift that ends less than this long before a midterm or final is flagged on the
+                  Jobs page and the calendar. 0 flags only a shift that runs into the exam itself.
                 </HelpTip>
               </div>
 

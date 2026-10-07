@@ -46,6 +46,8 @@ export interface CurrentUser {
     study_day_end: string;
     /** Below this a gap is walking time, not study time. */
     min_free_block_minutes: number;
+    /** Phase 2 item 14: a shift ending within this many hours of an exam is flagged. */
+    exam_buffer_hours?: number;
     /**
      * Colour per event kind, only for the kinds the student changed. A missing
      * kind means its default (features/calender/kindColors.ts).
