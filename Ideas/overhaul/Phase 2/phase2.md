@@ -85,9 +85,9 @@ Item 8 waits on UBC. Part B is drafted and waiting on your answers.
 | 6 | Owner review: proposals into the catalogue | **Deployed 2026-10-07** (D13). `scripts/catalogue_review.py`. Auto-approval is planned, not built (D5) |
 | 7 | Prerequisites on the course page, met or not | **Deployed 2026-10-07** (D12). Also warns when adding a future course |
 | 8 | UBC's permission, then a bulk import | Request drafted (`Ideas/overhaul/calender-request.md`); waits on UBC |
-| **B** | **The rest of the vision's Phase 2** | **Drafted 2026-10-06; order decided (D15). 12a and 14 built, not deployed** |
+| **B** | **The rest of the vision's Phase 2** | **Drafted 2026-10-06; order decided (D15). 12a, 14 and 10 built, not deployed** |
 | 9 | Shared tasks and events (group coursework) | Not started. No collaborator tables; tasks and events are per-user |
-| 10 | Accountability partners | Not started |
+| 10 | Accountability partners | **Built, not deployed** (D22). Invite links (D16) included |
 | 11 | Team sport and intramurals | Not started. No team, league or game tables |
 | 12 | Open signup, with affiliation verified later | **12a built, not deployed** (D18): per-caller throttling behind `TRUSTED_PROXY_HOPS`. 12b pushed out of Phase 2 (D19) |
 | 13 | End-of-term flow: ratings and anonymous grade contributions | Not started |

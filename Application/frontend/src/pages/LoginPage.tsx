@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../app/auth/AuthContext";
 import { loginWithEmail, loginWithGoogle, registerWithEmail } from "../services/authClient";
 import "../styles/login.css";
@@ -12,10 +12,26 @@ declare global {
 
 type Mode = "signin" | "register";
 
+/**
+ * Where to go once signed in: back to the page that sent you here, or home.
+ *
+ * Only a path on this site -- "/tasks", "/invite#..." -- never "//elsewhere"
+ * or a full URL, so a crafted link cannot use the sign-in page to send someone
+ * off-site.
+ */
+export function afterSignIn(from: unknown): string {
+  if (typeof from !== "string" || !from.startsWith("/") || from.startsWith("//") || from.startsWith("/\\")) {
+    return "/";
+  }
+  return from === "/login" ? "/" : from;
+}
+
 export default function LoginPage() {
   const buttonRef = useRef<HTMLDivElement>(null);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const destination = afterSignIn((location.state as { from?: unknown } | null)?.from);
 
   const [scriptError, setScriptError] = useState(false);
   const [mode, setMode] = useState<Mode>("signin");
@@ -38,7 +54,7 @@ export default function LoginPage() {
           try {
             const { access_token } = await loginWithGoogle(response.credential);
             await login(access_token);
-            navigate("/");
+            navigate(destination);
           } catch (err) {
             setError(err instanceof Error ? err.message : "Google sign-in failed");
           }
@@ -94,7 +110,7 @@ export default function LoginPage() {
           : await registerWithEmail(name, email, password);
 
       await login(access_token);
-      navigate("/");
+      navigate(destination);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {

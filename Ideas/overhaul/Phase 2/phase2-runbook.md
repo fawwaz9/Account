@@ -217,3 +217,59 @@ gcloud logging read 'resource.labels.service_name="account-api" AND httpRequest.
 gcloud run services update account-api --region us-west1 --project account-504419 \
   --remove-env-vars TRUSTED_PROXY_HOPS
 ```
+
+## The item 10 batch: accountability partners and invite links (D22). NOT YET RUN
+
+| What | Commits | Schema change |
+|---|---|---|
+| Item 10: invites, partnerships, four definer functions | on `phase2` | **New tables `invites`, `partnerships`; four new functions** |
+
+Runs after the 12a and 14 batch, or together with it. Same order as Part A:
+backup, schema (yours), then `deploy.run.sh all`.
+
+### 1. Apply the schema (adds two tables and four functions; nothing is dropped)
+
+```sh
+git checkout phase2
+cd Application/backend
+set -a; source ../.env; set +a
+DATABASE_URL="$SUPABASE_DATABASE_URL" .venv/bin/python -m app._database.schema
+```
+
+**What this adds:**
+- **`invites`:** per-user, with a unique token hash.
+- **`partnerships`:** per-user, with a database-level `ON DELETE CASCADE` on
+  the partner column.
+- **The four functions:** `account_invite_preview`,
+  `account_accept_partner_invite`, `account_end_partnership` and
+  `account_partner_figures`. Each is revoked from everyone but `account_app`,
+  including Supabase's by-name grants.
+
+**Verify, in the SQL editor:**
+1. **Only the API's role can call the new functions.** This should return
+   four rows, each `{postgres=X/postgres,account_app=X/postgres}` or similar.
+   `anon` and `authenticated` must not appear:
+
+   ```sql
+   SELECT p.proname, p.proacl FROM pg_proc p
+   WHERE p.proname IN ('account_invite_preview', 'account_accept_partner_invite',
+                       'account_end_partnership', 'account_partner_figures');
+   ```
+
+2. **Both tables have the per-user policy.** This should return two rows,
+   each `{account_app}` and `ALL`:
+
+   ```sql
+   SELECT tablename, roles, cmd FROM pg_policies WHERE tablename IN ('invites', 'partnerships');
+   ```
+
+The deploy's schema gate also refuses to deploy if any of the four functions
+is missing.
+
+**Undo:** not needed. The tables are new, and the old API never calls the
+functions.
+
+### 2. Before anyone uses it (yours)
+
+Whoever you invite must be able to sign in. Until open signup (D19), add
+their address to `ALLOWED_SIGNUP_EMAILS` on Cloud Run.

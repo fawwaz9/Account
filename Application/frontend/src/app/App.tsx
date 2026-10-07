@@ -41,6 +41,7 @@ const JobsPage = lazy(() => import("../pages/JobsPage"));
 const BudgetPage = lazy(() => import("../pages/BudgetPage"));
 const AccountDetailPage = lazy(() => import("../pages/budget/AccountDetailPage"));
 const SettingsPage = lazy(() => import("../pages/SettingsPage"));
+const InvitePage = lazy(() => import("../pages/InvitePage"));
 
 export default function App() {
   return (
@@ -74,6 +75,9 @@ export default function App() {
               <Route path="/budget" element={<BudgetPage />} />
               <Route path="/budget/accounts/:accountId" element={<AccountDetailPage />} />
               <Route path="/settings" element={<SettingsPage />} />
+              {/* Phase 2 item 10: an invite link. Behind sign-in, and the
+                  sign-in page brings you back here with the link intact. */}
+              <Route path="/invite" element={<InvitePage />} />
             </Route>
           </Routes>
         </BrowserRouter>

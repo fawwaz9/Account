@@ -78,6 +78,8 @@ def _build(with_b: bool):
     day = user_today(session, A_ID)
     world_a = seed_world(session, A_ID, iso.MARK_A, day)
     world_b = seed_world(session, B_ID, iso.MARK_B, day) if with_b else None
+    # A names no partner here (see DOMAIN_404); a fixed id so the path resolves.
+    world_a["partnerships"] = uuid.uuid5(uuid.NAMESPACE_URL, "account-ni/no-partnership")
     # Shared rows belong to nobody, so both runs hold them, with the same ids.
     seed_catalogue(session)
 
@@ -121,9 +123,16 @@ def _build(with_b: bool):
     return engine, session, a, world_a, world_b, day
 
 
+#: A fresh invite token in a response, and the hash of one in a row: random by
+#: design, so two runs differ there whatever B does (Phase 2 item 10).
+SECRET = re.compile(r'("token"\s*:\s*")[A-Za-z0-9_-]{20,}(")|("token_hash"\s*:\s*")[0-9a-f]{64}(")')
+
+
 def _normalise(text: str, known: set[str]) -> str:
-    """Mask what legitimately differs between two runs: clocks, and new ids."""
+    """Mask what legitimately differs between two runs: clocks, new ids, and
+    fresh secrets."""
     text = TIMESTAMP.sub("<ts>", text)
+    text = SECRET.sub(lambda m: (m.group(1) or m.group(3)) + "<secret>" + (m.group(2) or m.group(4)), text)
     return UUID.sub(lambda m: m.group(0) if m.group(0) in known else "<new>", text)
 
 
@@ -152,6 +161,10 @@ def _a_rows(snap: dict, b_keys: set, b_course, known: set[str]) -> dict:
 #: Routes whose 404 is an answer about A's own state, not a missed request.
 DOMAIN_404 = {
     ("POST", "/api/users/{user_id}/restore"): "no pending deletion to restore",
+    # No partnership in either run, on purpose: a partner is influence both
+    # people agreed to, which is not this walk's question. Ending one is
+    # tested in tests/test_partners.py.
+    ("DELETE", "/api/partners/{user_id}/partners/{partner_id}"): "no partnership to end",
 }
 
 

@@ -8,6 +8,7 @@ not depend on the routes it is about to be used to test.
 Every free-text column carries ``marker``, so "did anything of B's reach A" is a
 substring check on the response, whatever shape the route returns.
 """
+import hashlib
 import uuid
 from datetime import date, datetime, time, timedelta, timezone
 
@@ -26,10 +27,12 @@ from app._database.models import (
     CourseCategoryWeightModel,
     CourseModel,
     EventModel,
+    InviteModel,
     GradeModel,
     JobModel,
     PaychequeDeductionModel,
     PaychequeModel,
+    PartnershipModel,
     PrerequisiteProposalModel,
     RecurringTaskModel,
     RecurringTransactionModel,
@@ -260,6 +263,11 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
                        starting_balance=4242.42,
                        months=[{"month": (day - timedelta(days=60)).replace(day=1).isoformat(),
                                 "money_in": 4242.42, "money_out": 4242.42, "end_balance": 4242.42}]))
+    # Phase 2 item 10: an open invite of this user's, whose token is
+    # "<marker> invite token" -- so the walk can preview and accept A's own.
+    add(InviteModel(id=new_id(), user_id=user_id, kind="partner",
+                    token_hash=hashlib.sha256(f"{marker} invite token".encode()).hexdigest(),
+                    expires_at=datetime.combine(day + timedelta(days=5), time(12, 0))))
     # Phase 2 item 4: an own prerequisite rule on the world's course, with the
     # marker in the private syllabus sentence a leak would carry.
     add(PrerequisiteProposalModel(id=new_id(), user_id=user_id, course_id=course.id, kind="prerequisite",
@@ -269,8 +277,32 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
 
     db.commit()
 
-    missing = {t.name for t in Base.metadata.sorted_tables} - set(ids) - {"users"} - SHARED_READ_TABLES
+    missing = ({t.name for t in Base.metadata.sorted_tables} - set(ids) - {"users"} - SHARED_READ_TABLES
+               - PAIRED_TABLES)
     assert not missing, f"the world has nothing in: {sorted(missing)}"
+    return ids
+
+
+#: Tables whose rows need two people, seeded by seed_pair rather than by one
+#: user's world (Phase 2 item 10).
+PAIRED_TABLES = frozenset({"partnerships"})
+
+
+def seed_pair(db, a_id, b_id, mark_a: str, mark_b: str) -> tuple[dict, dict]:
+    """A partnership between A and B: one row each, as the accept function
+    writes them. Each row's partner_name carries its owner's marker, because
+    that is the one field the other person must never be shown -- what they
+    may see of each other is the figure, through the definer function.
+
+    Returns (A's ids, B's ids), to merge into each world.
+    """
+    a_row = PartnershipModel(id=uuid.uuid4(), user_id=a_id, partner_id=b_id, partner_name=f"{mark_a} partner",
+                             week_percent=50.0, streak_weeks=1, figure_on=date(2026, 9, 14))
+    b_row = PartnershipModel(id=uuid.uuid4(), user_id=b_id, partner_id=a_id, partner_name=f"{mark_b} partner",
+                             week_percent=75.0, streak_weeks=2, figure_on=date(2026, 9, 14))
+    db.add_all([a_row, b_row])
+    ids = ({"partnerships": a_row.id}, {"partnerships": b_row.id})
+    db.commit()
     return ids
 
 

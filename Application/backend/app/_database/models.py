@@ -132,6 +132,17 @@ class UserModel(Base):
     course_equivalences = relationship("CourseEquivalenceModel", cascade=cascade)
     saved_plans = relationship("SavedPlanModel", cascade=cascade)
     prerequisite_proposals = relationship("PrerequisiteProposalModel", cascade=cascade)
+    invites = relationship("InviteModel", cascade=cascade)
+    partnerships = relationship(
+        "PartnershipModel", cascade=cascade, foreign_keys="PartnershipModel.user_id"
+    )
+    #: Partners' rows that name this user. View-only: deleting them is left to
+    #: the database's ON DELETE CASCADE, because under row-level security the
+    #: purge acts as this user and cannot see those rows -- and a referential
+    #: action is the one thing row security does not stand in the way of.
+    partnered_by = relationship(
+        "PartnershipModel", foreign_keys="PartnershipModel.partner_id", viewonly=True,
+    )
 
     @property
     def has_password(self) -> bool:
@@ -1663,3 +1674,67 @@ class PrerequisiteProposalModel(Base):
     created_at = Column(DateTime, nullable=False, default=utc_now)
     updated_at = Column(DateTime, nullable=False, default=utc_now)
     reviewed_at = Column(DateTime, nullable=True)
+
+
+#: What an invite is for (Phase 2 B2). Partners first; tasks and teams later.
+INVITE_KINDS = ("partner",)
+#: How long a link works.
+INVITE_DAYS = 7
+
+
+class InviteModel(Base):
+    """A link you send someone yourself, to connect with you (Phase 2 B2, D16).
+
+    Only a SHA-256 of the token is stored: the token itself is shown to you
+    once, in the link, so a copy of the database holds no live invites. Looked
+    up and accepted only through definer functions (rls.py), which answer with
+    the inviter's display name and nothing else.
+    """
+
+    __tablename__ = "invites"
+    __table_args__ = (
+        CheckConstraint(_one_of("kind", INVITE_KINDS), name="ck_invite_kind"),
+    )
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    kind = Column(String, nullable=False)
+    token_hash = Column(String, nullable=False, unique=True)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+    expires_at = Column(DateTime, nullable=False)
+    used_at = Column(DateTime, nullable=True)
+    #: Who accepted. No foreign key: it is history, and must not stop that
+    #: person's account from being deleted.
+    used_by = Column(Uuid, nullable=True)
+    revoked_at = Column(DateTime, nullable=True)
+
+
+class PartnershipModel(Base):
+    """Your side of an accountability partnership (Phase 2 item 10, D22).
+
+    Two rows per partnership, one each, created together by the accept
+    function -- the only thing that can write a row for someone else. Your row
+    holds *your* figure (the share of this week's tasks you have done, and your
+    streak of good weeks), written only by you; your partner reads it through
+    a definer function that answers only while both rows point at each other.
+    Completion, never grades or money (vision §13.7).
+
+    `partner_name` is copied when the partnership starts (B3), so nobody ever
+    reads another person's user row.
+    """
+
+    __tablename__ = "partnerships"
+    __table_args__ = (
+        UniqueConstraint("user_id", "partner_id", name="uq_partnership"),
+        CheckConstraint("user_id <> partner_id", name="ck_partnership_not_self"),
+    )
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    partner_id = Column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    partner_name = Column(String, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+    #: Your figure, as of `figure_on` (your local date when it was worked out).
+    week_percent = Column(Float, nullable=True)
+    streak_weeks = Column(Integer, nullable=False, default=0)
+    figure_on = Column(Date, nullable=True)

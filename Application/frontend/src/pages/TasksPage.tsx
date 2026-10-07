@@ -41,6 +41,7 @@ import {
 } from "../features/tasks/types";
 import HowLongPrompt from "../features/tasks/components/HowLongPrompt";
 import EstimateRatioCard from "../features/tasks/components/EstimateRatioCard";
+import PartnersPanel from "../features/partners/PartnersPanel";
 import { updatePreferences } from "../services/currentUserClient";
 import { fetchCourses } from "../features/grades/api";
 import { Course } from "../features/grades/types";
@@ -306,6 +307,9 @@ export default function TasksPage() {
           <div className="taskSlot taskSlot--stats">
             <CompletionTimingBlock timing={timing} />
             <EstimateRatioCard ratio={ratio} onApply={handleApplyRatio} />
+            {/* Phase 2 item 10: beside your own completion figures, since a
+                partner sees a summary of exactly these. */}
+            {user && <PartnersPanel userId={user.id} />}
           </div>
 
           <div className="taskSlot taskSlot--capture">

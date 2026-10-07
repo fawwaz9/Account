@@ -78,6 +78,11 @@ FUNCTIONS = (
     "account_expired_user_ids",
     "account_release_push_endpoint",
     "account_users_with_unpushed_reminders",
+    # Phase 2 item 10 (D22): invites and accountability partners.
+    "account_invite_preview",
+    "account_accept_partner_invite",
+    "account_end_partnership",
+    "account_partner_figures",
 )
 
 FUNCTION_SQL = """
@@ -122,6 +127,74 @@ CREATE OR REPLACE FUNCTION account_users_with_unpushed_reminders(p_horizon times
           WHERE r.dismissed_at IS NULL AND r.pushed_at IS NULL AND r.remind_at <= p_horizon
             AND EXISTS (SELECT 1 FROM push_subscriptions s WHERE s.user_id = r.user_id) $$;
 
+-- Phase 2 item 10 (D22). An invite is looked up by the hash of its token,
+-- and answers with the inviter's display name and nothing else -- only for a
+-- caller who is signed in, and only while the invite is live.
+CREATE OR REPLACE FUNCTION account_invite_preview(p_token_hash text)
+    RETURNS TABLE(inviter_name text, kind text)
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ SELECT u.name::text, i.kind::text FROM invites i JOIN users u ON u.id = i.user_id
+          WHERE account_current_user() IS NOT NULL
+            AND i.token_hash = p_token_hash AND i.used_at IS NULL AND i.revoked_at IS NULL
+            AND i.expires_at > (now() AT TIME ZONE 'utc') AND u.deleted_at IS NULL $$;
+
+-- Accepting is the one place a row is written for someone else: both sides of
+-- the partnership, together, for the signed-in caller and the invite's owner.
+-- The caller is account_current_user(), never a parameter, so nobody can
+-- accept on another's behalf. Answers with a status word, never a row.
+CREATE OR REPLACE FUNCTION account_accept_partner_invite(p_token_hash text) RETURNS text
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$
+DECLARE
+    me uuid := account_current_user();
+    inv invites%ROWTYPE;
+    my_name text;
+    their_name text;
+BEGIN
+    IF me IS NULL THEN RETURN 'invalid'; END IF;
+    SELECT * INTO inv FROM invites
+        WHERE token_hash = p_token_hash AND kind = 'partner' AND used_at IS NULL
+          AND revoked_at IS NULL AND expires_at > (now() AT TIME ZONE 'utc')
+        FOR UPDATE;
+    IF NOT FOUND THEN RETURN 'invalid'; END IF;
+    IF inv.user_id = me THEN RETURN 'own'; END IF;
+    SELECT name INTO my_name FROM users WHERE id = me AND deleted_at IS NULL;
+    SELECT name INTO their_name FROM users WHERE id = inv.user_id AND deleted_at IS NULL;
+    IF my_name IS NULL OR their_name IS NULL THEN RETURN 'invalid'; END IF;
+    IF EXISTS (SELECT 1 FROM partnerships WHERE user_id = me AND partner_id = inv.user_id) THEN
+        RETURN 'already';
+    END IF;
+    INSERT INTO partnerships (id, user_id, partner_id, partner_name, created_at, streak_weeks)
+        VALUES (gen_random_uuid(), me, inv.user_id, their_name, now() AT TIME ZONE 'utc', 0),
+               (gen_random_uuid(), inv.user_id, me, my_name, now() AT TIME ZONE 'utc', 0)
+        ON CONFLICT (user_id, partner_id) DO NOTHING;
+    UPDATE invites SET used_at = now() AT TIME ZONE 'utc', used_by = me WHERE id = inv.id;
+    RETURN 'accepted';
+END $$;
+
+-- Either side may end it, and ending removes both rows.
+CREATE OR REPLACE FUNCTION account_end_partnership(p_partner uuid) RETURNS boolean
+    LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ WITH gone AS (
+              DELETE FROM partnerships
+              WHERE account_current_user() IS NOT NULL
+                AND ((user_id = account_current_user() AND partner_id = p_partner)
+                  OR (user_id = p_partner AND partner_id = account_current_user()))
+              RETURNING 1)
+          SELECT count(*) > 0 FROM gone $$;
+
+-- A partner's figure: three numbers from their own row, and only while both
+-- rows point at each other. A row naming someone that they never agreed to
+-- (only the accept function can write theirs) shows nothing.
+CREATE OR REPLACE FUNCTION account_partner_figures()
+    RETURNS TABLE(partner_id uuid, week_percent double precision, streak_weeks integer, figure_on date)
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ SELECT theirs.user_id, theirs.week_percent, theirs.streak_weeks, theirs.figure_on
+          FROM partnerships theirs
+          JOIN partnerships mine
+            ON mine.user_id = account_current_user() AND mine.partner_id = theirs.user_id
+          WHERE theirs.partner_id = account_current_user() $$;
+
 -- Definer functions run with their owner's rights, so nobody but the API
 -- needs to be able to call them.
 REVOKE ALL ON FUNCTION account_user_id_by_email(text) FROM PUBLIC;
@@ -130,6 +203,10 @@ REVOKE ALL ON FUNCTION account_email_taken(text, uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_expired_user_ids(timestamp) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_release_push_endpoint(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_users_with_unpushed_reminders(timestamp) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_invite_preview(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_accept_partner_invite(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_end_partnership(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_partner_figures() FROM PUBLIC;
 
 -- PUBLIC is not the only way in. Supabase's default privileges grant every new
 -- function to anon and authenticated by name, and its Data API lets anon call
@@ -272,6 +349,10 @@ def grant_statements() -> list[str]:
         "GRANT EXECUTE ON FUNCTION account_expired_user_ids(timestamp) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_release_push_endpoint(text) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_users_with_unpushed_reminders(timestamp) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_invite_preview(text) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_accept_partner_invite(text) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_end_partnership(uuid) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_partner_figures() TO " + APP_ROLE,
     ]
 
 

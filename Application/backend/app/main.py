@@ -7,7 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from app.api.routes import (
-    calendar, degree, finances, grades, intake, jobs, omnibox, push, recurring, survey, tasks, usage, users, auth,
+    calendar, degree, finances, grades, intake, jobs, omnibox, partners, push, recurring, survey, tasks, usage,
+    users, auth,
 )
 from app._database.db import Base, SessionLocal, engine
 from app._database import models
@@ -175,3 +176,4 @@ app.include_router(push.internal, prefix="/api/internal", tags=["Internal"])
 app.include_router(survey.router, prefix="/api/survey", tags=["Survey"])
 app.include_router(intake.router, prefix="/api/intake", tags=["Intake"])
 app.include_router(degree.router, prefix="/api/degree", tags=["Degree"])
+app.include_router(partners.router, prefix="/api/partners", tags=["Partners"])

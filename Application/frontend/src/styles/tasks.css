@@ -1066,3 +1066,39 @@
   margin-top: 8px;
   font-size: 0.85rem;
 }
+
+/* Phase 2 item 10: accountability partners. */
+.partnersPanel {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.partnerList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.partnerName {
+  font-weight: 600;
+}
+
+.inviteLink {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.inviteLink input {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.partnerInvites {
+  margin: 0;
+  padding-left: 1.1em;
+}

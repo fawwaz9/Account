@@ -34,7 +34,7 @@ from app._database.identity import act_as, email_taken, user_id_by_email
 from app._database.models import AccountModel, Base, GradeModel, UserModel
 from app.shared.dates import user_today
 from tests.conftest import TEST_DATABASE_URL, TESTING_SQLITE, connect_args_for, make_course, make_user
-from tests.isolation_world import seed_catalogue, seed_world, snapshot
+from tests.isolation_world import seed_catalogue, seed_pair, seed_world, snapshot
 
 pytestmark = pytest.mark.skipif(TESTING_SQLITE, reason="row-level security is Postgres-only")
 
@@ -84,6 +84,9 @@ def worlds(owner_engine):
         world_a = seed_world(session, a.id, "zzownera", day)
         world_b = seed_world(session, b.id, "zzvictimb", day)
         seed_catalogue(session)
+        pair_a, pair_b = seed_pair(session, a.id, b.id, "zzownera", "zzvictimb")
+        world_a.update(pair_a)
+        world_b.update(pair_b)
         yield session, a, b, world_a, world_b
     finally:
         session.close()
@@ -397,6 +400,10 @@ DEFINER_SIGNATURES = (
     "account_expired_user_ids(timestamp)",
     "account_release_push_endpoint(text)",
     "account_users_with_unpushed_reminders(timestamp)",
+    "account_invite_preview(text)",
+    "account_accept_partner_invite(text)",
+    "account_end_partnership(uuid)",
+    "account_partner_figures()",
 )
 
 
@@ -425,6 +432,10 @@ def test_only_the_app_role_can_call_the_cross_user_functions(owner_engine):
             "SELECT account_expired_user_ids(now()::timestamp)",
             "SELECT account_release_push_endpoint('https://x')",
             "SELECT account_users_with_unpushed_reminders(now()::timestamp)",
+            "SELECT * FROM account_invite_preview('x')",
+            "SELECT account_accept_partner_invite('x')",
+            "SELECT account_end_partnership(gen_random_uuid())",
+            "SELECT * FROM account_partner_figures()",
         ):
             with outsider.connect() as conn:
                 with pytest.raises(ProgrammingError, match="permission denied"):
@@ -573,3 +584,79 @@ def _truncate_catalogue(owner):
     owner.execute(text("DELETE FROM catalogue_prerequisites"))
     owner.execute(text("DELETE FROM catalogue_courses"))
     owner.commit()
+
+
+
+# --------------------------------------------------------------------------
+# Partners (Phase 2 item 10): the accept function is the only way a row is
+# written for someone else, and a figure is read only across a mutual pair.
+# --------------------------------------------------------------------------
+
+def _app_invite(app_session, owner, user):
+    from app.Partners.services import partner_service
+    act_as(app_session, user.id)
+    return partner_service.create_invite(app_session, user.id)
+
+
+def test_accepting_as_the_app_role_writes_both_sides(worlds, app_session):
+    from app.Partners.services import partner_service
+    owner, a, b, _, _ = worlds
+    owner.execute(text("DELETE FROM partnerships"))
+    owner.commit()
+    new = _app_invite(app_session, owner, a)
+    act_as(app_session, b.id)
+    assert partner_service.accept(app_session, b.id, new.token) == "accepted"
+    rows = owner.execute(text("SELECT user_id, partner_id FROM partnerships")).all()
+    assert {(r.user_id, r.partner_id) for r in rows} == {(a.id, b.id), (b.id, a.id)}
+
+
+def test_the_app_role_cannot_write_a_partnership_row_for_someone_else(worlds, app_session):
+    owner, a, b, _, _ = worlds
+    act_as(app_session, a.id)
+    with pytest.raises(DBAPIError, match="row-level security"):
+        app_session.execute(text(
+            "INSERT INTO partnerships (id, user_id, partner_id, partner_name, created_at, streak_weeks) "
+            "VALUES (gen_random_uuid(), :b, :a, 'forged', now(), 0)"), {"a": a.id, "b": b.id})
+
+
+def test_a_partners_figure_is_read_only_across_a_mutual_pair(worlds, app_session):
+    from app._database.sharing import partner_figures
+    owner, a, b, _, _ = worlds
+    act_as(app_session, a.id)
+    figures = partner_figures(app_session, a.id)
+    assert set(figures) == {b.id} and figures[b.id].week_percent == 75.0
+    app_session.rollback()
+    # A's side gone -- A never agreed, or ended it -- while B's row still names
+    # A and holds B's figure. A must see nothing of it.
+    owner.execute(text("DELETE FROM partnerships WHERE user_id = :a"), {"a": a.id})
+    owner.commit()
+    act_as(app_session, a.id)
+    assert partner_figures(app_session, a.id) == {}
+
+
+def test_nobody_outside_a_partnership_can_end_it(worlds, app_session):
+    from app._database.sharing import end_partnership
+    owner, a, b, _, _ = worlds
+    stranger = make_user(owner, "rls-stranger@example.com")
+    owner.commit()
+    act_as(app_session, stranger.id)
+    assert end_partnership(app_session, stranger.id, a.id) is False
+    assert owner.execute(text("SELECT count(*) FROM partnerships")).scalar() == 2
+
+
+def test_with_no_identity_the_partner_functions_do_nothing(worlds, app_session):
+    import hashlib
+    owner = worlds[0]
+    # A live invite of A's: the functions take the token's hash, as the app sends.
+    live = hashlib.sha256(b"zzownera invite token").hexdigest()
+    act_as(app_session, worlds[2].id)
+    assert app_session.execute(text("SELECT * FROM account_invite_preview(:h)"), {"h": live}).all(), \
+        "not vacuous: with an identity the invite is found"
+    app_session.rollback()
+    app_session.info.clear()
+    assert app_session.execute(text("SELECT * FROM account_partner_figures()")).all() == []
+    assert app_session.execute(text("SELECT account_accept_partner_invite(:h)"), {"h": live}).scalar() == "invalid"
+    assert app_session.execute(text("SELECT * FROM account_invite_preview(:h)"), {"h": live}).all() == []
+    assert app_session.execute(text("SELECT account_end_partnership(gen_random_uuid())")).scalar() is False
+    app_session.rollback()
+    assert owner.execute(text("SELECT count(*) FROM partnerships")).scalar() == 2

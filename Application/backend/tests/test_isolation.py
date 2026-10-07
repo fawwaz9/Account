@@ -66,7 +66,7 @@ from app.Auth.services.session_service import create_access_token
 from tests.conftest import make_user
 from app.shared.dates import user_today
 from app._database.rls import SHARED_READ_TABLES
-from tests.isolation_world import CATALOGUE_IDS, seed_catalogue, seed_world, snapshot
+from tests.isolation_world import CATALOGUE_IDS, PAIRED_TABLES, seed_catalogue, seed_pair, seed_world, snapshot
 
 MARK_A = "zzownera"
 MARK_B = "zzvictimb"
@@ -119,6 +119,11 @@ PATH_SOURCES = {
     "scheme_id": "grading_schemes",
     "task_id": "tasks",
     "transaction_id": "transactions",
+    "invite_id": "invites",
+    # A row id, never a person: A and B are partners in the world, so naming
+    # B here would end the partnership both agreed to -- not a leak, and not
+    # this walk's question. Ending is tested in tests/test_partners.py.
+    "partner_id": "partnerships",
 }
 
 #: Which of B's rows an id-shaped body or query field names.
@@ -221,6 +226,10 @@ BODY_PATCHES: dict[tuple[str, str], list[dict]] = {
         {"text": None, "rule": {"course": "CPSC 210"}},
     ],
     ("POST", "/api/grades/{user_id}/prerequisites/check"): [{"text": "CPSC 210"}],
+    # A's own live invite (isolation_world): preview answers with A's name,
+    # and accepting your own link answers "own" -- both reach the functions.
+    ("POST", "/api/partners/{user_id}/invites/preview"): [{"token": "zzownera invite token"}],
+    ("POST", "/api/partners/{user_id}/invites/accept"): [{"token": "zzownera invite token"}],
     ("POST", "/api/finances/{user_id}/subscriptions/confirm"): [
         {"instruction.kind": "expense", "instruction.to_account_id": None},
         {"instruction.kind": "transfer", "instruction.category_id": None},
@@ -516,6 +525,12 @@ def _cell(value) -> str:
     return str(value)
 
 
+#: Columns whose whole job is to name another person, set by a definer
+#: function both people agreed through. A changed row of A's naming B there
+#: is the partnership, not a cross-link.
+DELIBERATE_LINKS = {("partnerships", "partner_id")}
+
+
 def _check(before, after, b, world_b, response, sent: str):
     problems = []
 
@@ -536,7 +551,7 @@ def _check(before, after, b, world_b, response, sent: str):
             if (table, pk) in b_keys or before.get(table, {}).get(pk) == row:
                 continue
             for column, value in row.items():
-                if column == "id" or value is None:
+                if column == "id" or value is None or (table, column) in DELIBERATE_LINKS:
                     continue
                 text = _cell(value)
                 if any(s in text for s in b_strings):
@@ -581,6 +596,10 @@ def two_worlds(db):
     world_a = seed_world(db, a.id, MARK_A, day)
     world_b = seed_world(db, b.id, MARK_B, day)
     seed_catalogue(db)
+    # A and B are partners: what A may see of B is B's figure, and only that.
+    pair_a, pair_b = seed_pair(db, a.id, b.id, MARK_A, MARK_B)
+    world_a.update(pair_a)
+    world_b.update(pair_b)
     return a, b, world_a, world_b, day
 
 
@@ -684,6 +703,6 @@ def test_every_route_is_covered():
 def test_the_world_covers_every_table(db, user):
     from app._database.models import Base
     world = seed_world(db, user.id, MARK_B, user_today(db, user.id))
-    tables = {t.name for t in Base.metadata.sorted_tables} - {"users"} - SHARED_READ_TABLES
+    tables = {t.name for t in Base.metadata.sorted_tables} - {"users"} - SHARED_READ_TABLES - PAIRED_TABLES
     assert tables <= set(world)
     assert SHARED_READ_TABLES <= set(seed_catalogue(db))

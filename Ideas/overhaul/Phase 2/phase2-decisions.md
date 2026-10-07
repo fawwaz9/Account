@@ -656,3 +656,85 @@ date). Never from a T4 (D20).
   missed, so a test now covers it, and that mutation was then caught.
 - Frontend: 5 tests across the two panels. The existing Settings test that
   pins which keys each tab saves now includes `exam_buffer_hours`.
+
+## D22. Accountability partners: your figure in your own row, read across a mutual pair (item 10, 2026-10-07)
+
+The first feature where one person sees something of another's. Built on
+invite links (D16). It narrows the draft in one place, marked below.
+
+**What a partner sees:** two numbers, and a date.
+- **The share of this week's due tasks you've done.**
+- **Your run of good weeks,** meaning 80% or more done, counted back up to 26
+  weeks. A week with nothing due neither breaks nor extends a run.
+- **As of when.**
+
+Never a task's name, a grade or money (vision §13.7).
+
+**Where it lives (the change from the draft):** the draft had a scheduled job
+write a shared partnership row. Instead:
+- **Each person has their own `partnerships` row.** It is ordinary per-user
+  data under the usual policy, and holds *their own* figure.
+- **Only you write your figure,** whenever you open the Partners panel.
+- **Your partner reads it through `account_partner_figures()`.** That
+  function returns the numbers only while both rows point at each other.
+
+So no job reads across users, and no row is ever written by anyone but its
+owner. The one exception is `account_accept_partner_invite`, the only thing
+that writes a row for someone else: both sides, together, for the signed-in
+caller and the invite's owner.
+
+**The four functions,** each `SECURITY DEFINER`, revoked from everyone but
+`account_app`, and keyed on `account_current_user()`, never on a parameter:
+- **`account_invite_preview(hash)`** returns the inviter's display name, for a
+  live invite.
+- **`account_accept_partner_invite(hash)`** returns a status word: `accepted`,
+  `invalid`, `own` or `already`.
+- **`account_end_partnership(partner)`** lets either side end it, and removes
+  both rows.
+- **`account_partner_figures()`** returns three numbers per mutual partner.
+
+**Invite links:**
+- **Only a SHA-256 of the token is stored.** The token is shown once, in the
+  link.
+- **The token rides in the link's fragment** (`/invite#…`), which browsers
+  never send to a server. It reaches the API in request bodies, so it stays out
+  of URLs and logs.
+- **Each link works once, for 7 days,** with at most 5 open per person. They
+  can be cancelled.
+- **Sign-in now returns you to the page that sent you there,** so a link
+  opened while signed out survives. Only same-site paths are followed, so this
+  is no open redirect.
+
+**What one person sees of the other:** a name copied when the partnership
+starts (B3), never an email.
+
+**When an account is purged,** the partner's mirror row goes by the
+database's `ON DELETE CASCADE`. Under row-level security the purge can't see
+it, and a referential action is the one thing row security doesn't block.
+
+**For your step (D19):** someone invited must be able to sign in. Until open
+signup, their address has to be on `ALLOWED_SIGNUP_EMAILS`.
+
+**Evidence:**
+- `tests/test_partners.py`, 20 tests, run on both SQLite and Postgres, because
+  each cross-user step has a function path and a plain-query path.
+- 5 new Postgres proofs in `test_rls.py`:
+  - Accepting as the app role writes both sides.
+  - The app role can't insert a row for someone else.
+  - Figures are read only across a mutual pair.
+  - A stranger can't end someone's partnership.
+  - With no identity, all four functions do nothing.
+  - An outsider role can't call any of them.
+- The walks seed a partnership between A and B. A partner's row naming the
+  other is marked as the one deliberate cross-link, and B's own text in it is
+  checked never to reach A.
+- **Mutation check:** 7 removals across the SQL and its SQLite twin.
+- **Correction, kept in place:** 3 of the 7 were missed on the first run, and
+  each exposed a test that wasn't testing what it claimed:
+  - The no-identity test passed the raw token where the function takes its
+    hash, so it found nothing either way.
+  - The mutual-pair tests deleted the partner's own row, which removes the
+    data in question, instead of the reader's.
+
+  All three tests now check the real case, and all 7 mutations are caught.
+- Frontend: 10 tests (the panel, the invite page, the sign-in return path).
