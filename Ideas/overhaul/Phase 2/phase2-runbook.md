@@ -15,9 +15,10 @@ Tell me when UBC answers.
 Done in order: the backup (run 37556774219), step 1 (yours), then
 `deploy.run.sh all`. The schema gate passed, reporting row-level security on
 for 38 of 38 tables. The 6 new routes answer 401 against a 404 control. The
-live site matches the build (29 files). **Still to confirm:** checks 1 and 2
-from step 1 (empty tables; only `account_app | SELECT` on the catalogue).
-Their results weren't recorded.
+live site matches the build (29 files). **Check 1 passed** (2026-10-07, yours): both
+catalogue tables were empty after the schema step, so nothing got in during
+the D9 window. **Still to confirm:** check 2 (only `account_app | SELECT` on
+the catalogue).
 
 | What | Commits | Schema change |
 |---|---|---|
