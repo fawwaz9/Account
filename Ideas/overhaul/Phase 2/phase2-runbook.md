@@ -138,7 +138,7 @@ proposals' status stays "accepted":
 DELETE FROM catalogue_prerequisites WHERE id = '<row id>';
 ```
 
-## The 12a and 14 batch: the rate limiter per caller (D18), shifts near exams and the tax packet (D21). NOT YET RUN
+## The 12a and 14 batch: the rate limiter per caller (D18), shifts near exams and the tax packet (D21). DEPLOYED 2026-10-08 (`867938d`, `account-api-00040-w6n`); step 2 NOT YET RUN
 
 | What | Commits | Schema change |
 |---|---|---|
@@ -182,6 +182,10 @@ budget.
 
 **Undo:** the previous revision, per `Ideas/ROLLBACK.md`.
 
+**Result, 2026-10-08:** the two routes and the six partner routes answer 401 against
+a 404 control. The negative control answered 401 and logged
+`client=169.254.169.126`, so the forged `203.0.113.7` was ignored.
+
 ### 2. Flip the switch (yours: a Cloud Run setting; instant to undo)
 
 ```sh
@@ -218,7 +222,7 @@ gcloud run services update account-api --region us-west1 --project account-50441
   --remove-env-vars TRUSTED_PROXY_HOPS
 ```
 
-## The item 10 batch: accountability partners and invite links (D22). NOT YET RUN
+## The item 10 batch: accountability partners and invite links (D22). DEPLOYED 2026-10-08 (`867938d`, `account-api-00040-w6n`)
 
 | What | Commits | Schema change |
 |---|---|---|
@@ -268,6 +272,11 @@ is missing.
 
 **Undo:** not needed. The tables are new, and the old API never calls the
 functions.
+
+**Result, 2026-10-08:** both checks matched: four functions callable by
+`postgres` and `account_app` only, and two `{account_app} | ALL` policies.
+The deploy's gate reported row-level security on for 40 of 40 tables.
+Part A's grant check 2 also passed: two rows, `account_app | SELECT`.
 
 ### 2. Before anyone uses it (yours)
 

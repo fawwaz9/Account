@@ -884,6 +884,50 @@ production-URL build: 26 of 26 files.
 
 ---
 
+## Phase 2 items 12a, 14 and 10: throttling per caller, shifts near exams, the tax packet, accountability partners -- SHIPPED 2026-10-08
+Three Part B items in one deploy (`Ideas/overhaul/Phase 2/`, D18, D20-D22).
+- **12a, the rate limiter per caller (D18).** `client_address.client_of` reads
+  one position of `X-Forwarded-For`, counted from the right, and checks it is an
+  IP address. Anything doubtful falls back to the peer. It is behind
+  `TRUSTED_PROXY_HOPS`, which defaults to 0: the header is ignored, so
+  throttling behaves exactly as before. The position is confirmed against
+  production logs before the switch goes on (runbook, 12a step 2).
+- **14, shifts near exams (D21).** A shift that overlaps an exam, or ends
+  within the "Keep clear before an exam" buffer (Settings -> Calendar, default
+  12 hours, 0-48), is flagged on Jobs and Calendar. An untimed exam counts as
+  starting at 08:00.
+- **14, the tax packet (D20, D21).** For a calendar year: recorded pay per job,
+  and tuition paid, by the date it was paid. Built only from what you recorded;
+  T4s are scrapped, and no personal document is read.
+- **10, accountability partners (D22).** An invite link that lasts 7 days, with
+  at most 5 open. Only the token's sha256 is stored, and the token travels in
+  the URL fragment (`/invite#...`), which browsers never send to a server.
+  Accepting makes a mutual pair. Each person's figure (this week's percentage
+  and a streak of good weeks, 80% or more, capped at 26) lives in their own
+  row. A definer function returns figures only across a mutual pair, and one
+  other is the only writer across users. Ending a partnership removes both
+  rows. Signing in from an invite link returns you to it, and only to a path
+  on this site.
+
+Proven on SQLite and Postgres: 20 partner tests, 5 new RLS tests, and every
+new route in the isolation, non-interference and RLS walks. Mutations found
+three vacuous partner tests (a raw token passed where its hash belonged, and
+two tests that deleted the wrong side of a pair). All three were fixed, and
+the mutations are now caught.
+
+**Not on yet:** `TRUSTED_PROXY_HOPS`, the owner's switch. Until open signup
+(D19), an invitee must be on `ALLOWED_SIGNUP_EMAILS` to sign in.
+
+LIVE: API `account-api-00040-w6n` (digest-verified `867938d`, sha256
+`b0f9560a...`) since 2026-10-08 05:04 UTC. The schema step was the owner's;
+the read-backs matched. The gate reports row-level security on for 40 of 40
+tables. Health ok. The 8 new routes answer 401 against two 404 controls. No
+errors in the new revision's logs. A forged `X-Forwarded-For` was ignored
+(`client=169.254...`). Frontend `main` at `867938d`, matching a production
+build file by file (32 files).
+
+---
+
 ## Phase 2 Part A: the shared course catalogue and prerequisites -- SHIPPED 2026-10-07
 The first table every user reads and nobody owns (`Ideas/overhaul/Phase 2/`, D9-D14).
 - **The policy:** `rls.SHARED_READ_TABLES` gets a SELECT-only policy that still
