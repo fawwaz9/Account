@@ -25,7 +25,11 @@ Postgres refuse to return them, whatever the query says.
   grant and by a policy that covers SELECT alone. Only the tables' owner writes
   them, through an owner-run script.
 * The few questions that cross users are ``SECURITY DEFINER`` functions that
-  answer with an id or a boolean, never with rows.
+  answer with an id or a boolean, never with rows -- apart from the narrow
+  views sharing needs (a partner's figure, a shared task's few fields).
+* ``NO_DIRECT_WRITE_TABLES`` (Phase 2 D23) are per-user tables the app role
+  may read and delete from but never write: their rows are created only by a
+  definer function, for the person who accepted a link.
 
 **Why the owner is never forced through the policies.** Tables are owned by the
 role that created them, which is the role today's API connects as. ``ENABLE
@@ -83,7 +87,20 @@ FUNCTIONS = (
     "account_accept_partner_invite",
     "account_end_partnership",
     "account_partner_figures",
+    # Phase 2 item 9a (D23): shared tasks.
+    "account_task_invite_preview",
+    "account_accept_task_invite",
+    "account_shared_tasks",
+    "account_set_shared_task_done",
+    "account_edit_shared_task",
+    "account_leave_shared_task",
 )
+
+#: Tables the app role may read and delete from but never insert into or
+#: update (Phase 2 D23). A membership row is written only by the accept
+#: function, for the person holding the link -- so not even the task's owner
+#: can put somebody on a task, and nobody can rewrite a copied name.
+NO_DIRECT_WRITE_TABLES = frozenset({"task_members"})
 
 FUNCTION_SQL = """
 CREATE OR REPLACE FUNCTION account_current_user() RETURNS uuid
@@ -195,6 +212,110 @@ CREATE OR REPLACE FUNCTION account_partner_figures()
             ON mine.user_id = account_current_user() AND mine.partner_id = theirs.user_id
           WHERE theirs.partner_id = account_current_user() $$;
 
+-- Phase 2 item 9a (D23): shared tasks. A member reaches the owner's task
+-- only through these, each keyed on account_current_user(), and each ignoring
+-- a repeating occurrence and an owner whose account is being deleted.
+
+-- What a live link is for: the owner's name and the task's title.
+CREATE OR REPLACE FUNCTION account_task_invite_preview(p_token_hash text)
+    RETURNS TABLE(owner_name text, title text)
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ SELECT u.name::text, t.title::text
+          FROM task_invites i JOIN tasks t ON t.id = i.task_id JOIN users u ON u.id = t.user_id
+          WHERE account_current_user() IS NOT NULL
+            AND i.token_hash = p_token_hash AND i.revoked_at IS NULL
+            AND i.expires_at > (now() AT TIME ZONE 'utc')
+            AND t.recurring_id IS NULL AND u.deleted_at IS NULL $$;
+
+-- The only writer of task_members: the caller joins, never anyone else. The
+-- task is locked so two people accepting at once cannot both take the last
+-- place. 8 is models.MAX_TASK_MEMBERS.
+CREATE OR REPLACE FUNCTION account_accept_task_invite(p_token_hash text) RETURNS text
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$
+DECLARE
+    me uuid := account_current_user();
+    inv task_invites%ROWTYPE;
+    t tasks%ROWTYPE;
+    my_name text;
+    their_name text;
+BEGIN
+    IF me IS NULL THEN RETURN 'invalid'; END IF;
+    SELECT * INTO inv FROM task_invites
+        WHERE token_hash = p_token_hash AND revoked_at IS NULL
+          AND expires_at > (now() AT TIME ZONE 'utc');
+    IF NOT FOUND THEN RETURN 'invalid'; END IF;
+    SELECT * INTO t FROM tasks WHERE id = inv.task_id FOR UPDATE;
+    IF NOT FOUND OR t.recurring_id IS NOT NULL THEN RETURN 'invalid'; END IF;
+    IF t.user_id = me THEN RETURN 'own'; END IF;
+    SELECT name INTO my_name FROM users WHERE id = me AND deleted_at IS NULL;
+    SELECT name INTO their_name FROM users WHERE id = t.user_id AND deleted_at IS NULL;
+    IF my_name IS NULL OR their_name IS NULL THEN RETURN 'invalid'; END IF;
+    IF EXISTS (SELECT 1 FROM task_members WHERE task_id = t.id AND member_id = me) THEN
+        RETURN 'already';
+    END IF;
+    IF (SELECT count(*) FROM task_members WHERE task_id = t.id) >= 8 THEN RETURN 'full'; END IF;
+    INSERT INTO task_members (id, task_id, member_id, member_name, owner_name, joined_at)
+        VALUES (gen_random_uuid(), t.id, me, my_name, their_name, now() AT TIME ZONE 'utc')
+        ON CONFLICT (task_id, member_id) DO NOTHING;
+    RETURN 'accepted';
+END $$;
+
+-- The tasks the caller is a member of, with the fields a member may see:
+-- never the course, the grade, the timer, priority or tags.
+CREATE OR REPLACE FUNCTION account_shared_tasks()
+    RETURNS TABLE(task_id uuid, owner_name text, title text, notes text, due_date date,
+                  due_time time, done boolean, completed_at timestamp, member_names text[])
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ SELECT t.id, m.owner_name::text, t.title::text, t.notes::text, t.due_date, t.due_time,
+                 t.done, t.completed_at,
+                 ARRAY(SELECT o.member_name::text FROM task_members o
+                       WHERE o.task_id = t.id ORDER BY o.joined_at, o.member_name)
+          FROM task_members m
+          JOIN tasks t ON t.id = m.task_id
+          JOIN users u ON u.id = t.user_id
+          WHERE m.member_id = account_current_user()
+            AND t.recurring_id IS NULL AND u.deleted_at IS NULL $$;
+
+-- One tick closes it for everyone, the same way the owner's tick does:
+-- completed and archived together, or neither.
+CREATE OR REPLACE FUNCTION account_set_shared_task_done(p_task uuid, p_done boolean) RETURNS boolean
+    LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ WITH changed AS (
+              UPDATE tasks t
+              SET done = p_done,
+                  completed_at = CASE WHEN p_done THEN now() AT TIME ZONE 'utc' END,
+                  archived = p_done
+              WHERE t.id = p_task AND t.recurring_id IS NULL AND p_done IS NOT NULL
+                AND EXISTS (SELECT 1 FROM task_members m
+                            WHERE m.task_id = t.id AND m.member_id = account_current_user())
+                AND EXISTS (SELECT 1 FROM users u WHERE u.id = t.user_id AND u.deleted_at IS NULL)
+              RETURNING 1)
+          SELECT count(*) > 0 FROM changed $$;
+
+-- The text, and only the text. The same limits as the API's own checks.
+CREATE OR REPLACE FUNCTION account_edit_shared_task(p_task uuid, p_title text, p_notes text) RETURNS boolean
+    LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ WITH changed AS (
+              UPDATE tasks t SET title = btrim(p_title), notes = p_notes
+              WHERE t.id = p_task AND t.recurring_id IS NULL
+                AND length(btrim(coalesce(p_title, ''))) BETWEEN 1 AND 200
+                AND (p_notes IS NULL OR length(p_notes) <= 2000)
+                AND EXISTS (SELECT 1 FROM task_members m
+                            WHERE m.task_id = t.id AND m.member_id = account_current_user())
+                AND EXISTS (SELECT 1 FROM users u WHERE u.id = t.user_id AND u.deleted_at IS NULL)
+              RETURNING 1)
+          SELECT count(*) > 0 FROM changed $$;
+
+-- A member removes themselves, and nobody else.
+CREATE OR REPLACE FUNCTION account_leave_shared_task(p_task uuid) RETURNS boolean
+    LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ WITH gone AS (
+              DELETE FROM task_members
+              WHERE task_id = p_task AND member_id = account_current_user()
+              RETURNING 1)
+          SELECT count(*) > 0 FROM gone $$;
+
 -- Definer functions run with their owner's rights, so nobody but the API
 -- needs to be able to call them.
 REVOKE ALL ON FUNCTION account_user_id_by_email(text) FROM PUBLIC;
@@ -207,6 +328,12 @@ REVOKE ALL ON FUNCTION account_invite_preview(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_accept_partner_invite(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_end_partnership(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_partner_figures() FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_task_invite_preview(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_accept_task_invite(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_shared_tasks() FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_set_shared_task_done(uuid, boolean) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_edit_shared_task(uuid, text, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_leave_shared_task(uuid) FROM PUBLIC;
 
 -- PUBLIC is not the only way in. Supabase's default privileges grant every new
 -- function to anon and authenticated by name, and its Data API lets anon call
@@ -267,6 +394,17 @@ def is_shared(table: Table) -> bool:
     return True
 
 
+def _check_no_direct_write_list() -> None:
+    """Every name is a real table, and none is shared: a shared table is
+    already read-only, and a typo would leave the real table writable."""
+    unknown = NO_DIRECT_WRITE_TABLES - set(Base.metadata.tables)
+    if unknown:
+        raise ValueError(f"NO_DIRECT_WRITE_TABLES names tables no model builds: {sorted(unknown)}")
+    both = NO_DIRECT_WRITE_TABLES & SHARED_READ_TABLES
+    if both:
+        raise ValueError(f"Tables on both lists: {sorted(both)}")
+
+
 def _check_shared_list() -> None:
     """Every shared name is a real table. A typo would leave the real table
     raising -- loud, but for the wrong reason -- and the list claiming a share
@@ -299,6 +437,7 @@ def owner_predicate(table: Table) -> str:
 def policy_statements() -> list[str]:
     """Every statement that puts the policies in place. Idempotent."""
     _check_shared_list()
+    _check_no_direct_write_list()
     statements = []
     for table in Base.metadata.sorted_tables:
         if is_shared(table):
@@ -338,7 +477,18 @@ def grant_statements() -> list[str]:
         *(
             f"GRANT SELECT, INSERT, UPDATE, DELETE ON {table.name} TO {APP_ROLE}"
             for table in tables
-            if not is_shared(table)
+            if not is_shared(table) and table.name not in NO_DIRECT_WRITE_TABLES
+        ),
+        # Read and delete only. The REVOKE takes back a write grant left by
+        # an earlier shape, as the shared tables' does.
+        *(
+            statement
+            for table in tables
+            if table.name in NO_DIRECT_WRITE_TABLES
+            for statement in (
+                f"REVOKE INSERT, UPDATE, TRUNCATE ON {table.name} FROM {APP_ROLE}",
+                f"GRANT SELECT, DELETE ON {table.name} TO {APP_ROLE}",
+            )
         ),
         *(statement for table in tables if is_shared(table) for statement in _shared_grants(table)),
         "GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO " + APP_ROLE,
@@ -353,6 +503,12 @@ def grant_statements() -> list[str]:
         "GRANT EXECUTE ON FUNCTION account_accept_partner_invite(text) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_end_partnership(uuid) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_partner_figures() TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_task_invite_preview(text) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_accept_task_invite(text) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_shared_tasks() TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_set_shared_task_done(uuid, boolean) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_edit_shared_task(uuid, text, text) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_leave_shared_task(uuid) TO " + APP_ROLE,
     ]
 
 

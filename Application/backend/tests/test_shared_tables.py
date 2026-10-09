@@ -78,9 +78,38 @@ def test_a_shared_table_is_granted_select_only(table):
 def test_per_user_tables_keep_their_four_verbs():
     grants = rls.grant_statements()
     for table in Base.metadata.sorted_tables:
-        if table.name in rls.SHARED_READ_TABLES:
+        if table.name in rls.SHARED_READ_TABLES | rls.NO_DIRECT_WRITE_TABLES:
             continue
         assert f"GRANT SELECT, INSERT, UPDATE, DELETE ON {table.name} TO {rls.APP_ROLE}" in grants
+
+
+# --- read and delete only (Phase 2 D23) -------------------------------------------
+
+def test_memberships_are_read_and_deleted_never_written_by_the_app_role():
+    """A membership row is written only by the accept function, for the person
+    holding the link -- so the app role may not insert or update one."""
+    assert "task_members" in rls.NO_DIRECT_WRITE_TABLES
+    statements = _for(rls.grant_statements(), "task_members")
+    assert [s for s in statements if s.startswith("GRANT")] == [f"GRANT SELECT, DELETE ON task_members TO {rls.APP_ROLE}"]
+    assert f"REVOKE INSERT, UPDATE, TRUNCATE ON task_members FROM {rls.APP_ROLE}" in statements
+
+
+def test_a_read_and_delete_table_keeps_its_owner_policy():
+    policies = [s for s in _for(rls.policy_statements(), "task_members") if s.startswith("CREATE POLICY")]
+    assert len(policies) == 1 and f"FOR ALL TO {rls.APP_ROLE}" in policies[0]
+    assert "p.user_id = account_current_user()" in policies[0]
+
+
+def test_a_misspelt_read_and_delete_name_raises(monkeypatch):
+    monkeypatch.setattr(rls, "NO_DIRECT_WRITE_TABLES", frozenset({"task_membres"}))
+    with pytest.raises(ValueError, match="no model builds"):
+        rls.policy_statements()
+
+
+def test_a_table_cannot_be_on_both_lists(monkeypatch):
+    monkeypatch.setattr(rls, "NO_DIRECT_WRITE_TABLES", frozenset({"catalogue_courses"}))
+    with pytest.raises(ValueError, match="both lists"):
+        rls.policy_statements()
 
 
 def test_the_shared_predicate_still_needs_an_identity():

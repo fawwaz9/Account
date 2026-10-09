@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../app/auth/AuthContext";
 import { acceptInvite, previewInvite } from "../features/partners/api";
 import { AcceptStatus } from "../features/partners/types";
+import { TASK_LINK_PREFIX, TaskAcceptStatus, acceptTaskInvite, previewTaskInvite } from "../features/tasks/sharing";
 
 const REFUSED: Record<Exclude<AcceptStatus, "accepted">, string> = {
   invalid: "That invite link has expired, been used, or been cancelled. Ask for a new one.",
@@ -10,43 +11,73 @@ const REFUSED: Record<Exclude<AcceptStatus, "accepted">, string> = {
   already: "You're already partners.",
 };
 
+const TASK_REFUSED: Record<Exclude<TaskAcceptStatus, "accepted">, string> = {
+  invalid: "That link has expired or been cancelled. Ask for a new one.",
+  own: "That's a link to your own task. Send it to the people you're working with.",
+  already: "You're already on that task.",
+  full: "That task already has as many people on it as it can hold.",
+};
+
+/** What the link is for: a partner (the plain fragment, as item 10 sent them) or a task. */
+function parse(hash: string): { kind: "partner" | "task"; token: string } {
+  const raw = decodeURIComponent(hash.replace(/^#/, ""));
+  return raw.startsWith(TASK_LINK_PREFIX)
+    ? { kind: "task", token: raw.slice(TASK_LINK_PREFIX.length) }
+    : { kind: "partner", token: raw };
+}
+
 /**
- * Opening an invite link (Phase 2 item 10, D16). The token is in the fragment
- * (/invite#token), so it never reaches a server log; it is sent to the API in
- * a request body. Shows who sent it, then asks before anything happens.
+ * Opening an invite link (Phase 2 items 10 and 9a, D16, D23). The token is in
+ * the fragment (/invite#token, or /invite#task:token), so it never reaches a
+ * server log; it is sent to the API in a request body. Shows who sent it, and
+ * for what, then asks before anything happens.
  */
 export default function InvitePage() {
   const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const token = decodeURIComponent(location.hash.replace(/^#/, ""));
+  const { kind, token } = parse(location.hash);
   const [inviter, setInviter] = useState<string | null>(null);
+  const [taskTitle, setTaskTitle] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const invalid = kind === "task" ? TASK_REFUSED.invalid : REFUSED.invalid;
 
   useEffect(() => {
     if (!user) return;
     if (token.length < 16) {
-      setProblem(REFUSED.invalid);
+      setProblem(invalid);
       return;
     }
     let cancelled = false;
-    previewInvite(user.id, token)
-      .then((found) => { if (!cancelled) setInviter(found.inviter_name); })
-      .catch(() => { if (!cancelled) setProblem(REFUSED.invalid); });
+    const look = kind === "task"
+      ? previewTaskInvite(user.id, token).then((found) => {
+          if (!cancelled) { setInviter(found.owner_name); setTaskTitle(found.title); }
+        })
+      : previewInvite(user.id, token).then((found) => { if (!cancelled) setInviter(found.inviter_name); });
+    look.catch(() => { if (!cancelled) setProblem(invalid); });
     return () => { cancelled = true; };
-  }, [user, token]);
+  }, [user, token, kind, invalid]);
 
   async function accept() {
     if (!user) return;
     setBusy(true);
     try {
-      const { status } = await acceptInvite(user.id, token);
-      if (status === "accepted") {
-        navigate("/tasks", { replace: true });
-        return;
+      if (kind === "task") {
+        const { status } = await acceptTaskInvite(user.id, token);
+        if (status === "accepted") {
+          navigate("/tasks", { replace: true });
+          return;
+        }
+        setProblem(TASK_REFUSED[status]);
+      } else {
+        const { status } = await acceptInvite(user.id, token);
+        if (status === "accepted") {
+          navigate("/tasks", { replace: true });
+          return;
+        }
+        setProblem(REFUSED[status]);
       }
-      setProblem(REFUSED[status]);
     } catch {
       setProblem("That didn't work. Try again.");
     } finally {
@@ -54,26 +85,47 @@ export default function InvitePage() {
     }
   }
 
+  let offer = null;
+  if (inviter && kind === "task") {
+    offer = (
+      <>
+        <p>
+          <strong>{inviter}</strong> would like you on their task <strong>{taskTitle}</strong>. You&rsquo;d see
+          its title, notes and due date, and could tick it done for everyone or edit its title and notes.
+          Nothing else of theirs. {inviter} can take you off, and you can leave at any time.
+        </p>
+        <div className="catalogueActions">
+          <button type="button" className="calButton calButtonPrimary" onClick={() => void accept()} disabled={busy}>
+            Join the task
+          </button>
+          <Link to="/tasks" className="calButton">No thanks</Link>
+        </div>
+      </>
+    );
+  } else if (inviter) {
+    offer = (
+      <>
+        <p>
+          <strong>{inviter}</strong> would like you as an accountability partner. You&rsquo;d each see the
+          share of the week&rsquo;s tasks the other has done, and their run of good weeks. Never task names,
+          grades or money. Either of you can end it at any time.
+        </p>
+        <div className="catalogueActions">
+          <button type="button" className="calButton calButtonPrimary" onClick={() => void accept()} disabled={busy}>
+            Become partners
+          </button>
+          <Link to="/tasks" className="calButton">No thanks</Link>
+        </div>
+      </>
+    );
+  }
+
   return (
     <div className="container invitePage">
       <h1 className="title">An invite</h1>
       {problem ? (
         <p>{problem} <Link to="/tasks">Go to your tasks</Link></p>
-      ) : inviter ? (
-        <>
-          <p>
-            <strong>{inviter}</strong> would like you as an accountability partner. You&rsquo;d each see the
-            share of the week&rsquo;s tasks the other has done, and their run of good weeks. Never task names,
-            grades or money. Either of you can end it at any time.
-          </p>
-          <div className="catalogueActions">
-            <button type="button" className="calButton calButtonPrimary" onClick={() => void accept()} disabled={busy}>
-              Become partners
-            </button>
-            <Link to="/tasks" className="calButton">No thanks</Link>
-          </div>
-        </>
-      ) : (
+      ) : offer ?? (
         <p className="muted" role="status">Checking the invite…</p>
       )}
     </div>

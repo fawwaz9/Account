@@ -1,4 +1,4 @@
-"""The cross-user steps of sharing (Phase 2 item 10, D22), in one place.
+"""The cross-user steps of sharing (Phase 2 items 10 and 9a, D22 and D23), in one place.
 
 Like ``identity.py``: on Postgres each is a ``SECURITY DEFINER`` function
 (``rls.FUNCTION_SQL``) answering with a name, a status word or three numbers,
@@ -18,7 +18,10 @@ from datetime import date
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app._database.models import InviteModel, PartnershipModel, UserModel, utc_now
+from app._database.models import (
+    MAX_TASK_MEMBERS, InviteModel, PartnershipModel, TaskInviteModel, TaskMemberModel, TaskModel, UserModel,
+    utc_now,
+)
 
 
 def _is_postgres(db: Session) -> bool:
@@ -120,3 +123,150 @@ def partner_figures(db: Session, user_id: uuid.UUID) -> dict[uuid.UUID, PartnerF
         row.partner_id: PartnerFigure(row.partner_id, row.week_percent, row.streak_weeks or 0, row.figure_on)
         for row in rows
     }
+
+
+# --------------------------------------------------------------------------
+# Shared tasks (Phase 2 item 9a, D23)
+# --------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class TaskInvitePreview:
+    owner_name: str
+    title: str
+
+
+@dataclass(frozen=True)
+class SharedTask:
+    """What a member may see of someone else's task, and nothing more."""
+    task_id: uuid.UUID
+    owner_name: str
+    title: str
+    notes: str | None
+    due_date: date | None
+    due_time: object | None
+    done: bool
+    completed_at: object | None
+    member_names: list[str]
+
+
+def _live_owner(db: Session, owner_id: uuid.UUID) -> UserModel | None:
+    owner = db.get(UserModel, owner_id)
+    return owner if owner is not None and owner.deleted_at is None else None
+
+
+def _live_task_invite(db: Session, token_hash: str):
+    return (
+        db.query(TaskInviteModel)
+        .filter(TaskInviteModel.token_hash == token_hash, TaskInviteModel.revoked_at.is_(None),
+                TaskInviteModel.expires_at > utc_now())
+        .first()
+    )
+
+
+def task_invite_preview(db: Session, user_id: uuid.UUID, token_hash: str) -> TaskInvitePreview | None:
+    if _is_postgres(db):
+        row = db.execute(text("SELECT * FROM account_task_invite_preview(:h)"), {"h": token_hash}).first()
+        return TaskInvitePreview(row.owner_name, row.title) if row else None
+    invite = _live_task_invite(db, token_hash)
+    task = db.get(TaskModel, invite.task_id) if invite else None
+    if task is None or task.recurring_id is not None:
+        return None
+    owner = _live_owner(db, task.user_id)
+    return TaskInvitePreview(owner.name, task.title) if owner else None
+
+
+def accept_task_invite(db: Session, user_id: uuid.UUID, token_hash: str) -> str:
+    """'accepted', 'invalid', 'own', 'already' or 'full'."""
+    if _is_postgres(db):
+        status = db.execute(text("SELECT account_accept_task_invite(:h)"), {"h": token_hash}).scalar()
+        db.commit()
+        return status
+    invite = _live_task_invite(db, token_hash)
+    task = db.get(TaskModel, invite.task_id) if invite else None
+    if task is None or task.recurring_id is not None:
+        return "invalid"
+    if task.user_id == user_id:
+        return "own"
+    me, owner = _live_owner(db, user_id), _live_owner(db, task.user_id)
+    if me is None or owner is None:
+        return "invalid"
+    members = db.query(TaskMemberModel).filter(TaskMemberModel.task_id == task.id)
+    if members.filter(TaskMemberModel.member_id == user_id).first() is not None:
+        return "already"
+    if members.count() >= MAX_TASK_MEMBERS:
+        return "full"
+    db.add(TaskMemberModel(id=uuid.uuid4(), task_id=task.id, member_id=user_id, member_name=me.name,
+                           owner_name=owner.name, joined_at=utc_now()))
+    db.commit()
+    return "accepted"
+
+
+def _member_task(db: Session, user_id: uuid.UUID, task_id: uuid.UUID) -> TaskModel | None:
+    """SQLite's stand-in for the functions' shared WHERE: a one-off task of a
+    live owner, that the caller is a member of."""
+    task = db.get(TaskModel, task_id)
+    if task is None or task.recurring_id is not None or _live_owner(db, task.user_id) is None:
+        return None
+    member = db.query(TaskMemberModel).filter_by(task_id=task_id, member_id=user_id).first()
+    return task if member is not None else None
+
+
+def shared_tasks(db: Session, user_id: uuid.UUID) -> list[SharedTask]:
+    if _is_postgres(db):
+        rows = db.execute(text("SELECT * FROM account_shared_tasks()")).all()
+        return [SharedTask(r.task_id, r.owner_name, r.title, r.notes, r.due_date, r.due_time, r.done,
+                           r.completed_at, list(r.member_names or [])) for r in rows]
+    out = []
+    for membership in db.query(TaskMemberModel).filter(TaskMemberModel.member_id == user_id):
+        task = _member_task(db, user_id, membership.task_id)
+        if task is None:
+            continue
+        names = [m.member_name for m in sorted(
+            db.query(TaskMemberModel).filter(TaskMemberModel.task_id == task.id),
+            key=lambda m: (m.joined_at, m.member_name))]
+        out.append(SharedTask(task.id, membership.owner_name, task.title, task.notes, task.due_date,
+                              task.due_time, task.done, task.completed_at, names))
+    return out
+
+
+def set_shared_task_done(db: Session, user_id: uuid.UUID, task_id: uuid.UUID, done: bool) -> bool:
+    if _is_postgres(db):
+        changed = bool(db.execute(text("SELECT account_set_shared_task_done(:t, :d)"),
+                                  {"t": task_id, "d": done}).scalar())
+        db.commit()
+        return changed
+    task = _member_task(db, user_id, task_id)
+    if task is None:
+        return False
+    task.done = done
+    task.completed_at = utc_now() if done else None
+    task.archived = done
+    db.commit()
+    return True
+
+
+def edit_shared_task(db: Session, user_id: uuid.UUID, task_id: uuid.UUID, title: str, notes: str | None) -> bool:
+    if _is_postgres(db):
+        changed = bool(db.execute(text("SELECT account_edit_shared_task(:t, :title, :notes)"),
+                                  {"t": task_id, "title": title, "notes": notes}).scalar())
+        db.commit()
+        return changed
+    task = _member_task(db, user_id, task_id)
+    title = (title or "").strip()
+    if task is None or not 1 <= len(title) <= 200 or (notes is not None and len(notes) > 2000):
+        return False
+    task.title, task.notes = title, notes
+    db.commit()
+    return True
+
+
+def leave_shared_task(db: Session, user_id: uuid.UUID, task_id: uuid.UUID) -> bool:
+    if _is_postgres(db):
+        left = bool(db.execute(text("SELECT account_leave_shared_task(:t)"), {"t": task_id}).scalar())
+        db.commit()
+        return left
+    gone = db.query(TaskMemberModel).filter(
+        TaskMemberModel.task_id == task_id, TaskMemberModel.member_id == user_id,
+    ).delete(synchronize_session=False)
+    db.commit()
+    return gone > 0

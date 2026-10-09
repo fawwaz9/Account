@@ -56,6 +56,9 @@ from app._database.models import (
     SyllabusParseModel,
     TuitionPaymentModel,
     UsageEventModel,
+    TaskInviteModel,
+    TaskMemberModel,
+    UserModel,
 )
 
 from app.Intake.services import storage  # noqa: E402
@@ -268,6 +271,11 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
     add(InviteModel(id=new_id(), user_id=user_id, kind="partner",
                     token_hash=hashlib.sha256(f"{marker} invite token".encode()).hexdigest(),
                     expires_at=datetime.combine(day + timedelta(days=5), time(12, 0))))
+    # Phase 2 item 9a: a live link on the world's task, whose token is
+    # "<marker> task invite token" -- so the walk can preview and accept A's own.
+    add(TaskInviteModel(id=new_id(), task_id=task.id,
+                        token_hash=hashlib.sha256(f"{marker} task invite token".encode()).hexdigest(),
+                        expires_at=datetime.combine(day + timedelta(days=5), time(12, 0))))
     # Phase 2 item 4: an own prerequisite rule on the world's course, with the
     # marker in the private syllabus sentence a leak would carry.
     add(PrerequisiteProposalModel(id=new_id(), user_id=user_id, course_id=course.id, kind="prerequisite",
@@ -284,8 +292,8 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
 
 
 #: Tables whose rows need two people, seeded by seed_pair rather than by one
-#: user's world (Phase 2 item 10).
-PAIRED_TABLES = frozenset({"partnerships"})
+#: user's world (Phase 2 items 10 and 9a).
+PAIRED_TABLES = frozenset({"partnerships", "task_members"})
 
 
 def seed_pair(db, a_id, b_id, mark_a: str, mark_b: str) -> tuple[dict, dict]:
@@ -301,7 +309,26 @@ def seed_pair(db, a_id, b_id, mark_a: str, mark_b: str) -> tuple[dict, dict]:
     b_row = PartnershipModel(id=uuid.uuid4(), user_id=b_id, partner_id=a_id, partner_name=f"{mark_b} partner",
                              week_percent=75.0, streak_weeks=2, figure_on=date(2026, 9, 14))
     db.add_all([a_row, b_row])
-    ids = ({"partnerships": a_row.id}, {"partnerships": b_row.id})
+    # Shared tasks (Phase 2 item 9a), one way only. A has shared A's task with
+    # B, so B's membership is a row of A's -- under A's task -- and in the walk
+    # (A attacking B) A holds no rights over anything of B's. B's own task is
+    # shared with a third person, so B too has a membership row for A to fail
+    # to reach. Names carry each row owner's marker, as partner_name does.
+    a_task = db.query(TaskModel).filter_by(user_id=a_id, title=f"{mark_a} task").one()
+    b_task = db.query(TaskModel).filter_by(user_id=b_id, title=f"{mark_b} task").one()
+    third = UserModel(id=uuid.uuid5(uuid.NAMESPACE_URL, f"account-isolation-world/{mark_b}/third"),
+                      name="third member", email=f"{mark_b}-third@example.com", google_id=f"g-{mark_b}-third",
+                      email_verified=True)
+    db.add(third)
+    db.flush()
+    a_member = TaskMemberModel(id=uuid.uuid4(), task_id=a_task.id, member_id=b_id,
+                               member_name=f"{mark_a} member", owner_name=f"{mark_a} owner")
+    b_member = TaskMemberModel(id=uuid.uuid4(), task_id=b_task.id, member_id=third.id,
+                               member_name=f"{mark_b} member", owner_name=f"{mark_b} owner")
+    db.add_all([a_member, b_member])
+    db.flush()
+    ids = ({"partnerships": a_row.id, "task_members": a_member.id},
+           {"partnerships": b_row.id, "task_members": b_member.id})
     db.commit()
     return ids
 

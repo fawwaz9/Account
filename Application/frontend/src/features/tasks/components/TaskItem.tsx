@@ -138,6 +138,10 @@ export default function TaskItem({
           {/* A task the gradebook owns closes itself when the score lands, so
               saying where it came from explains why it cannot be deleted here. */}
           {task.grade_id && <span className="taskTag taskTagAuto">from grades</span>}
+          {/* Phase 2 item 9a: anyone on it can tick it and edit its text. */}
+          {task.shared_with && task.shared_with.length > 0 && (
+            <span className="taskTag taskTagShared">with {task.shared_with.join(", ")}</span>
+          )}
           {/* The count, not the history: the fourth time you push something back
               for the same reason, the reason is the problem. */}
           {task.snooze_count > 0 && (

@@ -137,6 +137,9 @@ class Task(TaskBase):
     snooze_count: int = 0
     #: Why it was last pushed back, so a blocked task says so on its own row.
     last_snooze_reason: str | None = None
+    #: The names of the people you have shared it with (Phase 2 D23). Empty
+    #: when it is yours alone.
+    shared_with: list[str] = Field(default_factory=list)
 
     class Config:
         from_attributes = True

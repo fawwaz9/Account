@@ -404,6 +404,12 @@ DEFINER_SIGNATURES = (
     "account_accept_partner_invite(text)",
     "account_end_partnership(uuid)",
     "account_partner_figures()",
+    "account_task_invite_preview(text)",
+    "account_accept_task_invite(text)",
+    "account_shared_tasks()",
+    "account_set_shared_task_done(uuid, boolean)",
+    "account_edit_shared_task(uuid, text, text)",
+    "account_leave_shared_task(uuid)",
 )
 
 
@@ -436,6 +442,12 @@ def test_only_the_app_role_can_call_the_cross_user_functions(owner_engine):
             "SELECT account_accept_partner_invite('x')",
             "SELECT account_end_partnership(gen_random_uuid())",
             "SELECT * FROM account_partner_figures()",
+            "SELECT * FROM account_task_invite_preview('x')",
+            "SELECT account_accept_task_invite('x')",
+            "SELECT * FROM account_shared_tasks()",
+            "SELECT account_set_shared_task_done(gen_random_uuid(), true)",
+            "SELECT account_edit_shared_task(gen_random_uuid(), 'x', NULL)",
+            "SELECT account_leave_shared_task(gen_random_uuid())",
         ):
             with outsider.connect() as conn:
                 with pytest.raises(ProgrammingError, match="permission denied"):
@@ -660,3 +672,119 @@ def test_with_no_identity_the_partner_functions_do_nothing(worlds, app_session):
     assert app_session.execute(text("SELECT account_end_partnership(gen_random_uuid())")).scalar() is False
     app_session.rollback()
     assert owner.execute(text("SELECT count(*) FROM partnerships")).scalar() == 2
+
+
+# --------------------------------------------------------------------------
+# Shared tasks (Phase 2 item 9a, D23): membership is written only by the
+# accept function, and a member reaches the owner's task only through the
+# functions -- never through the tasks table.
+# --------------------------------------------------------------------------
+
+def _shared_task(worlds):
+    """A's task, which the world has shared with B (isolation_world.seed_pair)."""
+    owner, a, b, world_a, _ = worlds
+    return owner.execute(text("SELECT task_id FROM task_members WHERE id = :m"),
+                         {"m": world_a["task_members"]}).scalar()
+
+
+def test_the_app_role_cannot_put_anyone_on_a_task_or_rename_them(worlds, app_session):
+    """Not even the task's owner: a membership row exists only because its
+    member accepted a link."""
+    owner, a, b, world_a, _ = worlds
+    task_id = _shared_task(worlds)
+    stranger = make_user(owner, "rls-planted@example.com")
+    owner.commit()
+    act_as(app_session, a.id)
+    with pytest.raises(ProgrammingError, match="permission denied"):
+        app_session.execute(text(
+            "INSERT INTO task_members (id, task_id, member_id, member_name, owner_name, joined_at) "
+            "VALUES (gen_random_uuid(), :t, :s, 'planted', 'A', now())"), {"t": task_id, "s": stranger.id})
+    app_session.rollback()
+    act_as(app_session, a.id)
+    with pytest.raises(ProgrammingError, match="permission denied"):
+        app_session.execute(text("UPDATE task_members SET member_name = 'renamed'"))
+    app_session.rollback()
+    # Removing someone from your own task is the owner's to do.
+    act_as(app_session, a.id)
+    removed = app_session.execute(text("DELETE FROM task_members WHERE id = :m"),
+                                  {"m": world_a["task_members"]}).rowcount
+    app_session.commit()
+    assert removed == 1
+
+
+def test_accepting_a_task_link_as_the_app_role_adds_only_the_caller(worlds, app_session):
+    from app.Tasks.services import task_sharing_service as shares
+    owner, a, b, _, _ = worlds
+    task_id = _shared_task(worlds)
+    joiner = make_user(owner, "rls-joiner@example.com")
+    owner.commit()
+    act_as(app_session, a.id)
+    new = shares.new_link(app_session, a.id, task_id)
+    act_as(app_session, joiner.id)
+    assert shares.accept(app_session, joiner.id, new.token) == "accepted"
+    members = owner.execute(text("SELECT member_id FROM task_members WHERE task_id = :t"), {"t": task_id}).scalars()
+    assert set(members) == {b.id, joiner.id}
+
+
+def test_a_member_reaches_the_task_only_through_the_functions(worlds, app_session):
+    from app._database import sharing
+    owner, a, b, _, _ = worlds
+    task_id = _shared_task(worlds)
+    act_as(app_session, b.id)
+    # The table itself stays A's alone.
+    assert app_session.execute(text("SELECT count(*) FROM tasks WHERE id = :t"), {"t": task_id}).scalar() == 0
+    assert app_session.execute(text("UPDATE tasks SET title = 'b was here' WHERE id = :t"),
+                               {"t": task_id}).rowcount == 0
+    app_session.rollback()
+    act_as(app_session, b.id)
+    assert [t.task_id for t in sharing.shared_tasks(app_session, b.id)] == [task_id]
+    act_as(app_session, b.id)
+    assert sharing.set_shared_task_done(app_session, b.id, task_id, True) is True
+    done, title = owner.execute(text("SELECT done, title FROM tasks WHERE id = :t"), {"t": task_id}).one()
+    assert done is True and "b was here" not in title
+
+
+def test_a_member_of_one_task_reaches_no_other(worlds, app_session):
+    from app._database import sharing
+    owner, a, b, world_a, world_b = worlds
+    other = uuid.uuid4()
+    owner.execute(text("INSERT INTO tasks (id, user_id, title, tags, priority, done, archived, created_at) "
+                       "VALUES (:id, :a, 'not shared', '[]', 3, false, false, now())"), {"id": other, "a": a.id})
+    owner.commit()
+    act_as(app_session, b.id)
+    assert sharing.set_shared_task_done(app_session, b.id, other, True) is False
+    act_as(app_session, b.id)
+    assert sharing.edit_shared_task(app_session, b.id, other, "mine", None) is False
+    assert owner.execute(text("SELECT done FROM tasks WHERE id = :t"), {"t": other}).scalar() is False
+    # And a stranger, on the shared one.
+    stranger = make_user(owner, "rls-task-stranger@example.com")
+    owner.commit()
+    act_as(app_session, stranger.id)
+    assert sharing.shared_tasks(app_session, stranger.id) == []
+    act_as(app_session, stranger.id)
+    assert sharing.leave_shared_task(app_session, stranger.id, _shared_task(worlds)) is False
+    assert owner.execute(text("SELECT count(*) FROM task_members")).scalar() == 2
+
+
+def test_with_no_identity_the_task_functions_do_nothing(worlds, app_session):
+    import hashlib
+    owner, a, b, _, _ = worlds
+    task_id = _shared_task(worlds)
+    live = hashlib.sha256(b"zzownera task invite token").hexdigest()
+    act_as(app_session, b.id)
+    assert app_session.execute(text("SELECT * FROM account_task_invite_preview(:h)"), {"h": live}).all(), \
+        "not vacuous: with an identity the link is found"
+    assert app_session.execute(text("SELECT * FROM account_shared_tasks()")).all(), \
+        "not vacuous: with an identity B sees A's shared task"
+    app_session.rollback()
+    app_session.info.clear()
+    assert app_session.execute(text("SELECT * FROM account_task_invite_preview(:h)"), {"h": live}).all() == []
+    assert app_session.execute(text("SELECT account_accept_task_invite(:h)"), {"h": live}).scalar() == "invalid"
+    assert app_session.execute(text("SELECT * FROM account_shared_tasks()")).all() == []
+    for call in ("SELECT account_set_shared_task_done(:t, true)",
+                 "SELECT account_edit_shared_task(:t, 'x', NULL)",
+                 "SELECT account_leave_shared_task(:t)"):
+        assert app_session.execute(text(call), {"t": task_id}).scalar() is False, call
+    app_session.rollback()
+    assert owner.execute(text("SELECT count(*) FROM task_members")).scalar() == 2
+    assert owner.execute(text("SELECT done FROM tasks WHERE id = :t"), {"t": task_id}).scalar() is False

@@ -143,6 +143,12 @@ class UserModel(Base):
     partnered_by = relationship(
         "PartnershipModel", foreign_keys="PartnershipModel.partner_id", viewonly=True,
     )
+    #: Others' tasks this user is a member of (Phase 2 item 9a). View-only for
+    #: the same reason as partnered_by: the rows hang under the owners' tasks,
+    #: so the purge cannot see them, and ON DELETE CASCADE removes them.
+    task_memberships = relationship(
+        "TaskMemberModel", foreign_keys="TaskMemberModel.member_id", viewonly=True,
+    )
 
     @property
     def has_password(self) -> bool:
@@ -650,6 +656,9 @@ class TaskModel(Base):
     snoozes = relationship(
         "TaskSnoozeModel", back_populates="task", cascade="all, delete-orphan"
     )
+    #: Who else is on it, and the link that lets them join (Phase 2 item 9a).
+    members = relationship("TaskMemberModel", back_populates="task", cascade="all, delete-orphan")
+    invites = relationship("TaskInviteModel", back_populates="task", cascade="all, delete-orphan")
 
 
 class SinkingFundModel(Base):
@@ -1738,3 +1747,60 @@ class PartnershipModel(Base):
     week_percent = Column(Float, nullable=True)
     streak_weeks = Column(Integer, nullable=False, default=0)
     figure_on = Column(Date, nullable=True)
+
+
+#: How many people besides the owner a task can hold (Phase 2 D23). The same
+#: figure is written into account_accept_task_invite, and a test holds the two
+#: together.
+MAX_TASK_MEMBERS = 8
+
+
+class TaskMemberModel(Base):
+    """Someone else on one of your tasks (Phase 2 item 9a, D23).
+
+    A child of the task, with no user_id of its own, so the row policy makes it
+    the task owner's alone: only the owner sees who is on a task, or removes
+    them. Nobody writes one directly -- the API's role may not insert or update
+    this table -- so a row exists only because its member accepted a link,
+    through account_accept_task_invite.
+
+    What the member may then do with the task goes through definer functions
+    (rls.py), never through this row.
+
+    Both names are copied when the member joins (B3), so nobody reads another
+    person's user row to say who is on a task.
+    """
+
+    __tablename__ = "task_members"
+    __table_args__ = (UniqueConstraint("task_id", "member_id", name="uq_task_member"),)
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    task_id = Column(Uuid, ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False, index=True)
+    #: The member. ON DELETE CASCADE because their purge acts as them and
+    #: cannot see this row, which belongs to the task's owner.
+    member_id = Column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    member_name = Column(String, nullable=False)
+    owner_name = Column(String, nullable=False)
+    joined_at = Column(DateTime, nullable=False, default=utc_now)
+
+    task = relationship("TaskModel", back_populates="members")
+
+
+class TaskInviteModel(Base):
+    """The link that lets people join one of your tasks (Phase 2 item 9a, D23).
+
+    A child of the task, so only its owner can make, see or cancel one. Usable
+    by several people, for a group chat; at most one live per task, since
+    making a new link cancels the old. Only a SHA-256 of the token is stored.
+    """
+
+    __tablename__ = "task_invites"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    task_id = Column(Uuid, ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False, index=True)
+    token_hash = Column(String, nullable=False, unique=True)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+    expires_at = Column(DateTime, nullable=False)
+    revoked_at = Column(DateTime, nullable=True)
+
+    task = relationship("TaskModel", back_populates="invites")

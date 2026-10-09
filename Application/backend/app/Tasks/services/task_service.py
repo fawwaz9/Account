@@ -9,7 +9,7 @@ import uuid
 from datetime import date, datetime
 
 from sqlalchemy import or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app._database.models import (
     CourseModel,
@@ -127,6 +127,8 @@ def attach_course_code(
     )
     task.snooze_count = len(history)
     task.last_snooze_reason = history[-1].reason if history else None
+    # Who else is on it (Phase 2 D23): their names, as copied when they joined.
+    task.shared_with = [m.member_name for m in sorted(task.members or [], key=lambda m: m.joined_at)]
     return task
 
 
@@ -169,7 +171,11 @@ def list_tasks(
     if user is None:
         return None
 
-    query = db.query(TaskModel).filter(TaskModel.user_id == user_id)
+    query = (
+        db.query(TaskModel)
+        .filter(TaskModel.user_id == user_id)
+        .options(selectinload(TaskModel.members))
+    )
 
     if not include_archived:
         query = query.filter(TaskModel.archived.is_(False))

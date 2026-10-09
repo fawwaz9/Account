@@ -53,6 +53,8 @@ export interface Task {
   actual_minutes?: number | null;
   /** When the running timer started (UTC); null when none runs. Kept by the server. */
   timer_started_at?: string | null;
+  /** Who you have shared it with (Phase 2 item 9a). Empty when it is yours alone. */
+  shared_with?: string[];
 }
 
 /** Mirrors TimerStop in app/Tasks/schemas/task.py. */

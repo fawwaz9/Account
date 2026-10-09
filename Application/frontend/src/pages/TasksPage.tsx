@@ -42,6 +42,7 @@ import {
 import HowLongPrompt from "../features/tasks/components/HowLongPrompt";
 import EstimateRatioCard from "../features/tasks/components/EstimateRatioCard";
 import PartnersPanel from "../features/partners/PartnersPanel";
+import SharedTasks from "../features/tasks/components/SharedTasks";
 import { updatePreferences } from "../services/currentUserClient";
 import { fetchCourses } from "../features/grades/api";
 import { Course } from "../features/grades/types";
@@ -370,6 +371,14 @@ export default function TasksPage() {
         </div>
 
         <div className="taskCol">
+          {/* Phase 2 item 9a: other people's tasks you are on. Hidden when
+              there are none, which is most of the time. */}
+          {user && (
+            <div className="taskSlot taskSlot--shared">
+              <SharedTasks userId={user.id} />
+            </div>
+          )}
+
           {/* The fast path is the add bar on the left; this is the same act with
               every field, for the tasks that need them. */}
           <div className="taskSlot taskSlot--form">

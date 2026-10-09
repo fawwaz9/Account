@@ -738,3 +738,72 @@ signup, their address has to be on `ALLOWED_SIGNUP_EMAILS`.
 
   All three tests now check the real case, and all 7 mutations are caught.
 - Frontend: 10 tests (the panel, the invite page, the sign-in return path).
+
+## D23. Shared tasks: membership as a child of the task, every member action through a definer function (item 9a, 2026-10-09)
+
+The first feature where one person changes another's row. Item 9 is split:
+**9a is shared tasks**, built now; **9b is shared events**, the same pattern,
+after it. This narrows the draft (B1) in two places, marked below.
+
+**What a member may do:**
+- **Read:** the title, notes, due date and time, and whether it is done,
+  plus the owner's name and the other members' names.
+- **Tick it done or undone.** One tick closes it for everyone.
+- **Edit the title and notes.**
+- **Leave.**
+
+**What a member never sees or changes:** the course, the grade it is linked
+to, the timer and minutes, priority, tags, the snooze history and the due
+date. Only the owner deletes it, changes its date, or changes who is on it.
+A shared task carries no reminder; reminders were never attached to tasks.
+
+**What can be shared:** one-off tasks only. A repeating occurrence can't be
+shared, and the functions ignore one even if a row says otherwise.
+
+**The tables (the first change from the draft): no fifth policy shape.**
+- **`task_members` and `task_invites` are children of `tasks`.** Each has a
+  required `task_id` and no `user_id`. The generator's existing child policy
+  therefore makes both visible and writable to the task's owner alone, at the
+  database level.
+- **The `tasks` policy is not touched.** It stays strictly per-user.
+- **Everything a member does goes through a definer function** keyed on
+  `account_current_user()`, the same as partners.
+
+**Nobody is put on a task without accepting (the second change).** The API's
+role gets SELECT and DELETE on `task_members`, never INSERT or UPDATE. So the
+owner can see and remove members, but a membership row is written only by
+`account_accept_task_invite`, for the caller who holds the link.
+
+**The six functions,** each `SECURITY DEFINER` and revoked from everyone but
+`account_app`:
+- **`account_task_invite_preview(hash)`** returns the owner's name and the
+  task's title, for a live link.
+- **`account_accept_task_invite(hash)`** returns `accepted`, `invalid`,
+  `own`, `already` or `full`.
+- **`account_shared_tasks()`** returns the tasks the caller is a member of,
+  with only the fields above.
+- **`account_set_shared_task_done(task, done)`** ticks or unticks, the same
+  way the owner's tick does (it also archives).
+- **`account_edit_shared_task(task, title, notes)`** edits the text only.
+- **`account_leave_shared_task(task)`** removes the caller's own membership.
+
+**Links:**
+- **One live link per task, usable by several people,** for a group chat.
+  Making a new link cancels the old one, and the owner can cancel it outright.
+- **It lasts 7 days.** A task holds at most 8 members.
+- **Only the token's SHA-256 is stored.** The token rides in the fragment
+  (`/invite#task:…`), as partner links do.
+
+**Names:** each membership row copies the member's and the owner's display
+names when someone joins (B3). Nobody reads another person's user row.
+
+**When an account goes (D17):** the owner's purge deletes their tasks, and
+the memberships and links with them. A member's purge removes only their
+membership, through the database's `ON DELETE CASCADE` on `member_id`, the
+same mechanism as a partner's mirror row.
+
+**What shared tasks don't feed:** a member's week load, free time, estimates
+and partner figure read only that member's own tasks. A shared task counts
+for its owner alone.
+
+**Not in 9a:** a shared task on the member's calendar, which comes with 9b.

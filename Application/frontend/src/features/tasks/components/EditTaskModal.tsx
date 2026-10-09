@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import TaskSharingSection from "./TaskSharingSection";
 import Modal from "../../../shared/components/Modal";
 import { setTaskDone, updateTask } from "../api";
 import {
@@ -299,6 +300,9 @@ export default function EditTaskModal({
           </div>
         </div>
       </form>
+      {/* Phase 2 item 9a. Outside the form: sharing saves as you go, and has
+          nothing to do with the Save button above. */}
+      <TaskSharingSection taskId={task.id} onChanged={onSaved} />
     </Modal>
   );
 }

@@ -282,3 +282,66 @@ Part A's grant check 2 also passed: two rows, `account_app | SELECT`.
 
 Whoever you invite must be able to sign in. Until open signup (D19), add
 their address to `ALLOWED_SIGNUP_EMAILS` on Cloud Run.
+
+## The item 9a batch: shared tasks (D23). NOT YET RUN
+
+| What | Commits | Schema change |
+|---|---|---|
+| Item 9a: task links, members, six definer functions | on `phase2` | **New tables `task_members`, `task_invites`; six new functions; a read-and-delete grant on `task_members`** |
+
+Same order as before: backup, schema (yours), then `deploy.run.sh all`.
+Nothing existing is altered: `tasks`, `events` and `invites` keep their shape
+and their policies.
+
+### 1. Apply the schema (adds two tables and six functions; nothing is dropped)
+
+```sh
+git checkout phase2
+cd Application/backend
+set -a; source ../.env; set +a
+DATABASE_URL="$SUPABASE_DATABASE_URL" .venv/bin/python -m app._database.schema
+```
+
+**What this adds:**
+- **`task_members`:** who is on a task, hung under the task. The task's
+  owner alone can see or delete these rows, and the API's role can't insert
+  or update them at all.
+- **`task_invites`:** a task's link, hung under the task, with a unique token
+  hash.
+- **The six functions:** `account_task_invite_preview`,
+  `account_accept_task_invite`, `account_shared_tasks`,
+  `account_set_shared_task_done`, `account_edit_shared_task` and
+  `account_leave_shared_task`. Each is revoked from everyone but
+  `account_app`.
+
+**Verify, in the SQL editor:**
+1. **Only the API's role can call the new functions.** This should return
+   six rows, each `{postgres=X/postgres,account_app=X/postgres}`, with no
+   `anon` or `authenticated`:
+
+   ```sql
+   SELECT proname, proacl FROM pg_proc
+   WHERE proname IN ('account_task_invite_preview', 'account_accept_task_invite',
+                     'account_shared_tasks', 'account_set_shared_task_done',
+                     'account_edit_shared_task', 'account_leave_shared_task');
+   ```
+
+2. **Both tables have the per-user policy.** This should return two rows,
+   each `{account_app}` and `ALL`:
+
+   ```sql
+   SELECT tablename, roles, cmd FROM pg_policies WHERE tablename IN ('task_members', 'task_invites');
+   ```
+
+3. **The API's role can read and delete memberships, never write them.** This
+   should return exactly two rows for `task_members`, `DELETE` and `SELECT`,
+   and four for `task_invites`:
+
+   ```sql
+   SELECT table_name, privilege_type FROM information_schema.role_table_grants
+   WHERE grantee = 'account_app' AND table_name IN ('task_members', 'task_invites')
+   ORDER BY 1, 2;
+   ```
+
+**Undo:** not needed. The tables are new, and the old API never calls the
+functions.

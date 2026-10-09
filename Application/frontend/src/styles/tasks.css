@@ -1102,3 +1102,33 @@
   margin: 0;
   padding-left: 1.1em;
 }
+
+/* Phase 2 item 9a: shared tasks. */
+.taskTagShared {
+  background: rgba(120, 190, 140, 0.15);
+  color: #8fd0a2;
+}
+
+.taskSharing {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.taskSharing h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.sharedTaskEdit {
+  display: grid;
+  gap: 6px;
+}
+
+.sharedTaskEdit input,
+.sharedTaskEdit textarea {
+  width: 100%;
+  min-width: 0;
+}

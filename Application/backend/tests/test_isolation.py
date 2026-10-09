@@ -124,6 +124,8 @@ PATH_SOURCES = {
     # B here would end the partnership both agreed to -- not a leak, and not
     # this walk's question. Ending is tested in tests/test_partners.py.
     "partner_id": "partnerships",
+    # A membership row's own id (Phase 2 item 9a), as the owner removes it.
+    "member_id": "task_members",
 }
 
 #: Which of B's rows an id-shaped body or query field names.
@@ -230,6 +232,10 @@ BODY_PATCHES: dict[tuple[str, str], list[dict]] = {
     # and accepting your own link answers "own" -- both reach the functions.
     ("POST", "/api/partners/{user_id}/invites/preview"): [{"token": "zzownera invite token"}],
     ("POST", "/api/partners/{user_id}/invites/accept"): [{"token": "zzownera invite token"}],
+    # A's own task link (isolation_world): preview answers with A's task, and
+    # accepting your own answers "own" -- both reach the functions.
+    ("POST", "/api/tasks/{user_id}/shared-tasks/invites/preview"): [{"token": "zzownera task invite token"}],
+    ("POST", "/api/tasks/{user_id}/shared-tasks/invites/accept"): [{"token": "zzownera task invite token"}],
     ("POST", "/api/finances/{user_id}/subscriptions/confirm"): [
         {"instruction.kind": "expense", "instruction.to_account_id": None},
         {"instruction.kind": "transfer", "instruction.category_id": None},

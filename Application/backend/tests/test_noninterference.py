@@ -80,6 +80,8 @@ def _build(with_b: bool):
     world_b = seed_world(session, B_ID, iso.MARK_B, day) if with_b else None
     # A names no partner here (see DOMAIN_404); a fixed id so the path resolves.
     world_a["partnerships"] = uuid.uuid5(uuid.NAMESPACE_URL, "account-ni/no-partnership")
+    # Likewise nobody is on A's task here, and A is on nobody's (DOMAIN_404).
+    world_a["task_members"] = uuid.uuid5(uuid.NAMESPACE_URL, "account-ni/no-task-member")
     # Shared rows belong to nobody, so both runs hold them, with the same ids.
     seed_catalogue(session)
 
@@ -165,6 +167,13 @@ DOMAIN_404 = {
     # people agreed to, which is not this walk's question. Ending one is
     # tested in tests/test_partners.py.
     ("DELETE", "/api/partners/{user_id}/partners/{partner_id}"): "no partnership to end",
+    # Shared tasks (Phase 2 item 9a): nobody is a member of anything in either
+    # run, for the same reason. A is the owner of the world's task, not a
+    # member, so the member's routes find nothing. Tested in
+    # tests/test_shared_tasks.py.
+    ("DELETE", "/api/tasks/{user_id}/tasks/{task_id}/sharing/members/{member_id}"): "nobody on the task to remove",
+    ("PATCH", "/api/tasks/{user_id}/shared-tasks/{task_id}"): "A is on nobody's task",
+    ("DELETE", "/api/tasks/{user_id}/shared-tasks/{task_id}"): "A is on nobody's task",
 }
 
 
