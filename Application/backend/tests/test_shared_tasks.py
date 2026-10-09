@@ -22,7 +22,7 @@ from app._database.identity import act_as
 from app._database.models import (
     MAX_TASK_MEMBERS, RecurringTaskModel, TaskInviteModel, TaskMemberModel, TaskModel, utc_now,
 )
-from app.Auth.dependencies import get_current_user
+from app.Auth.services.session_service import create_access_token
 from app.Partners.services import partner_service
 from app.Tasks.schemas.sharing import SharedTaskUpdate
 from app.Tasks.services import task_service
@@ -365,27 +365,34 @@ def test_a_shared_task_counts_toward_its_owners_figure_alone(db):
 
 # --- through the API -----------------------------------------------------------------
 
+def signed_in(user):
+    """A real token, so each request goes through get_current_user -- which is
+    what sets the database identity. Overriding that dependency would skip it,
+    and on Postgres the functions would then run as nobody."""
+    return {"Authorization": f"Bearer {create_access_token(user.id, user.session_epoch or 0)}"}
+
+
 def test_the_api_shows_names_never_emails_and_only_the_listed_fields(db):
     sam, alex = person(db, "Sam"), person(db, "Alex")
     course = make_course(db, sam.id, "CPSC 310")
     task = own_task(db, sam, course_id=course.id)
+    as_sam, as_alex = signed_in(sam), signed_in(alex)
     app.main.app.dependency_overrides[get_db] = lambda: db
     try:
         client = TestClient(app.main.app)
-        app.main.app.dependency_overrides[get_current_user] = lambda: sam
-        new = client.post(f"/api/tasks/{sam.id}/tasks/{task.id}/sharing/link").json()
+        new = client.post(f"/api/tasks/{sam.id}/tasks/{task.id}/sharing/link", headers=as_sam).json()
         assert len(new["token"]) >= 30
-        app.main.app.dependency_overrides[get_current_user] = lambda: alex
-        preview = client.post(f"/api/tasks/{alex.id}/shared-tasks/invites/preview", json={"token": new["token"]})
-        accepted = client.post(f"/api/tasks/{alex.id}/shared-tasks/invites/accept", json={"token": new["token"]})
-        listed = client.get(f"/api/tasks/{alex.id}/shared-tasks")
+        preview = client.post(f"/api/tasks/{alex.id}/shared-tasks/invites/preview", json={"token": new["token"]},
+                              headers=as_alex)
+        accepted = client.post(f"/api/tasks/{alex.id}/shared-tasks/invites/accept", json={"token": new["token"]},
+                               headers=as_alex)
+        listed = client.get(f"/api/tasks/{alex.id}/shared-tasks", headers=as_alex)
         # Fields a member may not change are ignored, not applied.
         patched = client.patch(f"/api/tasks/{alex.id}/shared-tasks/{task.id}",
-                               json={"done": True, "due_date": "2030-01-01", "course_id": None})
-        blank = client.patch(f"/api/tasks/{alex.id}/shared-tasks/{task.id}", json={"title": "   "})
-        app.main.app.dependency_overrides[get_current_user] = lambda: sam
-        sharing_view = client.get(f"/api/tasks/{sam.id}/tasks/{task.id}/sharing")
-        owners_task = client.get(f"/api/tasks/{sam.id}/tasks/{task.id}")
+                               json={"done": True, "due_date": "2030-01-01", "course_id": None}, headers=as_alex)
+        blank = client.patch(f"/api/tasks/{alex.id}/shared-tasks/{task.id}", json={"title": "   "}, headers=as_alex)
+        sharing_view = client.get(f"/api/tasks/{sam.id}/tasks/{task.id}/sharing", headers=as_sam)
+        owners_task = client.get(f"/api/tasks/{sam.id}/tasks/{task.id}", headers=as_sam)
     finally:
         app.main.app.dependency_overrides.clear()
     assert preview.json() == {"owner_name": "Sam", "title": "Group report"}
@@ -404,15 +411,16 @@ def test_the_api_shows_names_never_emails_and_only_the_listed_fields(db):
 def test_a_task_you_are_not_on_answers_404_like_one_that_does_not_exist(db):
     sam, eve = person(db, "Sam"), person(db, "Eve")
     task = own_task(db, sam)
+    as_eve = signed_in(eve)
     app.main.app.dependency_overrides[get_db] = lambda: db
-    app.main.app.dependency_overrides[get_current_user] = lambda: eve
     try:
         client = TestClient(app.main.app)
         answers = [
-            client.patch(f"/api/tasks/{eve.id}/shared-tasks/{target}", json={"done": True})
+            client.patch(f"/api/tasks/{eve.id}/shared-tasks/{target}", json={"done": True}, headers=as_eve)
             for target in (task.id, uuid.uuid4())
         ]
-        sharing_reads = [client.get(f"/api/tasks/{eve.id}/tasks/{target}/sharing") for target in (task.id, uuid.uuid4())]
+        sharing_reads = [client.get(f"/api/tasks/{eve.id}/tasks/{target}/sharing", headers=as_eve)
+                         for target in (task.id, uuid.uuid4())]
     finally:
         app.main.app.dependency_overrides.clear()
     assert [a.status_code for a in answers] == [404, 404] and answers[0].json() == answers[1].json()

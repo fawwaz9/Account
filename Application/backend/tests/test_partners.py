@@ -14,7 +14,7 @@ import app.main
 from app._database.db import get_db
 from app._database.identity import act_as
 from app._database.models import InviteModel, PartnershipModel, TaskModel, utc_now
-from app.Auth.dependencies import get_current_user
+from app.Auth.services.session_service import create_access_token
 from app.Partners.services import partner_service as partners
 from app.Users.services.user_service import DELETION_GRACE_DAYS, delete_user, purge_expired_users
 from conftest import make_user
@@ -228,15 +228,19 @@ def test_purging_a_partner_removes_your_side_too(db):
 def test_the_api_never_shows_a_partners_email(db):
     sam, alex = person(db, "Sam"), person(db, "Alex")
     pair(db, sam, alex)
-    app.main.app.dependency_overrides[get_current_user] = lambda: sam
+    # Real tokens, so get_current_user runs and sets the database identity.
+    # This test used to override that dependency instead, and passed on
+    # Postgres only because pair() had left Alex's identity on the session.
+    as_sam = {"Authorization": f"Bearer {create_access_token(sam.id, sam.session_epoch or 0)}"}
+    as_alex = {"Authorization": f"Bearer {create_access_token(alex.id, alex.session_epoch or 0)}"}
     app.main.app.dependency_overrides[get_db] = lambda: db
     try:
         client = TestClient(app.main.app)
-        body = client.get(f"/api/partners/{sam.id}").text
-        new = client.post(f"/api/partners/{sam.id}/invites").json()
+        body = client.get(f"/api/partners/{sam.id}", headers=as_sam).text
+        new = client.post(f"/api/partners/{sam.id}/invites", headers=as_sam).json()
         assert len(new["token"]) >= 30
-        app.main.app.dependency_overrides[get_current_user] = lambda: alex
-        preview = client.post(f"/api/partners/{alex.id}/invites/preview", json={"token": new["token"]}).json()
+        preview = client.post(f"/api/partners/{alex.id}/invites/preview", json={"token": new["token"]},
+                              headers=as_alex).json()
     finally:
         app.main.app.dependency_overrides.clear()
     assert alex.email not in body and "Alex" in body
