@@ -807,3 +807,33 @@ and partner figure read only that member's own tasks. A shared task counts
 for its owner alone.
 
 **Not in 9a:** a shared task on the member's calendar, which comes with 9b.
+
+**Evidence:**
+- `tests/test_shared_tasks.py`, 24 tests, run on both SQLite and Postgres:
+  links, joining, the member limit, what a member sees and may do, what only
+  the owner may do, deleting the task, and both kinds of purge.
+- 5 new Postgres proofs in `test_rls.py`:
+  - The app role can't insert or rename a membership, even as the owner.
+  - Accepting adds only the caller.
+  - A member can't read or update the `tasks` row directly; only the
+    functions reach it.
+  - A member of one task reaches no other.
+  - With no identity, all six functions do nothing.
+  - An outsider role can't call any of them.
+- The walks seed a shared task between A and B (A shares with B; B's task
+  has a third member), and all 9 new routes are walked on both databases,
+  including under row-level security.
+- **Mutation check:** 36 removals, 20 in the SQLite half and 16 in the SQL
+  functions and the grant. All are caught.
+- **Corrections, kept in place:**
+  - 2 of the 20 SQLite removals were missed on the first run. Both tests
+    checked the preview but never tried to accept: one for a repeating task,
+    one for an owner being deleted. Both now accept, and both removals are
+    caught.
+  - CI's Postgres job failed the API-level test. It overrode
+    `get_current_user`, which is what sets the database identity, so the
+    functions ran as nobody. Item 10's partner API test had the same shortcut
+    and passed only because an earlier step had left the right identity on
+    the session. Both now sign in with real tokens.
+- Frontend: 13 tests (the member's list, the owner's share section, the
+  invite page's task path).

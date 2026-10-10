@@ -345,3 +345,32 @@ DATABASE_URL="$SUPABASE_DATABASE_URL" .venv/bin/python -m app._database.schema
 
 **Undo:** not needed. The tables are new, and the old API never calls the
 functions.
+
+### 2. Deploy (after the schema step and its checks)
+
+```sh
+git checkout phase2
+./Application/deploy.run.sh all
+```
+
+The deploy's schema gate refuses if either table or any of the six
+functions is missing.
+
+**Verify:** the 9 new routes answer 401 against a 404 control:
+- `GET`, `/api/tasks/<id>/tasks/<task>/sharing`
+- `POST` and `DELETE`, `/api/tasks/<id>/tasks/<task>/sharing/link`
+- `DELETE`, `/api/tasks/<id>/tasks/<task>/sharing/members/<member>`
+- `GET`, `/api/tasks/<id>/shared-tasks`
+- `POST`, `/api/tasks/<id>/shared-tasks/invites/preview` and `/accept`
+- `PATCH` and `DELETE`, `/api/tasks/<id>/shared-tasks/<task>`
+
+Then open one of your own one-off tasks: the editor has a Share section.
+
+**Rollback:** both halves together, per `Ideas/ROLLBACK.md`. The schema
+stays: the older API never reads either table. Memberships and links stay
+stored for a redeploy.
+
+### 3. Before anyone uses it (yours)
+
+Whoever you share with must be able to sign in. Until open signup (D19),
+add them with `./invite.sh their@address`.
