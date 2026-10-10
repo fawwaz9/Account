@@ -884,6 +884,45 @@ production-URL build: 26 of 26 files.
 
 ---
 
+## Phase 2 item 9a: shared tasks, through task links -- SHIPPED 2026-10-10
+The first feature where one person changes another's row (`Ideas/overhaul/Phase 2/`, D23).
+- **What a member does:** sees the title, notes and due date, ticks it done
+  for everyone, edits the title and notes, and leaves. Never the course,
+  grade, timer, priority or tags. Only the owner changes the date, deletes
+  it, or changes who is on it. One-off tasks only.
+- **No new policy shape.** `task_members` and `task_invites` hang under the
+  task, so the existing child policy makes both the owner's alone. The
+  `tasks` policy is untouched.
+- **Nobody is put on a task without accepting.** The app role has SELECT and
+  DELETE on `task_members`, never INSERT or UPDATE; only
+  `account_accept_task_invite` writes a membership, for the caller.
+- **Six definer functions** reach the owner's task for a member, each keyed
+  on `account_current_user()` and revoked from everyone but `account_app`.
+- **Links:** one live per task, usable by several people, 7 days, at most 8
+  members. Only the token's hash is stored; the token rides in the fragment
+  (`/invite#task:...`).
+- **A shared task counts for its owner alone:** a member's week, estimates
+  and partner figure read only their own tasks.
+
+Proven on SQLite and Postgres: 24 shared-task tests, 5 new row-security
+proofs, and all 9 routes in the isolation, non-interference and RLS walks.
+36 of 36 guard mutations caught, after two test gaps were closed. CI's
+Postgres job also caught a test that overrode `get_current_user`, which
+skips setting the database identity; item 10's partner API test had the same
+shortcut and passed by accident. Both now sign in with real tokens.
+
+**Not in it:** shared events (9b), and a shared task on a member's calendar.
+
+LIVE: API `account-api-00043-s9h` (digest-verified `97a3858`, sha256
+`2cbe2e6f...`) since 2026-10-10 19:07 UTC. The schema step was the owner's;
+the three read-backs matched (`task_members`: SELECT and DELETE only). The
+gate reports row-level security on for 42 of 42 tables. Health ok. The 9 new
+routes answer 401 against two 404 controls. No errors in the new revision's
+logs. Frontend `main` at `97a3858`, matching a production build file by file
+(33 files).
+
+---
+
 ## Phase 2 items 12a, 14 and 10: throttling per caller, shifts near exams, the tax packet, accountability partners -- SHIPPED 2026-10-08
 Three Part B items in one deploy (`Ideas/overhaul/Phase 2/`, D18, D20-D22).
 - **12a, the rate limiter per caller (D18).** `client_address.client_of` reads
@@ -919,12 +958,25 @@ the mutations are now caught.
 (D19), an invitee must be on `ALLOWED_SIGNUP_EMAILS` to sign in.
 
 LIVE: API `account-api-00040-w6n` (digest-verified `867938d`, sha256
-`b0f9560a...`) since 2026-10-08 05:04 UTC. The schema step was the owner's;
+`089c4a2a...`; corrected 2026-10-10, see below) since 2026-10-08 05:04 UTC. The schema step was the owner's;
 the read-backs matched. The gate reports row-level security on for 40 of 40
 tables. Health ok. The 8 new routes answer 401 against two 404 controls. No
 errors in the new revision's logs. A forged `X-Forwarded-For` was ignored
 (`client=169.254...`). Frontend `main` at `867938d`, matching a production
 build file by file (32 files).
+
+**The switch, on since 2026-10-08:** the owner set `TRUSTED_PROXY_HOPS=1`
+(revision `00041-r88`). Checked on 2026-10-10 with a forged
+`X-Forwarded-For: 203.0.113.7`: the audit line's `client=` equalled Cloud
+Run's own `remoteIp` for the request, the caller's real address. It was
+neither the forged value nor the platform's `169.254...` proxy, so throttling
+is now per caller.
+
+**Correction, 2026-10-10:** this entry first gave the image's digest as
+`b0f9560a...`. That was the backup job's own `pg_dump` image, which logs a
+`Digest:` line earlier in the same workflow; a grep for "Digest" found it
+first. The deployed image is `089c4a2a...`, as Cloud Run's revision records.
+The deploy's own check compared the right digest at the time.
 
 ---
 

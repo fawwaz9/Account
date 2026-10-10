@@ -138,7 +138,7 @@ proposals' status stays "accepted":
 DELETE FROM catalogue_prerequisites WHERE id = '<row id>';
 ```
 
-## The 12a and 14 batch: the rate limiter per caller (D18), shifts near exams and the tax packet (D21). DEPLOYED 2026-10-08 (`867938d`, `account-api-00040-w6n`); step 2 NOT YET RUN
+## The 12a and 14 batch: the rate limiter per caller (D18), shifts near exams and the tax packet (D21). DEPLOYED 2026-10-08 (`867938d`, `account-api-00040-w6n`); switch on, checked 2026-10-10
 
 | What | Commits | Schema change |
 |---|---|---|
@@ -222,6 +222,9 @@ gcloud run services update account-api --region us-west1 --project account-50441
   --remove-env-vars TRUSTED_PROXY_HOPS
 ```
 
+**Result, 2026-10-10:** on since `00041-r88`. The forged request's `client=`
+equalled Cloud Run's `remoteIp`, the caller's real address: a pass.
+
 ## The item 10 batch: accountability partners and invite links (D22). DEPLOYED 2026-10-08 (`867938d`, `account-api-00040-w6n`)
 
 | What | Commits | Schema change |
@@ -283,7 +286,7 @@ Part A's grant check 2 also passed: two rows, `account_app | SELECT`.
 Whoever you invite must be able to sign in. Until open signup (D19), add
 their address to `ALLOWED_SIGNUP_EMAILS` on Cloud Run.
 
-## The item 9a batch: shared tasks (D23). NOT YET RUN
+## The item 9a batch: shared tasks (D23). DEPLOYED 2026-10-10 (`97a3858`, `account-api-00043-s9h`)
 
 | What | Commits | Schema change |
 |---|---|---|
@@ -374,3 +377,8 @@ stored for a redeploy.
 
 Whoever you share with must be able to sign in. Until open signup (D19),
 add them with `./invite.sh their@address`.
+
+**Result, 2026-10-10:** the three read-backs matched (`task_members`: SELECT
+and DELETE only). The gate reported row-level security on for 42 of 42
+tables; the 9 routes answer 401 against two 404 controls; no errors in the
+logs; the live site matches the build (33 files).

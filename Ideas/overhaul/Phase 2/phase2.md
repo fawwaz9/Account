@@ -85,11 +85,11 @@ Item 8 waits on UBC. Part B is drafted and waiting on your answers.
 | 6 | Owner review: proposals into the catalogue | **Deployed 2026-10-07** (D13). `scripts/catalogue_review.py`. Auto-approval is planned, not built (D5) |
 | 7 | Prerequisites on the course page, met or not | **Deployed 2026-10-07** (D12). Also warns when adding a future course |
 | 8 | UBC's permission, then a bulk import | Request drafted (`Ideas/overhaul/calender-request.md`); waits on UBC |
-| **B** | **The rest of the vision's Phase 2** | **Drafted 2026-10-06; order decided (D15). 12a, 14 and 10 deployed 2026-10-08 (`867938d`); 9a built** |
-| 9 | Shared tasks and events (group coursework) | **9a, shared tasks: built, not deployed** (D23). 9b, shared events, after it |
+| **B** | **The rest of the vision's Phase 2** | **Drafted 2026-10-06; order decided (D15). 12a, 14 and 10 deployed 2026-10-08 (`867938d`); 9a deployed 2026-10-10 (`97a3858`)** |
+| 9 | Shared tasks and events (group coursework) | **9a, shared tasks: deployed 2026-10-10** (D23). 9b, shared events, next |
 | 10 | Accountability partners | **Deployed 2026-10-08** (D22). Invite links (D16) included |
 | 11 | Team sport and intramurals | Not started. No team, league or game tables |
-| 12 | Open signup, with affiliation verified later | **12a deployed 2026-10-08, switch not yet on** (D18): per-caller throttling behind `TRUSTED_PROXY_HOPS`. 12b pushed out of Phase 2 (D19) |
+| 12 | Open signup, with affiliation verified later | **12a deployed 2026-10-08, switch on and checked** (D18): per-caller throttling behind `TRUSTED_PROXY_HOPS`. 12b pushed out of Phase 2 (D19) |
 | 13 | End-of-term flow: ratings and anonymous grade contributions | Not started |
 | 14 | Shift-versus-exam conflict flags, and the tax packet | **Deployed 2026-10-08** (D21). Tax packet from recorded pay only (D20) |
 
