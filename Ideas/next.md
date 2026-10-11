@@ -319,7 +319,10 @@ are the size of each job rather than an impression of it.
           NOT COVERED: statutory holidays. A payday on Canada Day moves for most
           payroll, but that needs a holiday calendar per province; the per-job
           weekend rule is the cheap 90%. Worth asking again if it bites.
-
+          
+          Internship/Job application tracker. Tracks the jobs you have applied to and
+            make dashboards and charts of your progress. Like the viral tree of applications,
+            interviews and offers. This should be under jobs and also add to phase 3 of overhaul.
 ### Budget
         Reimbursement state, and who and when for money lent out. On whichever
           account you actually keep it in -- there is no seeded pot for it since
