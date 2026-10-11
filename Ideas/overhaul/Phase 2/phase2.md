@@ -69,10 +69,17 @@ used:
 **Measurable today:** none. The four from §11 need teams, open signup and
 partnerships, none of which exist. Part A's are tests and page checks.
 
-## Status at a glance (2026-10-06)
+## Status at a glance (2026-10-11)
 
-**Part A, items 1–7, is deployed** (2026-10-07: `11925ac`, `account-api-00039-vmr`).
-Item 8 waits on UBC. Part B is drafted and waiting on your answers.
+**Every Phase 2 item is built.**
+- **Part A, items 1–7:** deployed (2026-10-07).
+- **Part B, deployed:** 12a (with its switch on), 14, 10, 9a and 9b.
+- **Part B, built and not deployed:** 13 and 11. They ship together after
+  one schema step, per the runbook's "Both together".
+- **Waiting on others:** item 8, on UBC's answer; open signup (12b), pushed out
+  of Phase 2 by D19.
+- **The exit criteria** now wait on use rather than on building: 5 active
+  teams, a partnership lasting a month, moderation load.
 
 | # | Item | Status |
 |---|---|---|
