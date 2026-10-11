@@ -451,7 +451,7 @@ and DELETE only). The gate reported row-level security on for 44 of 44
 tables; the 8 routes answer 401 against two 404 controls; no errors in the
 logs; the live site matches the build (34 files).
 
-## The item 13 batch: end-of-term reviews and the sealed grade count (D25). NOT YET RUN
+## The item 13 batch: end-of-term reviews and the sealed grade count (D25). DEPLOYED 2026-10-11 (`2de81a8`, `account-api-00045-hp9`)
 
 | What | Commits | Schema change |
 |---|---|---|
@@ -528,7 +528,7 @@ is a number of rows, never their contents.
 **Undo:** `gcloud scheduler jobs delete account-grade-recount --location=us-west1
 --project=account-504419`.
 
-## The item 11 batch: teams (D26). NOT YET RUN
+## The item 11 batch: teams (D26). DEPLOYED 2026-10-11 (`2de81a8`, `account-api-00045-hp9`)
 
 | What | Commits | Schema change |
 |---|---|---|
@@ -597,4 +597,12 @@ once), the read-backs, one deploy.
    the item 13 section). Nothing depends on it before Phase 3.
 
 Anyone you want on a team must be able to sign in: `./invite.sh their@address`.
+
+**Result, 2026-10-11 (both together):** the backup held 51 tables (the six
+new ones empty). Read-backs matched, apart from item 13's check C: its
+results pane showed the previous query's output, so it is to be re-run. The
+gate reported row-level security on for 50 of 50 tables. The new routes
+answer 401 against two 404 controls, and the recount door 403 without its
+secret. No errors in the logs; the live site matches the build (37 files).
+Still open: re-run check C, and, optionally, create the daily recount job.
 

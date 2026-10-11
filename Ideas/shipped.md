@@ -884,6 +884,45 @@ production-URL build: 26 of 26 files.
 
 ---
 
+## Phase 2 items 13 and 11: end-of-term reviews, and teams (under Fitness) -- SHIPPED 2026-10-11
+The last two buildable Phase 2 items, in one deploy (`Ideas/overhaul/Phase 2/`, D25, D26).
+
+**Item 13, end-of-term reviews (D25).** "Rate your term" on the Grades page:
+four questions per recently finished course, and an opt-in to add your grade
+to the course's distribution. Asked from 14 to 180 days after a term ends;
+answers lock after 14 days; the opt-in never does. **Nothing is shown:** the
+distributions are Phase 3's.
+- Your review holds no copy of your grade. The counts live in
+  `grade_distributions`, a new **sealed** kind of table: row security with
+  no policy and no grant, so the API itself can't read it.
+- `account_recount_grade_distributions()` rebuilds it whole, reading grades
+  at that moment, and writes nothing for a course-term under 5
+  contributors. Its daily schedule is the owner's optional step.
+
+**Item 11, teams (D26), on the page the owner renamed Fitness.** Make a team,
+send the link, and anyone on it records a game. A score counts once someone
+other than its recorder confirms it, the captain included; a disputed score
+shows both until the recorder corrects it. The record: wins, losses, ties and
+points from confirmed games. No leagues yet.
+- `team_members` and `games` are read-and-delete for the API's role: every
+  write goes through one of eleven definer functions, the captain's too.
+
+Proven on SQLite and Postgres. Mutation checks: 28 of 28 (13) and 40 of 41
+(11), the 41st a redundant guard. Both found real test gaps on the first run,
+now closed.
+
+LIVE: API `account-api-00045-hp9` (digest-verified `2de81a8`, sha256
+`6265a8bd...`) since 2026-10-11 18:26 UTC. The schema step was the owner's.
+Read-backs matched apart from item 13's check C, whose results pane showed the
+previous query's output; it is to be re-run (risk noted: the function only
+rebuilds counts and returns a number). The gate reports row-level security on
+for 50 of 50 tables. Health ok. The new routes answer 401 against two 404
+controls; the recount door 403 without its secret. No errors in the new
+revision's logs. Settings carried over. Frontend `main` at `2de81a8`, matching
+a production build file by file (37 files).
+
+---
+
 ## Phase 2 item 9b: shared events, through event links -- SHIPPED 2026-10-11
 The second half of item 9 (`Ideas/overhaul/Phase 2/`, D24), on 9a's pattern.
 - **A member sees and leaves, and changes nothing.** A shared event appears

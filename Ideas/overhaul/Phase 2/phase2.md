@@ -71,11 +71,10 @@ partnerships, none of which exist. Part A's are tests and page checks.
 
 ## Status at a glance (2026-10-11)
 
-**Every Phase 2 item is built.**
+**Every buildable Phase 2 item is deployed.**
 - **Part A, items 1–7:** deployed (2026-10-07).
-- **Part B, deployed:** 12a (with its switch on), 14, 10, 9a and 9b.
-- **Part B, built and not deployed:** 13 and 11. They ship together after
-  one schema step, per the runbook's "Both together".
+- **Part B, deployed:** every item: 12a (with its switch on), 14, 10, 9a,
+  9b, 13 and 11 (2026-10-08 to 2026-10-11).
 - **Waiting on others:** item 8, on UBC's answer; open signup (12b), pushed out
   of Phase 2 by D19.
 - **The exit criteria** now wait on use rather than on building: 5 active
@@ -92,12 +91,12 @@ partnerships, none of which exist. Part A's are tests and page checks.
 | 6 | Owner review: proposals into the catalogue | **Deployed 2026-10-07** (D13). `scripts/catalogue_review.py`. Auto-approval is planned, not built (D5) |
 | 7 | Prerequisites on the course page, met or not | **Deployed 2026-10-07** (D12). Also warns when adding a future course |
 | 8 | UBC's permission, then a bulk import | Request drafted (`Ideas/overhaul/calender-request.md`); waits on UBC |
-| **B** | **The rest of the vision's Phase 2** | **Drafted 2026-10-06; order decided (D15). 12a, 14 and 10 deployed 2026-10-08 (`867938d`); 9a deployed 2026-10-10 (`97a3858`); 9b deployed 2026-10-11 (`f884f69`); 13 and 11 built, not deployed** |
+| **B** | **The rest of the vision's Phase 2** | **Drafted 2026-10-06; order decided (D15). 12a, 14 and 10 deployed 2026-10-08 (`867938d`); 9a deployed 2026-10-10 (`97a3858`); 9b deployed 2026-10-11 (`f884f69`); 13 and 11 deployed 2026-10-11 (`2de81a8`)** |
 | 9 | Shared tasks and events (group coursework) | **9a, shared tasks: deployed 2026-10-10** (D23). **9b, shared events: deployed 2026-10-11** (D24). Item 9 done |
 | 10 | Accountability partners | **Deployed 2026-10-08** (D22). Invite links (D16) included |
-| 11 | Team sport and intramurals | **Built, not deployed** (D26). Teams, games, confirmation, the record; no leagues yet |
+| 11 | Team sport and intramurals | **Deployed 2026-10-11** (D26), under the Fitness page. No leagues yet |
 | 12 | Open signup, with affiliation verified later | **12a deployed 2026-10-08, switch on and checked** (D18): per-caller throttling behind `TRUSTED_PROXY_HOPS`. 12b pushed out of Phase 2 (D19) |
-| 13 | End-of-term flow: ratings and anonymous grade contributions | **Built, not deployed** (D25). Moved ahead of 11: it must be live before December |
+| 13 | End-of-term flow: ratings and anonymous grade contributions | **Deployed 2026-10-11** (D25). Live before December, as it had to be |
 | 14 | Shift-versus-exam conflict flags, and the tax packet | **Deployed 2026-10-08** (D21). Tax packet from recorded pay only (D20) |
 
 ## Part A: the shared course catalogue
