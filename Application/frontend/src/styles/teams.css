@@ -1,0 +1,132 @@
+/* Phase 2 item 11: teams. */
+.teamsTopbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.teamsGrid {
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 760px) {
+  .teamsGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.teamsList ul {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.teamCard {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(148, 163, 184, 0.06);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.teamCardActive {
+  border-color: var(--gold);
+}
+
+.teamCardName {
+  font-weight: 600;
+}
+
+.teamCardRecord {
+  font-variant-numeric: tabular-nums;
+}
+
+.teamsNew {
+  display: grid;
+  gap: 6px;
+}
+
+.teamView {
+  display: grid;
+  gap: 14px;
+}
+
+.teamHeader h2 {
+  margin: 0;
+}
+
+.teamRecord {
+  margin: 4px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.gameForm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.gameForm input[type="number"] {
+  width: 4.5em;
+}
+
+.gameForm input[aria-label="Opponent"] {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+.gameList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.gameRow {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-left: 3px solid var(--muted);
+  border-radius: 6px;
+}
+
+.gameRowConfirmed {
+  border-left-color: #4fa86f;
+}
+
+.gameRowDisputed {
+  border-left-color: var(--delete);
+}
+
+.gameRow p {
+  margin: 0;
+}
+
+.gameMain {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.gameScore {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.gameRow input[type="number"] {
+  width: 4.5em;
+}

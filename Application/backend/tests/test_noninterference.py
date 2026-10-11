@@ -83,6 +83,7 @@ def _build(with_b: bool):
     # Likewise nobody is on A's task here, and A is on nobody's (DOMAIN_404).
     world_a["task_members"] = uuid.uuid5(uuid.NAMESPACE_URL, "account-ni/no-task-member")
     world_a["event_members"] = uuid.uuid5(uuid.NAMESPACE_URL, "account-ni/no-event-member")
+    world_a["team_members"] = uuid.uuid5(uuid.NAMESPACE_URL, "account-ni/no-team-member")
     # Shared rows belong to nobody, so both runs hold them, with the same ids.
     seed_catalogue(session)
 
@@ -180,6 +181,10 @@ DOMAIN_404 = {
     # tests/test_shared_events.py.
     ("DELETE", "/api/calendar/{user_id}/events/{event_id}/sharing/members/{member_id}"): "nobody on the event to remove",
     ("DELETE", "/api/calendar/{user_id}/shared-events/{event_id}"): "A is on nobody's event",
+    # Teams (Phase 2 item 11), likewise: nobody plays on A's team in either
+    # run, and A captains rather than plays on it. Tested in tests/test_teams.py.
+    ("DELETE", "/api/teams/{user_id}/{team_id}/members/{member_id}"): "nobody on the team to remove",
+    ("DELETE", "/api/teams/{user_id}/{team_id}/membership"): "A captains the team; there is no membership to leave",
 }
 
 

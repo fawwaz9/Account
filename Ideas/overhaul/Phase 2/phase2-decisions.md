@@ -996,3 +996,91 @@ could reveal about one person.
     "caught" by an unrelated test. They now use 87.3, which a timestamp
     can't contain.
 - Frontend: 8 tests for the "Rate your term" panel.
+
+## D26. Teams: the captain's rows, every game write through a function, a score counts once someone else confirms it (item 11, 2026-10-11)
+
+Built overnight on the owner's "finish up phase 2". It is the draft's narrowest
+model, on the pattern 9a and 9b proved. **No leagues, no organisations, no
+per-sport stats:** those wait until two teams want to play each other inside
+the app.
+
+**The shape:**
+- **`teams`** is the captain's own row: a name and a sport, both free text.
+- **`team_members` and `team_invites`** are children of the team, so only the
+  captain sees or changes them. As in D23, the API's role can only read and
+  delete members; a membership is written only by
+  `account_accept_team_invite`, for the person holding the link.
+- **`games`** is a child of the team too: the date, the opponent as text, both
+  scores, who recorded it, and who confirmed or disputed it. **The API's role
+  can only read and delete games.** Every write goes through a function, the
+  captain's included, so "someone else confirms" holds for everyone.
+- **One link per team, usable by many, 7 days, at most 30 members.** A new
+  link cancels the old one. `/invite#team:…`.
+
+**What anyone on the team can do** (the captain included), through
+definer functions keyed on `account_current_user()`:
+- **See** the team, the roster's names and the games.
+- **Record a game.**
+- **Confirm a game someone else recorded.** It counts from then on.
+- **Dispute a game someone else recorded,** with the score they think it
+  was. Both scores are shown, and it doesn't count while disputed.
+- **Correct a game they recorded,** while it's unconfirmed. A correction
+  clears a dispute.
+- **Delete a game they recorded,** while it's unconfirmed.
+- **Leave** (members).
+
+**What only the captain can do:** rename the team, make or cancel the link,
+take someone off, delete any game, or delete the team. Deleting the team
+removes its games, members and link with it.
+
+**The record and standings:** wins, losses, ties, points for and against,
+from confirmed games only. Per team, across its own games.
+
+**Names, not ids, on the scoresheet:** a game copies the recorder's,
+confirmer's and disputer's names, and keeps their ids with no foreign key,
+the way `invites.used_by` does. So a teammate's account being deleted
+doesn't rewrite the team's history. The member's own membership goes by
+`ON DELETE CASCADE`, as in D23.
+
+**When the captain's account goes:** the team goes with it (D17's rule, for
+teams). Handing a team to someone else is a later question, with a second
+captain.
+
+**Evidence:**
+- `tests/test_teams.py`, 29 tests, run on both SQLite and Postgres:
+  - links and the roster
+  - what a member sees and what only the captain sees
+  - a non-member reaching nothing
+  - record, confirm, dispute, correct and delete
+  - the captain needing someone else to confirm too
+  - wins, losses and ties
+  - the database refusing a bad game
+  - a game reached only through its own team
+  - leaving and being taken off
+  - only the captain running the team
+  - deleting the team
+  - a captain being deleted stopping play at once, and a player's purge
+    leaving the scoresheet as it was
+  - the whole post-game flow through the API, with names, never emails
+- 9 new Postgres proofs in `test_rls.py`:
+  - Not even the captain can insert or update a membership or a game
+    directly.
+  - The captain can still take someone off and remove a game.
+  - A player reaches the team only through the functions.
+  - A stranger reaches no team.
+  - With no identity, all eleven functions do nothing.
+  - An outsider role can't call any of them.
+- The walks cover the 16 new routes on both databases, under row-level
+  security too.
+- **Mutation check:** 41 removals across the SQLite half, the captain service,
+  the SQL functions and the grants. 40 are caught. The 41st, the identity
+  guard in `account_on_team`, is redundant, not untested: with no identity
+  both of its other conditions are already false, so removing it changes
+  nothing.
+- **Correction, kept in place:** 2 more were missed on the first run, the
+  same gap in each half. The deleted-captain test checked only that the team
+  left the list, which a different filter already ensures. It now also
+  checks that nobody can read, record or confirm a game while the captain is
+  being deleted, and both removals are caught.
+- Frontend: 10 tests (the Teams page, every game state's actions, the
+  captain's link, leaving, the invite page's team path).

@@ -29,7 +29,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import DBAPIError, ProgrammingError
 from sqlalchemy.orm import sessionmaker
 
-from app._database import rls
+from app._database import rls, teams
 from app._database.identity import act_as, email_taken, user_id_by_email
 from app._database.models import AccountModel, Base, GradeModel, UserModel
 from app.shared.dates import user_today
@@ -427,6 +427,17 @@ DEFINER_SIGNATURES = (
     "account_shared_events()",
     "account_leave_shared_event(uuid)",
     "account_recount_grade_distributions()",
+    "account_on_team(uuid)",
+    "account_team_invite_preview(text)",
+    "account_accept_team_invite(text)",
+    "account_my_teams()",
+    "account_team_games(uuid)",
+    "account_record_team_game(uuid, date, text, integer, integer)",
+    "account_confirm_team_game(uuid)",
+    "account_dispute_team_game(uuid, integer, integer)",
+    "account_correct_team_game(uuid, date, text, integer, integer)",
+    "account_delete_team_game(uuid)",
+    "account_leave_team(uuid)",
 )
 
 
@@ -470,6 +481,17 @@ def test_only_the_app_role_can_call_the_cross_user_functions(owner_engine):
             "SELECT * FROM account_shared_events()",
             "SELECT account_leave_shared_event(gen_random_uuid())",
             "SELECT account_recount_grade_distributions()",
+            "SELECT account_on_team(gen_random_uuid())",
+            "SELECT * FROM account_team_invite_preview('x')",
+            "SELECT account_accept_team_invite('x')",
+            "SELECT * FROM account_my_teams()",
+            "SELECT * FROM account_team_games(gen_random_uuid())",
+            "SELECT account_record_team_game(gen_random_uuid(), current_date, 'x', 1, 1)",
+            "SELECT account_confirm_team_game(gen_random_uuid())",
+            "SELECT account_dispute_team_game(gen_random_uuid(), 1, 1)",
+            "SELECT account_correct_team_game(gen_random_uuid(), current_date, 'x', 1, 1)",
+            "SELECT account_delete_team_game(gen_random_uuid())",
+            "SELECT account_leave_team(gen_random_uuid())",
         ):
             with outsider.connect() as conn:
                 with pytest.raises(ProgrammingError, match="permission denied"):
@@ -962,3 +984,99 @@ def test_with_no_identity_the_recount_still_reveals_nothing(worlds, app_session)
     app_session.info.clear()
     answer = app_session.execute(text("SELECT account_recount_grade_distributions()")).scalar()
     assert isinstance(answer, int)
+
+
+# --------------------------------------------------------------------------
+# Teams (Phase 2 item 11, D26): memberships and games are written only by
+# the functions -- the captain's included -- and a player reaches the team
+# only through them.
+# --------------------------------------------------------------------------
+
+def _a_team(worlds):
+    """A's team, which B plays on (isolation_world.seed_pair)."""
+    owner, a, b, world_a, _ = worlds
+    return owner.execute(text("SELECT team_id FROM team_members WHERE id = :m"),
+                         {"m": world_a["team_members"]}).scalar()
+
+
+@pytest.mark.parametrize("statement", [
+    "INSERT INTO team_members (id, team_id, member_id, member_name, owner_name, joined_at) "
+    "VALUES (gen_random_uuid(), :t, :someone, 'planted', 'A', now())",
+    "UPDATE team_members SET member_name = 'renamed'",
+    "INSERT INTO games (id, team_id, played_on, opponent, our_score, their_score, recorded_by, recorded_by_name, "
+    "created_at) VALUES (gen_random_uuid(), :t, current_date, 'x', 9, 0, :someone, 'A', now())",
+    "UPDATE games SET our_score = 99, confirmed_by = :someone, confirmed_by_name = 'A'",
+])
+def test_not_even_the_captain_writes_a_membership_or_a_game_directly(worlds, app_session, statement):
+    owner, a, b, _, _ = worlds
+    act_as(app_session, a.id)
+    with pytest.raises(ProgrammingError, match="permission denied"):
+        app_session.execute(text(statement), {"t": _a_team(worlds), "someone": a.id})
+
+
+def test_the_captain_can_still_take_someone_off_and_remove_a_game(worlds, app_session):
+    owner, a, b, world_a, _ = worlds
+    act_as(app_session, a.id)
+    assert app_session.execute(text("DELETE FROM team_members WHERE id = :m"),
+                               {"m": world_a["team_members"]}).rowcount == 1
+    assert app_session.execute(text("DELETE FROM games WHERE id = :g"), {"g": world_a["games"]}).rowcount == 1
+    app_session.commit()
+
+
+def test_a_player_reaches_the_team_only_through_the_functions(worlds, app_session):
+    owner, a, b, _, _ = worlds
+    team_id = _a_team(worlds)
+    act_as(app_session, b.id)
+    for table, column in (("teams", "id"), ("games", "team_id"), ("team_members", "team_id")):
+        assert app_session.execute(text(f"SELECT count(*) FROM {table} WHERE {column} = :t"),
+                                   {"t": team_id}).scalar() == 0, table
+    app_session.rollback()
+    act_as(app_session, b.id)
+    assert [t.team_id for t in teams.member_teams(app_session, b.id)] == [team_id]
+    act_as(app_session, b.id)
+    [game] = teams.games(app_session, b.id, team_id)
+    act_as(app_session, b.id)
+    assert teams.confirm_game(app_session, b.id, game.game_id) is True
+    assert owner.execute(text("SELECT confirmed_by FROM games WHERE id = :g"), {"g": game.game_id}).scalar() == b.id
+
+
+def test_a_stranger_reaches_no_team(worlds, app_session):
+    owner, a, b, world_a, _ = worlds
+    team_id = _a_team(worlds)
+    stranger = make_user(owner, "rls-team-stranger@example.com")
+    owner.commit()
+    act_as(app_session, stranger.id)
+    assert teams.games(app_session, stranger.id, team_id) == []
+    act_as(app_session, stranger.id)
+    assert teams.record_game(app_session, stranger.id, team_id, user_today(owner, a.id), "x", 1, 1) is None
+    act_as(app_session, stranger.id)
+    assert teams.confirm_game(app_session, stranger.id, world_a["games"]) is False
+    act_as(app_session, stranger.id)
+    assert teams.leave_team(app_session, stranger.id, team_id) is False
+    assert owner.execute(text("SELECT count(*) FROM games")).scalar() == 2
+
+
+def test_with_no_identity_the_team_functions_do_nothing(worlds, app_session):
+    import hashlib
+    owner, a, b, world_a, _ = worlds
+    team_id = _a_team(worlds)
+    live = hashlib.sha256(b"zzownera team invite token").hexdigest()
+    act_as(app_session, b.id)
+    assert app_session.execute(text("SELECT account_on_team(:t)"), {"t": team_id}).scalar() is True, \
+        "not vacuous: with an identity B is on A's team"
+    app_session.rollback()
+    app_session.info.clear()
+    p = {"t": team_id, "g": world_a["games"], "h": live}
+    assert app_session.execute(text("SELECT account_on_team(:t)"), p).scalar() is False
+    assert app_session.execute(text("SELECT * FROM account_team_invite_preview(:h)"), p).all() == []
+    assert app_session.execute(text("SELECT account_accept_team_invite(:h)"), p).scalar() == "invalid"
+    assert app_session.execute(text("SELECT * FROM account_my_teams()")).all() == []
+    assert app_session.execute(text("SELECT * FROM account_team_games(:t)"), p).all() == []
+    assert app_session.execute(text("SELECT account_record_team_game(:t, current_date, 'x', 1, 1)"), p).scalar() is None
+    for call in ("SELECT account_confirm_team_game(:g)", "SELECT account_dispute_team_game(:g, 1, 1)",
+                 "SELECT account_correct_team_game(:g, current_date, 'x', 1, 1)",
+                 "SELECT account_delete_team_game(:g)", "SELECT account_leave_team(:t)"):
+        assert app_session.execute(text(call), p).scalar() is False, call
+    app_session.rollback()
+    assert owner.execute(text("SELECT count(*) FROM games")).scalar() == 2
+    assert owner.execute(text("SELECT count(*) FROM team_members")).scalar() == 2

@@ -134,6 +134,7 @@ class UserModel(Base):
     prerequisite_proposals = relationship("PrerequisiteProposalModel", cascade=cascade)
     invites = relationship("InviteModel", cascade=cascade)
     term_reviews = relationship("TermReviewModel", cascade=cascade, overlaps="course,term_reviews")
+    teams = relationship("TeamModel", cascade=cascade)
     partnerships = relationship(
         "PartnershipModel", cascade=cascade, foreign_keys="PartnershipModel.user_id"
     )
@@ -153,6 +154,10 @@ class UserModel(Base):
     #: Others' events this user is on (Phase 2 item 9b), for the same reason.
     event_memberships = relationship(
         "EventMemberModel", foreign_keys="EventMemberModel.member_id", viewonly=True,
+    )
+    #: Teams this user plays on (Phase 2 item 11), for the same reason.
+    team_memberships = relationship(
+        "TeamMemberModel", foreign_keys="TeamMemberModel.member_id", viewonly=True,
     )
 
     @property
@@ -1934,3 +1939,107 @@ class GradeDistributionModel(Base):
     bucket = Column(Integer, nullable=False)
     contributors = Column(Integer, nullable=False)
     computed_at = Column(DateTime, nullable=False, default=utc_now)
+
+
+#: How many people besides the captain a team can hold (Phase 2 D26). Written
+#: into account_accept_team_invite too; a test holds the two together.
+MAX_TEAM_MEMBERS = 30
+
+
+class TeamModel(Base):
+    """A team, owned by its captain (Phase 2 item 11, D26).
+
+    The captain's own row under the ordinary policy. Members, the link and
+    the games all hang beneath it, so the captain alone sees or changes them
+    directly; everyone else on the team reaches it through definer functions.
+    """
+
+    __tablename__ = "teams"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    #: Free text: "Ultimate", "Rec volleyball". No per-sport templates yet.
+    sport = Column(String, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+
+    members = relationship("TeamMemberModel", back_populates="team", cascade="all, delete-orphan")
+    invites = relationship("TeamInviteModel", back_populates="team", cascade="all, delete-orphan")
+    games = relationship("GameModel", back_populates="team", cascade="all, delete-orphan")
+
+
+class TeamMemberModel(Base):
+    """Someone on a team (Phase 2 item 11, D26). The shape of TaskMemberModel:
+    the captain's alone, never written by the API's role, only by
+    account_accept_team_invite for the person holding the link."""
+
+    __tablename__ = "team_members"
+    __table_args__ = (UniqueConstraint("team_id", "member_id", name="uq_team_member"),)
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    team_id = Column(Uuid, ForeignKey("teams.id", ondelete="CASCADE"), nullable=False, index=True)
+    member_id = Column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    member_name = Column(String, nullable=False)
+    owner_name = Column(String, nullable=False)
+    joined_at = Column(DateTime, nullable=False, default=utc_now)
+
+    team = relationship("TeamModel", back_populates="members")
+
+
+class TeamInviteModel(Base):
+    """A team's link (Phase 2 item 11, D26): many people, one live per team,
+    7 days, only the token's SHA-256 kept."""
+
+    __tablename__ = "team_invites"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    team_id = Column(Uuid, ForeignKey("teams.id", ondelete="CASCADE"), nullable=False, index=True)
+    token_hash = Column(String, nullable=False, unique=True)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+    expires_at = Column(DateTime, nullable=False)
+    revoked_at = Column(DateTime, nullable=True)
+
+    team = relationship("TeamModel", back_populates="invites")
+
+
+class GameModel(Base):
+    """One game a team played (Phase 2 item 11, D26).
+
+    A child of the team, so it is the captain's row -- but the API's role may
+    only read and delete it. Every write goes through a definer function, for
+    the captain as much as anyone, so "a score counts once someone else
+    confirms it" cannot be skipped by whoever owns the rows.
+
+    Who recorded, confirmed or disputed it is kept as a copied name and an id
+    with no foreign key (like invites.used_by): a teammate's account going
+    does not rewrite the team's scoresheet.
+    """
+
+    __tablename__ = "games"
+    __table_args__ = (
+        CheckConstraint("our_score BETWEEN 0 AND 999 AND their_score BETWEEN 0 AND 999", name="ck_game_scores"),
+        CheckConstraint(
+            "(disputed_by IS NULL AND disputed_our IS NULL AND disputed_their IS NULL) OR "
+            "(disputed_by IS NOT NULL AND disputed_our BETWEEN 0 AND 999 AND disputed_their BETWEEN 0 AND 999)",
+            name="ck_game_dispute",
+        ),
+    )
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    team_id = Column(Uuid, ForeignKey("teams.id", ondelete="CASCADE"), nullable=False, index=True)
+    played_on = Column(Date, nullable=False)
+    opponent = Column(String, nullable=False)
+    our_score = Column(Integer, nullable=False)
+    their_score = Column(Integer, nullable=False)
+    recorded_by = Column(Uuid, nullable=False)
+    recorded_by_name = Column(String, nullable=False)
+    confirmed_by = Column(Uuid, nullable=True)
+    confirmed_by_name = Column(String, nullable=True)
+    confirmed_at = Column(DateTime, nullable=True)
+    disputed_by = Column(Uuid, nullable=True)
+    disputed_by_name = Column(String, nullable=True)
+    disputed_our = Column(Integer, nullable=True)
+    disputed_their = Column(Integer, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+
+    team = relationship("TeamModel", back_populates="games")

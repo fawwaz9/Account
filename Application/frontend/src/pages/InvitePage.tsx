@@ -6,6 +6,7 @@ import { AcceptStatus } from "../features/partners/types";
 import { TASK_LINK_PREFIX, TaskAcceptStatus, acceptTaskInvite, previewTaskInvite } from "../features/tasks/sharing";
 import { EVENT_LINK_PREFIX, EventAcceptStatus, acceptEventInvite, previewEventInvite } from "../features/calender/sharing";
 import { shortDate } from "../shared/utils/dateUtils";
+import { TEAM_LINK_PREFIX, TeamAcceptStatus, acceptTeamInvite, previewTeamInvite } from "../features/teams/api";
 
 const REFUSED: Record<Exclude<AcceptStatus, "accepted">, string> = {
   invalid: "That invite link has expired, been used, or been cancelled. Ask for a new one.",
@@ -27,13 +28,21 @@ const EVENT_REFUSED: Record<Exclude<EventAcceptStatus, "accepted">, string> = {
   full: "That event already has as many people on it as it can hold.",
 };
 
-type Kind = "partner" | "task" | "event";
+const TEAM_REFUSED: Record<Exclude<TeamAcceptStatus, "accepted">, string> = {
+  invalid: "That link has expired or been cancelled. Ask for a new one.",
+  own: "That's a link to your own team. Send it to your teammates.",
+  already: "You're already on that team.",
+  full: "That team already has as many players as it can hold.",
+};
+
+type Kind = "partner" | "task" | "event" | "team";
 
 /** What the link is for: a partner (the plain fragment, as item 10 sent them), a task or an event. */
 function parse(hash: string): { kind: Kind; token: string } {
   const raw = decodeURIComponent(hash.replace(/^#/, ""));
   if (raw.startsWith(TASK_LINK_PREFIX)) return { kind: "task", token: raw.slice(TASK_LINK_PREFIX.length) };
   if (raw.startsWith(EVENT_LINK_PREFIX)) return { kind: "event", token: raw.slice(EVENT_LINK_PREFIX.length) };
+  if (raw.startsWith(TEAM_LINK_PREFIX)) return { kind: "team", token: raw.slice(TEAM_LINK_PREFIX.length) };
   return { kind: "partner", token: raw };
 }
 
@@ -53,7 +62,7 @@ export default function InvitePage() {
   const [eventDay, setEventDay] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const invalid = { task: TASK_REFUSED, event: EVENT_REFUSED, partner: REFUSED }[kind].invalid;
+  const invalid = { task: TASK_REFUSED, event: EVENT_REFUSED, team: TEAM_REFUSED, partner: REFUSED }[kind].invalid;
 
   useEffect(() => {
     if (!user) return;
@@ -66,6 +75,10 @@ export default function InvitePage() {
     if (kind === "task") {
       look = previewTaskInvite(user.id, token).then((found) => {
         if (!cancelled) { setInviter(found.owner_name); setTaskTitle(found.title); }
+      });
+    } else if (kind === "team") {
+      look = previewTeamInvite(user.id, token).then((found) => {
+        if (!cancelled) { setInviter(found.captain_name); setTaskTitle(found.team_name); setEventDay(found.sport); }
       });
     } else if (kind === "event") {
       look = previewEventInvite(user.id, token).then((found) => {
@@ -89,6 +102,13 @@ export default function InvitePage() {
           return;
         }
         setProblem(TASK_REFUSED[status]);
+      } else if (kind === "team") {
+        const { status } = await acceptTeamInvite(user.id, token);
+        if (status === "accepted") {
+          navigate("/teams", { replace: true });
+          return;
+        }
+        setProblem(TEAM_REFUSED[status]);
       } else if (kind === "event") {
         const { status } = await acceptEventInvite(user.id, token);
         if (status === "accepted") {
@@ -112,7 +132,24 @@ export default function InvitePage() {
   }
 
   let offer = null;
-  if (inviter && kind === "event") {
+  if (inviter && kind === "team") {
+    offer = (
+      <>
+        <p>
+          <strong>{inviter}</strong> would like you on <strong>{taskTitle}</strong>
+          {eventDay && <>, their {eventDay} team</>}. You&rsquo;d see the team&rsquo;s roster and games, and could
+          record, confirm or dispute a score. Nothing else of theirs. {inviter} can take you off, and you can
+          leave at any time.
+        </p>
+        <div className="catalogueActions">
+          <button type="button" className="calButton calButtonPrimary" onClick={() => void accept()} disabled={busy}>
+            Join the team
+          </button>
+          <Link to="/teams" className="calButton">No thanks</Link>
+        </div>
+      </>
+    );
+  } else if (inviter && kind === "event") {
     offer = (
       <>
         <p>

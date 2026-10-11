@@ -63,6 +63,10 @@ from app._database.models import (
     EventMemberModel,
     GradeDistributionModel,
     TermReviewModel,
+    GameModel,
+    TeamInviteModel,
+    TeamMemberModel,
+    TeamModel,
 )
 
 from app.Intake.services import storage  # noqa: E402
@@ -301,6 +305,15 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
     add(TermReviewModel(id=new_id(), user_id=user_id, course_id=course.id, course_key=f"{marker} key",
                         term_code="2025W1", hours_per_week=9, difficulty=4, clarity=2, would_take_again=False,
                         contribute_grade=True))
+    # Phase 2 item 11: a team this user captains, a game they recorded on it
+    # (unconfirmed, so correcting and deleting it reach the write), and a live
+    # link whose token is "<marker> team invite token".
+    team = add(TeamModel(id=new_id(), user_id=user_id, name=f"{marker} team", sport=f"{marker} ultimate"))
+    add(GameModel(id=new_id(), team_id=team.id, played_on=WORLD_DAY, opponent=f"{marker} opponent",
+                  our_score=7, their_score=5, recorded_by=user_id, recorded_by_name=f"{marker} recorder"))
+    add(TeamInviteModel(id=new_id(), team_id=team.id,
+                        token_hash=hashlib.sha256(f"{marker} team invite token".encode()).hexdigest(),
+                        expires_at=datetime.combine(day + timedelta(days=5), time(12, 0))))
     # Phase 2 item 4: an own prerequisite rule on the world's course, with the
     # marker in the private syllabus sentence a leak would carry.
     add(PrerequisiteProposalModel(id=new_id(), user_id=user_id, course_id=course.id, kind="prerequisite",
@@ -317,8 +330,8 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
 
 
 #: Tables whose rows need two people, seeded by seed_pair rather than by one
-#: user's world (Phase 2 items 10, 9a and 9b).
-PAIRED_TABLES = frozenset({"partnerships", "task_members", "event_members"})
+#: user's world (Phase 2 items 10, 9a, 9b and 11).
+PAIRED_TABLES = frozenset({"partnerships", "task_members", "event_members", "team_members"})
 
 
 def seed_pair(db, a_id, b_id, mark_a: str, mark_b: str) -> tuple[dict, dict]:
@@ -360,9 +373,20 @@ def seed_pair(db, a_id, b_id, mark_a: str, mark_b: str) -> tuple[dict, dict]:
     b_attendee = EventMemberModel(id=uuid.uuid4(), event_id=b_event.id, member_id=third.id,
                                   member_name=f"{mark_b} attendee", owner_name=f"{mark_b} owner")
     db.add_all([a_attendee, b_attendee])
+    # Teams (Phase 2 item 11), the same way round: B plays on A's team, and the
+    # third person on B's.
+    a_team = db.query(TeamModel).filter_by(user_id=a_id, name=f"{mark_a} team").one()
+    b_team = db.query(TeamModel).filter_by(user_id=b_id, name=f"{mark_b} team").one()
+    a_player = TeamMemberModel(id=uuid.uuid4(), team_id=a_team.id, member_id=b_id,
+                               member_name=f"{mark_a} player", owner_name=f"{mark_a} owner")
+    b_player = TeamMemberModel(id=uuid.uuid4(), team_id=b_team.id, member_id=third.id,
+                               member_name=f"{mark_b} player", owner_name=f"{mark_b} owner")
+    db.add_all([a_player, b_player])
     db.flush()
-    ids = ({"partnerships": a_row.id, "task_members": a_member.id, "event_members": a_attendee.id},
-           {"partnerships": b_row.id, "task_members": b_member.id, "event_members": b_attendee.id})
+    ids = ({"partnerships": a_row.id, "task_members": a_member.id, "event_members": a_attendee.id,
+            "team_members": a_player.id},
+           {"partnerships": b_row.id, "task_members": b_member.id, "event_members": b_attendee.id,
+            "team_members": b_player.id})
     db.commit()
     return ids
 

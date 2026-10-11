@@ -528,3 +528,73 @@ is a number of rows, never their contents.
 **Undo:** `gcloud scheduler jobs delete account-grade-recount --location=us-west1
 --project=account-504419`.
 
+## The item 11 batch: teams (D26). NOT YET RUN
+
+| What | Commits | Schema change |
+|---|---|---|
+| Item 11: teams, team links, members, games, eleven definer functions | on `phase2` | **New tables `teams`, `team_members`, `team_invites`, `games`; eleven new functions; read-and-delete grants on `team_members` and `games`** |
+
+Ships with item 13 in one go: see **Both together** below.
+
+**Verify after the schema step, in the SQL editor:**
+1. **Only the API's role can call the new functions.** This should return
+   eleven rows, each `{postgres=X/postgres,account_app=X/postgres}`:
+
+   ```sql
+   SELECT proname, proacl FROM pg_proc
+   WHERE proname IN ('account_on_team', 'account_team_invite_preview', 'account_accept_team_invite',
+                     'account_my_teams', 'account_team_games', 'account_record_team_game',
+                     'account_confirm_team_game', 'account_dispute_team_game',
+                     'account_correct_team_game', 'account_delete_team_game', 'account_leave_team');
+   ```
+
+2. **All four tables have the per-user policy.** Four rows, each
+   `{account_app}` and `ALL`:
+
+   ```sql
+   SELECT tablename, roles, cmd FROM pg_policies
+   WHERE tablename IN ('teams', 'team_members', 'team_invites', 'games');
+   ```
+
+3. **Memberships and games are read and deleted, never written, by the API's
+   role.** `games` and `team_members` should each show only `DELETE` and
+   `SELECT`; `teams` and `team_invites` all four:
+
+   ```sql
+   SELECT table_name, privilege_type FROM information_schema.role_table_grants
+   WHERE grantee = 'account_app' AND table_name IN ('teams', 'team_members', 'team_invites', 'games')
+   ORDER BY 1, 2;
+   ```
+
+**After the deploy, verify:** the 16 team routes answer 401 against a 404
+control (`/api/teams/<id>` and everything beneath it), then open **Teams** in
+the sidebar (or press G then M), make a team, and record a game.
+
+**Rollback:** both halves together, per `Ideas/ROLLBACK.md`. The schema
+stays: the older API never reads the new tables.
+
+## Both together: items 13 and 11, one morning (yours, then mine)
+
+One backup, one schema run (it creates both items' tables and functions at
+once), the read-backs, one deploy.
+
+1. **Say "deploy".** I take the backup and confirm it.
+2. **The schema step**, as before:
+
+   ```sh
+   cd ~/VS_Code/Account/Application/backend
+   git checkout phase2
+   set -a; source ../.env; set +a
+   DATABASE_URL="$SUPABASE_DATABASE_URL" .venv/bin/python -m app._database.schema
+   ```
+
+3. **The read-backs:** item 13's three (the counts table has no grants at all
+   and no policy; reviews have the per-user policy; the recount callable by
+   `account_app` only), and item 11's three above. Screenshots are fine.
+4. **I run `deploy.run.sh all`** and verify both batches' routes against a 404
+   control, the logs, and the live site against the build.
+5. **Optional, any time:** item 13's daily recount job (one `gcloud` line, in
+   the item 13 section). Nothing depends on it before Phase 3.
+
+Anyone you want on a team must be able to sign in: `./invite.sh their@address`.
+

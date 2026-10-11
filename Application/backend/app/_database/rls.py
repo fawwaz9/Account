@@ -30,7 +30,7 @@ Postgres refuse to return them, whatever the query says.
 * ``SEALED_TABLES`` (Phase 2 D25) are read by nobody through the API: row
   security with no policy, and no grant, the app role's included. Only a
   definer function writes them.
-* ``NO_DIRECT_WRITE_TABLES`` (Phase 2 D23, D24) are per-user tables the app role
+* ``NO_DIRECT_WRITE_TABLES`` (Phase 2 D23, D24, D26) are per-user tables the app role
   may read and delete from but never write: their rows are created only by a
   definer function, for the person who accepted a link.
 
@@ -110,13 +110,25 @@ FUNCTIONS = (
     "account_leave_shared_event",
     # Phase 2 item 13 (D25): the daily recount into the sealed table.
     "account_recount_grade_distributions",
+    # Phase 2 item 11 (D26): teams and games.
+    "account_on_team",
+    "account_team_invite_preview",
+    "account_accept_team_invite",
+    "account_my_teams",
+    "account_team_games",
+    "account_record_team_game",
+    "account_confirm_team_game",
+    "account_dispute_team_game",
+    "account_correct_team_game",
+    "account_delete_team_game",
+    "account_leave_team",
 )
 
 #: Tables the app role may read and delete from but never insert into or
 #: update (Phase 2 D23). A membership row is written only by the accept
 #: function, for the person holding the link -- so not even the task's owner
 #: can put somebody on a task, and nobody can rewrite a copied name.
-NO_DIRECT_WRITE_TABLES = frozenset({"task_members", "event_members"})
+NO_DIRECT_WRITE_TABLES = frozenset({"task_members", "event_members", "team_members", "games"})
 
 FUNCTION_SQL = """
 CREATE OR REPLACE FUNCTION account_current_user() RETURNS uuid
@@ -444,6 +456,176 @@ BEGIN
     RETURN written;
 END $$;
 
+-- Phase 2 item 11 (D26): teams. "On the team" means the captain or a member,
+-- of a captain whose account is not being deleted. Every game write goes
+-- through these, the captain's included.
+CREATE OR REPLACE FUNCTION account_on_team(p_team uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ SELECT account_current_user() IS NOT NULL AND EXISTS (
+              SELECT 1 FROM teams t JOIN users u ON u.id = t.user_id
+              WHERE t.id = p_team AND u.deleted_at IS NULL
+                AND (t.user_id = account_current_user()
+                     OR EXISTS (SELECT 1 FROM team_members m
+                                WHERE m.team_id = t.id AND m.member_id = account_current_user()))) $$;
+
+CREATE OR REPLACE FUNCTION account_team_invite_preview(p_token_hash text)
+    RETURNS TABLE(captain_name text, team_name text, sport text)
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ SELECT u.name::text, t.name::text, t.sport::text
+          FROM team_invites i JOIN teams t ON t.id = i.team_id JOIN users u ON u.id = t.user_id
+          WHERE account_current_user() IS NOT NULL
+            AND i.token_hash = p_token_hash AND i.revoked_at IS NULL
+            AND i.expires_at > (now() AT TIME ZONE 'utc') AND u.deleted_at IS NULL $$;
+
+-- The only writer of team_members. 30 is models.MAX_TEAM_MEMBERS.
+CREATE OR REPLACE FUNCTION account_accept_team_invite(p_token_hash text) RETURNS text
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$
+DECLARE
+    me uuid := account_current_user();
+    inv team_invites%ROWTYPE;
+    tm teams%ROWTYPE;
+    my_name text;
+    their_name text;
+BEGIN
+    IF me IS NULL THEN RETURN 'invalid'; END IF;
+    SELECT * INTO inv FROM team_invites
+        WHERE token_hash = p_token_hash AND revoked_at IS NULL
+          AND expires_at > (now() AT TIME ZONE 'utc');
+    IF NOT FOUND THEN RETURN 'invalid'; END IF;
+    SELECT * INTO tm FROM teams WHERE id = inv.team_id FOR UPDATE;
+    IF NOT FOUND THEN RETURN 'invalid'; END IF;
+    IF tm.user_id = me THEN RETURN 'own'; END IF;
+    SELECT name INTO my_name FROM users WHERE id = me AND deleted_at IS NULL;
+    SELECT name INTO their_name FROM users WHERE id = tm.user_id AND deleted_at IS NULL;
+    IF my_name IS NULL OR their_name IS NULL THEN RETURN 'invalid'; END IF;
+    IF EXISTS (SELECT 1 FROM team_members WHERE team_id = tm.id AND member_id = me) THEN
+        RETURN 'already';
+    END IF;
+    IF (SELECT count(*) FROM team_members WHERE team_id = tm.id) >= 30 THEN RETURN 'full'; END IF;
+    INSERT INTO team_members (id, team_id, member_id, member_name, owner_name, joined_at)
+        VALUES (gen_random_uuid(), tm.id, me, my_name, their_name, now() AT TIME ZONE 'utc')
+        ON CONFLICT (team_id, member_id) DO NOTHING;
+    RETURN 'accepted';
+END $$;
+
+-- The teams the caller plays on as a member (a captain reads their own).
+CREATE OR REPLACE FUNCTION account_my_teams()
+    RETURNS TABLE(team_id uuid, team_name text, sport text, captain_name text, member_names text[])
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ SELECT t.id, t.name::text, t.sport::text, m.owner_name::text,
+                 ARRAY(SELECT o.member_name::text FROM team_members o
+                       WHERE o.team_id = t.id ORDER BY o.joined_at, o.member_name)
+          FROM team_members m JOIN teams t ON t.id = m.team_id JOIN users u ON u.id = t.user_id
+          WHERE m.member_id = account_current_user() AND u.deleted_at IS NULL $$;
+
+-- A team's games, for anyone on it. Names, and whether it was you -- never
+-- another person's id.
+CREATE OR REPLACE FUNCTION account_team_games(p_team uuid)
+    RETURNS TABLE(game_id uuid, played_on date, opponent text, our_score integer, their_score integer,
+                  recorded_by_name text, recorded_by_me boolean, confirmed_by_name text,
+                  confirmed_at timestamp, disputed_by_name text, disputed_by_me boolean,
+                  disputed_our integer, disputed_their integer)
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ SELECT g.id, g.played_on, g.opponent::text, g.our_score, g.their_score,
+                 g.recorded_by_name::text, g.recorded_by = account_current_user(),
+                 g.confirmed_by_name::text, g.confirmed_at,
+                 g.disputed_by_name::text, coalesce(g.disputed_by = account_current_user(), false),
+                 g.disputed_our, g.disputed_their
+          FROM games g
+          WHERE g.team_id = p_team AND account_on_team(p_team)
+          ORDER BY g.played_on DESC, g.created_at DESC $$;
+
+CREATE OR REPLACE FUNCTION account_record_team_game(p_team uuid, p_played_on date, p_opponent text,
+                                                    p_ours integer, p_theirs integer) RETURNS uuid
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$
+DECLARE
+    me uuid := account_current_user();
+    my_name text;
+    new_id uuid := gen_random_uuid();
+BEGIN
+    IF NOT account_on_team(p_team) OR p_played_on IS NULL
+       OR length(btrim(coalesce(p_opponent, ''))) NOT BETWEEN 1 AND 60
+       OR p_ours IS NULL OR p_theirs IS NULL
+       OR p_ours NOT BETWEEN 0 AND 999 OR p_theirs NOT BETWEEN 0 AND 999 THEN
+        RETURN NULL;
+    END IF;
+    SELECT name INTO my_name FROM users WHERE id = me;
+    INSERT INTO games (id, team_id, played_on, opponent, our_score, their_score,
+                       recorded_by, recorded_by_name, created_at)
+        VALUES (new_id, p_team, p_played_on, btrim(p_opponent), p_ours, p_theirs,
+                me, my_name, now() AT TIME ZONE 'utc');
+    RETURN new_id;
+END $$;
+
+-- Someone else agrees. Not the recorder, not once confirmed, and not over
+-- someone else's dispute: a disputed game is settled by its recorder
+-- correcting it. Confirming your own dispute withdraws it.
+CREATE OR REPLACE FUNCTION account_confirm_team_game(p_game uuid) RETURNS boolean
+    LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ WITH changed AS (
+              UPDATE games g
+              SET confirmed_by = account_current_user(),
+                  confirmed_by_name = (SELECT name FROM users WHERE id = account_current_user()),
+                  confirmed_at = now() AT TIME ZONE 'utc',
+                  disputed_by = NULL, disputed_by_name = NULL, disputed_our = NULL, disputed_their = NULL
+              WHERE g.id = p_game AND account_on_team(g.team_id)
+                AND g.recorded_by <> account_current_user() AND g.confirmed_by IS NULL
+                AND (g.disputed_by IS NULL OR g.disputed_by = account_current_user())
+              RETURNING 1)
+          SELECT count(*) > 0 FROM changed $$;
+
+CREATE OR REPLACE FUNCTION account_dispute_team_game(p_game uuid, p_ours integer, p_theirs integer) RETURNS boolean
+    LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ WITH changed AS (
+              UPDATE games g
+              SET disputed_by = account_current_user(),
+                  disputed_by_name = (SELECT name FROM users WHERE id = account_current_user()),
+                  disputed_our = p_ours, disputed_their = p_theirs
+              WHERE g.id = p_game AND account_on_team(g.team_id)
+                AND g.recorded_by <> account_current_user() AND g.confirmed_by IS NULL
+                AND p_ours BETWEEN 0 AND 999 AND p_theirs BETWEEN 0 AND 999
+              RETURNING 1)
+          SELECT count(*) > 0 FROM changed $$;
+
+-- The recorder fixes their own unconfirmed game; a correction clears a dispute.
+CREATE OR REPLACE FUNCTION account_correct_team_game(p_game uuid, p_played_on date, p_opponent text,
+                                                     p_ours integer, p_theirs integer) RETURNS boolean
+    LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ WITH changed AS (
+              UPDATE games g
+              SET played_on = p_played_on, opponent = btrim(p_opponent), our_score = p_ours,
+                  their_score = p_theirs,
+                  disputed_by = NULL, disputed_by_name = NULL, disputed_our = NULL, disputed_their = NULL
+              WHERE g.id = p_game AND account_on_team(g.team_id)
+                AND g.recorded_by = account_current_user() AND g.confirmed_by IS NULL
+                AND p_played_on IS NOT NULL
+                AND length(btrim(coalesce(p_opponent, ''))) BETWEEN 1 AND 60
+                AND p_ours BETWEEN 0 AND 999 AND p_theirs BETWEEN 0 AND 999
+              RETURNING 1)
+          SELECT count(*) > 0 FROM changed $$;
+
+-- The recorder, while it's unconfirmed; or the captain, any time.
+CREATE OR REPLACE FUNCTION account_delete_team_game(p_game uuid) RETURNS boolean
+    LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ WITH gone AS (
+              DELETE FROM games g
+              WHERE g.id = p_game AND account_on_team(g.team_id)
+                AND ((g.recorded_by = account_current_user() AND g.confirmed_by IS NULL)
+                     OR EXISTS (SELECT 1 FROM teams t
+                                WHERE t.id = g.team_id AND t.user_id = account_current_user()))
+              RETURNING 1)
+          SELECT count(*) > 0 FROM gone $$;
+
+CREATE OR REPLACE FUNCTION account_leave_team(p_team uuid) RETURNS boolean
+    LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ WITH gone AS (
+              DELETE FROM team_members
+              WHERE team_id = p_team AND member_id = account_current_user()
+              RETURNING 1)
+          SELECT count(*) > 0 FROM gone $$;
+
 -- Definer functions run with their owner's rights, so nobody but the API
 -- needs to be able to call them.
 REVOKE ALL ON FUNCTION account_user_id_by_email(text) FROM PUBLIC;
@@ -467,6 +649,17 @@ REVOKE ALL ON FUNCTION account_accept_event_invite(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_shared_events() FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_leave_shared_event(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_recount_grade_distributions() FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_on_team(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_team_invite_preview(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_accept_team_invite(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_my_teams() FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_team_games(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_record_team_game(uuid, date, text, integer, integer) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_confirm_team_game(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_dispute_team_game(uuid, integer, integer) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_correct_team_game(uuid, date, text, integer, integer) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_delete_team_game(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_leave_team(uuid) FROM PUBLIC;
 
 -- PUBLIC is not the only way in. Supabase's default privileges grant every new
 -- function to anon and authenticated by name, and its Data API lets anon call
@@ -676,6 +869,17 @@ def grant_statements() -> list[str]:
         "GRANT EXECUTE ON FUNCTION account_shared_events() TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_leave_shared_event(uuid) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_recount_grade_distributions() TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_on_team(uuid) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_team_invite_preview(text) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_accept_team_invite(text) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_my_teams() TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_team_games(uuid) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_record_team_game(uuid, date, text, integer, integer) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_confirm_team_game(uuid) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_dispute_team_game(uuid, integer, integer) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_correct_team_game(uuid, date, text, integer, integer) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_delete_team_game(uuid) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_leave_team(uuid) TO " + APP_ROLE,
     ]
 
 

@@ -107,6 +107,8 @@ PATH_SOURCES = {
     ("/api/calendar/{user_id}/shared-events/", "event_id"): "events_personal",
     # An event's membership row; bare member_id is a task's.
     ("/api/calendar/", "member_id"): "event_members",
+    # A team's membership row (Phase 2 item 11).
+    ("/api/teams/", "member_id"): "team_members",
     ("/api/finances/", "rule_id"): "recurring_transactions",
     ("/api/jobs/", "event_id"): "events_shift",
     "account_id": "accounts",
@@ -133,6 +135,8 @@ PATH_SOURCES = {
     # B here would end the partnership both agreed to -- not a leak, and not
     # this walk's question. Ending is tested in tests/test_partners.py.
     "partner_id": "partnerships",
+    "team_id": "teams",
+    "game_id": "games",
     # A membership row's own id (Phase 2 item 9a), as the owner removes it.
     "member_id": "task_members",
 }
@@ -247,6 +251,8 @@ BODY_PATCHES: dict[tuple[str, str], list[dict]] = {
     ("POST", "/api/tasks/{user_id}/shared-tasks/invites/accept"): [{"token": "zzownera task invite token"}],
     ("POST", "/api/calendar/{user_id}/shared-events/invites/preview"): [{"token": "zzownera event invite token"}],
     ("POST", "/api/calendar/{user_id}/shared-events/invites/accept"): [{"token": "zzownera event invite token"}],
+    ("POST", "/api/teams/{user_id}/invites/preview"): [{"token": "zzownera team invite token"}],
+    ("POST", "/api/teams/{user_id}/invites/accept"): [{"token": "zzownera team invite token"}],
     ("POST", "/api/finances/{user_id}/subscriptions/confirm"): [
         {"instruction.kind": "expense", "instruction.to_account_id": None},
         {"instruction.kind": "transfer", "instruction.category_id": None},

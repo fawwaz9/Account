@@ -8,7 +8,7 @@ from sqlalchemy import text
 
 from app.api.routes import (
     calendar, degree, finances, grades, intake, jobs, omnibox, partners, push, recurring, shared_events, shared_tasks,
-    survey, tasks, term_reviews, usage, users, auth,
+    survey, tasks, teams, term_reviews, usage, users, auth,
 )
 from app._database.db import Base, SessionLocal, engine
 from app._database import models
@@ -184,3 +184,4 @@ app.include_router(survey.router, prefix="/api/survey", tags=["Survey"])
 app.include_router(intake.router, prefix="/api/intake", tags=["Intake"])
 app.include_router(degree.router, prefix="/api/degree", tags=["Degree"])
 app.include_router(partners.router, prefix="/api/partners", tags=["Partners"])
+app.include_router(teams.router, prefix="/api/teams", tags=["Teams"])
