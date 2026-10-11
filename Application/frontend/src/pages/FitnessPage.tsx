@@ -11,14 +11,15 @@ import {
 import "../styles/teams.css";
 
 /**
- * Teams (Phase 2 item 11, D26): your teams, their games, and the record.
+ * Fitness (Phase 2 item 11, D26). Today: your teams, their games, and the
+ * record. The exertion features of a later phase join it here.
  *
  * Anyone on a team records a game; it counts once someone else confirms it,
  * the captain included. A disputed score shows both and counts for nothing
  * until whoever recorded it corrects it. Only the captain changes who is on
  * the team.
  */
-export default function TeamsPage() {
+export default function FitnessPage() {
   const { user } = useAuth();
   const [teams, setTeams] = useState<TeamSummary[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
@@ -63,7 +64,7 @@ export default function TeamsPage() {
   return (
     <div className="container teamsPage">
       <div className="teamsTopbar">
-        <h1 className="title">Teams</h1>
+        <h1 className="title">Fitness</h1>
         <HelpTip label="How scores count">
           Anyone on a team can record a game. It counts once someone else on the team confirms it, the
           captain included. If someone disputes it, both scores show and it doesn&rsquo;t count until
@@ -73,7 +74,8 @@ export default function TeamsPage() {
       {error && <p className="calError" role="alert">{error}</p>}
 
       <div className="teamsGrid">
-        <aside className="teamsList">
+        <aside className="teamsList" aria-label="Your teams">
+          <h2 className="teamsHeading">Teams</h2>
           {teams && teams.length === 0 && (
             <p className="small-text muted">No teams yet. Make one, then send your teammates the link.</p>
           )}

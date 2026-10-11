@@ -15,7 +15,7 @@ export const NAV: NavItem[] = [
   { to: "/calendar", label: "Calendar", key: "c" },
   { to: "/tasks", label: "Tasks", key: "t" },
   { to: "/jobs", label: "Jobs", key: "j" },
-  { to: "/teams", label: "Teams", key: "m" },
+  { to: "/fitness", label: "Fitness", key: "f" },
   { to: "/budget", label: "Budget", key: "b" },
   { to: "/settings", label: "Settings", key: "s" },
 ];

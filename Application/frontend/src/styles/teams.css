@@ -130,3 +130,8 @@
 .gameRow input[type="number"] {
   width: 4.5em;
 }
+
+.teamsHeading {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}

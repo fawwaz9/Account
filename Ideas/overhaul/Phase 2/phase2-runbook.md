@@ -567,8 +567,8 @@ Ships with item 13 in one go: see **Both together** below.
    ```
 
 **After the deploy, verify:** the 16 team routes answer 401 against a 404
-control (`/api/teams/<id>` and everything beneath it), then open **Teams** in
-the sidebar (or press G then M), make a team, and record a game.
+control (`/api/teams/<id>` and everything beneath it), then open **Fitness** in
+the sidebar (or press G then F), make a team, and record a game.
 
 **Rollback:** both halves together, per `Ideas/ROLLBACK.md`. The schema
 stays: the older API never reads the new tables.

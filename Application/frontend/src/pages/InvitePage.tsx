@@ -105,7 +105,7 @@ export default function InvitePage() {
       } else if (kind === "team") {
         const { status } = await acceptTeamInvite(user.id, token);
         if (status === "accepted") {
-          navigate("/teams", { replace: true });
+          navigate("/fitness", { replace: true });
           return;
         }
         setProblem(TEAM_REFUSED[status]);
@@ -145,7 +145,7 @@ export default function InvitePage() {
           <button type="button" className="calButton calButtonPrimary" onClick={() => void accept()} disabled={busy}>
             Join the team
           </button>
-          <Link to="/teams" className="calButton">No thanks</Link>
+          <Link to="/fitness" className="calButton">No thanks</Link>
         </div>
       </>
     );

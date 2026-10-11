@@ -19,7 +19,7 @@ vi.mock("../features/teams/api", async () => {
 });
 vi.mock("../app/auth/AuthContext", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
 
-import TeamsPage from "./TeamsPage";
+import FitnessPage from "./FitnessPage";
 import InvitePage from "./InvitePage";
 import { recordLine, teamInviteLink } from "../features/teams/api";
 import { today } from "../shared/utils/dateUtils";
@@ -42,14 +42,14 @@ afterEach(cleanup);
 async function openTeam(team = detail()) {
   api.fetchTeams.mockResolvedValue([summary]);
   api.fetchTeam.mockResolvedValue(team);
-  render(<TeamsPage />);
+  render(<FitnessPage />);
   return screen.findByRole("region", { name: "Thunder" });
 }
 
-describe("TeamsPage", () => {
+describe("FitnessPage", () => {
   it("lists your teams with their records, and says what to do with none", async () => {
     api.fetchTeams.mockResolvedValue([]);
-    render(<TeamsPage />);
+    render(<FitnessPage />);
     expect(await screen.findByText(/No teams yet/)).toBeTruthy();
     cleanup();
     await openTeam();
@@ -60,7 +60,7 @@ describe("TeamsPage", () => {
   it("makes a team", async () => {
     api.fetchTeams.mockResolvedValue([]);
     api.createTeam.mockResolvedValue({ ...detail(), team_id: "t2" });
-    render(<TeamsPage />);
+    render(<FitnessPage />);
     fireEvent.change(await screen.findByLabelText("New team name"), { target: { value: " Thunder " } });
     fireEvent.change(screen.getByLabelText("New team sport"), { target: { value: "Ultimate" } });
     fireEvent.click(screen.getByRole("button", { name: "New team" }));
@@ -135,6 +135,15 @@ describe("TeamsPage", () => {
   });
 });
 
+describe("the page", () => {
+  it("is called Fitness, with your teams inside it", async () => {
+    api.fetchTeams.mockResolvedValue([]);
+    render(<FitnessPage />);
+    expect(await screen.findByRole("heading", { level: 1, name: "Fitness" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 2, name: "Teams" })).toBeTruthy();
+  });
+});
+
 describe("helpers", () => {
   it("reads a record as wins–losses–ties, and keeps the token out of the path", () => {
     expect(recordLine(record)).toBe("2–1–0");
@@ -150,14 +159,14 @@ describe("InvitePage, for a team", () => {
       <MemoryRouter initialEntries={["/invite#team:tok_abcdefghijklmnopqrstuv"]}>
         <Routes>
           <Route path="/invite" element={<InvitePage />} />
-          <Route path="/teams" element={<p>teams page</p>} />
+          <Route path="/fitness" element={<p>fitness page</p>} />
         </Routes>
       </MemoryRouter>,
     );
     expect(await screen.findByText("Thunder")).toBeTruthy();
     expect(api.acceptTeamInvite).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Join the team" }));
-    expect(await screen.findByText("teams page")).toBeTruthy();
+    expect(await screen.findByText("fitness page")).toBeTruthy();
     expect(api.acceptTeamInvite).toHaveBeenCalledWith("u1", "tok_abcdefghijklmnopqrstuv");
   });
 });

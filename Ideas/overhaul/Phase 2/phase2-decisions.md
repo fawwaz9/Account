@@ -1084,3 +1084,9 @@ captain.
   being deleted, and both removals are caught.
 - Frontend: 10 tests (the Teams page, every game state's actions, the
   captain's link, leaving, the invite page's team path).
+
+**Renamed by the owner, 2026-10-11:** the page is **Fitness**, at `/fitness`
+(G then F), with the teams inside it under a "Teams" heading. Fitness is the
+room the exertion features (vision §13.14, Phase 3) join later. The API and
+the tables keep the name `teams`, which nobody sees.
+

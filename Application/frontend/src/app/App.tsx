@@ -42,7 +42,7 @@ const BudgetPage = lazy(() => import("../pages/BudgetPage"));
 const AccountDetailPage = lazy(() => import("../pages/budget/AccountDetailPage"));
 const SettingsPage = lazy(() => import("../pages/SettingsPage"));
 const InvitePage = lazy(() => import("../pages/InvitePage"));
-const TeamsPage = lazy(() => import("../pages/TeamsPage"));
+const FitnessPage = lazy(() => import("../pages/FitnessPage"));
 
 export default function App() {
   return (
@@ -73,8 +73,8 @@ export default function App() {
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/tasks" element={<TasksPage />} />
               <Route path="/jobs" element={<JobsPage />} />
-              {/* Phase 2 item 11. */}
-              <Route path="/teams" element={<TeamsPage />} />
+              {/* Phase 2 item 11: teams, under Fitness. */}
+              <Route path="/fitness" element={<FitnessPage />} />
               <Route path="/budget" element={<BudgetPage />} />
               <Route path="/budget/accounts/:accountId" element={<AccountDetailPage />} />
               <Route path="/settings" element={<SettingsPage />} />
