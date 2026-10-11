@@ -896,3 +896,103 @@ is on their calendar to see, not yet in those figures.
   calendar conversions, the invite page's event path). One existing guard
   also caught the share section using a heading style that only the Budget
   page's sheets define. It has its own style now.
+
+## D25. End-of-term reviews: answers in your own row, grades counted into a sealed table above a floor (item 13, 2026-10-11)
+
+Moved ahead of item 11 (teams) under D15's own rule: it has to be live before
+the first term that ends after it ships, and this term ends in December.
+**Collection only: nothing is shown in Phase 2.** The distributions are
+Phase 3's.
+
+**What it asks, once per finished course** (vision §13.7, four questions):
+- hours a week
+- difficulty, 1 to 5
+- instructor clarity, 1 to 5
+- would you take it again
+
+Plus an opt-in: "add my final grade to the course's distribution".
+
+**When:** from 14 days after a term ends (grades post) until 180 days after,
+so it is asked while the term is fresh and never about years-old courses.
+Not for transfer credit. A course can be skipped. Answers can be changed
+for 14 days, then they lock. The grade contribution can be turned on or off
+at any time, and a whole review can be deleted.
+
+**Where your answers live:** `term_reviews`, an ordinary per-user table
+under the usual policy, one row per course. **It holds no copy of your
+grade,** only whether you chose to contribute it. It also snapshots the
+course key (`UBCV CPSC 221`) and the term (`2025W1`), which are what the
+counts are grouped by.
+
+**Where the counts live (the change from the draft): a sealed table.**
+- **`grade_distributions` holds bucket counts only:** course key, term,
+  5-point band (below 50, 50 to 54, …, 95 to 100), and the number of
+  contributors. No user id, no timestamp per contribution, no row per
+  contribution.
+- **The API's role can't read it at all.** It is a new third kind of table
+  in the generator, `SEALED_TABLES`: row-level security on with no policy,
+  and every grant revoked, the API's role included. So "no route returns an
+  aggregate" is enforced by the database, not by remembering not to write
+  the route.
+- **The draft's version was a shared table** the API could read. That works
+  once there is a floor at display, but in Phase 2 there is no display, so
+  nothing needs to read it.
+
+**Counting:** `account_recount_grade_distributions()` is a definer function
+that rebuilds the whole table from scratch. It reads each contributor's
+course grade at that moment (the final grade, or the running average when
+there is none), so withdrawing, or a corrected grade, takes effect at the
+next recount. Deleted accounts and transfer credit are left out. It returns
+only how many rows it wrote.
+
+**The cohort floor, in the job as well as the display:** a course-term with
+fewer than 5 contributors is not written at all. So a group small enough to
+point at a person never exists, even in the sealed table. The floor lives
+in the SQL, not as a parameter, so a caller can't lower it.
+
+**When it runs:** daily, from Cloud Scheduler, through a secret-protected
+`POST /api/internal/distributions/recount`, like reminder dispatch. Daily,
+rather than after each contribution, so the table never changes in step
+with one person's choice. Setting up the schedule is yours (a one-line
+`gcloud` command in the runbook). Nothing depends on it before Phase 3.
+
+**For Phase 3, noted now:** showing the counts needs the floor applied at
+display too, and a thought about what changes between two days' counts
+could reveal about one person.
+
+**Evidence:**
+- `tests/test_term_reviews.py`, 30 tests, run on both SQLite and Postgres:
+  - when it asks
+  - how terms and course keys are named
+  - your review holds no grade
+  - the opt-in, the lock and skipping
+  - the floor, the bands, withdrawal at the next recount
+  - the grade read at recount time, final before average
+  - deleted accounts, transfer credit and skipped reviews left out
+  - no route answers with a count
+  - the recount door refusing anyone without the secret
+- 9 new Postgres proofs in `test_rls.py`:
+  - The app role is refused every read and write on the counts, TRUNCATE
+    included.
+  - Supabase-style grants, to an outsider and to the app role, are taken away
+    by install.
+  - The recount writes only groups at or above the floor, into a table whose
+    columns hold no user id.
+  - It needs no identity and answers with a number.
+  - The per-table proofs now expect "permission denied" on a sealed table,
+    where they expect "no rows" everywhere else.
+- The walks cover the 5 new routes on both databases, under row-level
+  security too. They also check that no request ever changes the sealed
+  table.
+- **Mutation check:** 28 removals across the SQLite recount, the review
+  service, the SQL function and the seal. All are caught.
+- **Corrections, kept in place:**
+  - 5 were missed on the first run, each a real gap. No test had a skipped
+    row asking to contribute, no test told "final grade first" from "average
+    first" (the only case had no final grade), and the SQL's cap at 95 was
+    tested only through the Python band function. All 5 now have tests.
+  - Two tests asserted that "82" never appears in a response, but a
+    timestamp can contain "82" by chance. That is how one SQL mutation was
+    "caught" by an unrelated test. They now use 87.3, which a timestamp
+    can't contain.
+- Frontend: 8 tests for the "Rate your term" panel.

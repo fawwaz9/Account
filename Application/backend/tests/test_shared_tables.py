@@ -78,7 +78,7 @@ def test_a_shared_table_is_granted_select_only(table):
 def test_per_user_tables_keep_their_four_verbs():
     grants = rls.grant_statements()
     for table in Base.metadata.sorted_tables:
-        if table.name in rls.SHARED_READ_TABLES | rls.NO_DIRECT_WRITE_TABLES:
+        if table.name in rls.SHARED_READ_TABLES | rls.NO_DIRECT_WRITE_TABLES | rls.SEALED_TABLES:
             continue
         assert f"GRANT SELECT, INSERT, UPDATE, DELETE ON {table.name} TO {rls.APP_ROLE}" in grants
 
@@ -131,3 +131,42 @@ def test_a_shared_child_of_a_shared_table_is_not_mistaken_for_owned():
                   Column("p_id", Uuid, ForeignKey("p.id"), nullable=False))
     assert rls._owner_parent(child) is None
     _ = parent
+
+
+# --- sealed (Phase 2 D25) ------------------------------------------------------------
+
+@pytest.mark.parametrize("table", sorted(rls.SEALED_TABLES))
+def test_a_sealed_table_has_row_security_and_no_policy(table):
+    statements = _for(rls.policy_statements(), table)
+    assert f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY" in statements
+    assert not [s for s in statements if s.startswith("CREATE POLICY")]
+
+
+@pytest.mark.parametrize("table", sorted(rls.SEALED_TABLES))
+def test_a_sealed_table_is_granted_to_nobody_not_even_the_app_role(table):
+    statements = _for(rls.grant_statements(), table)
+    assert not [s for s in statements if s.startswith("GRANT")]
+    assert f"REVOKE ALL ON {table} FROM {rls.APP_ROLE}" in statements
+    assert f"REVOKE ALL ON {table} FROM PUBLIC" in statements
+
+
+def test_the_grade_counts_are_sealed():
+    assert "grade_distributions" in rls.SEALED_TABLES
+
+
+def test_a_per_user_table_cannot_be_sealed_by_naming_it(monkeypatch):
+    monkeypatch.setattr(rls, "SEALED_TABLES", frozenset({"accounts", "grade_distributions"}))
+    with pytest.raises(ValueError, match="has an owner"):
+        rls.policy_statements()
+
+
+def test_a_misspelt_sealed_name_raises(monkeypatch):
+    monkeypatch.setattr(rls, "SEALED_TABLES", frozenset({"grade_distribution"}))
+    with pytest.raises(ValueError, match="no model builds"):
+        rls.policy_statements()
+
+
+def test_a_table_cannot_be_both_sealed_and_shared(monkeypatch):
+    monkeypatch.setattr(rls, "SEALED_TABLES", frozenset({"catalogue_courses", "grade_distributions"}))
+    with pytest.raises(ValueError, match="both lists"):
+        rls.policy_statements()

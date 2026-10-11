@@ -11,6 +11,7 @@ import YearCourses from "../../features/grades/components/YearCourses";
 import AttentionPanel from "../../features/grades/components/AttentionPanel";
 import BlindSpotsPanel from "../../features/grades/components/BlindSpotsPanel";
 import GradeTrendChart from "../../features/grades/components/GradeTrendChart";
+import TermReviewPanel from "../../features/grades/components/TermReviewPanel";
 import { useCourses } from "../../features/grades/hooks/useCourses";
 import { useDashboard } from "../../features/grades/hooks/useDashboard";
 import { useBlindSpots } from "../../features/grades/hooks/useBlindSpots";
@@ -231,6 +232,9 @@ export default function GradesPage() {
             <Link to="/grades/degree" className="calButton degreeLink">Degree audit</Link>
 
             <GradeTrendChart points={summary?.term_history ?? []} />
+
+            {/* Phase 2 item 13: silent unless a course finished recently. */}
+            {user && <TermReviewPanel userId={user.id} />}
 
             <AttentionPanel items={summary?.attention ?? []} userId={user?.id} />
 

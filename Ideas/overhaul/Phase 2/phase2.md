@@ -90,7 +90,7 @@ Item 8 waits on UBC. Part B is drafted and waiting on your answers.
 | 10 | Accountability partners | **Deployed 2026-10-08** (D22). Invite links (D16) included |
 | 11 | Team sport and intramurals | Not started. No team, league or game tables |
 | 12 | Open signup, with affiliation verified later | **12a deployed 2026-10-08, switch on and checked** (D18): per-caller throttling behind `TRUSTED_PROXY_HOPS`. 12b pushed out of Phase 2 (D19) |
-| 13 | End-of-term flow: ratings and anonymous grade contributions | Not started |
+| 13 | End-of-term flow: ratings and anonymous grade contributions | **Built, not deployed** (D25). Moved ahead of 11: it must be live before December |
 | 14 | Shift-versus-exam conflict flags, and the tax packet | **Deployed 2026-10-08** (D21). Tax packet from recorded pay only (D20) |
 
 ## Part A: the shared course catalogue

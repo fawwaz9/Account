@@ -450,3 +450,81 @@ has a Share section.
 and DELETE only). The gate reported row-level security on for 44 of 44
 tables; the 8 routes answer 401 against two 404 controls; no errors in the
 logs; the live site matches the build (34 files).
+
+## The item 13 batch: end-of-term reviews and the sealed grade count (D25). NOT YET RUN
+
+| What | Commits | Schema change |
+|---|---|---|
+| Item 13: term reviews, the sealed counts table, the recount function | on `phase2` | **New tables `term_reviews`, `grade_distributions` (sealed); one new function** |
+
+Same order as before: backup, schema (yours), then `deploy.run.sh all`.
+Nothing existing is altered.
+
+### 1. Apply the schema (adds two tables and one function; nothing is dropped)
+
+```sh
+git checkout phase2
+cd Application/backend
+set -a; source ../.env; set +a
+DATABASE_URL="$SUPABASE_DATABASE_URL" .venv/bin/python -m app._database.schema
+```
+
+**Verify, in the SQL editor:**
+1. **Nobody but the owner can touch the counts.** This should return no rows
+   at all: not `account_app`, not `anon`, not `authenticated`:
+
+   ```sql
+   SELECT grantee, privilege_type FROM information_schema.role_table_grants
+   WHERE table_name = 'grade_distributions'
+     AND grantee <> (SELECT tableowner FROM pg_tables WHERE tablename = 'grade_distributions');
+   ```
+
+2. **The counts have row security and no policy; reviews have the per-user
+   one.** The first should return `t`; the second one row, `{account_app}`
+   and `ALL`:
+
+   ```sql
+   SELECT relrowsecurity FROM pg_class WHERE relname = 'grade_distributions';
+   SELECT tablename, roles, cmd FROM pg_policies WHERE tablename IN ('term_reviews', 'grade_distributions');
+   ```
+
+3. **Only the API's role can run the recount:**
+
+   ```sql
+   SELECT proname, proacl FROM pg_proc WHERE proname = 'account_recount_grade_distributions';
+   ```
+
+   One row, `{postgres=X/postgres,account_app=X/postgres}`.
+
+**Undo:** not needed. The tables are new, and the old API never reads them.
+
+### 2. Deploy
+
+```sh
+./Application/deploy.run.sh all
+```
+
+**Verify:** the 4 review routes answer 401 against a 404 control (`GET
+/api/grades/<id>/term-reviews`, `PUT` and `DELETE`
+`/term-reviews/<course>`, `POST /term-reviews/<course>/skip`), and `POST
+/api/internal/distributions/recount` answers 403 without the secret.
+
+### 3. The daily recount (yours, whenever you like; nothing depends on it before Phase 3)
+
+```sh
+gcloud scheduler jobs create http account-grade-recount --location=us-west1 --project=account-504419 \
+  --schedule="30 9 * * *" --time-zone="UTC" --http-method=POST \
+  --uri="https://account-api-210502804146.us-west1.run.app/api/internal/distributions/recount" \
+  --headers="X-Cron-Secret=$(gcloud secrets versions access latest --secret=cron-secret --project=account-504419)"
+```
+
+The second of Cloud Scheduler's three free jobs. Daily, so the counts never
+change in step with one person's choice.
+
+**Verify:** `gcloud scheduler jobs run account-grade-recount --location=us-west1
+--project=account-504419`, then the job's last attempt shows `200`. The answer
+is a number of rows, never their contents.
+
+**Undo:** `gcloud scheduler jobs delete account-grade-recount --location=us-west1
+--project=account-504419`.
+

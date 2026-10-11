@@ -8,7 +8,7 @@ from sqlalchemy import text
 
 from app.api.routes import (
     calendar, degree, finances, grades, intake, jobs, omnibox, partners, push, recurring, shared_events, shared_tasks,
-    survey, tasks, usage, users, auth,
+    survey, tasks, term_reviews, usage, users, auth,
 )
 from app._database.db import Base, SessionLocal, engine
 from app._database import models
@@ -158,6 +158,8 @@ app.add_middleware(
 )
 
 app.include_router(grades.router, prefix="/api/grades", tags=["Grades"])
+# End-of-term reviews (Phase 2 item 13): about finished courses, so under grades.
+app.include_router(term_reviews.router, prefix="/api/grades", tags=["Term reviews"])
 app.include_router(users.router, prefix="/api/users", tags=["Users"])
 app.include_router(calendar.router, prefix="/api/calendar", tags=["Calendar"])
 # Same prefix as calendar: a shared event is an event (Phase 2 item 9b).
@@ -177,6 +179,7 @@ app.include_router(omnibox.router, prefix="/api/omnibox", tags=["Omnibox"])
 app.include_router(usage.router, prefix="/api/usage", tags=["Usage"])
 app.include_router(push.router, prefix="/api/push", tags=["Push"])
 app.include_router(push.internal, prefix="/api/internal", tags=["Internal"])
+app.include_router(term_reviews.internal, prefix="/api/internal", tags=["Internal"])
 app.include_router(survey.router, prefix="/api/survey", tags=["Survey"])
 app.include_router(intake.router, prefix="/api/intake", tags=["Intake"])
 app.include_router(degree.router, prefix="/api/degree", tags=["Degree"])

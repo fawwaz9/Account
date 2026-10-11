@@ -14,7 +14,7 @@ from datetime import date, datetime, time, timedelta, timezone
 
 from sqlalchemy import select
 
-from app._database.rls import SHARED_READ_TABLES
+from app._database.rls import SEALED_TABLES, SHARED_READ_TABLES
 from app._database.models import (
     AccountCategoryLimitModel,
     AccountCategoryMonthLimitModel,
@@ -61,6 +61,8 @@ from app._database.models import (
     UserModel,
     EventInviteModel,
     EventMemberModel,
+    GradeDistributionModel,
+    TermReviewModel,
 )
 
 from app.Intake.services import storage  # noqa: E402
@@ -294,6 +296,11 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
     add(EventInviteModel(id=new_id(), event_id=personal_event.id,
                          token_hash=hashlib.sha256(f"{marker} event invite token".encode()).hexdigest(),
                          expires_at=datetime.combine(day + timedelta(days=5), time(12, 0))))
+    # Phase 2 item 13: an end-of-term review of the world's course, opted in to
+    # the grade count, with the marker in the snapshot key a leak would carry.
+    add(TermReviewModel(id=new_id(), user_id=user_id, course_id=course.id, course_key=f"{marker} key",
+                        term_code="2025W1", hours_per_week=9, difficulty=4, clarity=2, would_take_again=False,
+                        contribute_grade=True))
     # Phase 2 item 4: an own prerequisite rule on the world's course, with the
     # marker in the private syllabus sentence a leak would carry.
     add(PrerequisiteProposalModel(id=new_id(), user_id=user_id, course_id=course.id, kind="prerequisite",
@@ -304,7 +311,7 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
     db.commit()
 
     missing = ({t.name for t in Base.metadata.sorted_tables} - set(ids) - {"users"} - SHARED_READ_TABLES
-               - PAIRED_TABLES)
+               - SEALED_TABLES - PAIRED_TABLES)
     assert not missing, f"the world has nothing in: {sorted(missing)}"
     return ids
 
@@ -365,11 +372,13 @@ def seed_pair(db, a_id, b_id, mark_a: str, mark_b: str) -> tuple[dict, dict]:
 CATALOGUE_IDS = {
     "catalogue_courses": uuid.uuid5(uuid.NAMESPACE_URL, "account-test/catalogue_courses"),
     "catalogue_prerequisites": uuid.uuid5(uuid.NAMESPACE_URL, "account-test/catalogue_prerequisites"),
+    "grade_distributions": uuid.uuid5(uuid.NAMESPACE_URL, "account-test/grade_distributions"),
 }
 
 
 def seed_catalogue(db) -> dict[str, uuid.UUID]:
-    """One row in every shared table, belonging to nobody (Phase 2 item 1).
+    """One row in every shared table, and in every sealed one, belonging to
+    nobody (Phase 2 items 1 and 13).
 
     Not part of a user's world: shared rows have no owner, so they are seeded
     once beside both worlds. Present so a route that changed or deleted one is
@@ -384,11 +393,17 @@ def seed_catalogue(db) -> dict[str, uuid.UUID]:
                                       rule={"all": [{"course": "UBCV CPSC 210"}]},
                                       source="reviewed-proposal")
     db.add(rule)
+    # Phase 2 item 13: one row in the sealed table too -- nobody's, like the
+    # catalogue, and readable by no request at all -- so a route that changed
+    # or leaked it would be caught.
+    sealed = GradeDistributionModel(id=CATALOGUE_IDS["grade_distributions"], course_key="UBCV CPSC 221",
+                                    term_code="2025W1", bucket=80, contributors=7)
+    db.add(sealed)
     # Read before the commit: after it, touching an attribute refreshes the row
     # and leaves a transaction open holding a lock that blocks rls.install.
-    ids = {"catalogue_courses": course.id, "catalogue_prerequisites": rule.id}
+    ids = {"catalogue_courses": course.id, "catalogue_prerequisites": rule.id, "grade_distributions": sealed.id}
     db.commit()
-    missing = SHARED_READ_TABLES - set(ids)
+    missing = (SHARED_READ_TABLES | SEALED_TABLES) - set(ids)
     assert not missing, f"the catalogue seed has nothing in: {sorted(missing)}"
     return ids
 

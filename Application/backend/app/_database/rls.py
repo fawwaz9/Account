@@ -27,6 +27,9 @@ Postgres refuse to return them, whatever the query says.
 * The few questions that cross users are ``SECURITY DEFINER`` functions that
   answer with an id or a boolean, never with rows -- apart from the narrow
   views sharing needs (a partner's figure, a shared task's few fields).
+* ``SEALED_TABLES`` (Phase 2 D25) are read by nobody through the API: row
+  security with no policy, and no grant, the app role's included. Only a
+  definer function writes them.
 * ``NO_DIRECT_WRITE_TABLES`` (Phase 2 D23, D24) are per-user tables the app role
   may read and delete from but never write: their rows are created only by a
   definer function, for the person who accepted a link.
@@ -62,6 +65,12 @@ POLICY = "account_isolation"
 #: writes them (Phase 2 D9). By name, so an ownerless table still raises
 #: unless someone decided, here, that it is shared.
 SHARED_READ_TABLES = frozenset({"catalogue_courses", "catalogue_prerequisites"})
+
+#: Tables nobody reads through the API at all (Phase 2 D25): row-level
+#: security with no policy, and every grant revoked, the app role's included.
+#: Only a definer function, running as the owner, writes them. By name, like
+#: the shared list, and refused if the table has an owner.
+SEALED_TABLES = frozenset({"grade_distributions"})
 
 #: Who may read a shared row: anyone the API has identified. Not ``true``, so an
 #: un-identified query still sees nothing -- the same fail-closed rule as every
@@ -99,6 +108,8 @@ FUNCTIONS = (
     "account_accept_event_invite",
     "account_shared_events",
     "account_leave_shared_event",
+    # Phase 2 item 13 (D25): the daily recount into the sealed table.
+    "account_recount_grade_distributions",
 )
 
 #: Tables the app role may read and delete from but never insert into or
@@ -395,6 +406,44 @@ CREATE OR REPLACE FUNCTION account_leave_shared_event(p_event uuid) RETURNS bool
               RETURNING 1)
           SELECT count(*) > 0 FROM gone $$;
 
+-- Phase 2 item 13 (D25). Rebuilds grade_distributions whole, from the grades
+-- contributors chose to add, read from each course at this moment -- the
+-- final grade, or the running average when there is none. A course-term with
+-- fewer than 5 contributors (models.COHORT_FLOOR) is not written at all, so a
+-- group small enough to point at a person never exists. Answers with how many
+-- rows it wrote, and nothing else.
+CREATE OR REPLACE FUNCTION account_recount_grade_distributions() RETURNS integer
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$
+DECLARE
+    written integer;
+BEGIN
+    DELETE FROM grade_distributions;
+    WITH graded AS (
+        SELECT r.course_key, r.term_code,
+               CASE WHEN c.final_grade > 0 THEN c.final_grade
+                    WHEN c.average > 0 THEN c.average END AS grade
+        FROM term_reviews r
+        JOIN courses c ON c.id = r.course_id
+        JOIN users u ON u.id = r.user_id
+        WHERE r.contribute_grade AND NOT r.skipped AND u.deleted_at IS NULL AND NOT c.transfer_credit
+          AND r.course_key IS NOT NULL AND r.term_code IS NOT NULL
+    ), counted AS (
+        SELECT course_key, term_code,
+               CASE WHEN grade < 50 THEN 0 ELSE LEAST(95, (floor(grade / 5) * 5)::integer) END AS bucket
+        FROM graded WHERE grade IS NOT NULL
+    ), enough AS (
+        SELECT course_key, term_code FROM counted GROUP BY course_key, term_code HAVING count(*) >= 5
+    )
+    INSERT INTO grade_distributions (id, course_key, term_code, bucket, contributors, computed_at)
+        SELECT gen_random_uuid(), counted.course_key, counted.term_code, counted.bucket, count(*),
+               now() AT TIME ZONE 'utc'
+        FROM counted JOIN enough USING (course_key, term_code)
+        GROUP BY counted.course_key, counted.term_code, counted.bucket;
+    GET DIAGNOSTICS written = ROW_COUNT;
+    RETURN written;
+END $$;
+
 -- Definer functions run with their owner's rights, so nobody but the API
 -- needs to be able to call them.
 REVOKE ALL ON FUNCTION account_user_id_by_email(text) FROM PUBLIC;
@@ -417,6 +466,7 @@ REVOKE ALL ON FUNCTION account_event_invite_preview(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_accept_event_invite(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_shared_events() FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_leave_shared_event(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_recount_grade_distributions() FROM PUBLIC;
 
 -- PUBLIC is not the only way in. Supabase's default privileges grant every new
 -- function to anon and authenticated by name, and its Data API lets anon call
@@ -488,6 +538,25 @@ def _check_no_direct_write_list() -> None:
         raise ValueError(f"Tables on both lists: {sorted(both)}")
 
 
+def is_sealed(table: Table) -> bool:
+    """Whether ``table`` is sealed -- and if it is, that it has no owner. A
+    sealed table with an owner would hide that owner's own rows from them."""
+    if table.name not in SEALED_TABLES:
+        return False
+    if table.name == "users" or "user_id" in table.columns or _owner_parent(table) is not None:
+        raise ValueError(f"Table {table.name!r} is listed in SEALED_TABLES but has an owner.")
+    return True
+
+
+def _check_sealed_list() -> None:
+    unknown = SEALED_TABLES - set(Base.metadata.tables)
+    if unknown:
+        raise ValueError(f"SEALED_TABLES names tables no model builds: {sorted(unknown)}")
+    both = SEALED_TABLES & (SHARED_READ_TABLES | NO_DIRECT_WRITE_TABLES)
+    if both:
+        raise ValueError(f"Tables on both lists: {sorted(both)}")
+
+
 def _check_shared_list() -> None:
     """Every shared name is a real table. A typo would leave the real table
     raising -- loud, but for the wrong reason -- and the list claiming a share
@@ -521,8 +590,17 @@ def policy_statements() -> list[str]:
     """Every statement that puts the policies in place. Idempotent."""
     _check_shared_list()
     _check_no_direct_write_list()
+    _check_sealed_list()
     statements = []
     for table in Base.metadata.sorted_tables:
+        if is_sealed(table):
+            # Row security on and no policy at all: under RLS a command with no
+            # policy is refused, so no role but the owner sees a row.
+            statements += [
+                f"ALTER TABLE {table.name} ENABLE ROW LEVEL SECURITY",
+                f"DROP POLICY IF EXISTS {POLICY} ON {table.name}",
+            ]
+            continue
         if is_shared(table):
             statements += [
                 f"ALTER TABLE {table.name} ENABLE ROW LEVEL SECURITY",
@@ -560,8 +638,9 @@ def grant_statements() -> list[str]:
         *(
             f"GRANT SELECT, INSERT, UPDATE, DELETE ON {table.name} TO {APP_ROLE}"
             for table in tables
-            if not is_shared(table) and table.name not in NO_DIRECT_WRITE_TABLES
+            if not is_shared(table) and not is_sealed(table) and table.name not in NO_DIRECT_WRITE_TABLES
         ),
+        *(statement for table in tables if is_sealed(table) for statement in _sealed_grants(table)),
         # Read and delete only. The REVOKE takes back a write grant left by
         # an earlier shape, as the shared tables' does.
         *(
@@ -596,6 +675,7 @@ def grant_statements() -> list[str]:
         "GRANT EXECUTE ON FUNCTION account_accept_event_invite(text) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_shared_events() TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_leave_shared_event(uuid) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_recount_grade_distributions() TO " + APP_ROLE,
     ]
 
 
@@ -628,6 +708,29 @@ BEGIN
 END $$""",
         f"REVOKE {WRITE_PRIVILEGES} ON {name} FROM {APP_ROLE}",
         f"GRANT SELECT ON {name} TO {APP_ROLE}",
+    ]
+
+
+def _sealed_grants(table: Table) -> list[str]:
+    """Nothing to anyone but the owner -- the app role included."""
+    name = table.name
+    return [
+        f"REVOKE ALL ON {name} FROM PUBLIC",
+        f"""DO $$
+DECLARE r record;
+BEGIN
+    FOR r IN
+        SELECT DISTINCT g.rolname
+        FROM pg_class c
+        CROSS JOIN LATERAL aclexplode(c.relacl) a
+        JOIN pg_roles g ON g.oid = a.grantee
+        WHERE c.oid = 'public.{name}'::regclass
+          AND a.grantee <> c.relowner
+    LOOP
+        EXECUTE format('REVOKE ALL ON public.{name} FROM %I', r.rolname);
+    END LOOP;
+END $$""",
+        f"REVOKE ALL ON {name} FROM {APP_ROLE}",
     ]
 
 

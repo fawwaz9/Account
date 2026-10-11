@@ -133,6 +133,7 @@ class UserModel(Base):
     saved_plans = relationship("SavedPlanModel", cascade=cascade)
     prerequisite_proposals = relationship("PrerequisiteProposalModel", cascade=cascade)
     invites = relationship("InviteModel", cascade=cascade)
+    term_reviews = relationship("TermReviewModel", cascade=cascade, overlaps="course,term_reviews")
     partnerships = relationship(
         "PartnershipModel", cascade=cascade, foreign_keys="PartnershipModel.user_id"
     )
@@ -237,6 +238,8 @@ class CourseModel(Base):
     )
     events = relationship("EventModel", back_populates="course", cascade=cascade)
     tasks = relationship("TaskModel", back_populates="course", cascade=cascade)
+    term_reviews = relationship("TermReviewModel", back_populates="course", cascade=cascade,
+                                overlaps="term_reviews")
     grading_schemes = relationship("GradingSchemeModel", cascade=cascade)
     prerequisite_proposals = relationship("PrerequisiteProposalModel", cascade=cascade)
 
@@ -1859,3 +1862,75 @@ class EventInviteModel(Base):
     revoked_at = Column(DateTime, nullable=True)
 
     event = relationship("EventModel", back_populates="invites")
+
+
+#: Phase 2 item 13 (D25). Below this many contributors, a course-term's grade
+#: counts are never written, even to the sealed table. The same figure is in
+#: account_recount_grade_distributions; a test holds the two together.
+COHORT_FLOOR = 5
+
+
+class TermReviewModel(Base):
+    """Your end-of-term answers about one finished course (Phase 2 item 13, D25).
+
+    Yours alone, under the ordinary row policy. **It holds no copy of your
+    grade** -- only whether you chose to add it to the course's distribution.
+    The recount reads the grade from the course itself when it runs, so a
+    withdrawal, or a corrected grade, takes effect at the next recount, and
+    there is one record of the grade rather than two that can disagree.
+
+    `course_key` and `term_code` are snapshots of what the counts are grouped
+    by ("UBCV CPSC 221", "2025W1"), taken when you answer.
+    """
+
+    __tablename__ = "term_reviews"
+    __table_args__ = (
+        UniqueConstraint("user_id", "course_id", name="uq_term_review"),
+        CheckConstraint("difficulty IS NULL OR difficulty BETWEEN 1 AND 5", name="ck_term_review_difficulty"),
+        CheckConstraint("clarity IS NULL OR clarity BETWEEN 1 AND 5", name="ck_term_review_clarity"),
+        CheckConstraint("hours_per_week IS NULL OR hours_per_week BETWEEN 0 AND 80", name="ck_term_review_hours"),
+    )
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    course_id = Column(Uuid, ForeignKey("courses.id"), nullable=False, index=True)
+    course_key = Column(String, nullable=True)
+    term_code = Column(String, nullable=True)
+    hours_per_week = Column(Integer, nullable=True)
+    difficulty = Column(Integer, nullable=True)
+    clarity = Column(Integer, nullable=True)
+    would_take_again = Column(Boolean, nullable=True)
+    #: Opt-in, and changeable at any time, after the answers have locked too.
+    contribute_grade = Column(Boolean, nullable=False, default=False)
+    #: "Not this one": asked, declined, not asked again.
+    skipped = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+    updated_at = Column(DateTime, nullable=False, default=utc_now)
+
+    course = relationship("CourseModel", back_populates="term_reviews", overlaps="term_reviews")
+
+
+class GradeDistributionModel(Base):
+    """How many contributors' grades fell in each band, per course and term
+    (Phase 2 item 13, D25). **Sealed** (rls.SEALED_TABLES): the API's role can
+    neither read nor write it. Only account_recount_grade_distributions writes
+    it, rebuilding it whole, and only for a course-term with at least
+    COHORT_FLOOR contributors.
+
+    Counts and nothing else: no user id, no timestamp per contribution, no row
+    per contribution. Nothing reads it in Phase 2; the distributions are
+    Phase 3's.
+    """
+
+    __tablename__ = "grade_distributions"
+    __table_args__ = (
+        UniqueConstraint("course_key", "term_code", "bucket", name="uq_grade_distribution"),
+    )
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    course_key = Column(String, nullable=False)
+    term_code = Column(String, nullable=False)
+    #: The band's lower bound: 0 for anything below 50, then 50, 55, ... 95.
+    bucket = Column(Integer, nullable=False)
+    contributors = Column(Integer, nullable=False)
+    computed_at = Column(DateTime, nullable=False, default=utc_now)

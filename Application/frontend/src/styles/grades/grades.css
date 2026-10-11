@@ -1061,3 +1061,58 @@
   margin-top: 24px;
 }
 
+
+/* Phase 2 item 13: rate your term. */
+.termReviewPanel {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.termReviewHeading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.termReviewHeading h2 {
+  margin: 0;
+}
+
+.termReviewList {
+  display: grid;
+  gap: 14px;
+}
+
+.termReviewForm {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+}
+
+.termReviewField {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.termReviewField input {
+  width: 5em;
+}
+
+.termReviewScale {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.termReviewContribute {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}

@@ -137,6 +137,11 @@ def test_every_table_has_row_security_and_a_policy(owner_engine):
     for table in Base.metadata.sorted_tables:
         row = by_table[table.name]
         assert row.relrowsecurity, f"{table.name}: row level security is off"
+        if table.name in rls.SEALED_TABLES:
+            # Sealed (Phase 2 D25): row security on and no policy at all.
+            assert row.roles is None, f"{table.name}: a sealed table has a policy for {row.roles}"
+            assert not row.relforcerowsecurity
+            continue
         assert row.roles == [rls.APP_ROLE], f"{table.name}: policy is for {row.roles}"
         # Shared tables are read, never written: a policy for SELECT alone.
         expected = "SELECT" if table.name in rls.SHARED_READ_TABLES else "ALL"
@@ -165,6 +170,9 @@ def test_the_app_role_is_granted_the_model_tables_and_nothing_else(owner_engine)
                 ).scalar()
             assert not granted("rls_stray")
             for table in Base.metadata.sorted_tables:
+                if table.name in rls.SEALED_TABLES:
+                    assert not granted(table.name), f"{table.name}: sealed, but the app role can read it"
+                    continue
                 assert granted(table.name), f"{table.name}: the app role cannot read it"
     finally:
         with owner_engine.begin() as conn:
@@ -301,6 +309,8 @@ def test_no_identity_sees_no_rows_at_all(worlds, app_session):
     for table in Base.metadata.sorted_tables:
         # Not vacuous: the rows are there, for the owner.
         assert owner.execute(text(f"SELECT count(*) FROM {table.name}")).scalar(), table.name
+        if table.name in rls.SEALED_TABLES:
+            continue  # refused outright, not merely empty: see the sealed tests below
         count = app_session.execute(text(f"SELECT count(*) FROM {table.name}")).scalar()
         assert count == 0, f"{table.name}: {count} rows visible with no identity set"
 
@@ -312,6 +322,8 @@ def test_an_identity_sees_exactly_its_own_rows_in_every_table(worlds, app_sessio
 
     act_as(app_session, a.id)
     for table in Base.metadata.sorted_tables:
+        if table.name in rls.SEALED_TABLES:
+            continue  # refused outright: see the sealed tests below
         visible = set(app_session.execute(text(f"SELECT id FROM {table.name}")).scalars())
         assert visible == mine[table.name], (
             f"{table.name}: as A, saw {len(visible)} rows, A owns {len(mine[table.name])}"
@@ -414,6 +426,7 @@ DEFINER_SIGNATURES = (
     "account_accept_event_invite(text)",
     "account_shared_events()",
     "account_leave_shared_event(uuid)",
+    "account_recount_grade_distributions()",
 )
 
 
@@ -456,6 +469,7 @@ def test_only_the_app_role_can_call_the_cross_user_functions(owner_engine):
             "SELECT account_accept_event_invite('x')",
             "SELECT * FROM account_shared_events()",
             "SELECT account_leave_shared_event(gen_random_uuid())",
+            "SELECT account_recount_grade_distributions()",
         ):
             with outsider.connect() as conn:
                 with pytest.raises(ProgrammingError, match="permission denied"):
@@ -875,3 +889,76 @@ def test_with_no_identity_the_event_functions_do_nothing(worlds, app_session):
     assert app_session.execute(text("SELECT account_leave_shared_event(:e)"), {"e": event_id}).scalar() is False
     app_session.rollback()
     assert owner.execute(text("SELECT count(*) FROM event_members")).scalar() == 2
+
+
+# --------------------------------------------------------------------------
+# The sealed grade counts (Phase 2 item 13, D25): no request reads or writes
+# them, and the recount writes only groups at or above the floor.
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize("statement", [
+    "SELECT * FROM grade_distributions",
+    "INSERT INTO grade_distributions (id, course_key, term_code, bucket, contributors, computed_at) "
+    "VALUES (gen_random_uuid(), 'X', '2025W1', 80, 9, now())",
+    "UPDATE grade_distributions SET contributors = 99",
+    "DELETE FROM grade_distributions",
+    "TRUNCATE grade_distributions",
+])
+def test_the_app_role_can_neither_read_nor_write_the_grade_counts(worlds, app_session, statement):
+    act_as(app_session, worlds[1].id)
+    with pytest.raises(ProgrammingError, match="permission denied"):
+        app_session.execute(text(statement))
+
+
+def test_supabase_style_grants_on_the_grade_counts_are_taken_away(owner_engine):
+    with owner_engine.begin() as conn:
+        if not conn.execute(text("SELECT 1 FROM pg_roles WHERE rolname = 'rls_outsider'")).scalar():
+            conn.execute(text("CREATE ROLE rls_outsider LOGIN PASSWORD 'outsider_test_only'"))
+        conn.execute(text("GRANT ALL ON grade_distributions TO rls_outsider"))
+        conn.execute(text(f"GRANT ALL ON grade_distributions TO {rls.APP_ROLE}"))
+    rls.install(owner_engine)
+    with owner_engine.connect() as conn:
+        for role in ("rls_outsider", rls.APP_ROLE):
+            for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE"):
+                assert not conn.execute(text("SELECT has_table_privilege(:r, 'grade_distributions', :p)"),
+                                        {"r": role, "p": privilege}).scalar(), (role, privilege)
+
+
+def _contributors(owner, n, course_key, grade):
+    """n people, each with a course graded `grade` and a review opted in."""
+    from app._database.models import CourseModel, TermReviewModel
+    for i in range(n):
+        person = make_user(owner, f"rls-contrib-{course_key[-3:]}-{grade}-{i}@example.com")
+        course = CourseModel(id=uuid.uuid4(), user_id=person.id, code="CPSC 221", name="Algorithms",
+                             semester="Fall", year=2, credits=4.0, final_grade=grade)
+        owner.add(course)
+        owner.flush()
+        owner.add(TermReviewModel(id=uuid.uuid4(), user_id=person.id, course_id=course.id,
+                                  course_key=course_key, term_code="2025W1", contribute_grade=True))
+    owner.commit()
+
+
+def test_the_recount_writes_counts_only_at_or_above_the_floor(worlds, app_session):
+    from app._database import distributions
+    owner = worlds[0]
+    _contributors(owner, 3, "UBCV CPSC 221", 82.0)
+    _contributors(owner, 2, "UBCV CPSC 221", 91.0)
+    _contributors(owner, 4, "UBCV CPSC 310", 75.0)  # one short of the floor
+    act_as(app_session, worlds[1].id)
+    written = distributions.recount(app_session)
+    rows = owner.execute(text("SELECT course_key, term_code, bucket, contributors FROM grade_distributions "
+                              "ORDER BY bucket")).all()
+    assert [tuple(r) for r in rows] == [("UBCV CPSC 221", "2025W1", 80, 3), ("UBCV CPSC 221", "2025W1", 90, 2)]
+    assert written == 2
+    columns = set(owner.execute(text("SELECT column_name FROM information_schema.columns "
+                                     "WHERE table_name = 'grade_distributions'")).scalars())
+    assert columns == {"id", "course_key", "term_code", "bucket", "contributors", "computed_at"}, \
+        "the counts table holds no user id and nothing per contribution"
+
+
+def test_with_no_identity_the_recount_still_reveals_nothing(worlds, app_session):
+    """It needs no identity -- the scheduler has none -- and answers with a
+    number of rows, never their contents."""
+    app_session.info.clear()
+    answer = app_session.execute(text("SELECT account_recount_grade_distributions()")).scalar()
+    assert isinstance(answer, int)

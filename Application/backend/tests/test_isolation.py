@@ -65,7 +65,7 @@ from app._database.db import get_db
 from app.Auth.services.session_service import create_access_token
 from tests.conftest import make_user
 from app.shared.dates import user_today
-from app._database.rls import SHARED_READ_TABLES
+from app._database.rls import SEALED_TABLES, SHARED_READ_TABLES
 from tests.isolation_world import CATALOGUE_IDS, PAIRED_TABLES, seed_catalogue, seed_pair, seed_world, snapshot
 
 MARK_A = "zzownera"
@@ -80,6 +80,8 @@ PUBLIC = {
     # The scheduler's door: no user in it, refused without the cron secret
     # (and absent entirely when none is configured, as in the suite).
     ("POST", "/api/internal/reminders/dispatch"),
+    # The daily grade recount (Phase 2 item 13): the same door, the same rule.
+    ("POST", "/api/internal/distributions/recount"),
 }
 #: Routes about the caller themselves, resolved from the token rather than from
 #: the path, so there is no foreign id to put in it.
@@ -577,6 +579,11 @@ def _check(before, after, b, world_b, response, sent: str):
     for table in SHARED_READ_TABLES:
         if after.get(table) != before.get(table):
             problems.append(f"SHARED WRITE: a request changed {table}")
+    # Sealed rows (Phase 2 D25) likewise: only the scheduler's recount writes
+    # them, and the walk never holds its secret.
+    for table in SEALED_TABLES:
+        if after.get(table) != before.get(table):
+            problems.append(f"SEALED WRITE: a request changed {table}")
 
     if response.status_code >= 500:
         problems.append(f"CRASH: {response.status_code} {response.text[:200]}")
@@ -718,6 +725,7 @@ def test_every_route_is_covered():
 def test_the_world_covers_every_table(db, user):
     from app._database.models import Base
     world = seed_world(db, user.id, MARK_B, user_today(db, user.id))
-    tables = {t.name for t in Base.metadata.sorted_tables} - {"users"} - SHARED_READ_TABLES - PAIRED_TABLES
+    tables = ({t.name for t in Base.metadata.sorted_tables} - {"users"} - SHARED_READ_TABLES - SEALED_TABLES
+              - PAIRED_TABLES)
     assert tables <= set(world)
-    assert SHARED_READ_TABLES <= set(seed_catalogue(db))
+    assert SHARED_READ_TABLES | SEALED_TABLES <= set(seed_catalogue(db))
