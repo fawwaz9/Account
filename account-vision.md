@@ -389,6 +389,16 @@ user base meet. Every item was impossible earlier for lack of people, not lack o
   and both need density: the radar to anonymise check-ins, the salary data to converge
   independent submissions or match a parsed pay stub. Unverified offers never enter the
   aggregate.
+- **Internship and job application tracker** *(added by the owner, 2026-10-11, from
+  `Ideas/next.md`)*. Under Jobs. Every application you send: the company, the role, when
+  you applied and where you found it, and its status as it moves from applied to screening,
+  interview rounds, then offer, rejection, no reply or withdrawn, with deadlines and
+  follow-ups. Dashboards of your own progress: how many get a reply, how long replies take,
+  and the applications → interviews → offers flow drawn as a Sankey diagram, the chart
+  students share at the end of a recruiting season. **Private and single-user:** it needs
+  no density, so unlike the rest of this phase it can ship as soon as the phase opens. It
+  is also the natural way in to co-op salary transparency above: an offer recorded here is
+  the one a student can choose to submit to that aggregate, opt-in.
 
 ### Phase 4 — Smart (history pays)
 The coach. Everything here needs *time* rather than people — a term of personal history,
@@ -2153,6 +2163,7 @@ build high-impact × high-feasibility first. Cost detail lives in §15; decision
 | Office-hours radar | High | Med | Self-reported check-ins → aggregates only; value exchange stated explicitly. |
 | Co-op salary transparency | Med | Very high | Anonymous offers, explicit consent, verified by matching payroll records or converging submissions. Unverified never aggregates. |
 | Gym buddy (opt-in, scoped) | High | Low-Med | Only within existing connections — no-stranger-discovery rules out open matching. |
+| Internship / job application tracker | High | High | Under Jobs: per-user applications with a status history (applied → screening → interviews → offer / rejected / no reply / withdrawn), deadlines and follow-ups. Dashboards plus an applications → interviews → offers Sankey. Single-user, so it needs no density; an offer recorded here can feed co-op salary transparency, opt-in. Added by the owner 2026-10-11. |
 
 ### Phase 4 — smart (history pays)
 
