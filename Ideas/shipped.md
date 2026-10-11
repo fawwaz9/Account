@@ -884,6 +884,41 @@ production-URL build: 26 of 26 files.
 
 ---
 
+## Phase 2 item 9b: shared events, through event links -- SHIPPED 2026-10-11
+The second half of item 9 (`Ideas/overhaul/Phase 2/`, D24), on 9a's pattern.
+- **A member sees and leaves, and changes nothing.** A shared event appears
+  on their own calendar with its title, kind, time, place and notes, the
+  owner's name and the other members'. Drawn dashed. Never the course. A task
+  is the group's work, so members edit it; an event is a time and place one
+  person set, so they don't.
+- **Only a one-off event of your own can be shared:** not a repeat, a shift
+  or a grade's block. If the owner makes it repeat later, it drops off
+  members' calendars.
+- **The same structure as 9a:** `event_members` and `event_invites` hang under
+  the event; `event_members` is read-and-delete for the app role, written
+  only by `account_accept_event_invite`. Four definer functions, none of
+  which writes an event.
+- **Shared tasks reach the calendar too:** a member sees a shared task's due
+  date there, with a card pointing to the Tasks page to tick or edit it.
+- **One share section** now serves tasks and events.
+
+Proven on SQLite and Postgres: 23 shared-event tests, 4 new row-security
+proofs, and all 8 routes in the walks, including under row-level security.
+27 of 27 guard mutations caught on the first run.
+
+**Not yet:** a shared event doesn't count in the member's free time, week
+load or crunch strip.
+
+LIVE: API `account-api-00044-vn2` (digest-verified `f884f69`, sha256
+`cf9d49ca...`) since 2026-10-11 09:58 UTC. The schema step was the owner's;
+the three read-backs matched (`event_members`: SELECT and DELETE only). The
+gate reports row-level security on for 44 of 44 tables. Health ok. The 8 new
+routes answer 401 against two 404 controls. No errors in the new revision's
+logs. `TRUSTED_PROXY_HOPS=1` and the signup list carried over. Frontend
+`main` at `f884f69`, matching a production build file by file (34 files).
+
+---
+
 ## Phase 2 item 9a: shared tasks, through task links -- SHIPPED 2026-10-10
 The first feature where one person changes another's row (`Ideas/overhaul/Phase 2/`, D23).
 - **What a member does:** sees the title, notes and due date, ticks it done

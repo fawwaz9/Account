@@ -383,7 +383,7 @@ and DELETE only). The gate reported row-level security on for 42 of 42
 tables; the 9 routes answer 401 against two 404 controls; no errors in the
 logs; the live site matches the build (33 files).
 
-## The item 9b batch: shared events (D24). NOT YET RUN
+## The item 9b batch: shared events (D24). DEPLOYED 2026-10-11 (`f884f69`, `account-api-00044-vn2`)
 
 | What | Commits | Schema change |
 |---|---|---|
@@ -445,3 +445,8 @@ and `DELETE` on `/api/calendar/<id>/events/<event>/sharing` (and `/link`,
 has a Share section.
 
 **Rollback:** both halves together, per `Ideas/ROLLBACK.md`. The schema stays.
+
+**Result, 2026-10-11:** the three read-backs matched (`event_members`: SELECT
+and DELETE only). The gate reported row-level security on for 44 of 44
+tables; the 8 routes answer 401 against two 404 controls; no errors in the
+logs; the live site matches the build (34 files).
