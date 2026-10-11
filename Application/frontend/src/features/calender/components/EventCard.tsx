@@ -24,10 +24,11 @@ export function EventChip({ occurrence, onSelect }: EventCardProps) {
   return (
     <button
       type="button"
-      className={`calChip calChip-${occurrence.kind}${exam ? " calChipExam" : ""}`}
+      className={`calChip calChip-${occurrence.kind}${exam ? " calChipExam" : ""}${occurrence.shared ? " calChipShared" : ""}`}
       style={kindStyle(occurrence.kind, colors)}
       onClick={() => onSelect(occurrence)}
-      title={[occurrence.title, occurrence.location].filter(Boolean).join(" - ")}
+      title={[occurrence.title, occurrence.location, occurrence.shared && `${occurrence.shared.owner_name}'s`]
+        .filter(Boolean).join(" - ")}
     >
       {occurrence.start_time && (
         <span className="calChipTime">{clockTime(occurrence.start_time)}</span>

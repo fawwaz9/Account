@@ -837,3 +837,62 @@ for its owner alone.
     the session. Both now sign in with real tokens.
 - Frontend: 13 tests (the member's list, the owner's share section, the
   invite page's task path).
+
+## D24. Shared events: a member sees and leaves, and nothing more (item 9b, 2026-10-10)
+
+The second half of item 9, on D23's pattern. It differs in one place:
+**a member changes nothing of an event.** A shared task is work the group
+does together, so anyone can tick it or fix its text. An event is a time and
+a place one person set, and letting a member move it would move it for
+everyone else too.
+
+**What a member gets:**
+- **The event on their own calendar:** its title, kind, time, place and
+  notes, the owner's name and the other members' names. It's drawn dashed,
+  so it reads as on their calendar but not theirs.
+- **Leave.**
+- **Never the course,** and no edit, cancel or delete controls.
+
+**What can be shared:** a one-off event of the owner's own. Not a repeat,
+not a shift (its job and pay are the owner's), and not a block a grade
+produced. If the owner later makes it repeat, it drops off members'
+calendars, and the membership stays for if it becomes a one-off again.
+
+**The same structure as D23:**
+- **Tables:** `event_members` and `event_invites` are children of `events`,
+  so they are the owner's alone. The `events` policy is untouched.
+- **Grants:** `event_members` is on the read-and-delete list. Only
+  `account_accept_event_invite` writes a membership.
+- **Four functions,** not six, because a member doesn't edit:
+  `account_event_invite_preview` (the owner's name, the title and the day),
+  `account_accept_event_invite`, `account_shared_events` and
+  `account_leave_shared_event`. None of them updates or deletes an event,
+  and a test reads the SQL to hold that.
+- **Links:** one live per event, several people, 7 days, at most 8, and
+  `/invite#event:…`.
+
+**Shared tasks reach the calendar too (left open in D23):** a shared task
+with a due date shows on the member's calendar on that day, beside the day's
+all-day items. It says to tick or edit it on the Tasks page, so the calendar
+has one way to change it, not two.
+
+**Still not fed into anything of the member's:** free time, week load and
+the crunch strip read only the member's own events and tasks. A shared event
+is on their calendar to see, not yet in those figures.
+
+**Evidence:**
+- `tests/test_shared_events.py`, 23 tests, run on both SQLite and Postgres.
+- 4 new Postgres proofs in `test_rls.py`:
+  - The app role can't insert or rename an event membership.
+  - A member sees the event only through the function, never in `events`.
+  - A stranger sees nothing and can't take anyone off.
+  - With no identity, all four functions do nothing.
+  - An outsider role can't call any of them.
+- The walks seed a shared study group between A and B, and all 8 new routes
+  are walked on both databases, including under row-level security.
+- **Mutation check:** 27 removals across the SQLite half, the owner service,
+  the SQL functions and the grant. All were caught on the first run.
+- Frontend: 10 tests (the event share section, the shared-item card, the
+  calendar conversions, the invite page's event path). One existing guard
+  also caught the share section using a heading style that only the Budget
+  page's sheets define. It has its own style now.

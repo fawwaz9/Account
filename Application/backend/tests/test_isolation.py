@@ -98,6 +98,13 @@ SKIPPED = {
 #: modules.
 PATH_SOURCES = {
     ("/api/tasks/", "rule_id"): "recurring_tasks",
+    # Phase 2 item 9b: sharing needs a one-off event, so these routes name the
+    # world's study group rather than its weekly lecture -- otherwise A's own
+    # requests stop at "can't be shared" and never reach the write.
+    ("/api/calendar/{user_id}/events/{event_id}/sharing", "event_id"): "events_personal",
+    ("/api/calendar/{user_id}/shared-events/", "event_id"): "events_personal",
+    # An event's membership row; bare member_id is a task's.
+    ("/api/calendar/", "member_id"): "event_members",
     ("/api/finances/", "rule_id"): "recurring_transactions",
     ("/api/jobs/", "event_id"): "events_shift",
     "account_id": "accounts",
@@ -236,6 +243,8 @@ BODY_PATCHES: dict[tuple[str, str], list[dict]] = {
     # accepting your own answers "own" -- both reach the functions.
     ("POST", "/api/tasks/{user_id}/shared-tasks/invites/preview"): [{"token": "zzownera task invite token"}],
     ("POST", "/api/tasks/{user_id}/shared-tasks/invites/accept"): [{"token": "zzownera task invite token"}],
+    ("POST", "/api/calendar/{user_id}/shared-events/invites/preview"): [{"token": "zzownera event invite token"}],
+    ("POST", "/api/calendar/{user_id}/shared-events/invites/accept"): [{"token": "zzownera event invite token"}],
     ("POST", "/api/finances/{user_id}/subscriptions/confirm"): [
         {"instruction.kind": "expense", "instruction.to_account_id": None},
         {"instruction.kind": "transfer", "instruction.category_id": None},

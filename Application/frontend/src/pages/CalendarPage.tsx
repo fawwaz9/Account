@@ -3,6 +3,7 @@ import CalenderView from "../features/calender/components/CalenderView";
 import WeekView from "../features/calender/components/WeekView";
 import EventCard from "../features/calender/components/EventCard";
 import EventModal from "../features/calender/components/EventModal";
+import SharedOccurrenceCard from "../features/calender/components/SharedOccurrenceCard";
 import Modal from "../shared/components/Modal";
 import DeleteConfirmModal from "../features/grades/components/DeleteConfirmModal";
 import { useCalender } from "../features/calender/hooks/useCalender";
@@ -254,14 +255,25 @@ export default function CalendarPage() {
           title={`${selected.title} — ${shortDate(selected.on_date)}`}
           onClose={() => setSelected(null)}
         >
-          <EventCard
-            occurrence={selected}
-            onEdit={handleEditSeries}
-            onSkip={handleSkip}
-            onDelete={() => setConfirmingDelete(true)}
-            onClose={() => setSelected(null)}
-            busy={busy}
-          />
+          {/* Phase 2 item 9b: someone else's, shared with you. Theirs to
+              change, so none of the edit, cancel or delete controls. */}
+          {selected.shared && user ? (
+            <SharedOccurrenceCard
+              userId={user.id}
+              occurrence={selected}
+              onClose={() => setSelected(null)}
+              onLeft={() => { setSelected(null); void reload(); }}
+            />
+          ) : (
+            <EventCard
+              occurrence={selected}
+              onEdit={handleEditSeries}
+              onSkip={handleSkip}
+              onDelete={() => setConfirmingDelete(true)}
+              onClose={() => setSelected(null)}
+              busy={busy}
+            />
+          )}
         </Modal>
       )}
 

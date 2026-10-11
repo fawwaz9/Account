@@ -1104,3 +1104,12 @@
   border: none;
   min-width: 0;
 }
+
+/* Phase 2 item 9b: someone else's, shared with you. Dashed, so it reads as on
+   your calendar but not yours to change. Only the left edge has a border here,
+   so only it is dashed; the outline marks the rest. */
+.calChipShared {
+  border-left-style: dashed;
+  outline: 1px dashed rgba(148, 163, 184, 0.45);
+  outline-offset: -1px;
+}

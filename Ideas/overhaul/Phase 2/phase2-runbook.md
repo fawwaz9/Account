@@ -382,3 +382,66 @@ add them with `./invite.sh their@address`.
 and DELETE only). The gate reported row-level security on for 42 of 42
 tables; the 9 routes answer 401 against two 404 controls; no errors in the
 logs; the live site matches the build (33 files).
+
+## The item 9b batch: shared events (D24). NOT YET RUN
+
+| What | Commits | Schema change |
+|---|---|---|
+| Item 9b: event links, members, four definer functions | on `phase2` | **New tables `event_members`, `event_invites`; four new functions; a read-and-delete grant on `event_members`** |
+
+Same order as 9a: backup, schema (yours), then `deploy.run.sh all`. Nothing
+existing is altered.
+
+### 1. Apply the schema (adds two tables and four functions; nothing is dropped)
+
+```sh
+git checkout phase2
+cd Application/backend
+set -a; source ../.env; set +a
+DATABASE_URL="$SUPABASE_DATABASE_URL" .venv/bin/python -m app._database.schema
+```
+
+**Verify, in the SQL editor:**
+1. **Only the API's role can call the new functions.** This should return
+   four rows, each `{postgres=X/postgres,account_app=X/postgres}`:
+
+   ```sql
+   SELECT proname, proacl FROM pg_proc
+   WHERE proname IN ('account_event_invite_preview', 'account_accept_event_invite',
+                     'account_shared_events', 'account_leave_shared_event');
+   ```
+
+2. **Both tables have the per-user policy.** This should return two rows,
+   each `{account_app}` and `ALL`:
+
+   ```sql
+   SELECT tablename, roles, cmd FROM pg_policies WHERE tablename IN ('event_members', 'event_invites');
+   ```
+
+3. **The API's role can read and delete event memberships, never write
+   them.** This should return two rows for `event_members` (`DELETE`,
+   `SELECT`) and four for `event_invites`:
+
+   ```sql
+   SELECT table_name, privilege_type FROM information_schema.role_table_grants
+   WHERE grantee = 'account_app' AND table_name IN ('event_invites', 'event_members')
+   ORDER BY 1, 2;
+   ```
+
+**Undo:** not needed. The tables are new, and the old API never calls the
+functions.
+
+### 2. Deploy
+
+```sh
+./Application/deploy.run.sh all
+```
+
+**Verify:** the 8 new routes answer 401 against a 404 control: `GET`, `POST`
+and `DELETE` on `/api/calendar/<id>/events/<event>/sharing` (and `/link`,
+`/members/<member>`); `GET /api/calendar/<id>/shared-events`; `POST`
+`/shared-events/invites/preview` and `/accept`; `DELETE
+/shared-events/<event>`. Then open one of your own one-off events: the editor
+has a Share section.
+
+**Rollback:** both halves together, per `Ideas/ROLLBACK.md`. The schema stays.

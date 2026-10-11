@@ -149,6 +149,10 @@ class UserModel(Base):
     task_memberships = relationship(
         "TaskMemberModel", foreign_keys="TaskMemberModel.member_id", viewonly=True,
     )
+    #: Others' events this user is on (Phase 2 item 9b), for the same reason.
+    event_memberships = relationship(
+        "EventMemberModel", foreign_keys="EventMemberModel.member_id", viewonly=True,
+    )
 
     @property
     def has_password(self) -> bool:
@@ -588,6 +592,9 @@ class EventModel(Base):
     user = relationship("UserModel", back_populates="events")
     course = relationship("CourseModel", back_populates="events")
     grade = relationship("GradeModel", back_populates="events")
+    #: Who else is on it, and the link that lets them join (Phase 2 item 9b).
+    members = relationship("EventMemberModel", back_populates="event", cascade="all, delete-orphan")
+    invites = relationship("EventInviteModel", back_populates="event", cascade="all, delete-orphan")
 
 
 class TaskModel(Base):
@@ -1804,3 +1811,51 @@ class TaskInviteModel(Base):
     revoked_at = Column(DateTime, nullable=True)
 
     task = relationship("TaskModel", back_populates="invites")
+
+
+#: How many people besides the owner an event can hold (Phase 2 D24). Written
+#: into account_accept_event_invite too; a test holds the two together.
+MAX_EVENT_MEMBERS = 8
+
+
+class EventMemberModel(Base):
+    """Someone else on one of your events (Phase 2 item 9b, D24).
+
+    The same shape as TaskMemberModel, for the same reasons: a child of the
+    event, so only its owner sees or removes it; never written by the API's
+    role, only by account_accept_event_invite for the person holding the link.
+    A member only sees the event and may leave -- they change nothing of it.
+    """
+
+    __tablename__ = "event_members"
+    __table_args__ = (UniqueConstraint("event_id", "member_id", name="uq_event_member"),)
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    event_id = Column(Uuid, ForeignKey("events.id", ondelete="CASCADE"), nullable=False, index=True)
+    #: ON DELETE CASCADE: the member's purge cannot see this row (it is the
+    #: event owner's), so the database removes it.
+    member_id = Column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    member_name = Column(String, nullable=False)
+    owner_name = Column(String, nullable=False)
+    joined_at = Column(DateTime, nullable=False, default=utc_now)
+
+    event = relationship("EventModel", back_populates="members")
+
+
+class EventInviteModel(Base):
+    """The link that lets people join one of your events (Phase 2 item 9b, D24).
+
+    Like TaskInviteModel: the owner's alone, several people per link, one live
+    per event, and only the token's SHA-256 stored.
+    """
+
+    __tablename__ = "event_invites"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    event_id = Column(Uuid, ForeignKey("events.id", ondelete="CASCADE"), nullable=False, index=True)
+    token_hash = Column(String, nullable=False, unique=True)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+    expires_at = Column(DateTime, nullable=False)
+    revoked_at = Column(DateTime, nullable=True)
+
+    event = relationship("EventModel", back_populates="invites")

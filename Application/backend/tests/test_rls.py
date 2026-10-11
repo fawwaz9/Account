@@ -410,6 +410,10 @@ DEFINER_SIGNATURES = (
     "account_set_shared_task_done(uuid, boolean)",
     "account_edit_shared_task(uuid, text, text)",
     "account_leave_shared_task(uuid)",
+    "account_event_invite_preview(text)",
+    "account_accept_event_invite(text)",
+    "account_shared_events()",
+    "account_leave_shared_event(uuid)",
 )
 
 
@@ -448,6 +452,10 @@ def test_only_the_app_role_can_call_the_cross_user_functions(owner_engine):
             "SELECT account_set_shared_task_done(gen_random_uuid(), true)",
             "SELECT account_edit_shared_task(gen_random_uuid(), 'x', NULL)",
             "SELECT account_leave_shared_task(gen_random_uuid())",
+            "SELECT * FROM account_event_invite_preview('x')",
+            "SELECT account_accept_event_invite('x')",
+            "SELECT * FROM account_shared_events()",
+            "SELECT account_leave_shared_event(gen_random_uuid())",
         ):
             with outsider.connect() as conn:
                 with pytest.raises(ProgrammingError, match="permission denied"):
@@ -788,3 +796,82 @@ def test_with_no_identity_the_task_functions_do_nothing(worlds, app_session):
     app_session.rollback()
     assert owner.execute(text("SELECT count(*) FROM task_members")).scalar() == 2
     assert owner.execute(text("SELECT done FROM tasks WHERE id = :t"), {"t": task_id}).scalar() is False
+
+
+# --------------------------------------------------------------------------
+# Shared events (Phase 2 item 9b, D24): the same boundary, and a member only
+# ever reads the event.
+# --------------------------------------------------------------------------
+
+def _shared_event(worlds):
+    """A's study group, which the world has shared with B."""
+    owner, a, b, world_a, _ = worlds
+    return owner.execute(text("SELECT event_id FROM event_members WHERE id = :m"),
+                         {"m": world_a["event_members"]}).scalar()
+
+
+def test_the_app_role_cannot_put_anyone_on_an_event(worlds, app_session):
+    owner, a, b, world_a, _ = worlds
+    event_id = _shared_event(worlds)
+    stranger = make_user(owner, "rls-planted-event@example.com")
+    owner.commit()
+    act_as(app_session, a.id)
+    with pytest.raises(ProgrammingError, match="permission denied"):
+        app_session.execute(text(
+            "INSERT INTO event_members (id, event_id, member_id, member_name, owner_name, joined_at) "
+            "VALUES (gen_random_uuid(), :e, :s, 'planted', 'A', now())"), {"e": event_id, "s": stranger.id})
+    app_session.rollback()
+    act_as(app_session, a.id)
+    with pytest.raises(ProgrammingError, match="permission denied"):
+        app_session.execute(text("UPDATE event_members SET member_name = 'renamed'"))
+    app_session.rollback()
+    act_as(app_session, a.id)
+    assert app_session.execute(text("DELETE FROM event_members WHERE id = :m"),
+                               {"m": world_a["event_members"]}).rowcount == 1
+    app_session.commit()
+
+
+def test_a_member_sees_the_event_only_through_the_function(worlds, app_session):
+    from app._database import sharing
+    owner, a, b, _, _ = worlds
+    event_id = _shared_event(worlds)
+    act_as(app_session, b.id)
+    assert app_session.execute(text("SELECT count(*) FROM events WHERE id = :e"), {"e": event_id}).scalar() == 0
+    assert app_session.execute(text("UPDATE events SET title = 'b was here' WHERE id = :e"),
+                               {"e": event_id}).rowcount == 0
+    app_session.rollback()
+    act_as(app_session, b.id)
+    assert [e.event_id for e in sharing.shared_events(app_session, b.id)] == [event_id]
+    assert "b was here" not in owner.execute(text("SELECT title FROM events WHERE id = :e"), {"e": event_id}).scalar()
+
+
+def test_a_stranger_sees_no_event_and_cannot_take_anyone_off(worlds, app_session):
+    from app._database import sharing
+    owner, a, b, _, _ = worlds
+    stranger = make_user(owner, "rls-event-stranger@example.com")
+    owner.commit()
+    act_as(app_session, stranger.id)
+    assert sharing.shared_events(app_session, stranger.id) == []
+    act_as(app_session, stranger.id)
+    assert sharing.leave_shared_event(app_session, stranger.id, _shared_event(worlds)) is False
+    assert owner.execute(text("SELECT count(*) FROM event_members")).scalar() == 2
+
+
+def test_with_no_identity_the_event_functions_do_nothing(worlds, app_session):
+    import hashlib
+    owner, a, b, _, _ = worlds
+    event_id = _shared_event(worlds)
+    live = hashlib.sha256(b"zzownera event invite token").hexdigest()
+    act_as(app_session, b.id)
+    assert app_session.execute(text("SELECT * FROM account_event_invite_preview(:h)"), {"h": live}).all(), \
+        "not vacuous: with an identity the link is found"
+    assert app_session.execute(text("SELECT * FROM account_shared_events()")).all(), \
+        "not vacuous: with an identity B sees A's shared event"
+    app_session.rollback()
+    app_session.info.clear()
+    assert app_session.execute(text("SELECT * FROM account_event_invite_preview(:h)"), {"h": live}).all() == []
+    assert app_session.execute(text("SELECT account_accept_event_invite(:h)"), {"h": live}).scalar() == "invalid"
+    assert app_session.execute(text("SELECT * FROM account_shared_events()")).all() == []
+    assert app_session.execute(text("SELECT account_leave_shared_event(:e)"), {"e": event_id}).scalar() is False
+    app_session.rollback()
+    assert owner.execute(text("SELECT count(*) FROM event_members")).scalar() == 2

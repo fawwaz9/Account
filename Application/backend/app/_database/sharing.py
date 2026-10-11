@@ -1,4 +1,4 @@
-"""The cross-user steps of sharing (Phase 2 items 10 and 9a, D22 and D23), in one place.
+"""The cross-user steps of sharing (Phase 2 items 10, 9a and 9b; D22-D24), in one place.
 
 Like ``identity.py``: on Postgres each is a ``SECURITY DEFINER`` function
 (``rls.FUNCTION_SQL``) answering with a name, a status word or three numbers,
@@ -19,8 +19,8 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app._database.models import (
-    MAX_TASK_MEMBERS, InviteModel, PartnershipModel, TaskInviteModel, TaskMemberModel, TaskModel, UserModel,
-    utc_now,
+    MAX_EVENT_MEMBERS, MAX_TASK_MEMBERS, EventInviteModel, EventMemberModel, EventModel, InviteModel,
+    PartnershipModel, TaskInviteModel, TaskMemberModel, TaskModel, UserModel, utc_now,
 )
 
 
@@ -267,6 +267,114 @@ def leave_shared_task(db: Session, user_id: uuid.UUID, task_id: uuid.UUID) -> bo
         return left
     gone = db.query(TaskMemberModel).filter(
         TaskMemberModel.task_id == task_id, TaskMemberModel.member_id == user_id,
+    ).delete(synchronize_session=False)
+    db.commit()
+    return gone > 0
+
+
+# --------------------------------------------------------------------------
+# Shared events (Phase 2 item 9b, D24): a member sees and leaves, nothing more
+# --------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class EventInvitePreview:
+    owner_name: str
+    title: str
+    starts_on: date
+
+
+@dataclass(frozen=True)
+class SharedEvent:
+    """What a member may see of someone else's event: when and where."""
+    event_id: uuid.UUID
+    owner_name: str
+    title: str
+    kind: str
+    location: str | None
+    notes: str | None
+    starts_on: date
+    start_time: object | None
+    end_time: object | None
+    member_names: list[str]
+
+
+def event_shareable(event: EventModel) -> bool:
+    """A one-off of the owner's own: not a repeat, a shift, or a grade's block."""
+    return event.recur_freq is None and event.job_id is None and event.grade_id is None
+
+
+def _live_event_invite(db: Session, token_hash: str):
+    return (
+        db.query(EventInviteModel)
+        .filter(EventInviteModel.token_hash == token_hash, EventInviteModel.revoked_at.is_(None),
+                EventInviteModel.expires_at > utc_now())
+        .first()
+    )
+
+
+def event_invite_preview(db: Session, user_id: uuid.UUID, token_hash: str) -> EventInvitePreview | None:
+    if _is_postgres(db):
+        row = db.execute(text("SELECT * FROM account_event_invite_preview(:h)"), {"h": token_hash}).first()
+        return EventInvitePreview(row.owner_name, row.title, row.starts_on) if row else None
+    invite = _live_event_invite(db, token_hash)
+    event = db.get(EventModel, invite.event_id) if invite else None
+    if event is None or not event_shareable(event):
+        return None
+    owner = _live_owner(db, event.user_id)
+    return EventInvitePreview(owner.name, event.title, event.starts_on) if owner else None
+
+
+def accept_event_invite(db: Session, user_id: uuid.UUID, token_hash: str) -> str:
+    """'accepted', 'invalid', 'own', 'already' or 'full'."""
+    if _is_postgres(db):
+        status = db.execute(text("SELECT account_accept_event_invite(:h)"), {"h": token_hash}).scalar()
+        db.commit()
+        return status
+    invite = _live_event_invite(db, token_hash)
+    event = db.get(EventModel, invite.event_id) if invite else None
+    if event is None or not event_shareable(event):
+        return "invalid"
+    if event.user_id == user_id:
+        return "own"
+    me, owner = _live_owner(db, user_id), _live_owner(db, event.user_id)
+    if me is None or owner is None:
+        return "invalid"
+    members = db.query(EventMemberModel).filter(EventMemberModel.event_id == event.id)
+    if members.filter(EventMemberModel.member_id == user_id).first() is not None:
+        return "already"
+    if members.count() >= MAX_EVENT_MEMBERS:
+        return "full"
+    db.add(EventMemberModel(id=uuid.uuid4(), event_id=event.id, member_id=user_id, member_name=me.name,
+                            owner_name=owner.name, joined_at=utc_now()))
+    db.commit()
+    return "accepted"
+
+
+def shared_events(db: Session, user_id: uuid.UUID) -> list[SharedEvent]:
+    if _is_postgres(db):
+        rows = db.execute(text("SELECT * FROM account_shared_events()")).all()
+        return [SharedEvent(r.event_id, r.owner_name, r.title, r.kind, r.location, r.notes, r.starts_on,
+                            r.start_time, r.end_time, list(r.member_names or [])) for r in rows]
+    out = []
+    for membership in db.query(EventMemberModel).filter(EventMemberModel.member_id == user_id):
+        event = db.get(EventModel, membership.event_id)
+        if event is None or not event_shareable(event) or _live_owner(db, event.user_id) is None:
+            continue
+        names = [m.member_name for m in sorted(
+            db.query(EventMemberModel).filter(EventMemberModel.event_id == event.id),
+            key=lambda m: (m.joined_at, m.member_name))]
+        out.append(SharedEvent(event.id, membership.owner_name, event.title, event.kind, event.location,
+                               event.notes, event.starts_on, event.start_time, event.end_time, names))
+    return out
+
+
+def leave_shared_event(db: Session, user_id: uuid.UUID, event_id: uuid.UUID) -> bool:
+    if _is_postgres(db):
+        left = bool(db.execute(text("SELECT account_leave_shared_event(:e)"), {"e": event_id}).scalar())
+        db.commit()
+        return left
+    gone = db.query(EventMemberModel).filter(
+        EventMemberModel.event_id == event_id, EventMemberModel.member_id == user_id,
     ).delete(synchronize_session=False)
     db.commit()
     return gone > 0

@@ -27,7 +27,7 @@ Postgres refuse to return them, whatever the query says.
 * The few questions that cross users are ``SECURITY DEFINER`` functions that
   answer with an id or a boolean, never with rows -- apart from the narrow
   views sharing needs (a partner's figure, a shared task's few fields).
-* ``NO_DIRECT_WRITE_TABLES`` (Phase 2 D23) are per-user tables the app role
+* ``NO_DIRECT_WRITE_TABLES`` (Phase 2 D23, D24) are per-user tables the app role
   may read and delete from but never write: their rows are created only by a
   definer function, for the person who accepted a link.
 
@@ -94,13 +94,18 @@ FUNCTIONS = (
     "account_set_shared_task_done",
     "account_edit_shared_task",
     "account_leave_shared_task",
+    # Phase 2 item 9b (D24): shared events.
+    "account_event_invite_preview",
+    "account_accept_event_invite",
+    "account_shared_events",
+    "account_leave_shared_event",
 )
 
 #: Tables the app role may read and delete from but never insert into or
 #: update (Phase 2 D23). A membership row is written only by the accept
 #: function, for the person holding the link -- so not even the task's owner
 #: can put somebody on a task, and nobody can rewrite a copied name.
-NO_DIRECT_WRITE_TABLES = frozenset({"task_members"})
+NO_DIRECT_WRITE_TABLES = frozenset({"task_members", "event_members"})
 
 FUNCTION_SQL = """
 CREATE OR REPLACE FUNCTION account_current_user() RETURNS uuid
@@ -316,6 +321,80 @@ CREATE OR REPLACE FUNCTION account_leave_shared_task(p_task uuid) RETURNS boolea
               RETURNING 1)
           SELECT count(*) > 0 FROM gone $$;
 
+-- Phase 2 item 9b (D24): shared events. The same shape as shared tasks, but a
+-- member only sees and leaves: nothing a member does changes the event. A
+-- shareable event is a one-off of the owner's own: not a repeat, not a
+-- shift, not a block a grade produced.
+
+CREATE OR REPLACE FUNCTION account_event_invite_preview(p_token_hash text)
+    RETURNS TABLE(owner_name text, title text, starts_on date)
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ SELECT u.name::text, e.title::text, e.starts_on
+          FROM event_invites i JOIN events e ON e.id = i.event_id JOIN users u ON u.id = e.user_id
+          WHERE account_current_user() IS NOT NULL
+            AND i.token_hash = p_token_hash AND i.revoked_at IS NULL
+            AND i.expires_at > (now() AT TIME ZONE 'utc')
+            AND e.recur_freq IS NULL AND e.job_id IS NULL AND e.grade_id IS NULL
+            AND u.deleted_at IS NULL $$;
+
+-- The only writer of event_members. 8 is models.MAX_EVENT_MEMBERS.
+CREATE OR REPLACE FUNCTION account_accept_event_invite(p_token_hash text) RETURNS text
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$
+DECLARE
+    me uuid := account_current_user();
+    inv event_invites%ROWTYPE;
+    ev events%ROWTYPE;
+    my_name text;
+    their_name text;
+BEGIN
+    IF me IS NULL THEN RETURN 'invalid'; END IF;
+    SELECT * INTO inv FROM event_invites
+        WHERE token_hash = p_token_hash AND revoked_at IS NULL
+          AND expires_at > (now() AT TIME ZONE 'utc');
+    IF NOT FOUND THEN RETURN 'invalid'; END IF;
+    SELECT * INTO ev FROM events WHERE id = inv.event_id FOR UPDATE;
+    IF NOT FOUND OR ev.recur_freq IS NOT NULL OR ev.job_id IS NOT NULL OR ev.grade_id IS NOT NULL THEN
+        RETURN 'invalid';
+    END IF;
+    IF ev.user_id = me THEN RETURN 'own'; END IF;
+    SELECT name INTO my_name FROM users WHERE id = me AND deleted_at IS NULL;
+    SELECT name INTO their_name FROM users WHERE id = ev.user_id AND deleted_at IS NULL;
+    IF my_name IS NULL OR their_name IS NULL THEN RETURN 'invalid'; END IF;
+    IF EXISTS (SELECT 1 FROM event_members WHERE event_id = ev.id AND member_id = me) THEN
+        RETURN 'already';
+    END IF;
+    IF (SELECT count(*) FROM event_members WHERE event_id = ev.id) >= 8 THEN RETURN 'full'; END IF;
+    INSERT INTO event_members (id, event_id, member_id, member_name, owner_name, joined_at)
+        VALUES (gen_random_uuid(), ev.id, me, my_name, their_name, now() AT TIME ZONE 'utc')
+        ON CONFLICT (event_id, member_id) DO NOTHING;
+    RETURN 'accepted';
+END $$;
+
+-- The events the caller is on: when and where, never the course.
+CREATE OR REPLACE FUNCTION account_shared_events()
+    RETURNS TABLE(event_id uuid, owner_name text, title text, kind text, location text, notes text,
+                  starts_on date, start_time time, end_time time, member_names text[])
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ SELECT e.id, m.owner_name::text, e.title::text, e.kind::text, e.location::text, e.notes::text,
+                 e.starts_on, e.start_time, e.end_time,
+                 ARRAY(SELECT o.member_name::text FROM event_members o
+                       WHERE o.event_id = e.id ORDER BY o.joined_at, o.member_name)
+          FROM event_members m
+          JOIN events e ON e.id = m.event_id
+          JOIN users u ON u.id = e.user_id
+          WHERE m.member_id = account_current_user()
+            AND e.recur_freq IS NULL AND e.job_id IS NULL AND e.grade_id IS NULL
+            AND u.deleted_at IS NULL $$;
+
+CREATE OR REPLACE FUNCTION account_leave_shared_event(p_event uuid) RETURNS boolean
+    LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ WITH gone AS (
+              DELETE FROM event_members
+              WHERE event_id = p_event AND member_id = account_current_user()
+              RETURNING 1)
+          SELECT count(*) > 0 FROM gone $$;
+
 -- Definer functions run with their owner's rights, so nobody but the API
 -- needs to be able to call them.
 REVOKE ALL ON FUNCTION account_user_id_by_email(text) FROM PUBLIC;
@@ -334,6 +413,10 @@ REVOKE ALL ON FUNCTION account_shared_tasks() FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_set_shared_task_done(uuid, boolean) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_edit_shared_task(uuid, text, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_leave_shared_task(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_event_invite_preview(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_accept_event_invite(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_shared_events() FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_leave_shared_event(uuid) FROM PUBLIC;
 
 -- PUBLIC is not the only way in. Supabase's default privileges grant every new
 -- function to anon and authenticated by name, and its Data API lets anon call
@@ -509,6 +592,10 @@ def grant_statements() -> list[str]:
         "GRANT EXECUTE ON FUNCTION account_set_shared_task_done(uuid, boolean) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_edit_shared_task(uuid, text, text) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_leave_shared_task(uuid) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_event_invite_preview(text) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_accept_event_invite(text) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_shared_events() TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_leave_shared_event(uuid) TO " + APP_ROLE,
     ]
 
 

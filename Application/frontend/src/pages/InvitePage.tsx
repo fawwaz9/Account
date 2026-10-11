@@ -4,6 +4,8 @@ import { useAuth } from "../app/auth/AuthContext";
 import { acceptInvite, previewInvite } from "../features/partners/api";
 import { AcceptStatus } from "../features/partners/types";
 import { TASK_LINK_PREFIX, TaskAcceptStatus, acceptTaskInvite, previewTaskInvite } from "../features/tasks/sharing";
+import { EVENT_LINK_PREFIX, EventAcceptStatus, acceptEventInvite, previewEventInvite } from "../features/calender/sharing";
+import { shortDate } from "../shared/utils/dateUtils";
 
 const REFUSED: Record<Exclude<AcceptStatus, "accepted">, string> = {
   invalid: "That invite link has expired, been used, or been cancelled. Ask for a new one.",
@@ -18,17 +20,26 @@ const TASK_REFUSED: Record<Exclude<TaskAcceptStatus, "accepted">, string> = {
   full: "That task already has as many people on it as it can hold.",
 };
 
-/** What the link is for: a partner (the plain fragment, as item 10 sent them) or a task. */
-function parse(hash: string): { kind: "partner" | "task"; token: string } {
+const EVENT_REFUSED: Record<Exclude<EventAcceptStatus, "accepted">, string> = {
+  invalid: "That link has expired or been cancelled. Ask for a new one.",
+  own: "That's a link to your own event. Send it to the people you're meeting.",
+  already: "You're already on that event.",
+  full: "That event already has as many people on it as it can hold.",
+};
+
+type Kind = "partner" | "task" | "event";
+
+/** What the link is for: a partner (the plain fragment, as item 10 sent them), a task or an event. */
+function parse(hash: string): { kind: Kind; token: string } {
   const raw = decodeURIComponent(hash.replace(/^#/, ""));
-  return raw.startsWith(TASK_LINK_PREFIX)
-    ? { kind: "task", token: raw.slice(TASK_LINK_PREFIX.length) }
-    : { kind: "partner", token: raw };
+  if (raw.startsWith(TASK_LINK_PREFIX)) return { kind: "task", token: raw.slice(TASK_LINK_PREFIX.length) };
+  if (raw.startsWith(EVENT_LINK_PREFIX)) return { kind: "event", token: raw.slice(EVENT_LINK_PREFIX.length) };
+  return { kind: "partner", token: raw };
 }
 
 /**
- * Opening an invite link (Phase 2 items 10 and 9a, D16, D23). The token is in
- * the fragment (/invite#token, or /invite#task:token), so it never reaches a
+ * Opening an invite link (Phase 2 items 10, 9a and 9b; D16, D23, D24). The
+ * token is in the fragment (/invite#token, #task:token or #event:token), so it never reaches a
  * server log; it is sent to the API in a request body. Shows who sent it, and
  * for what, then asks before anything happens.
  */
@@ -39,9 +50,10 @@ export default function InvitePage() {
   const { kind, token } = parse(location.hash);
   const [inviter, setInviter] = useState<string | null>(null);
   const [taskTitle, setTaskTitle] = useState<string | null>(null);
+  const [eventDay, setEventDay] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const invalid = kind === "task" ? TASK_REFUSED.invalid : REFUSED.invalid;
+  const invalid = { task: TASK_REFUSED, event: EVENT_REFUSED, partner: REFUSED }[kind].invalid;
 
   useEffect(() => {
     if (!user) return;
@@ -50,11 +62,18 @@ export default function InvitePage() {
       return;
     }
     let cancelled = false;
-    const look = kind === "task"
-      ? previewTaskInvite(user.id, token).then((found) => {
-          if (!cancelled) { setInviter(found.owner_name); setTaskTitle(found.title); }
-        })
-      : previewInvite(user.id, token).then((found) => { if (!cancelled) setInviter(found.inviter_name); });
+    let look: Promise<void>;
+    if (kind === "task") {
+      look = previewTaskInvite(user.id, token).then((found) => {
+        if (!cancelled) { setInviter(found.owner_name); setTaskTitle(found.title); }
+      });
+    } else if (kind === "event") {
+      look = previewEventInvite(user.id, token).then((found) => {
+        if (!cancelled) { setInviter(found.owner_name); setTaskTitle(found.title); setEventDay(found.starts_on); }
+      });
+    } else {
+      look = previewInvite(user.id, token).then((found) => { if (!cancelled) setInviter(found.inviter_name); });
+    }
     look.catch(() => { if (!cancelled) setProblem(invalid); });
     return () => { cancelled = true; };
   }, [user, token, kind, invalid]);
@@ -70,6 +89,13 @@ export default function InvitePage() {
           return;
         }
         setProblem(TASK_REFUSED[status]);
+      } else if (kind === "event") {
+        const { status } = await acceptEventInvite(user.id, token);
+        if (status === "accepted") {
+          navigate("/calendar", { replace: true });
+          return;
+        }
+        setProblem(EVENT_REFUSED[status]);
       } else {
         const { status } = await acceptInvite(user.id, token);
         if (status === "accepted") {
@@ -86,7 +112,24 @@ export default function InvitePage() {
   }
 
   let offer = null;
-  if (inviter && kind === "task") {
+  if (inviter && kind === "event") {
+    offer = (
+      <>
+        <p>
+          <strong>{inviter}</strong> would like you at <strong>{taskTitle}</strong>
+          {eventDay && <> on {shortDate(eventDay)}</>}. It would appear on your calendar with its time, place
+          and notes. Nothing else of theirs, and you couldn&rsquo;t change it. {inviter} can take you off, and
+          you can leave at any time.
+        </p>
+        <div className="catalogueActions">
+          <button type="button" className="calButton calButtonPrimary" onClick={() => void accept()} disabled={busy}>
+            Add it to my calendar
+          </button>
+          <Link to="/calendar" className="calButton">No thanks</Link>
+        </div>
+      </>
+    );
+  } else if (inviter && kind === "task") {
     offer = (
       <>
         <p>

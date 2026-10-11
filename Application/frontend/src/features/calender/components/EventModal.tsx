@@ -1,3 +1,4 @@
+import EventSharingSection from "./EventSharingSection";
 import { useEffect, useState } from "react";
 import Modal from "../../../shared/components/Modal";
 import RecurrenceEditor from "./RecurrenceEditor";
@@ -226,6 +227,9 @@ export default function EventModal({
           </button>
         </div>
       </form>
+      {/* Phase 2 item 9b: an event that exists can be shared. Outside the
+          form, since sharing saves as you go. */}
+      {event && <EventSharingSection eventId={event.id} />}
     </Modal>
   );
 }

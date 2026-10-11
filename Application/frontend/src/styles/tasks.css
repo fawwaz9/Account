@@ -1117,6 +1117,14 @@
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+/* Its own heading row, not .sectionHeading: that one lives in the Budget
+   sheets, which the calendar and tasks pages never load. */
+.taskSharingHeading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .taskSharing h3 {
   margin: 0;
   font-size: 1rem;

@@ -59,6 +59,8 @@ from app._database.models import (
     TaskInviteModel,
     TaskMemberModel,
     UserModel,
+    EventInviteModel,
+    EventMemberModel,
 )
 
 from app.Intake.services import storage  # noqa: E402
@@ -179,6 +181,17 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
     db.add(shift_event)
     db.flush()
     ids["events_shift"] = shift_event.id
+    # Phase 2 item 9b: a one-off personal event, the kind that can be shared --
+    # the lecture above repeats, and the shift is a shift. Its own key, so
+    # ids["events"] stays the lecture the walk already uses.
+    personal_event = EventModel(
+        id=new_id(), user_id=user_id, title=f"{marker} study group", kind="personal",
+        location=f"{marker} library", notes=f"{marker} bring notes", starts_on=WORLD_DAY,
+        start_time=time(14, 0), end_time=time(15, 0),
+    )
+    db.add(personal_event)
+    db.flush()
+    ids["events_personal"] = personal_event.id
     task = add(TaskModel(
         id=new_id(), user_id=user_id, course_id=course.id, grade_id=grade.id, title=f"{marker} task",
         notes=f"{marker} notes", due_date=WORLD_DAY, done=False, archived=False,
@@ -276,6 +289,11 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
     add(TaskInviteModel(id=new_id(), task_id=task.id,
                         token_hash=hashlib.sha256(f"{marker} task invite token".encode()).hexdigest(),
                         expires_at=datetime.combine(day + timedelta(days=5), time(12, 0))))
+    # Phase 2 item 9b: a live link on the world's personal event, token
+    # "<marker> event invite token".
+    add(EventInviteModel(id=new_id(), event_id=personal_event.id,
+                         token_hash=hashlib.sha256(f"{marker} event invite token".encode()).hexdigest(),
+                         expires_at=datetime.combine(day + timedelta(days=5), time(12, 0))))
     # Phase 2 item 4: an own prerequisite rule on the world's course, with the
     # marker in the private syllabus sentence a leak would carry.
     add(PrerequisiteProposalModel(id=new_id(), user_id=user_id, course_id=course.id, kind="prerequisite",
@@ -292,8 +310,8 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
 
 
 #: Tables whose rows need two people, seeded by seed_pair rather than by one
-#: user's world (Phase 2 items 10 and 9a).
-PAIRED_TABLES = frozenset({"partnerships", "task_members"})
+#: user's world (Phase 2 items 10, 9a and 9b).
+PAIRED_TABLES = frozenset({"partnerships", "task_members", "event_members"})
 
 
 def seed_pair(db, a_id, b_id, mark_a: str, mark_b: str) -> tuple[dict, dict]:
@@ -326,9 +344,18 @@ def seed_pair(db, a_id, b_id, mark_a: str, mark_b: str) -> tuple[dict, dict]:
     b_member = TaskMemberModel(id=uuid.uuid4(), task_id=b_task.id, member_id=third.id,
                                member_name=f"{mark_b} member", owner_name=f"{mark_b} owner")
     db.add_all([a_member, b_member])
+    # Shared events (Phase 2 item 9b), the same way round: A's study group has
+    # B on it, and B's has the third person.
+    a_event = db.query(EventModel).filter_by(user_id=a_id, title=f"{mark_a} study group").one()
+    b_event = db.query(EventModel).filter_by(user_id=b_id, title=f"{mark_b} study group").one()
+    a_attendee = EventMemberModel(id=uuid.uuid4(), event_id=a_event.id, member_id=b_id,
+                                  member_name=f"{mark_a} attendee", owner_name=f"{mark_a} owner")
+    b_attendee = EventMemberModel(id=uuid.uuid4(), event_id=b_event.id, member_id=third.id,
+                                  member_name=f"{mark_b} attendee", owner_name=f"{mark_b} owner")
+    db.add_all([a_attendee, b_attendee])
     db.flush()
-    ids = ({"partnerships": a_row.id, "task_members": a_member.id},
-           {"partnerships": b_row.id, "task_members": b_member.id})
+    ids = ({"partnerships": a_row.id, "task_members": a_member.id, "event_members": a_attendee.id},
+           {"partnerships": b_row.id, "task_members": b_member.id, "event_members": b_attendee.id})
     db.commit()
     return ids
 

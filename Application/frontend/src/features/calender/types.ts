@@ -85,6 +85,12 @@ export interface EventOccurrence {
    * grade was saved.
    */
   grade_id: string | null;
+  /**
+   * Phase 2 item 9b: set when this is someone else's, shared with you -- their
+   * event, or their task's due date. It is theirs to change: the calendar only
+   * shows it, and offers leaving.
+   */
+  shared?: { owner_name: string; member_names: string[]; what: "event" | "task" };
 }
 
 export interface EventCreate {

@@ -85,17 +85,22 @@ def test_per_user_tables_keep_their_four_verbs():
 
 # --- read and delete only (Phase 2 D23) -------------------------------------------
 
-def test_memberships_are_read_and_deleted_never_written_by_the_app_role():
+def test_both_membership_tables_are_on_the_read_and_delete_list():
+    assert {"task_members", "event_members"} <= rls.NO_DIRECT_WRITE_TABLES
+
+
+@pytest.mark.parametrize("table", sorted(rls.NO_DIRECT_WRITE_TABLES))
+def test_memberships_are_read_and_deleted_never_written_by_the_app_role(table):
     """A membership row is written only by the accept function, for the person
     holding the link -- so the app role may not insert or update one."""
-    assert "task_members" in rls.NO_DIRECT_WRITE_TABLES
-    statements = _for(rls.grant_statements(), "task_members")
-    assert [s for s in statements if s.startswith("GRANT")] == [f"GRANT SELECT, DELETE ON task_members TO {rls.APP_ROLE}"]
-    assert f"REVOKE INSERT, UPDATE, TRUNCATE ON task_members FROM {rls.APP_ROLE}" in statements
+    statements = _for(rls.grant_statements(), table)
+    assert [s for s in statements if s.startswith("GRANT")] == [f"GRANT SELECT, DELETE ON {table} TO {rls.APP_ROLE}"]
+    assert f"REVOKE INSERT, UPDATE, TRUNCATE ON {table} FROM {rls.APP_ROLE}" in statements
 
 
-def test_a_read_and_delete_table_keeps_its_owner_policy():
-    policies = [s for s in _for(rls.policy_statements(), "task_members") if s.startswith("CREATE POLICY")]
+@pytest.mark.parametrize("table", sorted(rls.NO_DIRECT_WRITE_TABLES))
+def test_a_read_and_delete_table_keeps_its_owner_policy(table):
+    policies = [s for s in _for(rls.policy_statements(), table) if s.startswith("CREATE POLICY")]
     assert len(policies) == 1 and f"FOR ALL TO {rls.APP_ROLE}" in policies[0]
     assert "p.user_id = account_current_user()" in policies[0]
 

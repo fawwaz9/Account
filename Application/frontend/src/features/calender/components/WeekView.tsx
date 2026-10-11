@@ -96,7 +96,7 @@ export default function WeekView({
                   type="button"
                   className={`calChip calChip-${occurrence.kind}${
                     EXAM_KINDS.includes(occurrence.kind) ? " calChipExam" : ""
-                  }`}
+                  }${occurrence.shared ? " calChipShared" : ""}`}
                   style={kindStyle(occurrence.kind, colors)}
                   onClick={() => onSelectOccurrence(occurrence)}
                 >
@@ -141,7 +141,8 @@ export default function WeekView({
                   <button
                     key={`${item.occurrence.event_id}-${item.occurrence.on_date}`}
                     type="button"
-                    className={`weekBlock calChip-${item.occurrence.kind}${exam ? " weekBlockExam" : ""}`}
+                    className={`weekBlock calChip-${item.occurrence.kind}${exam ? " weekBlockExam" : ""}${
+                      item.occurrence.shared ? " calChipShared" : ""}`}
                     style={{
                       ...kindStyle(item.occurrence.kind, colors),
                       top,

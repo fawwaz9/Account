@@ -82,6 +82,7 @@ def _build(with_b: bool):
     world_a["partnerships"] = uuid.uuid5(uuid.NAMESPACE_URL, "account-ni/no-partnership")
     # Likewise nobody is on A's task here, and A is on nobody's (DOMAIN_404).
     world_a["task_members"] = uuid.uuid5(uuid.NAMESPACE_URL, "account-ni/no-task-member")
+    world_a["event_members"] = uuid.uuid5(uuid.NAMESPACE_URL, "account-ni/no-event-member")
     # Shared rows belong to nobody, so both runs hold them, with the same ids.
     seed_catalogue(session)
 
@@ -174,6 +175,11 @@ DOMAIN_404 = {
     ("DELETE", "/api/tasks/{user_id}/tasks/{task_id}/sharing/members/{member_id}"): "nobody on the task to remove",
     ("PATCH", "/api/tasks/{user_id}/shared-tasks/{task_id}"): "A is on nobody's task",
     ("DELETE", "/api/tasks/{user_id}/shared-tasks/{task_id}"): "A is on nobody's task",
+    # Shared events (Phase 2 item 9b), likewise. The path's event is A's own
+    # study group, which A owns rather than attends. Tested in
+    # tests/test_shared_events.py.
+    ("DELETE", "/api/calendar/{user_id}/events/{event_id}/sharing/members/{member_id}"): "nobody on the event to remove",
+    ("DELETE", "/api/calendar/{user_id}/shared-events/{event_id}"): "A is on nobody's event",
 }
 
 

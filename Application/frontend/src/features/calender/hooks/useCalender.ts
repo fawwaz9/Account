@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchAgenda } from "../api";
 import { EventOccurrence } from "../types";
 import { fetchTasks } from "../../tasks/api";
+import { fetchSharedTasks, SharedTask } from "../../tasks/sharing";
+import { fetchSharedEvents, SharedEvent } from "../sharing";
 import { Task } from "../../tasks/types";
 import { useAuth } from "../../../app/auth/AuthContext";
 import {
@@ -87,12 +89,22 @@ export function useCalender() {
     setError(null);
 
     try {
-      const [nextOccurrences, nextTasks] = await Promise.all([
+      const [nextOccurrences, nextTasks, sharedEvents, sharedTasks] = await Promise.all([
         fetchAgenda(userId, windowStart, windowEnd),
         fetchTasks(userId, { start: windowStart, end: windowEnd }),
+        // Phase 2 item 9b. A failure here leaves your own calendar as it was
+        // rather than taking it down with it.
+        fetchSharedEvents(userId, windowStart, windowEnd).catch(() => [] as SharedEvent[]),
+        fetchSharedTasks(userId).catch(() => [] as SharedTask[]),
       ]);
       if (ticket !== latestRequest.current) return;
-      setOccurrences(nextOccurrences);
+      setOccurrences([
+        ...nextOccurrences,
+        ...sharedEvents.map(sharedEventOccurrence),
+        ...sharedTasks
+          .filter((task) => task.due_date && task.due_date >= windowStart && task.due_date <= windowEnd)
+          .map(sharedTaskOccurrence),
+      ]);
       setTasks(nextTasks);
     } catch (err) {
       if (ticket !== latestRequest.current) return;
@@ -146,4 +158,28 @@ function groupByDay(
   }
 
   return days.map((date) => buckets.get(date)!);
+}
+
+/** Someone else's event, as an occurrence on your calendar (Phase 2 item 9b). */
+export function sharedEventOccurrence(event: SharedEvent): EventOccurrence {
+  return {
+    event_id: event.event_id, on_date: event.starts_on, title: event.title,
+    kind: event.kind as EventOccurrence["kind"], start_time: event.start_time, end_time: event.end_time,
+    location: event.location, notes: event.notes, course_id: null, course_code: null, job_id: null,
+    repeats: false, grade_id: null,
+    shared: { owner_name: event.owner_name, member_names: event.member_names, what: "event" },
+  };
+}
+
+/**
+ * Someone else's task, on the day it is due. Shown with the day's all-day
+ * items rather than on the clock: it is a deadline, not a block of time.
+ */
+export function sharedTaskOccurrence(task: SharedTask): EventOccurrence {
+  return {
+    event_id: task.task_id, on_date: task.due_date as string, title: task.done ? `✓ ${task.title}` : task.title,
+    kind: "deadline", start_time: null, end_time: null, location: null, notes: task.notes,
+    course_id: null, course_code: null, job_id: null, repeats: false, grade_id: null,
+    shared: { owner_name: task.owner_name, member_names: task.member_names, what: "task" },
+  };
 }

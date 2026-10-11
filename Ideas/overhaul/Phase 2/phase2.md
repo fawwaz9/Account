@@ -86,7 +86,7 @@ Item 8 waits on UBC. Part B is drafted and waiting on your answers.
 | 7 | Prerequisites on the course page, met or not | **Deployed 2026-10-07** (D12). Also warns when adding a future course |
 | 8 | UBC's permission, then a bulk import | Request drafted (`Ideas/overhaul/calender-request.md`); waits on UBC |
 | **B** | **The rest of the vision's Phase 2** | **Drafted 2026-10-06; order decided (D15). 12a, 14 and 10 deployed 2026-10-08 (`867938d`); 9a deployed 2026-10-10 (`97a3858`)** |
-| 9 | Shared tasks and events (group coursework) | **9a, shared tasks: deployed 2026-10-10** (D23). 9b, shared events, next |
+| 9 | Shared tasks and events (group coursework) | **9a, shared tasks: deployed 2026-10-10** (D23). **9b, shared events: built, not deployed** (D24) |
 | 10 | Accountability partners | **Deployed 2026-10-08** (D22). Invite links (D16) included |
 | 11 | Team sport and intramurals | Not started. No team, league or game tables |
 | 12 | Open signup, with affiliation verified later | **12a deployed 2026-10-08, switch on and checked** (D18): per-caller throttling behind `TRUSTED_PROXY_HOPS`. 12b pushed out of Phase 2 (D19) |
