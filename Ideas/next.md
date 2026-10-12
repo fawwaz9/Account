@@ -211,10 +211,10 @@ are the size of each job rather than an impression of it.
         (?) sweep, which is tracked under Interface quality above.
 
 ### Calendar
-        Mobile calendar views: 1 day, 3 day, and month.
-          On a phone the week view's seven columns are too narrow to read, so
-          mobile offers a 1-day and a 3-day view alongside the month, in place of
-          the full week.
+        BUILT, 2026-10-12 -- the phone views are live: Day, 3 day and Month at
+        720px and below, opening on three days from today, with the desktop keeping
+        Week and Month. Arrows and swipes move a whole page. See `shipped.md`,
+        "Phone calendar". Nothing is outstanding for this module.
 
 ### Grades
         Term retrospective when a term closes: what moved, what slipped, what you predicted vs got.
@@ -342,7 +342,9 @@ are the size of each job rather than an impression of it.
 ### Quality of Life
         Weekly digest on the dashboard: what is due, what moved, what you spent.
         Offline-capable, because campus wifi. Only read-only offline should be implemented.
-        Add icons for each module in the sidebar.
+        Add icons for each module in the sidebar. BUILT, 2026-10-12: gold icons
+          beside every sidebar link, and the phone's bottom icon bar. See
+          `shipped.md`, "Phone redesign".
           Confirmed missing: Sidebar.tsx renders labels only, zero svg. The nav
           is a plain array of {to, label} at lines 11-17, so this is one icon
           field on that array plus the svg. Seven entries: Dashboard, Grades,
@@ -491,11 +493,13 @@ wrong, and the measurements that decide what the work above should look like.
   advised adding an explicit column rather than loading a third meaning onto
   kind -- which is what counts_toward_net_worth is. Keep following it: the next
   per-account rule wants its own column too.
-- counts_toward_net_worth is available on every kind and defaults to on, and is
-  deliberately independent of safe-to-spend. Excluding a spending account from
-  net worth does not change what you can spend: what you are worth and what you
-  can spend before payday are different questions, and one setting quietly
-  moving two figures is how a number stops being trusted. There is a test.
+- counts_toward_net_worth is available on every kind and defaults to on. Since
+  D39 (2026-10-06) it is one switch for net worth AND every analytic: an
+  unticked account is treated as if it did not exist by safe-to-spend, the
+  forecast, the year plan, budgets and the subscription finder, while its
+  ledger and page are untouched. This reversed the earlier rule that it was
+  independent of safe-to-spend. Settings -> Financial lists every account with
+  the switch. `tests/test_counted_accounts.py` holds the invariant.
 - A sinking fund's monthly figure is derived on every read, never stored:
   (target - saved) / months left. A stored schedule goes stale the moment a
   month is missed or the target moves, and the recovery from either is the same
