@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import CalenderView from "../features/calender/components/CalenderView";
 import WeekView from "../features/calender/components/WeekView";
 import EventCard from "../features/calender/components/EventCard";
@@ -23,14 +23,22 @@ import { Course } from "../features/grades/types";
 import { useAuth } from "../app/auth/AuthContext";
 import ShiftConflictsPanel from "../features/jobs/components/ShiftConflictsPanel";
 import "../styles/jobs.css";
-import { addDays, monthLabel, shortDate, today, weekLabel } from "../shared/utils/dateUtils";
+import { addDays, shortDate, today, weekGrid } from "../shared/utils/dateUtils";
 import { useShortcut } from "../shared/hooks/useShortcut";
+import { useSwipe } from "../shared/hooks/useSwipe";
+import { stepNoun, viewName } from "../features/calender/views";
 import "../styles/calendar.css";
 
 export default function CalendarPage() {
   const { user } = useAuth();
-  const { view, setView, cursor, setCursor, step, days, loading, error, reload } =
-    useCalender();
+  const {
+    view, setView, phone, views, label, setCursor, step, cursor, days, loading, error, reload,
+  } = useCalender();
+  // Whichever grid is showing. A sideways swipe on a phone is the arrows by
+  // another name, so it calls the same `step` they do.
+  const gridRef = useRef<HTMLDivElement>(null);
+  useSwipe(gridRef, step, phone);
+  const insightWeek = days.length > 0 ? weekGrid(days[0].date) : null;
 
   const [courses, setCourses] = useState<Course[]>([]);
   const [selected, setSelected] = useState<EventOccurrence | null>(null);
@@ -148,27 +156,25 @@ export default function CalendarPage() {
         </button>
       </div>
 
-      {/* One header for both views: the step buttons mean a month or a week
-          depending on which is showing, so they belong above the switch rather
-          than inside either grid. */}
+      {/* One header for every view: the step buttons mean a month, a week or a
+          few days depending on which is showing, so they belong above the
+          switch rather than inside any grid. */}
       <header className="calHeader">
         <div className="calNav">
           <button
             type="button"
             className="calButton"
             onClick={() => step(-1)}
-            aria-label={view === "month" ? "Previous month" : "Previous week"}
+            aria-label={`Previous ${stepNoun(view)}`}
           >
             ‹
           </button>
-          <h2 className="calMonth">
-            {view === "month" ? monthLabel(cursor) : weekLabel(cursor)}
-          </h2>
+          <h2 className="calMonth">{label}</h2>
           <button
             type="button"
             className="calButton"
             onClick={() => step(1)}
-            aria-label={view === "month" ? "Next month" : "Next week"}
+            aria-label={`Next ${stepNoun(view)}`}
           >
             ›
           </button>
@@ -190,7 +196,8 @@ export default function CalendarPage() {
           </button>
 
           <div className="calViewSwitch" role="group" aria-label="Calendar view">
-            {(["month", "week"] as const).map((option) => (
+            {/* A phone offers one and three days in place of the week (views.ts). */}
+            {views.map((option) => (
               <button
                 key={option}
                 type="button"
@@ -198,7 +205,7 @@ export default function CalendarPage() {
                 onClick={() => setView(option)}
                 aria-pressed={view === option}
               >
-                {option === "month" ? "Month" : "Week"}
+                {viewName(option)}
               </button>
             ))}
           </div>
@@ -211,17 +218,17 @@ export default function CalendarPage() {
       {user && <ShiftConflictsPanel userId={user.id} nonce={insightNonce} />}
       {actionError && <p className="calError">{actionError}</p>}
 
-      {view === "month" ? (
-        <CalenderView
-          month={cursor}
-          days={days}
-          loading={loading}
-          onSelectOccurrence={setSelected}
-          onSelectTask={setEditingTask}
-          onAddOnDay={openNewEvent}
-        />
-      ) : (
-        <>
+      <div ref={gridRef}>
+        {view === "month" ? (
+          <CalenderView
+            month={cursor}
+            days={days}
+            loading={loading}
+            onSelectOccurrence={setSelected}
+            onSelectTask={setEditingTask}
+            onAddOnDay={openNewEvent}
+          />
+        ) : (
           <WeekView
             days={days}
             loading={loading}
@@ -229,23 +236,25 @@ export default function CalendarPage() {
             onSelectTask={setEditingTask}
             onAddOnDay={openNewEvent}
           />
+        )}
+      </div>
 
-          {/* Week view only: the gaps between classes only mean something
-              against a time axis, and a month of free blocks is a list nobody
-              reads. */}
-          {user && days.length > 0 && (
-            <TimeInsights
-              userId={user.id}
-              weekStart={days[0].date}
-              weekEnd={days[days.length - 1].date}
-              horizonEnd={addDays(days[0].date, 12 * 7)}
-              nonce={insightNonce}
-            />
-          )}
-        </>
+      {/* Time-axis views only: the gaps between classes only mean something
+          against a time axis, and a month of free blocks is a list nobody
+          reads. Always a whole week, the one the first day on screen falls in,
+          even in the one- and three-day views: a week's load measured over
+          three days would read as a light week. */}
+      {view !== "month" && user && insightWeek && (
+        <TimeInsights
+          userId={user.id}
+          weekStart={insightWeek[0]}
+          weekEnd={insightWeek[6]}
+          horizonEnd={addDays(insightWeek[0], 12 * 7)}
+          nonce={insightNonce}
+        />
       )}
 
-      {/* Both views. Unlike the free blocks above, the shape of a term does not
+      {/* Every view. Unlike the free blocks above, the shape of a term does not
           need a time axis to mean something -- and it answers a question the
           month grid raises as readily as the week one. */}
       <TermTimeline courses={courses} />

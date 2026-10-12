@@ -15,7 +15,8 @@ const setCursor = vi.fn();
 
 vi.mock("../features/calender/hooks/useCalender", () => ({
   useCalender: () => ({
-    view: "month", setView: vi.fn(), cursor: "2026-10-03", setCursor, step,
+    view: "month", setView: vi.fn(), phone: false, views: ["week", "month"], label: "October 2026",
+    cursor: "2026-10-03", setCursor, step,
     days: [], loading: false, error: null, reload: vi.fn(),
   }),
 }));

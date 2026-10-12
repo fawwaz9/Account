@@ -1,11 +1,11 @@
-import { useEffect, useRef } from "react";
+import { CSSProperties, useEffect, useRef } from "react";
 import { CalendarDay } from "../hooks/useCalender";
 import { EventOccurrence, EXAM_KINDS } from "../types";
 import { Task } from "../../tasks/types";
 import { hasSpecificTime } from "../../tasks/dueTime";
 import { TaskChip } from "./EventCard";
 import { DAY_START, HOUR_HEIGHT, HOURS, OPENING_HOUR, place, placeTasks } from "../weekLayout";
-import { clockTime, fromIso, hourLabel } from "../../../shared/utils/dateUtils";
+import { clockTime, fromIso, hourLabel, weekdayIndex } from "../../../shared/utils/dateUtils";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { useNow } from "../hooks/useNow";
 import { useKindColors } from "../hooks/useKindColors";
@@ -22,7 +22,8 @@ interface WeekViewProps {
 }
 
 /**
- * One week against the clock, all twenty-four hours of it.
+ * One week against the clock, all twenty-four hours of it -- or, on a phone,
+ * one day or three, which is the same grid with fewer columns.
  *
  * The month grid answers "what is coming"; this answers "what does Tuesday
  * actually look like" — which needs the time axis, because the useful thing on
@@ -64,16 +65,21 @@ export default function WeekView({
     }
   }, []);
 
+  // The column count, for the CSS template both grids share. The headings are
+  // read from each date rather than its position, since a three-day window can
+  // start on any day of the week.
+  const columns = { "--days": days.length } as CSSProperties;
+
   return (
-    <div className="weekWrap">
+    <div className="weekWrap" style={columns}>
       <div className="weekHeader">
         <div className="weekCorner" aria-hidden="true" />
-        {days.map((day, index) => (
+        {days.map((day) => (
           <div
             key={day.date}
             className={day.date === now.date ? "weekHead weekHeadToday" : "weekHead"}
           >
-            <span className="weekHeadDay">{WEEKDAY_HEADINGS[index]}</span>
+            <span className="weekHeadDay">{WEEKDAY_HEADINGS[weekdayIndex(fromIso(day.date))]}</span>
             <button
               type="button"
               className="weekHeadDate"

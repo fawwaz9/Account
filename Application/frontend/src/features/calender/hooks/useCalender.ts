@@ -6,14 +6,20 @@ import { fetchSharedTasks, SharedTask } from "../../tasks/sharing";
 import { fetchSharedEvents, SharedEvent } from "../sharing";
 import { Task } from "../../tasks/types";
 import { useAuth } from "../../../app/auth/AuthContext";
+import { today } from "../../../shared/utils/dateUtils";
+import { useMediaQuery } from "../../../shared/hooks/useMediaQuery";
 import {
-  addDays,
-  addMonths,
-  firstOfMonth,
-  monthGrid,
-  today,
-  weekGrid,
-} from "../../../shared/utils/dateUtils";
+  CalendarView,
+  defaultView,
+  fitView,
+  PHONE_QUERY,
+  stepCursor,
+  viewLabel,
+  viewsFor,
+  windowDays,
+} from "../views";
+
+export type { CalendarView } from "../views";
 
 export interface CalendarDay {
   date: string;
@@ -21,12 +27,10 @@ export interface CalendarDay {
   tasks: Task[];
 }
 
-/** A month of dates, or one week laid out against the clock. */
-export type CalendarView = "month" | "week";
-
 /**
- * One window of the calendar -- a month or a week -- with events expanded by the
- * API and the tasks due in the same span.
+ * One window of the calendar -- a month, or a week, three days or one day
+ * against the clock -- with events expanded by the API and the tasks due in
+ * the same span.
  *
  * Two requests rather than one combined endpoint, because a deadline is edited
  * on the task and a lecture is edited on the event -- merging them server-side
@@ -40,11 +44,18 @@ export function useCalender() {
   // hook's entire fetch -- the id is what this actually needs, and it does not
   // change.
   const userId = user?.id;
-  // Week by default: it is the view with a time axis, so it is the one that
-  // answers "what does today actually look like" and the one the free
-  // blocks and week load hang off.
-  const [view, setView] = useState<CalendarView>("week");
-  // One anchor for both views, so switching between them stays where you were
+  // A phone gets the day and three-day views in place of the week, whose seven
+  // columns are too narrow to read there (views.ts).
+  const phone = useMediaQuery(PHONE_QUERY);
+  // A time axis by default -- the week, or three days on a phone: it is the
+  // view that answers "what does today actually look like" and the one the
+  // free blocks and week load hang off.
+  const [chosenView, setView] = useState<CalendarView>(() => defaultView(phone));
+  // Read through fitView rather than corrected in an effect, so a rotation that
+  // crosses the breakpoint never renders, or fetches, a view the width does not
+  // offer. The choice itself is kept: rotate back and it is still there.
+  const view = fitView(chosenView, phone);
+  // One anchor for every view, so switching between them stays where you were
   // rather than jumping back to today.
   const [cursor, setCursor] = useState(today());
   const [occurrences, setOccurrences] = useState<EventOccurrence[]>([]);
@@ -54,9 +65,9 @@ export function useCalender() {
 
   // The month grid runs from the Monday before the 1st to the Sunday after the
   // last, so the window has to cover those overflow days or the first and last
-  // rows come back empty. A week is simply its own seven days -- the agenda
-  // endpoint takes any window, so neither view needs anything of its own.
-  const days = view === "month" ? monthGrid(cursor) : weekGrid(cursor);
+  // rows come back empty. The other views are simply their own days -- the
+  // agenda endpoint takes any window, so no view needs anything of its own.
+  const days = windowDays(view, cursor);
   const windowStart = days[0];
   const windowEnd = days[days.length - 1];
 
@@ -66,14 +77,10 @@ export function useCalender() {
   // bug the budget month picker had (audit #12).
   const latestRequest = useRef(0);
 
-  /** Step a month or a week, whichever is on screen. */
+  /** Step a whole page of whatever is on screen. */
   const step = useCallback(
     (direction: number) => {
-      setCursor((current) =>
-        view === "month"
-          ? addMonths(firstOfMonth(current), direction)
-          : addDays(current, direction * 7)
-      );
+      setCursor((current) => stepCursor(view, current, direction));
     },
     [view]
   );
@@ -121,6 +128,9 @@ export function useCalender() {
   return {
     view,
     setView,
+    phone,
+    views: viewsFor(phone),
+    label: viewLabel(view, cursor),
     cursor,
     setCursor,
     step,

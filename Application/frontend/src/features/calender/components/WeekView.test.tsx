@@ -154,3 +154,41 @@ describe("chosen event colours", () => {
     expect(chip.style.getPropertyValue("--kind-color")).toBe("#654321");
   });
 });
+
+describe("fewer days, as on a phone", () => {
+  // Thursday 1 to Saturday 3 October: a window that does not start on a Monday.
+  const THREE = ["2026-10-01", "2026-10-02", "2026-10-03"];
+
+  it("heads each column with its own weekday, not its position", () => {
+    const { container } = show(THREE);
+    const heads = [...container.querySelectorAll(".weekHeadDay")].map((head) => head.textContent);
+    expect(heads).toEqual(["Thu", "Fri", "Sat"]);
+  });
+
+  it("tells the stylesheet how many columns to draw", () => {
+    const { container } = show(THREE);
+    const wrap = container.querySelector<HTMLElement>(".weekWrap")!;
+    expect(wrap.style.getPropertyValue("--days")).toBe("3");
+    expect(container.querySelectorAll(".weekColumn")).toHaveLength(3);
+  });
+
+  it("still draws the line in today's column", () => {
+    const { container } = show(THREE);
+    expect(lineDay(container, THREE)).toBe("2026-10-03");
+    expect(todayHeading(container, THREE)).toBe("2026-10-03");
+  });
+
+  it("draws one day as a single column", () => {
+    const { container } = show(["2026-10-03"]);
+    expect(container.querySelectorAll(".weekColumn")).toHaveLength(1);
+    expect(container.querySelector(".weekHeadDay")!.textContent).toBe("Sat");
+  });
+
+  it("sizes both grids from the same count, so their columns stay lined up", () => {
+    // jsdom applies no stylesheet, so this reads the rule itself.
+    const css = readFileSync(join(__dirname, "../../../styles/calendar.css"), "utf8");
+    const rule = css.match(/\.weekHeader,\s*\.weekGrid\s*\{([^}]*)\}/)?.[1] ?? "";
+    expect(rule).toMatch(/grid-template-columns:[^;]*repeat\(var\(--days, 7\)/);
+    expect(rule).toMatch(/min-width:[^;]*var\(--days, 7\)/);
+  });
+});

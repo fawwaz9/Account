@@ -153,23 +153,28 @@ export function monthLabel(value: string): string {
   return `${monthName(value)} ${fromIso(value).getFullYear()}`;
 }
 
+/** "8 – 14 Sep 2026", for the week `value` falls in. */
+export function weekLabel(value: string): string {
+  const days = weekGrid(value);
+  return rangeLabel(days[0], days[6]);
+}
+
 /**
  * "8 – 14 Sep 2026", collapsing whatever the two ends share.
  *
- * A week that straddles a month or a year has to say so; one that does not
+ * A span that straddles a month or a year has to say so; one that does not
  * should not repeat itself.
  */
-export function weekLabel(value: string): string {
-  const days = weekGrid(value);
-  const start = fromIso(days[0]);
-  const end = fromIso(days[6]);
+export function rangeLabel(first: string, last: string): string {
+  const start = fromIso(first);
+  const end = fromIso(last);
 
-  const endPart = `${end.getDate()} ${monthName(days[6], true)} ${end.getFullYear()}`;
+  const endPart = `${end.getDate()} ${monthName(last, true)} ${end.getFullYear()}`;
   if (start.getFullYear() !== end.getFullYear()) {
-    return `${start.getDate()} ${monthName(days[0], true)} ${start.getFullYear()} – ${endPart}`;
+    return `${start.getDate()} ${monthName(first, true)} ${start.getFullYear()} – ${endPart}`;
   }
   if (start.getMonth() !== end.getMonth()) {
-    return `${start.getDate()} ${monthName(days[0], true)} – ${endPart}`;
+    return `${start.getDate()} ${monthName(first, true)} – ${endPart}`;
   }
   return `${start.getDate()} – ${endPart}`;
 }

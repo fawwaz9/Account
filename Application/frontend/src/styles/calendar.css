@@ -508,10 +508,13 @@
 .weekHeader,
 .weekGrid {
   display: grid;
-  /* A fixed gutter for the hour labels, then seven equal days. */
-  grid-template-columns: 52px repeat(7, minmax(90px, 1fr));
+  /* A fixed gutter for the hour labels, then the days -- seven, or on a phone
+     one or three. WeekView sets --days; --gutter narrows on a phone. */
+  grid-template-columns: var(--gutter, 52px) repeat(var(--days, 7), minmax(90px, 1fr));
   gap: 0;
-  min-width: 680px;
+  /* Wide enough that seven days stay legible and scroll sideways on a narrow
+     screen; one or three days fit a phone with no scroll at all. */
+  min-width: calc(var(--gutter, 52px) + var(--days, 7) * 90px);
 }
 
 .weekHeader {
@@ -770,7 +773,8 @@
 
 @media (max-width: 720px) {
   .calHeader { gap: 8px; }
-  .weekWrap { padding: 8px; }
+  .weekWrap { padding: 8px; --gutter: 40px; }
+  .weekAllDayLabel { padding: 4px 3px; }
 }
 
 /* ===== Time insights =====
