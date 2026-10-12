@@ -884,6 +884,45 @@ production-URL build: 26 of 26 files.
 
 ---
 
+## Phone calendar: one day and three days in place of the week -- SHIPPED 2026-10-12
+next.md, Calendar. On a phone the week's seven columns were too narrow to read,
+and the grid's 680px minimum made it scroll sideways.
+- **Which views where.** At 720px and below (the width where the sidebar
+  already becomes a top bar) the switch offers Day, 3 day and Month, opening
+  on three days from today. The desktop keeps Week and Month, unchanged: the
+  owner's choice, phones only.
+- **A page at a time.** The arrows move one day, three days, a week or a
+  month. Three days starts at the cursor rather than snapping to a week, so
+  Today shows today and the next two. A sideways swipe on a phone does what
+  the arrows do. Only a clearly sideways swipe counts: at least 50px, and 1.5
+  times its vertical travel. So scrolling through the hours never steps the
+  calendar, and two fingers (a pinch) don't either.
+- **Rotation.** The view is read through `fitView`, not corrected in an
+  effect. A width change that crosses the breakpoint therefore never renders
+  or fetches a view the width doesn't offer. Week becomes three days and
+  back, Month stays Month, and the date is kept.
+- **One grid.** WeekView draws any number of days. The column count is a
+  `--days` variable that both grids' template reads, so their columns can't
+  drift apart. Headings come from each date, not its position, since a
+  three-day window can start on any weekday. The hour gutter narrows to 40px
+  on a phone.
+- **The free blocks and week load stay a whole week** in the day and
+  three-day views: the week the first visible day falls in. A week's load
+  measured over three days would read as a light week.
+- The helpers are in `features/calender/views.ts`; `rangeLabel` was split out
+  of `weekLabel`.
+
+627 frontend tests, 23 of them new. The mutation check caught 11 of 11
+mutants: wrong step size, no `fitView`, a week offered on a phone, the wrong
+default, headings by position, no `--days`, swipe on a desktop, no
+verticality check, swipe direction reversed, no listener for width changes,
+and a fixed 7 in the CSS. Frontend only: no route, no schema.
+
+LIVE: `main` at `6500761`, matching a production build file by file (37
+files).
+
+---
+
 ## Phase 2 items 13 and 11: end-of-term reviews, and teams (under Fitness) -- SHIPPED 2026-10-11
 The last two buildable Phase 2 items, in one deploy (`Ideas/overhaul/Phase 2/`, D25, D26).
 
