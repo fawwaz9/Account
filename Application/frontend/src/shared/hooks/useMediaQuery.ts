@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
 
+/**
+ * Where the app becomes its phone layout: the bottom icon bar, the header with
+ * the profile icon, the phone dashboard and the calendar's day and three-day
+ * views. The stylesheets switch at the same 720px.
+ */
+export const PHONE_QUERY = "(max-width: 720px)";
+
 function matches(query: string): boolean {
   return typeof window !== "undefined" && typeof window.matchMedia === "function"
     ? window.matchMedia(query).matches

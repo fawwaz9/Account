@@ -54,8 +54,9 @@ const user = {
   },
 };
 
+const logout = vi.fn();
 vi.mock("../app/auth/AuthContext", () => ({
-  useAuth: () => ({ user, login: vi.fn(), refreshUser }),
+  useAuth: () => ({ user, login: vi.fn(), refreshUser, logout }),
 }));
 
 vi.mock("../services/currentUserClient", () => ({
@@ -593,5 +594,31 @@ describe("the financial tab", () => {
     const group = await screen.findByRole("group", { name: /Counted accounts/ });
     fireEvent.click(within(group).getByRole("checkbox", { name: "Lent to Sam" }));
     expect((await within(group).findByRole("alert")).textContent).toBe("Account not found");
+  });
+});
+
+describe("signing out on a phone", () => {
+  // The phone header has no Sign out: the profile icon brings you here, and
+  // this is where it lives (the owner's sketch).
+  const original = window.matchMedia;
+  afterEach(() => { window.matchMedia = original; });
+
+  function onScreen(phone: boolean) {
+    window.matchMedia = vi.fn(() => ({
+      matches: phone, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })) as unknown as typeof window.matchMedia;
+  }
+
+  it("offers Sign out, which signs you out", () => {
+    onScreen(true);
+    render(<SettingsPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    expect(logout).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves it to the header on a desktop", () => {
+    onScreen(false);
+    render(<SettingsPage />);
+    expect(screen.queryByRole("button", { name: "Sign out" })).toBeNull();
   });
 });

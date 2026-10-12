@@ -4,15 +4,20 @@
  */
 export function formatMoney(
   amount: number,
-  options: { signed?: boolean; compact?: boolean } = {}
+  options: { signed?: boolean; compact?: boolean; whole?: boolean } = {}
 ) {
+  // Whole dollars: the phone dashboard's figures are a glance, and the owner's
+  // sketch rounds them. Rounded before the sign is chosen, so -$0.40 reads as
+  // $0 rather than as a minus sign in front of nothing.
+  if (options.whole) amount = Math.round(amount);
+
   // Chart axes have no room for cents, and a four-figure tick with two
   // decimals collides with its neighbour.
   const formatted = options.compact
     ? compactAmount(Math.abs(amount))
     : Math.abs(amount).toLocaleString(undefined, {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
+        minimumFractionDigits: options.whole ? 0 : 2,
+        maximumFractionDigits: options.whole ? 0 : 2,
       });
 
   if (options.signed) {

@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 /**
  * The phone views (next.md, Calendar): one day and three days in place of the
@@ -200,5 +202,17 @@ describe("crossing the breakpoint", () => {
     expect(pressed()).toBe("Month");
     screenSize.resize(false);
     expect(pressed()).toBe("Month");
+  });
+});
+
+describe("the header on a phone", () => {
+  it("wraps rather than running off the screen", () => {
+    // Three view tabs beside Today and Blocked periods were 45px wider than a
+    // 390px phone: the page widened, the phone zoomed out, and the fixed bottom
+    // bar fell out of view. jsdom has no layout, so this reads the rule itself.
+    const css = readFileSync(join(__dirname, "../styles/calendar.css"), "utf8");
+    const phone = css.slice(css.indexOf("@media (max-width: 720px) {\n  .calHeader"));
+    expect(phone).toMatch(/\.calHeaderActions\s*\{[^}]*flex-wrap:\s*wrap/);
+    expect(phone).toMatch(/\.calViewSwitch\s*\{[^}]*flex-basis:\s*100%/);
   });
 });

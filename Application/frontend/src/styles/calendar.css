@@ -773,6 +773,13 @@
 
 @media (max-width: 720px) {
   .calHeader { gap: 8px; }
+  /* Three view tabs beside Today and Blocked periods ran 45px past a 390px
+     screen. That widened the page, the phone zoomed out to fit it, and the
+     fixed bottom bar fell below the visible area. Wrap instead, with the view
+     switch on a row of its own, its tabs sharing the width. */
+  .calHeaderActions { flex-wrap: wrap; width: 100%; }
+  .calViewSwitch { flex-basis: 100%; }
+  .calViewTab { flex: 1; white-space: nowrap; }
   .weekWrap { padding: 8px; --gutter: 40px; }
   .weekAllDayLabel { padding: 4px 3px; }
 }

@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover makes env(safe-area-inset-bottom) real on an iPhone, so
+         the phone's fixed bottom bar clears the home indicator. The status bar
+         keeps its default style, so nothing is drawn under it at the top. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Account</title>
     <!-- Installable to the home screen: on iPhone that is the only way a site
          can receive push notifications (Phase 0 item 5). -->

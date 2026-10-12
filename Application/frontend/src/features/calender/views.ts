@@ -21,8 +21,8 @@ import {
  */
 export type CalendarView = "month" | "week" | "3day" | "day";
 
-/** The width below which the calendar offers phone views: the sidebar's own. */
-export const PHONE_QUERY = "(max-width: 720px)";
+// The app's one phone breakpoint, re-exported for the calendar's callers.
+export { PHONE_QUERY } from "../../shared/hooks/useMediaQuery";
 
 /** The views the switch offers, in its order. */
 export function viewsFor(phone: boolean): CalendarView[] {

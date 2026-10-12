@@ -20,6 +20,7 @@ import "../styles/login.css";
 // but the dev server injects CSS per imported module, so without this those rows
 // render unstyled on /settings until /budget has been visited.
 import "../styles/budget.css";
+import { PHONE_QUERY, useMediaQuery } from "../shared/hooks/useMediaQuery";
 
 /**
  * "08:00:00" from the API, "08:00" for an <input type="time">.
@@ -88,7 +89,10 @@ const TABS = [
 type TabId = (typeof TABS)[number]["id"];
 
 export default function SettingsPage() {
-  const { user, login, refreshUser } = useAuth();
+  const { user, login, refreshUser, logout } = useAuth();
+  // On a phone the header has no Sign out; the profile icon brings you here,
+  // and this is where it lives instead.
+  const phone = useMediaQuery(PHONE_QUERY);
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -442,6 +446,11 @@ export default function SettingsPage() {
                 </HelpTip>
               </span>
             </div>
+            {phone && (
+              <button type="button" className="calButton phoneSignOut" onClick={logout}>
+                Sign out
+              </button>
+            )}
           </div>
           <div className="settingsCard">
             <h2>{hasPassword ? "Change password" : "Add a password"}</h2>

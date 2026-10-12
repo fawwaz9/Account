@@ -1,8 +1,21 @@
 import { useEffect, useState } from "react";
-import { fetchFreeBlocks, fetchWeekLoad } from "../api";
-import { FreeBlock, WeekLoad } from "../types";
+import { fetchAgenda, fetchFreeBlocks, fetchWeekLoad } from "../api";
+import { EventOccurrence, EXAM_KINDS, FreeBlock, WeekLoad } from "../types";
 import { addDays, startOfWeek, today } from "../../../shared/utils/dateUtils";
 import { useAuth } from "../../../app/auth/AuthContext";
+
+/** This week's exams (midterms and finals) and shifts, counted off the calendar. */
+export interface WeekCounts {
+  exams: number;
+  shifts: number;
+}
+
+export function countWeek(occurrences: EventOccurrence[]): WeekCounts {
+  return {
+    exams: occurrences.filter((item) => EXAM_KINDS.includes(item.kind)).length,
+    shifts: occurrences.filter((item) => item.kind === "shift").length,
+  };
+}
 
 /**
  * Just what the dashboard shows: this week's room and what it costs.
@@ -23,6 +36,9 @@ export function useTimeGlance() {
   // null exactly as an unanswered one does, and the dashboard's checklist must
   // not take either for "nothing on your week".
   const [loaded, setLoaded] = useState(false);
+  // Read apart from the rest: a failure here hides two figures on the phone
+  // dashboard and nothing else, so it must not take the week down with it.
+  const [counts, setCounts] = useState<WeekCounts | null>(null);
 
   useEffect(() => {
     if (!userId) return;
@@ -33,6 +49,10 @@ export function useTimeGlance() {
     const sunday = addDays(monday, 6);
 
     let cancelled = false;
+    fetchAgenda(userId, monday, sunday)
+      .then((occurrences) => { if (!cancelled) setCounts(countWeek(occurrences)); })
+      .catch(() => { if (!cancelled) setCounts(null); });
+
     Promise.all([
       fetchFreeBlocks(userId, monday, sunday),
       fetchWeekLoad(userId, monday, sunday),
@@ -53,5 +73,5 @@ export function useTimeGlance() {
     return () => { cancelled = true; };
   }, [userId]);
 
-  return { blocks, load, loaded };
+  return { blocks, load, loaded, counts };
 }

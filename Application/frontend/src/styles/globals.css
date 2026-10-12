@@ -383,3 +383,37 @@ button:not(:disabled):active {
   font-size: 0.78rem;
   line-height: 1.3;
 }
+
+/* ===== Icons =====
+   Every icon is gold. The PNG is only a mask -- its shape, not its colour -- and
+   the fill is the token, so the files stay as drawn (black on transparent) and
+   recolouring the app's icons is one variable. Sized in em so an icon follows
+   the text it sits beside unless a caller sizes it. */
+.appIcon {
+  display: inline-block;
+  flex: none;
+  width: 1.15em;
+  height: 1.15em;
+  background-color: var(--gold);
+  -webkit-mask: var(--icon) center / contain no-repeat;
+  mask: var(--icon) center / contain no-repeat;
+}
+
+/* The omnibox's "?" on a phone sits after File in a flex row. Its panel opens
+   on a line of its own under the row rather than squeezing the input, so the
+   wrapper steps aside and the panel takes the full width. Here rather than in
+   layout.css because HelpTip's classes are styled from this sheet only. */
+@media (max-width: 720px) {
+  .omniRow .helpTip { display: contents; }
+  .omniRow .helpTipPanel { flex-basis: 100%; order: 10; margin-top: 2px; }
+  /* Sized and coloured as one of the phone's icons, which are all gold. */
+  .omniRow .helpTipMark {
+    width: 26px;
+    height: 26px;
+    margin-left: 2px;
+    border: 1.5px solid var(--gold);
+    color: var(--gold);
+    font-size: 0.9rem;
+    font-weight: 700;
+  }
+}

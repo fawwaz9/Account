@@ -43,7 +43,9 @@
 }
 
 .sidebarLink {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   padding: 9px 12px;
   border-radius: 8px;
   color: var(--muted);
@@ -60,6 +62,11 @@
 .sidebarLinkActive {
   color: var(--gold);
   background: var(--bg);
+}
+
+.sidebarIcon {
+  width: 18px;
+  height: 18px;
 }
 
 .sidebarLink:focus-visible {
@@ -112,24 +119,129 @@
 
 .appContent { flex: 1; min-width: 0; }
 
+/* ===== Phone: the bottom icon bar =====
+   The owner's sketch. Rendered always and shown only here, so the switch from
+   sidebar to bar is pure CSS at the same width the rest of the phone layout
+   uses (PHONE_QUERY). */
+.phoneNav { display: none; }
+
 @media (max-width: 720px) {
-  .appShell { flex-direction: column; }
-  .sidebar {
-    width: auto;
-    flex-direction: row;
-    align-items: center;
-    gap: 12px;
-    overflow-x: auto;
-    border-right: none;
-    border-bottom: 1px solid var(--border);
-    padding: 12px 14px;
-    /* Still pinned, but a strip across the top rather than a full column. */
-    height: auto;
-    align-self: stretch;
-    overflow-y: visible;
+  /* On the shell, so both the bar and the content's clearance read it. */
+  .appShell { flex-direction: column; --phone-nav-height: 58px; }
+  .sidebar { display: none; }
+
+  /* Room for the bar, so the last thing on a page can be scrolled clear of it. */
+  .appContent {
+    padding-bottom: calc(var(--phone-nav-height) + 24px + env(safe-area-inset-bottom));
   }
-  .sidebarNav { flex-direction: row; }
-  .sidebarLink { white-space: nowrap; }
+
+  .phoneNav {
+    display: block;
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    /* Above the page, below every dialog (Modal's overlay sits at 9999). */
+    z-index: 50;
+    height: var(--phone-nav-height);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--panel-2);
+    box-shadow: 0 8px 24px var(--shadow);
+    overflow: hidden;
+  }
+
+  .phoneNavList {
+    list-style: none;
+    margin: 0;
+    padding: 0 8px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+
+  .phoneNavList::-webkit-scrollbar { display: none; }
+
+  /* Five and a sliver: 5.4 items across, so the edge of the sixth says the bar
+     goes on. */
+  .phoneNavItem {
+    flex: 0 0 calc((100vw - 24px - 16px) / 5.4);
+    display: flex;
+    justify-content: center;
+    scroll-snap-align: start;
+  }
+
+  .phoneNavLink {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 1.5px solid transparent;
+    transition: 0.15s ease;
+  }
+
+  /* The current page: a gold ring, as sketched. */
+  .phoneNavLink[aria-current="page"] {
+    border-color: var(--gold);
+    background: rgba(212, 175, 55, 0.08);
+  }
+
+  .phoneNavLink:focus-visible {
+    outline: 2px solid var(--gold);
+    outline-offset: 2px;
+  }
+
+  .phoneNavIcon {
+    width: 24px;
+    height: 24px;
+  }
+}
+
+/* ===== Phone: the header =====
+   "Account", centred, with the profile icon on the right -- the way to
+   Settings, and so to signing out. The omnibox follows on the home screen. */
+.phoneTopbarRow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+}
+
+.phoneBrand {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--gold);
+  letter-spacing: 0.02em;
+}
+
+.phoneProfile {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+
+.phoneProfile:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.phoneProfileIcon {
+  width: 30px;
+  height: 30px;
 }
 
 
@@ -234,9 +346,14 @@
 }
 
 @media (max-width: 720px) {
-  .topbar { flex-direction: column; align-items: stretch; }
+  .topbar { flex-direction: column; align-items: stretch; padding: 12px 16px; gap: 12px; }
   .omnibox { max-width: none; }
   .topbarRight { justify-content: flex-end; }
+
+  /* Wraps so the "?" panel after File can take a line of its own (globals.css). */
+  .omniRow { flex-wrap: wrap; }
+  /* With no hint line on a phone, an idle reading line is empty: no gap for it. */
+  .omniReading:empty { min-height: 0; margin-top: 0; }
 }
 
 /* Respecting the setting rather than spinning regardless: the element still

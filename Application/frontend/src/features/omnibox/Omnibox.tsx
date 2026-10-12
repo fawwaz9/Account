@@ -6,6 +6,8 @@ import { useAuth } from "../../app/auth/AuthContext";
 import useDebounce from "../../shared/hooks/useDebounce";
 import { dueLabel, duration } from "../../shared/utils/dateUtils";
 import { formatMoney } from "../budget/money";
+import HelpTip from "../../shared/components/HelpTip";
+import { PHONE_QUERY, useMediaQuery } from "../../shared/hooks/useMediaQuery";
 
 /** Where each kind lands, so the confirmation can offer to go and look. */
 function destination(result: OmniboxResult): string {
@@ -38,6 +40,10 @@ export default function Omnibox() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const debounced = useDebounce(text, 200);
+  // On a phone the how-to is behind a "?" rather than a line of text under the
+  // box (the owner's sketch): the room is short, and the line says the same
+  // thing every time it is read.
+  const phone = useMediaQuery(PHONE_QUERY);
 
   // Only the newest reading may land; typing fast fires several.
   const latestRequest = useRef(0);
@@ -119,6 +125,15 @@ export default function Omnibox() {
         >
           {saving ? "Filing..." : "File"}
         </button>
+
+        {phone && (
+          <HelpTip label="How to use this box">
+            Type one line and press File. A mark like <strong>cosc121 midterm 78/100</strong>{" "}
+            goes to Grades, an amount like <strong>coffee 4.50</strong> to Budget, and
+            anything else, like <strong>lab due fri</strong>, to Tasks. The badge before
+            the box says which, before anything is filed.
+          </HelpTip>
+        )}
       </form>
 
       <div id="omni-reading" className="omniReading" aria-live="polite">
@@ -162,7 +177,7 @@ export default function Omnibox() {
           <span className="omniWarn">{preview.reason ?? preview.summary}</span>
         )}
 
-        {!error && !filed && !preview && (
+        {!error && !filed && !preview && !phone && (
           <span className="muted omniHint">
             A mark goes to Grades, an amount to Budget, anything else to Tasks.
             <kbd className="omniKbd">⌘K</kbd>

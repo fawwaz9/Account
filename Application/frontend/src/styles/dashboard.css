@@ -178,3 +178,66 @@ p.workloadHeadline {
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* ===== Phone dashboard =====
+   The owner's sketch: three cards, figures in a grid of three, no greeting. */
+@media (max-width: 720px) {
+  .phoneDashboard {
+    min-height: 0;
+    padding: 16px;
+  }
+}
+
+.phoneCard {
+  margin-bottom: 16px;
+  padding: 16px 18px;
+  gap: 12px;
+}
+
+.phoneCardTitle {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.phoneStats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px 12px;
+}
+
+/* Booked is the widest figure ("27h 40m"), so its column fits it rather than
+   wrapping it onto two lines. */
+.phoneStatsWeek {
+  grid-template-columns: auto repeat(3, minmax(0, 1fr));
+}
+
+.phoneStatsWeek .statValue {
+  white-space: nowrap;
+}
+
+.phoneStats .statValue {
+  font-size: 1.45rem;
+}
+
+.phoneStatsWeek .statValue {
+  font-size: 1.15rem;
+}
+
+.phoneStats .statLabel {
+  font-size: 0.66rem;
+  letter-spacing: 0.04em;
+}
+
+.phoneFree {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.phoneSignOut {
+  margin-top: 12px;
+  align-self: flex-start;
+}

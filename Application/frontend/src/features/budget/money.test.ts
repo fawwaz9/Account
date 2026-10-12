@@ -75,6 +75,27 @@ describe("formatMoney", () => {
   });
 });
 
+describe("formatMoney, in whole dollars", () => {
+  // The phone dashboard's glance figures, rounded as the owner sketched them.
+  it("rounds to the nearest dollar and drops the cents", () => {
+    expect(formatMoney(3937.6, { whole: true })).toBe("$3,938");
+    expect(formatMoney(512.4, { whole: true })).toBe("$512");
+  });
+
+  it("keeps a real minus sign on a negative", () => {
+    expect(formatMoney(-51650.99, { whole: true })).toBe("−$51,651");
+  });
+
+  it("does not print a minus in front of nothing", () => {
+    expect(formatMoney(-0.4, { whole: true })).toBe("$0");
+    expect(formatMoney(0, { whole: true })).toBe("$0");
+  });
+
+  it("leaves the default at two decimals", () => {
+    expect(formatMoney(3937.6)).toBe("$3,937.60");
+  });
+});
+
 describe("formatPercent", () => {
   it("renders a gain with an explicit plus when asked", () => {
     expect(formatPercent(3.2, { signed: true })).toBe("+3.2%");

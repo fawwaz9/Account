@@ -9,6 +9,8 @@ import { duration } from "../shared/utils/dateUtils";
 import { formatMoney } from "../features/budget/money";
 import GetStarted, { steps } from "../features/onboarding/GetStarted";
 import DisappointmentQuestion from "../features/survey/DisappointmentQuestion";
+import { PHONE_QUERY, useMediaQuery } from "../shared/hooks/useMediaQuery";
+import { FreeBlock } from "../features/calender/types";
 
 function browserZone(): string | undefined {
   try {
@@ -25,7 +27,8 @@ export default function Dashboard() {
   const {
     accounts, summary: budget, totalBalance, error: budgetError, loaded: budgetLoaded,
   } = useBudgetGlance();
-  const { blocks: freeBlocks, load: weekLoad, loaded: weekLoaded } = useTimeGlance();
+  const { blocks: freeBlocks, load: weekLoad, loaded: weekLoaded, counts } = useTimeGlance();
+  const phone = useMediaQuery(PHONE_QUERY);
   const forecast = useWorkloadForecast();
   // Nothing to say without a timetable, so the section stays away
   // rather than showing a row of zeroes.
@@ -49,6 +52,67 @@ export default function Dashboard() {
       || (budget?.total_actual ?? 0) > 0,
     hasWeek: Boolean(weekLoad && (weekLoad.booked_minutes > 0 || weekLoad.task_count > 0)),
   }) : null;
+
+  if (phone) {
+    // The owner's phone sketch: no greeting, three cards, whole dollars. The
+    // checklist and the survey stay while they apply, since both go away by
+    // themselves; the rest of the desktop's extras do not fit a glance.
+    const termLabel = user?.current_school_year && user?.current_semester
+      ? `Year ${user.current_school_year} ${user.current_semester}`
+      : "This term";
+
+    return (
+      <div className="dashboard phoneDashboard">
+        {summaryError && <p className="muted" role="alert">{summaryError}</p>}
+        {budgetError && <p className="muted" role="alert">{budgetError}</p>}
+
+        {checklist && user && <GetStarted userId={user.id} steps={checklist} />}
+        {user && <DisappointmentQuestion userId={user.id} />}
+
+        {hasCourses && summary && (
+          <section className="gradeSummary phoneCard" aria-label="Grades">
+            <div className="phoneStats">
+              <Stat value={summary.cumulative_average} label="Average" />
+              {summary.cgpa !== null && <Stat value={summary.cgpa} label="CGPA" />}
+              <Stat value={summary.total_courses} label="Courses" />
+              <Stat value={summary.semester_average} label={termLabel} />
+              <Stat value={summary.credits_completed} label="Credits completed" />
+            </div>
+          </section>
+        )}
+
+        {budget && (
+          <section className="gradeSummary phoneCard" aria-label="Money">
+            <div className="phoneStats">
+              <Stat value={formatMoney(budget.total_actual, { whole: true })} label="Spent" />
+              {budget.total_planned > 0 && (
+                <Stat
+                  value={formatMoney(budget.total_planned - budget.total_actual, { whole: true })}
+                  label="Left"
+                />
+              )}
+              <Stat value={formatMoney(totalBalance, { whole: true })} label="Net worth" />
+            </div>
+          </section>
+        )}
+
+        {hasWeek && weekLoad && (
+          <section className="gradeSummary phoneCard" aria-label="This week">
+            <h2 className="phoneCardTitle">This week</h2>
+            <div className="phoneStats phoneStatsWeek">
+              <Stat value={duration(weekLoad.booked_minutes) || "0h"} label="Booked" />
+              <Stat value={weekLoad.task_count} label={weekLoad.task_count === 1 ? "Task due" : "Tasks due"} />
+              {counts && <Stat value={counts.exams} label={counts.exams === 1 ? "Exam" : "Exams"} />}
+              {counts && <Stat value={counts.shifts} label={counts.shifts === 1 ? "Shift" : "Shifts"} />}
+            </div>
+            {freeBlocks.length > 0 && (
+              <p className="phoneFree">Free time: {longestFree(freeBlocks)}</p>
+            )}
+          </section>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="dashboard">
@@ -188,4 +252,21 @@ export default function Dashboard() {
       )}
     </div>
   );
+}
+
+function Stat({ value, label }: { value: string | number; label: string }) {
+  return (
+    <div className="statBlock">
+      <span className="statValue">{value}</span>
+      <span className="statLabel">{label}</span>
+    </div>
+  );
+}
+
+/** "13h Sat, 7h Fri": the two longest gaps, as the desktop's line picks them. */
+function longestFree(blocks: FreeBlock[]): string {
+  return blocks.slice(0, 2).map((block) => {
+    const day = new Date(`${block.on_date}T00:00:00`).toLocaleDateString(undefined, { weekday: "short" });
+    return `${duration(block.minutes)} ${day}`;
+  }).join(", ");
 }
