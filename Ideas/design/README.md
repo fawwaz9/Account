@@ -219,6 +219,17 @@ sets `padding: 7px 14px`, so anything with a fixed width and height needs
 `display:inline-flex; padding:0; box-sizing:border-box` or its glyph sits low and
 right. This has caught five controls.
 
+**Phones get their own shell at 720px** (`PHONE_QUERY` in
+`shared/hooks/useMediaQuery.ts`). The sidebar gives way to a fixed bottom icon
+bar, and the header to "Account" with the profile icon, which opens Settings.
+The omnibox appears on home only. Layout switches in CSS at that width; content
+that differs (the phone dashboard's cards, Sign out in Settings, the
+calendar's day and three-day views) reads `useMediaQuery(PHONE_QUERY)`. **Every
+icon is gold**: `shared/components/Icon.tsx` uses the PNG as a mask filled with
+`--gold`, so a new icon is drawn black on transparent and never coloured in the
+file. **Nothing may be wider than a phone.** One overflowing row widens the
+page, the phone zooms out, and the fixed bar falls out of view.
+
 **Every page is a `lazy()` route.** `src/app/App.tsx` loads the signed-in pages
 on demand; `LoginPage` and the shell stay eager. A new page added with a
 static import silently folds itself back into the first download and nothing

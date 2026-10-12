@@ -884,6 +884,51 @@ production-URL build: 26 of 26 files.
 
 ---
 
+## Phone redesign from the owner's sketch, with gold icons -- SHIPPED 2026-10-12
+From the owner's sketch ("Add Course.pdf") and nine icons in
+`frontend/src/assets/icons/`. Frontend only. The owner chose a phone-only
+redesign plus gold icons on the desktop sidebar, the profile icon opening
+Settings, the checklist and survey kept, and "exams" counting midterms and
+finals.
+- **The bottom icon bar** (`app/layout/BottomNav.tsx`) replaces the sidebar at
+  720px and below. It is fixed, scrolls sideways, and shows five icons and a
+  sliver of the sixth (Home, Grades, Tasks, Budget, Calendar, then Fitness and
+  Jobs). The current page is in a gold ring, drawn from `aria-current`. Its
+  entries are picked out of `NAV` by route, so the two bars can't drift.
+  Settings isn't in it.
+- **The header** is "Account" and the profile icon, which opens Settings.
+  Sign out lives at the foot of Settings' Account card on a phone. The omnibox
+  shows on home only, with its how-to behind a gold "?" instead of the line of
+  text under it.
+- **The phone dashboard** has no greeting. It shows three cards:
+  - grades: average, CGPA, courses, this term's average under "Year 3 Fall",
+    and credits completed
+  - money in whole dollars (`formatMoney(..., { whole: true })`)
+  - this week: booked, tasks due, exams, shifts and free time
+  Exams and shifts are counted off this week's agenda (`countWeek`). A failed
+  read hides those two figures only. The checklist and survey stay while they
+  apply. The workload line, strongest and weakest course, biggest category and
+  estimated work are desktop only.
+- **Every icon is gold.** The PNGs are CSS masks filled with `--gold`
+  (`shared/components/Icon.tsx`), so the files stay as drawn and the colour is
+  one token. The site's `img-src` allows `'self'` and `data:`, which covers
+  both the hashed files and the one small enough to inline.
+- **Fixed on the way:** the phone calendar's header ran 45px past a 390px
+  screen once it had three view tabs. The page widened, the phone zoomed out,
+  and the fixed bar fell out of view. Found from a headless-Chrome screenshot,
+  not a test. The header now wraps, with a stylesheet test.
+- `viewport-fit=cover`, so the bar clears an iPhone's home indicator.
+
+Checked by screenshotting the phone and desktop layouts in headless Chrome
+against a mock API with sample figures (no real data). 667 frontend tests, 40
+new. The mutation check caught 15 of 16; the 16th, dropping `end` on the home
+link, is equivalent, because React Router never marks `to="/"` active on a
+sub-page.
+
+LIVE: `main` at `4103e3c`, matching a production build file by file (35 files).
+
+---
+
 ## Phone calendar: one day and three days in place of the week -- SHIPPED 2026-10-12
 next.md, Calendar. On a phone the week's seven columns were too narrow to read,
 and the grid's 680px minimum made it scroll sideways.
