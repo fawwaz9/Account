@@ -604,5 +604,6 @@ results pane showed the previous query's output, so it is to be re-run. The
 gate reported row-level security on for 50 of 50 tables. The new routes
 answer 401 against two 404 controls, and the recount door 403 without its
 secret. No errors in the logs; the live site matches the build (37 files).
-Still open: re-run check C, and, optionally, create the daily recount job.
+Check C re-run 2026-10-12: `{postgres=X/postgres,account_app=X/postgres}`, a
+match. Still open, optionally: the daily recount job.
 

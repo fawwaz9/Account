@@ -913,9 +913,9 @@ now closed.
 
 LIVE: API `account-api-00045-hp9` (digest-verified `2de81a8`, sha256
 `6265a8bd...`) since 2026-10-11 18:26 UTC. The schema step was the owner's.
-Read-backs matched apart from item 13's check C, whose results pane showed the
-previous query's output; it is to be re-run (risk noted: the function only
-rebuilds counts and returns a number). The gate reports row-level security on
+All read-backs matched. Item 13's check C was re-run on 2026-10-12, its first
+results pane having shown the previous query's output: the recount is callable
+by `postgres` and `account_app` only. The gate reports row-level security on
 for 50 of 50 tables. Health ok. The new routes answer 401 against two 404
 controls; the recount door 403 without its secret. No errors in the new
 revision's logs. Settings carried over. Frontend `main` at `2de81a8`, matching
