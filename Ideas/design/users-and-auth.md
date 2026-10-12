@@ -4,7 +4,10 @@
 
 Who is signed in, what they can reach, and the settings every other module reads.
 Small in surface and the only module where a mistake is a security bug rather
-than a wrong number, which is why it carries 22 tests for roughly 400 lines.
+than a wrong number. The database's half of isolation, row security and the
+identity each request carries, is in
+[isolation-and-sharing.md](isolation-and-sharing.md). This note is the
+application's half.
 
 **Decisions taken:** two ways in — Google and a local password — and an account
 may end up with both; a session is a stateless JWT, revoked by an epoch counter
@@ -20,16 +23,28 @@ Pydantic model, so a new preference needs no migration.
 | `hash_password` / `verify_password` | `Auth/services/password_service.py` | bcrypt, with a 72-byte ceiling |
 | `burn_one_verification` | `Auth/services/password_service.py:40` | constant-time behaviour for an unknown address |
 | `SlidingWindowLimiter` | `Auth/services/login_throttle.py` | 8 attempts per key, bounded at 4096 keys |
+| `client_of` | `Auth/services/client_address.py` | the caller's address, for the limiters and the audit log (D18) |
+| `may_sign_up` | `Auth/services/signup_policy.py` | the signup allowlist, on both ways in |
+| `get_current_user` | `Auth/dependencies.py` | the token's user, and `act_as` so the database knows who is asking |
 | `verify_user_access` | `Auth/services/access.py` | `VerifiedUserId`, on every route in the app |
-| `get_preferences` | `Users/services/user_service.py:205` | stored settings, defaults filled in |
+| `get_preferences` | `Users/services/user_service.py` | stored settings, defaults filled in |
+| `delete_user` / `restore_user` / `purge_expired_users` | `Users/services/user_service.py` | deletion with a 30-day way back |
 
 ## Data model
 
 `users` — name, email (normalised: trimmed and lower-cased on the way in, so
 `A@b.com` and `a@b.com` are not two accounts), `password_hash` (nullable),
 `google_id` (nullable), `email_verified`, `session_epoch`,
-`current_school_year` / `current_semester` / `term_label`, and `preferences`
+`current_school_year` / `current_semester`, `first_year_calendar_year` (the
+anchor every term date and heading derive from), `term_label` (the fallback for
+a user with no anchor, and due to be dropped), `deleted_at`, and `preferences`
 (JSON).
+
+`push_subscriptions` — one row per device that turned notifications on. The
+endpoint is unique across users: a browser handed from one account to another is
+released from the first by a definer function
+(`account_release_push_endpoint`), since nothing in the second account can see
+the first's row.
 
 `auth_provider` records how the account was *originally* created. What it can
 sign in with *today* is `has_password` / `has_google`, two properties derived from
@@ -81,6 +96,34 @@ the address, so the same address from a different client is a different key. The
 key table is capped at 4096, because an unbounded one is itself the denial of
 service.
 
+> **"Client" was the platform's proxy until 2026-10-08.** Behind Cloud Run every
+> request's peer is the same internal address (99 of 99 in the logs), so every
+> caller shared one budget. `client_of` now reads `X-Forwarded-For`, counting
+> `TRUSTED_PROXY_HOPS` entries in from the **right**, because the left end is
+> whatever the client wrote. With 0 (the default) the header is ignored, so a
+> local run behaves as before. Production runs with 1, set only after a forged
+> header was shown to be ignored.
+
+**Signup is by allowlist; sign-in is not.** `ALLOWED_SIGNUP_EMAILS` gates
+*creating* an account, on `/register` and on `/auth/google`, which creates
+accounts too. An allowlist on the password path alone would have left the
+other way in open. An account that exists keeps working whether or not it is
+listed, because taking access away is a deletion and deletion has its own path.
+Unset means open, so a fresh clone can make its first account. `./invite.sh`
+adds addresses to the deployed list.
+
+**Deleting an account is marked, not done.** `delete_user` stamps `deleted_at`
+and bumps the session epoch in the same moment, so a stolen token that asked for
+the deletion can't keep using the account during the grace period. The owner
+signs in again, sees the date, and can undo it. `purge_expired_users` removes
+the account 30 days later, one account at a time and acting as that user:
+- Under row security the cascade can only see that user's rows, which is
+  exactly the set that should go.
+- Kept syllabus files go first, since no database cascade reaches storage. If
+  storage can't confirm the delete, the account waits for the next purge.
+- A refused delete rolls back and waits, rather than taking down the startup
+  it runs in (D33).
+
 **Changing an email clears `email_verified`.** Repeating the *same* address does
 not, so saving Settings without touching the address does not silently
 de-verify it.
@@ -95,10 +138,21 @@ One JSON column, parsed through `UserPreferences`. New keys are additive and nee
 no migration — which is how the study window (`study_day_start`,
 `study_day_end`, `min_free_block_minutes`) arrived for free.
 
-What is in it, and who reads it: timezone (the completion-timing figure),
-currency, week start, theme, date and time format, default reminder minutes,
-`credit_target` and `gpa_scale_enabled` and `default_target_grade` (Grades, and
-the at-risk bands in Tasks), and the study window (free blocks).
+What is in it, and who reads it:
+- **`timezone`**: "today" everywhere, on the server (`shared/dates`) and in the
+  browser (`setClockZone`), plus completion timing, reminders and the now-line
+- **`credit_target`, `gpa_scale_enabled`, `default_target_grade`**: Grades, and
+  the at-risk bands in Tasks
+- **The study window**: free blocks
+- **`event_colors`**: the calendar, only for the kinds you changed
+- **`use_estimate_ratio`**: whether the workload forecast scales estimates (D36)
+- **`exam_buffer_hours`**: how close before an exam a shift is flagged, 0 to 48
+  (D21)
+- **`cash_tip_account_id`**: where cash tips are filed. It is read here but
+  deliberately absent from `UserPreferencesPatch`, because choosing it files
+  every held tip, and that has its own endpoint with its own ownership check
+- **Unread**: currency, week start, theme, date and time format, and default
+  reminder minutes. Nothing reads these
 
 > **The bug this column caused.** `model_dump()` in Python mode puts `datetime.time`
 > objects into a JSON column, which raises at commit rather than at assignment —
@@ -108,27 +162,40 @@ the at-risk bands in Tasks), and the study window (free blocks).
 > class in this codebase; the other two were `events.skipped_dates` and a
 > recurring rule's.
 
-> **Seven of those keys have no control anywhere, and one of them is load-bearing
-> (audit #58).** `SettingsPage` sends `credit_target`, `gpa_scale_enabled`,
-> `default_target_grade` and the study window. It does not send `timezone`,
-> `currency`, `week_start`, `theme`, `date_format`, `time_format` or
-> `default_reminder_minutes_before` — the API validates all seven, so only the
-> form is missing.
+> **Audit #58 is closed, and its wording was misleading.** "Seven preferences
+> have no control" read as seven controls to build. It was one bug, one control
+> and the rest. The bug: every Settings save reset the preferences it didn't
+> mention, timezone included, because the update took the full model, whose
+> every field has a default. It now takes `UserPreferencesPatch`, merged with
+> `exclude_unset`. The control was the time zone, in Settings → Calendar. The
+> rest are the six unread keys above, kept unexposed on purpose: a control that
+> changes nothing is worse than none.
 >
-> `timezone` is the one that matters. It defaults to `America/Regina` and
-> `timing_service.local_completion_date` converts `completed_at` through it
-> before comparing against a due date, so a wrong zone is not cosmetic: it is
-> the systematic drift toward "late" that module's own docstring warns about.
-> Every user outside that zone currently gets it and cannot say so. `currency`
-> is validated as ISO 4217 and then ignored — `money.ts` hardcodes `$`. The
-> additive-keys property that made these cheap to add is also what let them be
-> added without a control.
+> The time zone control is seeded from the **stored** zone, never the browser's
+> guess. The guess is offered by a button instead, so opening Settings in
+> another city can't quietly repoint every reminder on the next save.
+> `currency` is validated as ISO 4217 and still ignored: `money.ts` hardcodes
+> `$`.
 
 ## Academic status
 
 `current_school_year` + `current_semester` are what `term_bucket` compares a
 course against. With neither set, **everything reads as current** — a student who
 has not filled it in sees their courses rather than an empty page.
+
+`first_year_calendar_year` is the anchor term dates and the term heading derive
+from (Settings → Academic, which suggests one from your courses' dates).
+`term_label` predates it. It has no editor anywhere, which is how it went a
+year stale, and is due to be dropped once every user has an anchor.
+
+## Settings, the page
+
+Account and Password side by side, then three tabs shown one at a time
+(Academic, the default, then Calendar and Financial), and `?tab=` opens one
+directly. Calendar holds the study window, the time zone, event colours, the
+exam buffer and Blocked periods. Financial holds the income split, categories,
+cash tips and the counted-accounts list. Notifications are switched on per
+device from there too.
 
 ## Notes
 
@@ -137,5 +204,10 @@ has not filled it in sees their courses rather than an empty page.
 - Email is normalised on the way in; lookups also use ILIKE.
 - `auth_provider` is history. Ask `has_password` / `has_google` for what works now.
 - The throttle is in-process. It resets on restart and is not shared across
-  workers — acceptable for a single-process app, and the first thing to revisit
-  if that changes.
+  Cloud Run instances. That is acceptable at this scale, and the first thing
+  to revisit if traffic grows.
+- Never key a limiter on the leftmost `X-Forwarded-For` entry, or on "the first
+  public address". Both are the client's to write.
+- `ALLOWED_SIGNUP_EMAILS` is comma-separated, so `invite.sh` sets it with
+  `--update-env-vars "^|^…"`. A plain `--update-env-vars` splits on the commas
+  and keeps only the first address.

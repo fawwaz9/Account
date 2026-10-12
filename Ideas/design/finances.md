@@ -21,10 +21,18 @@ what money went *on* (category) is separate from which pot it came *from*
 
 | Piece | Where | What it does |
 |---|---|---|
-| `split_income` | `services/deposit_service.py:22` | divide an amount by each account's share, remainder on the largest |
-| `record_deposit` | `services/deposit_service.py:62` | one income row per account, one `group_id` |
+| `split_income` | `services/deposit_service.py` | divide an amount by each account's share, remainder on the largest |
+| `record_deposit` | `services/deposit_service.py` | one income row per account, one `group_id` |
 | `is_money_in` / `is_money_out` | `services/activity_service.py` | direction, including a transfer's two signs |
-| `get_budget_summary` | `services/budget_service.py:186` | a month against its targets |
+| `uncounted_account_ids` | `services/counted.py` | the accounts every analytic leaves out (D39) |
+| `get_budget_summary` | `services/budget_service.py` | a month against its targets |
+| `safe_to_spend` | `services/safe_service.py` | the headline: what is spendable before the next cheque |
+| `forecast`, `runway`, `run_rates` | `services/forecast_service.py` | where the spending accounts are heading (D9) |
+| `plan`, `solve` | `services/plan_service.py` | the year plan, and hours a week to a target (D10) |
+| `save_plan`, `review` | `services/plan_review_service.py` | the saved plan against each finished month (D37) |
+| `preview`, `commit`, `undo` | `services/import_service.py` | a bank CSV into the ledger (D14, D15) |
+| `Categorizer` | `services/categorize_service.py` | a category suggested for an expense (D17) |
+| `find_subscriptions` | `services/subscription_service.py` | charges that repeat with no standing instruction behind them |
 | `run_due` / `upcoming` | `services/recurring_service.py` | standing instructions, written when due |
 | `term_span`, `term_budget` | `services/tuition_service.py` | a term measured over its fixed dates, from `Grades/utils/terms.py` |
 | `preview_tuition`, `record_tuition` | `services/tuition_service.py` | a term priced from a per-credit rate |
@@ -34,9 +42,14 @@ what money went *on* (category) is separate from which pot it came *from*
 `accounts` — name, `kind`, `income_share`, `archived`, `position`. User-defined,
 because one student's "Savings" is another's "Tuition fund".
 
-`kind` is mostly styling and sensible defaults, with **three** exceptions now:
-safe-to-spend counts `spending` accounts only, `debt` marks money owed, and
-`investment` is the only kind that can hold a recorded market value.
+`kind` is mostly styling and sensible defaults, with these exceptions:
+- safe-to-spend and the forecast count `spending` accounts only
+- the year plan counts `spending`, `savings` and `emergency` as liquid
+- `debt` marks money owed
+- `investment` is the only kind that can hold a recorded market value
+
+Whether an account counts at all is not a kind. It is its own column,
+`counts_toward_net_worth`, below.
 
 The column's own comment warns against loading more meaning onto it, and the third
 one is worth justifying rather than just counting. The warning is about per-account
@@ -210,11 +223,43 @@ somebody else is just as real a case as money lent out.
 
 The default is still to count, so nothing is hidden unless it is chosen.
 
-**It is independent of `kind`, and must stay that way.** Excluding a spending
-account from net worth does not change what safe-to-spend counts — *what am I
-worth* and *what can I spend before payday* are different questions, and one
-setting quietly moving two figures is the kind of coupling that makes a number
-untrustworthy. There is a test asserting exactly that.
+## Counted accounts: one switch for every figure
+
+**This reversed a rule the note used to defend** (D39, the owner's call,
+2026-10-06). It said excluding an account from net worth must not change
+safe-to-spend, because "what am I worth" and "what can I spend" are different
+questions. The owner chose one switch instead, and the column kept its name:
+renaming a Postgres column is a migration with no user-visible gain.
+
+**An unticked account is treated as if it did not exist** by every figure built
+from more than one account:
+- net worth and safe to spend
+- the forecast, runway and run-rates
+- the year plan and the plan against actual
+- the budget summary and the Dashboard
+- the term budget and course cost
+- the subscription finder and the standing-instruction totals
+
+**Recording is untouched**: its ledger, its own page, deposits and the income
+split, imports, and the cash-tip account. Its card says "not counted".
+Settings → Financial lists every account with the switch, and the account's edit
+dialog carries the same one.
+
+**Money crossing the line still counts.** A transfer from a counted account to an
+uncounted one is money out, because it really did leave the counted world.
+
+**The income share stays as it is.** `spendable_income_share` keeps every account
+with a share in its denominator. Pay landing in an uncounted account really does
+leave the counted world, so dropping it from the denominator would overstate the
+pay the forecast and plan expect.
+
+Every analytic reads the one helper (`Finances/services/counted.py`), which
+depends only on the models: several of the services that read it import each
+other. `tests/test_counted_accounts.py` is the invariant. It adds an uncounted
+account of every kind, with income, expenses, a repeating charge, a standing
+instruction, a target, a sinking fund and a course expense, and requires every
+figure to stay the same. Then it ticks the account back on and requires them to
+change, so the test cannot pass vacuously.
 
 > **The migration is the interesting part.** Every older boolean in
 > `ADDED_COLUMNS` is written `BOOLEAN NOT NULL DEFAULT 0`, which **Postgres
@@ -271,12 +316,14 @@ safely under budget. It shipped, and was rolled back the same day. Keying on the
 pair means the limit and the spending it is measured against cover the same
 money.
 
-> **That rollback left its table in production, and still has.** `category_budgets`
-> holds four indexes and two rows and is read by nothing; the removal took out the
-> model, the service, the routes and the frontend, and stopped there. Found by
-> counting tables on 2026-09-28, not by anything failing. Audit #66, and the
-> reason `shipping.md` now has a step 18. A feature can be removed from the code
-> in one commit; its table is a separate decision, and that one is still open.
+> **That rollback left its table in production, deliberately.** `category_budgets`
+> and `spend_categories.monthly_limit` are read and written by nothing. The
+> removal took out the model, the service, the routes and the frontend, and
+> stopped there. Found by counting tables on 2026-09-28, not by anything failing.
+> Audit #66, and the reason `shipping.md` has a step 18. They were then **left on
+> purpose**: dropping is irreversible against production, and migrations here
+> only add. ROLLBACK.md, "Two orphaned schema objects", has the reasoning. If they
+> are ever in the way, drop them as their own change with its own backup.
 
 **Standing, with a per-month override.** `account_category_limits` holds what
 this account means to spend here every month; `account_category_month_limits`
@@ -402,6 +449,13 @@ where-it-went breakdown; standing instructions in all four kinds on the shared
 recurrence engine; `course_id` on expenses; Pay Tuition; term budget measured
 over the term's own dates rather than a calendar month.
 
+Then safe to spend, sinking funds, the subscription audit, investment returns,
+per-account category limits, account ordering, counted accounts (D39), the
+forecast (D9), the year plan and its review (D10, D37), and CSV import with
+category suggestions (D14, D15, D17). The Budget page leads with safe to spend
+and puts the forecast and the year plan side by side at its foot, by the
+owner's choice.
+
 ## Notes
 
 - **Only money that moved.** If it never entered or left an account, it is not a
@@ -438,10 +492,10 @@ two days of runway on the 29th. The period you actually have to make money last
 is the one before more arrives — and that answer only became available once Jobs
 knew about pay schedules.
 
-**Only spending accounts count.** This is the single place `accounts.kind`
-drives behaviour rather than styling, and the column itself now says so. Against
-real data the difference is stark: roughly $27,800 across every account, against
-what is actually in the spending pot.
+**Only counted spending accounts count.** Against real data the difference is
+stark: roughly $27,800 across every account, against what is actually in the
+spending pot. Upcoming charges paid from an uncounted account, and sinking
+funds paid from one, are left out of the commitments too (D39).
 
 **Two figures, one headline.** `safe_now` is the answer; `safe_soon` sits under
 it as context. A cheque can be late or short — catching that is part of why Jobs
@@ -483,6 +537,71 @@ Deleting a fund takes its transfers with it; deleting a transfer clears the
 contribution. Both directions are mutation-tested — a fund left claiming money
 no longer set aside is the orphaned-tuition-payment fault again.
 
+## Where this is heading
+
+`forecast_service` (D9), at the foot of the Budget page beside the year plan.
+It is not another ledger but a date: "at this pace you go negative on March 3".
+It shows the first day the spending accounts would cross $0, the runway at the
+recent pace, and the one-off categories spending fastest. **Every response lists
+what it assumed**, because a forecast that hides its assumptions misleads real
+decisions.
+
+Each input is counted once:
+- **The start** is spending balances, exactly as safe-to-spend counts them.
+- **Standing instructions** come from the projections `/recurring/upcoming`
+  already makes. A transfer to savings is money leaving; one between two
+  spending accounts nets to nothing.
+- **Pay** comes from each current job's pay dates, with an hourly job projected
+  from its scheduled shifts, scaled by the income share that lands in spending.
+- **Card purchases count when they happen**, not when the card is paid.
+- **One-off spending** runs at the recent daily pace, measured from the
+  history actually held (`days_of_history`).
+
+## The year plan
+
+`plan_service` (D10). One running balance from now to the end of the school year
+(the Winter term's last day), across **all liquid money**: spending, savings and
+emergency. A spreadsheet tracking everything you could live on is what it
+replaces. It reuses the forecast's engine rather than re-entering anything.
+
+**Solved backwards**: give it a target balance and date, and it divides the
+shortfall by what one extra hour of your hourly job adds, over the weeks left.
+It is shown as scenarios, because students think in "what if I picked up a
+shift".
+
+**The plan against the month** (D37). The plan is recomputed on every read, so
+on its own it can never be wrong, and that is why it needs a saved copy. "Save as
+my plan" keeps one, never overwritten. Each finished month is compared with the
+newest plan saved *before that month began*. A plan saved on March 14 only
+forecast from the 15th, and setting it against all of March would blame it for
+two weeks it never saw. Actuals are read by the plan's own definitions, archived
+liquid accounts included, or the comparison would measure the definitions rather
+than the month. Tuition is named on its own line.
+
+## Bank CSV import
+
+`import_service` (D14, D15). Every Canadian bank exports CSV, and the ledger is
+real money, so:
+- **Nothing is written until you confirm.** The preview parses, maps columns and
+  flags duplicates. The commit re-parses the same text with the same mapping and
+  writes only the lines named, so what lands is exactly what was shown, never
+  rows a client describes.
+- **Duplicates start unticked, not dropped.** A duplicate is a row with the same
+  amount within three days, and the same merchant or the same day. Importing a
+  file twice adds nothing unless someone ticks the duplicates on purpose. Two
+  coffees on one day in the same file are both kept.
+- **An import undoes as one unit.** Its rows carry `transactions.import_id`, and
+  `imports` records the batch.
+
+**Category suggestions** (D17) come in three layers, tried cheapest first:
+1. Your own merchant map: every expense you have categorised before.
+2. A short, hand-kept list of well-known Canadian merchants, matched to the
+   names *you* use.
+3. Naive Bayes on your own history.
+
+No model and nothing shared: the ledger is the map. The omnibox uses the same
+suggestions.
+
 ## Subscription audit
 
 Read-only, no tables: every call re-groups the ledger fresh, so there is
@@ -523,10 +642,30 @@ Verified against a copy of the real ledger: 37 real expenses, nothing repeats
 description three times, zero findings — the right answer, not a gap in the
 detector.
 
+**"Until when?"** (D21). A rule with no end date projects forever and corrupts
+every forecast, while leases and term-length subscriptions have natural ends.
+Each finding has an optional Until date, no earlier than the next expected
+charge. It reads "ongoing" until set, and is sent as the rule's
+`recurrence.until`.
+
+## Account order
+
+A drag handle on each card (2026-10-03), beside the pencil and outside the card's
+link, since a handle inside it would open the account on every drag. It uses
+Pointer Events with pointer capture rather than HTML5 drag-and-drop, which
+never fires on touch. The focused handle also moves by arrow keys, and Escape
+mid-drag puts the card back. It is saved as one PATCH per account that moved,
+writing every index rather than nudging, because older accounts can share
+position 0. It is not atomic: a failure midway leaves a mixed order, which costs
+nothing but order and is fixed by dragging again.
+
 ## Still open
 
-Reimbursement state, and who and when for money lent out — on whichever
-account the student keeps it in, since there is no longer a seeded pot for it.
-
-Account ordering is stored (`position`) and has no editor, so the grid order is
-whatever creation produced. Worth a drag handle only if the list gets long.
+- Reimbursement state, and who and when for money lent out, on whichever account
+  the student keeps it in.
+- Whether a category can declare itself not-spending. A student loan recorded as
+  an expense distorts every budget-against-plan figure downstream. The settled
+  preference is options over rules, so if this is worth doing it is a flag the
+  user sets, not a warning the app raises.
+- "Left to spend" keeps its label when it goes negative. NetWorth already swaps
+  to "In the red" for the same reason.

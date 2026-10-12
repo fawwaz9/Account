@@ -9,12 +9,21 @@ to study.
 - [TEMPLATE.md](TEMPLATE.md) — the design note format, and why each heading is there
 - [grades.md](grades.md) · [finances.md](finances.md) · [calendar.md](calendar.md) ·
   [tasks.md](tasks.md) · [jobs.md](jobs.md) · [users-and-auth.md](users-and-auth.md)
+- [isolation-and-sharing.md](isolation-and-sharing.md) — row-level security, and
+  every feature where one person's data reaches another: partners, shared tasks
+  and events, teams on the Fitness page, the shared course catalogue
+- [../overhaul/](../overhaul/) — the phased plan since 2026-10-04. Each phase has
+  its plan, its decisions (D-numbers, cited throughout these notes) and its
+  runbook
 - [../jobs-plan.md](../jobs-plan.md) — the worked example, with its build log
 - [../next.md](../next.md) and [../shipped.md](../shipped.md) — what is next, what is shipped, and the
   accumulated notes
-- [../session-handoff.md](../session-handoff.md) — where the project is right now
-- [../deployment.md](../deployment.md) — how it got on the web, and
-  [../ROLLBACK.md](../ROLLBACK.md) for when it breaks
+- [../shipping.md](../shipping.md) — the build-verify-deploy loop, and
+  [../ROLLBACK.md](../ROLLBACK.md) for when it breaks. Its "What is where" table
+  is the one kept current
+- [../deployment.md](../deployment.md) — how it got on the web.
+  [../session-handoff.md](../session-handoff.md) is a snapshot from 2026-09-28,
+  before the overhaul. Read `shipped.md` for anything since
 
 ---
 
@@ -28,25 +37,42 @@ Application/
       <Module>/services/    the logic. Takes a Session, returns schemas
       <Module>/utils/       pure functions. No session, no models
       api/routes/           thin. Parse, call one service, map errors to status
-      _database/            models, engine, migrations
+      _database/            models, engine, migrations, schema, row security
+                            (rls.py), the database identity (identity.py), and
+                            the cross-user functions (sharing.py, teams.py,
+                            distributions.py)
       shared/               tokenizer, audit, error bodies, money, dates
-    tests/                  940 cases
+    tests/                  3,088 cases, run on SQLite and on Postgres
   frontend/
     src/features/<area>/    api.ts, types.ts, components/, hooks/
     src/pages/              one per route, composing features
     src/shared/             components, utils, hooks used by more than one area
     src/services/           apiClient, endpoints
     src/styles/             one stylesheet per area
-    *.test.ts(x)            142 cases in 17 files, beside what they test
+    *.test.ts(x)            627 cases in 78 files, beside what they test
 ```
 
-Twenty-five tables. FastAPI + SQLAlchemy 2.0 + Pydantic v2; React 19 + Vite 7 +
-Tailwind v4 + react-router-dom.
+The modules: Grades, Finances, Calendar, Tasks and Jobs, the five with pages;
+Auth and Users; and the newer, smaller ones. **Intake** reads a syllabus.
+**Notifications** is push. **Omnibox** is the one input that files anywhere.
+**Partners** and **Teams** are shared between users. **Usage** and **Survey**
+measure the phase gates.
+
+Fifty tables and 234 routes. FastAPI + SQLAlchemy 2.0 + Pydantic v2; React 19 +
+Vite 7 + Tailwind v4 + react-router-dom 7.
 
 **Two databases, one schema.** SQLite is the local default and the working copy
 lives at `data/app.db`. Production is Postgres 17 on Supabase, reached through a
 transaction-mode pooler. The same models drive both; the two places that differ
 are handled in `_database/db.py` and explained in `../plan-a-decisions.md` D2.6.
+
+**Postgres has a second line of isolation that SQLite lacks.** The API connects
+as `account_app`, a role every table's row policy constrains, so a query that
+forgets its `user_id` filter still gets only the caller's rows. Anything that
+crosses between users is a `SECURITY DEFINER` function with a SQLite twin
+written to mean the same thing. CI runs the suite on both databases, the
+Postgres run as the restricted role. See
+[isolation-and-sharing.md](isolation-and-sharing.md).
 
 ## The rules that hold it together
 
@@ -107,9 +133,12 @@ rate that the budget could never compute.
 - **422** — a parse-time Pydantic validator. The request was malformed.
 - **400** — a service-layer validator. The request was well-formed and wrong.
 - **404** — missing, or belongs to another user. Deliberately the same answer, or
-  the API confirms which ids are real.
+  the API confirms which ids are real. Under row security another user's row is
+  not merely filtered out; the database never returns it.
 - **403** — the URL's `user_id` is not the token's. A different check, at the path
   rather than the resource, where there is nothing to conceal.
+- **429** — throttled. The limiters key on the caller's own address, read from
+  `X-Forwarded-For` by `Auth/services/client_address.py` (D18).
 
 ### Cascades go both ways, and are mutation-tested
 
@@ -127,17 +156,32 @@ confirming it fails.
 `_database/migrations.py`. New tables come from `create_all`. Back up
 `data/app.db` first.
 
-> **They no longer run on startup in production.** The deployed service sets
-> `RUN_SCHEMA_ON_STARTUP=0`, so **a new table or column does not reach Supabase
-> by deploying.** Run it yourself, once, as part of the deploy:
+> **They never run on deploy in production.** The deployed service sets
+> `RUN_SCHEMA_ON_STARTUP=0`, and `deploy.run.sh` never applies schema. The schema
+> step is the owner's, run once against Supabase as part of the deploy, after
+> the backup and before the API goes out:
 >
 > ```sh
 > DATABASE_URL="$SUPABASE_DATABASE_URL" python -m app._database.schema
 > ```
 >
-> It is idempotent, so a repeat is harmless. Locally the default is still on and
-> nothing changes. This is the single easiest way to ship a change that works on
-> your machine and 500s in production.
+> It is idempotent, so a repeat is harmless. It also installs the row policies,
+> grants and definer functions from `rls.py`. The deploy workflow's schema gate
+> (`check_schema_conformance.py`) refuses to ship an image whose tables or
+> columns production lacks, and prints this fix. Locally the default is still on
+> and nothing changes.
+
+**A new table needs a row-security kind.** Per-user (`user_id`), child (exactly
+one foreign key to an owned table), shared-read, sealed or no-direct-write.
+`rls.py` refuses to generate policies for a table it cannot classify. The
+isolation suites walk every route and table: a new route goes into the
+isolation, non-interference and RLS walks in the same change.
+
+**API tests sign in with real tokens.** `create_access_token`, not an override of
+`get_current_user`. The real dependency calls `act_as`, which sets the
+database identity. An override skips it, and on Postgres that test then reads
+nothing. Two tests passed by accident that way before CI's Postgres job caught
+one.
 
 **Route order is load-bearing.** FastAPI matches in declaration order, so every
 literal path goes above its `/{param}` catch-all. `/courses/resolve` below
@@ -175,8 +219,8 @@ sets `padding: 7px 14px`, so anything with a fixed width and height needs
 `display:inline-flex; padding:0; box-sizing:border-box` or its glyph sits low and
 right. This has caught five controls.
 
-**Every page is a `lazy()` route.** `src/app/App.tsx` loads the nine signed-in
-pages on demand; `LoginPage` and the shell stay eager. A new page added with a
+**Every page is a `lazy()` route.** `src/app/App.tsx` loads the signed-in pages
+on demand; `LoginPage` and the shell stay eager. A new page added with a
 static import silently folds itself back into the first download and nothing
 fails to say so. The one `Suspense` lives in `MainLayout` around `<Outlet />`,
 so the sidebar stays put while a route arrives.
@@ -246,7 +290,12 @@ The joins are the reason the app exists, so they are worth naming.
 | Grades × Tasks | a task from a below-target course carries a risk badge and leads its date group |
 | Calendar × Tasks | tasks with due dates draw on the calendar; the week's load counts booked hours against estimated ones |
 | Calendar × Jobs | a shift is an event, so work competes with study for the same hours in the free-block finder |
-| Jobs × Finances | a paycheque's net splits across accounts by income share, like any other deposit |
+| Jobs × Finances | a paycheque's net splits across accounts by income share, like any other deposit; a cash tip goes to the one account chosen for tips |
+| Jobs × Calendar × Grades | a shift that overlaps an exam, or ends inside the buffer before one, is flagged on both pages (D21) |
+| Finances × Jobs × Calendar | the forecast and the year plan read pay dates from each job's rule and its scheduled shifts |
+| Jobs × Finances, at tax time | the tax packet sets a year's recorded pay beside the tuition paid in it (D20, D21) |
+| Tasks × Grades | a syllabus raises a course, its weights, and a dated grade per assessment, which raise their tasks and blocks |
+| Users × every module | partners, shared tasks and events, and teams cross between users, always through a definer function |
 
 ## Adding a module
 
@@ -259,5 +308,7 @@ The joins are the reason the app exists, so they are worth naming.
    catch-alls.
 5. `src/features/<module>/` with `api.ts`, `types.ts`, `components/`, `hooks/`;
    a page; a stylesheet; a nav entry.
-6. Tests as you go, and mutation-test every guard.
-7. Update `shipped.md` as part of landing it, not afterwards.
+6. Give each new table its row-security kind in `rls.py`, and put each new route
+   in the isolation, non-interference and RLS walks.
+7. Tests as you go, on both databases, and mutation-test every guard.
+8. Update `shipped.md` as part of landing it, not afterwards.

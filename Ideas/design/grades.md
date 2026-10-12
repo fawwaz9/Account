@@ -16,16 +16,23 @@ its ends or it is a second opinion; flags (`no_final`, `transfer_credit`,
 
 | Piece | Where | What it does |
 |---|---|---|
-| `calculate_current_average` | `services/grade_service.py:287` | the course average, from marked work only |
-| `bonus_contribution` | `services/grade_service.py:267` | marks banked on top of the 100 |
-| `project_average` | `services/grade_service.py:403` | the same arithmetic with unmarked work at an assumed score |
-| `calculate_grade_band` | `services/grade_service.py:444` | best and worst finish, per unmarked item |
-| `calculate_required_final` | `services/grade_service.py:483` | what the final has to be |
-| `category_points` | `services/grade_service.py:544` | marks out of a category's weight, in `Decimal` |
+| `calculate_current_average` | `services/grade_service.py` | the course average, from marked work only |
+| `bonus_contribution` | `services/grade_service.py` | marks banked on top of the 100 |
+| `project_average` | `services/grade_service.py` | the same arithmetic with unmarked work at an assumed score |
+| `calculate_grade_band` | `services/grade_service.py` | best and worst finish, per unmarked item |
+| `calculate_required_final` | `services/grade_service.py` | what the final has to be |
+| `category_points` | `services/grade_service.py` | marks out of a category's weight, in `Decimal` |
 | `term_bucket`, `course_result_grade`, `effective_target` | `utils/terms.py` | placing a course in time, and judging it |
 | `weight_problems` | `utils/weights.py` | weights that do not add up |
+| `sorted_grades`, `grade_sort_key` | `utils/ordering.py` | the one order grades reach a client in: case ignored, numbers compared as numbers |
 | `resolve_course` | `services/course_lookup.py` | a course from a typed code; three callers |
 | `sync_schedule_for_grade` | `services/grade_schedule.py` | a dated grade's task or calendar block |
+| `compare`, `set_counting` | `services/scheme_service.py` | alternative grading schemes beside the course's own (D18, D25) |
+| `audit` | `services/degree_service.py` | requirements against courses, computed on every read (D31) |
+| `link_of`, `match` | `services/catalogue_service.py` | a course's place in the shared catalogue, matched when read |
+| `prerequisites`, `evaluate` | `services/prerequisite_service.py`, `utils/prerequisites.py` | met, on track or not met, advisory only |
+| `overview`, `save` | `services/term_review_service.py` | the end-of-term review (D25) |
+| `parse`, `apply`, `add_to_course` | `Intake/services/syllabus_service.py` | a syllabus in, a course out, checked by a person (D16, D27) |
 
 ## Data model
 
@@ -39,6 +46,22 @@ flags that change rules rather than visibility:
 - `transfer_credit` — counts credits, carries no grade, stays out of every average
 - `archived` — still searchable and still in the credit-weighted average, but out
   of credits completed
+
+And since Phase 1 and 2:
+
+- `section` — "101", "L1A". A current course without one is listed in Attention
+  (D22), since the catalogue and a syllabus both need to know which section
+- `final_grade` — the result the professor submitted. Once entered it is the
+  grade a finished course is represented by (`course_result_grade`), ahead of
+  the running average
+- `projected_before_final`, `projected_on` — the projection kept from the moment
+  before the final was marked or the result entered (D34). Stored, because the
+  point is what was true *then*
+- `counting_scheme_id` — the grading scheme that counts as the course's grade, or
+  null for the course's own weights (D29)
+- `catalogue_course_id`, `catalogue_unlinked` — only what *you* decided about the
+  catalogue link: a course picked by hand, or "none". With neither, the link is
+  matched by campus and code on every read
 
 `course_category_weights` — category → weight, one row each. A table rather than
 a JSON blob because it is queried and summed.
@@ -64,6 +87,17 @@ two drifting apart.
 
 `excluded` is the dropped-mark flag: the grade stays on the course, visible, and
 leaves every average. For a professor who drops the two lowest quizzes.
+
+Newer tables, each the user's own:
+- `grading_schemes`: alternative rubrics.
+- `degree_requirements` and `course_equivalences`: the audit's inputs.
+- `syllabus_parses`: a parse and, if kept, where its file is.
+- `prerequisite_proposals`: your own prerequisite rules.
+- `term_reviews`: the end-of-term answers.
+
+`catalogue_courses` and `catalogue_prerequisites` belong to nobody, and
+`grade_distributions` is sealed. All three are in
+[isolation-and-sharing.md](isolation-and-sharing.md).
 
 ## What was built, and what it cost
 
@@ -244,8 +278,122 @@ composing it, so chasing one is how you spend a weekend moving a number that was
 never going to reach. Zero-leverage items are excluded too — offering work that
 changes nothing is worse than offering none.
 
+## What the final needs, and what it was projected to be
+
+**The required final is a card beside the grade band** (D7). It is measured
+against the course's own target, or the account default (`effective_target`). It
+shows only while the final is still ahead: a current term, a weighted final,
+unmarked, and not a transfer or a no-final course. The free calculator stays,
+as "Try another target". The Attention panel says what the final needs too
+(D13).
+
+**Before the final, we projected 83.0%. You got 82%** (D34). When a final is
+marked or a result entered, the projection from just before is kept on the
+course. It is the review loop the grade band was always missing: whether
+these projections are any good is only knowable afterwards.
+
+## Grading schemes
+
+Some courses publish more than one rubric: "the better of 40/60 or 20/80".
+`scheme_service` projects each scheme beside the course's own grade, with the
+working shown (D18). A scheme has its own weights, and two rules:
+`drop_lowest` leaves out a category's N lowest marks, and `replace_with` lets a
+higher category average stand in for another ("the final replaces the midterm
+if higher").
+
+**A scheme with the course's own weights and no rules must give exactly the
+course's average.** That is tested, so a scheme can only ever differ for a
+reason it can show.
+
+**A scheme can count as the grade** (D25, D29). `counting_scheme_id` makes it the
+figure the course reports. The stored average is recomputed in the same
+commit, so every screen moves together. That fixed a real overshoot: a course weighted over 100 was told
+its final needed 191% when 96.16% would do.
+
+## From a syllabus
+
+**Upload a syllabus and the term builds itself** (D16): assessments, weights,
+dated exams and due dates. Three rules carry it:
+- **Nothing becomes a record without confirmation.** The parse is shown with
+  every field editable, and only what is confirmed is written. A hallucinated
+  weight in a grade projection is exactly the failure this exists to avoid.
+- **Checks are deterministic and run on every parse,** so the screen can point
+  at what to look at: weights not summing to 100, a weighted assessment with no
+  date that isn't marked TBA, a date outside the term.
+- **A syllabus can add to a course you already have, and only add** (D27, D30).
+  Matching rows are left alone and nothing is changed or removed, so a second
+  upload can't undo a correction you made.
+
+**What is sent to a model is narrow on purpose.** `Intake/services/llm.py` is the
+one door, provider-agnostic and named by task (`extract_document`). Only
+syllabi go through it: course documents, with nothing identifying a user in the
+request. Personal documents are not sent (Phase 1 D3), and that is why T4 upload
+was scrapped (Phase 2 D20). Original files are kept in a bucket when one is
+configured (D24), and the account purge deletes them first.
+
+Parses are capped per day (`LLM_PARSES_PER_DAY`, default 10). **The cap once
+compared a UTC date with the student's local one**, so every evening it counted
+nothing. CI caught it by running the same commit after midnight UTC. Tests in
+UTC-12 and UTC+14 now fail at any hour if it returns. The feature hides itself
+until a key is set.
+
+The reader also picks up **prerequisites**, filed only once you confirm them.
+The syllabus's own sentence stays with you and never reaches the catalogue.
+
+## The degree audit
+
+Grades → Degree audit (D31). You enter the requirements and how your courses map
+onto them once, and it shows what is done, in progress and missing. It is
+computed on every read and never stored, so it can't drift from the courses
+it describes.
+
+**An equivalence replaces its sources.** It applies when every source course is
+on your record, takes the least-finished one's status, and stands in for them.
+So a course is never counted both as itself and as what it maps to.
+
+## Prerequisites, and the shared catalogue
+
+**Each course is matched to the catalogue by campus and code when it is read**,
+so it links itself as soon as the catalogue gains it, and the catalogue starts
+empty. What is stored is only your own decision: a course picked by hand, or
+"none". **Linking moves no grade, average or credit**; it is a pointer for
+prerequisites.
+
+**Your prerequisites are typed, and apply to you at once.** "CPSC 210 and one of
+MATH 200, MATH 217", "6 credits of MATH 1xx", "CPSC 210 with 64%". They parse into
+a small JSON tree (`utils/prerequisites.py`): a course with an optional minimum
+grade, a number of credits by subject and level, or `all` and `any`. Codes are
+stored without the campus suffix. Anything a tree can't hold, such as year
+standing or "permission of the instructor", goes in the note beside it.
+
+**Met, on track, or not met, per part, labelled by source.** Yours wins for you
+when you have one, and both are shown. "Not met" always adds "exceptions are
+sometimes made", and **nothing anywhere is refused** because of it (D3).
+Adding a future course previews the shared rule.
+
+Your rule is also a proposal. The owner reviews proposals as counts of accounts
+with the rule tree alone, and only approved rules reach the shared catalogue.
+
+## Rate your term
+
+**End-of-term reviews** (D25), on the Grades page from 14 to 180 days after a
+term ends. There are four questions per finished course: hours a week (0-80),
+difficulty and clarity (1-5), and whether you would take it again. Answers lock
+after 14 days. A course can be skipped.
+
+**The opt-in adds your grade to the course's distribution**, and never locks. The
+review holds no copy of the grade. The count is rebuilt whole by a definer
+function, reading grades at that moment, into a table nothing can read, and
+nothing is written for a course-term under 5 contributors. **Nothing is shown
+yet:** distributions are Phase 3's.
+
 ## Still open
 
-A term retrospective once a term closes; the syllabus parser, deliberately
-late because it depends on due dates, category weights and the tokenizer all
-being settled — they now are.
+- A term retrospective when a term closes: what moved, what slipped, what you
+  predicted against what you got. The kept projection (D34) is its first input.
+- Pasting syllabus text rather than uploading a file; making the syllabus the
+  default way to add a course, with manual entry a button away.
+- Dropping `users.term_label` once every user has a first-year anchor.
+- Whether semesters themselves should be editable. Safe, but there are two
+  `Semester` enums to keep in step or collapse, and `SEMESTER_ORDER` is the
+  part that would break. The working is in `next.md`.

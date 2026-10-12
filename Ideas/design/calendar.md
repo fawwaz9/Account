@@ -7,10 +7,14 @@ module other modules build on rather than the one with the most features: class
 times, standing payments, repeating tasks and shifts all resolve through one
 recurrence engine, and three of the four store no occurrences at all.
 
-**Decisions taken:** a repeat is stored as the rule that generates it, never as
-its occurrences; the rule is a small fixed set of fields rather than an RFC 5545
-string; the week grid is a fixed 24 hours in a scrolling body; all-day items live
-in the header, because pinning them to midnight would say something false.
+**Decisions taken:**
+- A repeat is stored as the rule that generates it, never as its occurrences.
+- The rule is a small fixed set of fields, not an RFC 5545 string.
+- The time grid is a fixed 24 hours in a scrolling body.
+- All-day items live in the header, because pinning them to midnight would say
+  something false.
+- "Now" and "today" come from the Settings time zone, never the browser's.
+- A phone gets one and three days in place of the week.
 
 ## What it is built from
 
@@ -23,6 +27,10 @@ in the header, because pinning them to midnight would say something false.
 | `set_class_schedule` | `services/class_schedule_service.py` | a course timetable, replacing rather than appending |
 | `free_blocks`, `week_load`, `crunch` | `services/load_service.py` | three readings of one window |
 | `blackout_dates` | `services/blackout_service.py` | a reading break, subtracted from course events only |
+| `event_sharing_service` | `services/event_sharing_service.py` | a one-off event shared through a link (D24) |
+| `useCalender` | `frontend/src/features/calender/hooks/useCalender.ts` | the window on screen, its fetches, and the shared items merged in |
+| `views.ts` | `frontend/src/features/calender/views.ts` | which views a width offers, each view's dates, step and heading |
+| `place`, `placeTasks` | `frontend/src/features/calender/weekLayout.ts` | overlap columns for blocks, and deadlines on the clock |
 
 ## The engine
 
@@ -93,14 +101,97 @@ single `list_occurrences` call.
   which is how a shift stayed correctly absent from a measure of academic
   pressure without anyone writing a rule for it.
 
+## The views
+
+**Desktop: Week and Month.** The week opens by default, because it has the time
+axis that answers "what does today actually look like", and the free blocks and
+week load hang off it. The month runs Monday to Sunday over six rows, so the
+window it fetches covers the overflow days too.
+
+**A phone gets Day, 3 day and Month** (shipped 2026-10-12). At 720px and below
+(`PHONE_QUERY`, the width where the sidebar becomes a top bar) seven columns are
+too narrow to read. A phone opens on three days from today.
+- **The arrows move a whole page**: a day, three days, a week or a month. A
+  three-day window starts at the cursor rather than snapping to a week, so Today
+  means today and the two days after it.
+- **A sideways swipe does what the arrows do** (`shared/hooks/useSwipe.ts`).
+  It counts only if it travels at least 50px and 1.5 times as far sideways as
+  vertically. Scrolling through the hours is vertical and never perfectly so,
+  and must never step the calendar. Two fingers is a pinch. The listeners are
+  passive, so a scroll is never held up.
+- **The view is read through `fitView`, not corrected in an effect.** A rotation
+  that crosses the breakpoint therefore never renders or fetches a view the width
+  doesn't offer. The week becomes three days and back, Month stays Month, and
+  the date stays put. The choice is kept too: rotate back and it is still there.
+
+**One time grid for one, three or seven days.** `WeekView` sets `--days` on its
+root, and both grids' `grid-template-columns` read it. The header and body are
+separate grids, so the dates stay put while the hours scroll, and the shared
+variable is the only thing keeping their columns lined up. Headings come from each
+date, not its position: a three-day window can start on any weekday. The
+minimum width is `gutter + days × 90px`, so seven days scroll sideways on a
+narrow screen and one or three fit a phone.
+
+**The free blocks and week load stay a whole week** in the day and three-day
+views: the Monday-to-Sunday week the first visible day falls in. A week's load
+measured over three days would read as a light week.
+
+## The clock
+
+**The now-line** is a red line at the current minute, in today's column and
+nowhere else. So a week that isn't this one draws none, with no branch of its
+own. It ticks on the minute boundary, not 60 seconds from mount, ignores the
+pointer, and is hidden from screen readers, which would otherwise hear a new
+time every minute.
+
+It reads the **Settings time zone** through `nowIn(zone)`, and so does the
+highlighted today in every view. The backend's "today" already did, and a line
+from a different clock would sit in a different column from every figure the
+server sends. `today()` reads a module-level zone that `AuthProvider` sets
+while rendering, not in an effect: an effect would open on the browser's day
+and then flip. About forty frontend call sites follow it without each threading
+a zone through.
+
+## Colours
+
+All eight kinds can be recoloured in Settings → Calendar, stored in
+`preferences.event_colors` only for the kinds changed. "Default" removes the key,
+so a retuned default reaches everyone who never touched it. Kinds stay a fixed
+enum: recolouring only.
+
+The stylesheet holds one `--kind-color` per kind, with the bar and tint derived
+by `color-mix`, and a chosen colour arrives as an inline custom property. An
+exam keeps its heavier bar in any colour. A test keeps `kindColors.ts`'s
+defaults in step with the stylesheet's.
+
+## Shared events, and shifts near exams
+
+**A one-off event of your own can be shared through a link** (D24). Members see
+it on their own calendar, drawn dashed, with the owner's name and the other
+members'. They can leave and change nothing: an event is a time and place one
+person set. If the owner later makes it repeat, it drops off members' calendars.
+A shared *task* reaches members' calendars on its due date as an all-day item.
+Both are merged into the window in `useCalender`, and a failed shared read leaves
+your own calendar as it was. The mechanism is in
+[isolation-and-sharing.md](isolation-and-sharing.md).
+
+**A shift that collides with an exam is flagged here and on Jobs** (D21): it
+overlaps, or ends within the "Keep clear before an exam" buffer. The rule lives
+in Jobs (`conflict_service.py`), reading the calendar's own occurrences, so it
+agrees with what this page shows. See [jobs.md](jobs.md).
+
 ## Notes
 
 - **`skipped_dates` is a JSON column.** Serialise dates before assigning and
   rewrite the list whole. Assigning `date` objects into it broke editing any
   event with a cancelled date. Same class of bug as `users.preferences`.
 - Adding an `EventKind` touches: the enum, `EVENT_KIND_LABELS` here and in the
-  frontend, and a chip colour in `calendar.css`. It must **not** join
-  `CLASS_KINDS` unless a course timetable should be able to be made of it.
+  frontend, and a `--kind-color` in `calendar.css` with its twin in
+  `kindColors.ts` (a test fails until both exist). The Settings colour list
+  reads `EVENT_KIND_LABELS`, so it follows. It must **not** join `CLASS_KINDS` unless a
+  course timetable should be able to be made of it.
+- `features/calender/` is misspelled across its files. It is a known follow-up,
+  deliberately not bundled into any feature change.
 - What protects a shift from a timetable rewrite is the `course_id` match in
   `set_class_schedule`, **not** `CLASS_KINDS`. A test asserting otherwise was
   vacuous and had to be rewritten.
@@ -196,6 +287,8 @@ to reach for a library rather than extend the rule.
 
 ## Still open
 
-Nothing on the Calendar side. `ShiftMeeting` is the same shape and could take the
-same two fields whenever a fortnightly shift comes up; it was left out here as
-scope rather than as an oversight.
+- A shared event doesn't count in a member's free blocks, week load or crunch
+  strip.
+- `ShiftMeeting` is the same shape as `ClassMeeting` and could take the same two
+  fields whenever a fortnightly shift comes up. It was left out as scope, not as
+  an oversight.

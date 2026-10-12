@@ -5,8 +5,9 @@
 
 ## Context
 
-One or several jobs, and the three questions they raise: *when am I working*,
-*what am I earning*, and *did the cheque match the hours*.
+One or several jobs, and the questions they raise: *when am I working*, *what am
+I earning*, *did the cheque match the hours*, *is the job crowding my exams*,
+and at year end *what do I tell the tax return*.
 
 Deliberately two-faced. **Time** goes to the Calendar, so a shift competes with
 lectures for the same hours and the existing free-block machinery sees it.
@@ -19,7 +20,7 @@ shift counts at its scheduled hours and says so; a job is hourly, salaried or
 contract, each with its own expected-pay rule; a paycheque records gross and
 named deductions and sends only the net, split by income share; a shift is a new
 `EventKind` on the existing events table; tips are marked cash or on-cheque and
-only cash may reach the ledger.
+only cash may reach the ledger, into the one account chosen for cash tips.
 
 ## What it reuses, and what that bought
 
@@ -32,6 +33,7 @@ only cash may reach the ledger.
 | `split_income` | the net behaves like any other deposit |
 | `tuition_payments` | the structural precedent, near-mechanically reversed |
 | `week_load` | hours against class time, once split by kind |
+| `list_occurrences` | shifts near exams, read from the calendar's own expansion, so the two pages agree (D21) |
 
 Four behaviours for the price of one column and one enum member. That table is
 the argument for writing *What already exists* before designing anything.
@@ -122,9 +124,23 @@ gross unexplainable. They sit on the cheque; only the net reaches the ledger.
 
 **Cash vs on-cheque tips.** A cash tip is money already in hand and writes its own
 income row. A tip paid through payroll arrives inside the cheque's gross, so a
-row of its own would count it twice. A cash tip with nowhere to go — no account
-takes an income share — still records, reporting `tip_in_ledger: false`: logging
-your hours must not fail over an unrelated budget setting.
+row of its own would count it twice.
+
+**A cash tip goes to one account, whole** (2026-10-04). It used to split across
+accounts by income share like a paycheque, which claimed it was in the bank when
+it was in a pocket. Settings → Financial now has "Cash tips go to", and the tip
+lands there as one row (`sync_cash_tip`, `file_cash_tip`).
+- **With no account chosen**, or with the chosen one archived or deleted, a tip is
+  **held**: recorded on the shift, kept out of the budget, `tip_in_ledger` false.
+  A red "!" beside the confirmed shift says so and links to Settings →
+  Financial. Logging your hours must not fail over an unrelated budget setting.
+- **Choosing an account files every held tip** into it. Choosing has its own
+  endpoint (`PUT /jobs/{user_id}/cash-tip-account`), not the generic
+  preferences save, because it writes to the ledger and needs an ownership
+  check in the same transaction.
+- **Changing the account affects tips from then on.** A tip already in the budget
+  is never moved by re-saving its shift, including old tips split under the
+  previous rule.
 
 **Expected, per kind.** Hourly compares hours × rate. Salaried compares the period
 amount and treats hours as what the job *costs* you, never as evidence of
@@ -154,6 +170,60 @@ One service, one pass, in the shape of `load_service`:
   `class_minutes` split.
 - **Unpaid, and when** — hours since the last cheque's period, plus the next date
   the pay rule produces.
+
+## Is this cheque right?
+
+`check_paycheque` (`services/paycheck_service.py`) recomputes a cheque from its
+shifts and shows the arithmetic line by line, each line naming the rule it came
+from (D11). The rules are pure functions in `services/pay_rules.py`:
+- **Overtime**, BC Employment Standards Act s.40. Time and a half over 8 hours a
+  day up to 12, double time over 12. Time and a half over 40 a week (Sunday to
+  Saturday), not counting hours already paid as daily overtime.
+- **Vacation pay**, s.58: 4% of gross wages, 6% after five years. Tips are not
+  wages for this.
+
+**It cuts both ways**, because a false "you're short" erodes trust as fast as a
+missed real one:
+- Vacation pay is checked **both ways**. The app can't know whether an employer
+  pays the 4% on each cheque or holds it, so a cheque matching either
+  expectation matches. One between the two says to check the vacation-pay line.
+- **Short is measured against the smaller expectation**, so a "short" flag never
+  depends on that guess.
+- The tolerance is a dollar, or 0.5% on a large cheque (`tolerance`).
+  Rounding on a real cheque is cents, sometimes a dollar, never a percent.
+- **What it can't see, it says.** Statutory holiday pay (s.44-45) is not
+  checked: its eligibility test reaches outside the pay period.
+
+This is what replaced the old "not built: overtime rules" below. The per-shift
+rate override still covers a night differential or an employer's own rule.
+
+## Shifts near exams
+
+`conflict_service.find_conflicts` (D21). A shift **overlaps** an exam if they
+share any time. It **crowds** one if it ends before the exam starts, but by less
+than your buffer (`exam_buffer_hours`, Settings → Calendar, default 12, 0
+flags overlaps only). That catches a closing shift the night before an 8:30
+final.
+
+It reads the calendar's own occurrences, so skipped dates, blackouts and
+repeating shifts all agree with what the calendar shows. Jobs reading the
+calendar is the allowed direction, and nothing here writes. **Untimed items flag
+more, never less**: an exam with no time is taken to start at 08:00, the
+earliest a UBC exam sits, and run the day. A shift with no times runs the whole
+day. Shown on Jobs and on the Calendar, and silent when there is nothing.
+
+## The tax packet
+
+`tax_packet_service.tax_packet` (D20, D21): for a calendar year, recorded pay per
+job and the tuition paid in it. It is built **only from what you recorded**:
+paycheques, cash tips and tuition payments. A cheque counts in the year it
+arrived (`occurred_on`), which is when employment income is taxed. A deduction
+is sorted by its name (income tax, CPP, EI, or kept under its own name), because
+that is all a recorded deduction says about itself.
+
+**The app never reads a T4** (D20). The slip is the most personal document there
+is, so T4 upload was scrapped and the page tells you to check its sums against
+the slip instead. No personal document is ever sent to a model.
 
 ### Paid leads; the guesses live together
 
@@ -185,8 +255,10 @@ window, paid counts cheques *dated* inside it.
 - `record_deposit` commits on its own, so it cannot be reused: the rows and the
   cheque must land in one transaction. `deposit_rows` builds them unsaved from
   the same `split_income`.
-- A cash tip is **several** rows, not one. The record points at one; the group
-  finds the rest. Deleting only the row it points at orphans the others.
+- A cash tip filed today is one row. A tip from before 2026-10-04 is **several**,
+  split by income share and tied by `group_id`. The record points at one and the
+  group finds the rest, so anything removing a tip walks the group. Deleting only
+  the row it points at orphans the others.
 - `db.refresh()` reloads from the database and discards pending edits. It silently
   undid a corrected gross. `db.flush()` was what was wanted.
 - Do not delete deductions by hand: the relationship's `delete-orphan` cascade
@@ -199,13 +271,25 @@ window, paid counts cheques *dated* inside it.
   from a timetable rewrite; the `course_id` match does. Two tests, for two
   different things.
 
+## Pay dates feed the money room
+
+The forecast and the year plan (see [finances.md](finances.md)) read each current
+job's pay dates from its rule. An hourly job is projected from its scheduled
+shifts, and the pay is scaled by the share of income that lands in the accounts
+being forecast. Jobs owns the schedule; Finances only reads it.
+
 ## Not built, deliberately
 
-- **Overtime rules.** Offered and declined: a per-shift rate override covers the
-  stat holiday and the night differential without a provincial rule table.
-- **A cash account.** A cash tip splits by income share like any other income,
-  which claims it is in the bank when it is in a pocket. A student who wants it
-  apart can give a cash account its own share. Worth revisiting if that proves
-  awkward.
+- **Statutory holiday pay** in the cheque check, for the reason above.
 - **Invoices as their own record.** A contract cheque *is* the invoice being paid;
   there is nothing separate to track until one needs chasing.
+- **T4 upload** (D20), scrapped for good.
+
+Two items once listed here have since been built: BC overtime and vacation pay,
+in the cheque check, and a single account for cash tips.
+
+## Still open
+
+Pay on specific days of the month is proposed in `next.md`: set dates, the last
+day of the month, or the Nth weekday, with weekend handling chosen per job. A
+monthly rule today can only repeat on the day of the month it started.

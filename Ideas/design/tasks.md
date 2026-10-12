@@ -3,8 +3,9 @@
 ## Context
 
 What is outstanding, and increasingly *what is worth doing first*. The module
-started as a list ordered by date and has grown two further senses: which work
-belongs to a course you are behind on, and whether you actually hit your dates.
+started as a list ordered by date and has grown further senses: which work
+belongs to a course you are behind on, whether you actually hit your dates, and
+how long work really takes against what you guessed.
 
 **Decisions taken:** the page groups by how soon, because the question it answers
 is "what now"; a task with a date is also a calendar item, read through
@@ -20,16 +21,23 @@ on.
 | `sort_key` | `services/task_service.py` | risk, then date, then time, then created |
 | `course_risk`, `risk_band` | `services/task_service.py` | how far behind a current course is |
 | `completion_timing` | `services/timing_service.py` | how early or late work gets finished |
+| `start_timer`, `stop_clock`, `estimate_ratio` | `services/estimates_service.py` | how long it actually took, against the estimate (D35, D36) |
+| `sharing_of`, `accept`, `update_shared`, `leave` | `services/task_sharing_service.py` | a task shared through a link (D23) |
+| `due_reminders` | `services/reminder_service.py` | reminders, read by the client and by the push scheduler |
 | `run_due`, `materialise`, `resync_occurrences` | `services/recurring_task_service.py` | repeating chores |
 | `build_preview`, `capture` | `services/quick_capture_service.py` | a line of text into a task |
 | `tokenizer` | `shared/tokenizer.py` | course code, date word, duration, amount, score |
 
 ## Data model
 
-`tasks` — title, notes, `due_date`, `due_time`, `estimated_minutes`, `tags`
-(JSON), `priority`, `done`, `completed_at`, `archived`, and three links:
+`tasks` — title, notes, `due_date`, `due_time`, `estimated_minutes`,
+`actual_minutes`, `timer_started_at`, `tags` (JSON), `priority`,
+`snoozed_until`, `done`, `completed_at`, `archived`, and three links:
 `course_id` (school work, whose course code is then its category), `grade_id`
 (raised from a dated grade), `recurring_id` (written by a repeat rule).
+
+`task_members` and `task_invites` hang under a task once it is shared. Their
+shape is in [isolation-and-sharing.md](isolation-and-sharing.md).
 
 `recurring_tasks` — the template plus the five shared `recur_*` columns, and its
 own `priority` so a chore that repeats sixty times is not corrected sixty times.
@@ -82,7 +90,7 @@ by default and cannot be reused.
 
 A rule writes occurrences for a rolling window — 14 days back, 60 ahead —
 idempotent on `(recurring_id, occurrence_date)`, so it is safe to call on every
-load and there is no scheduler anywhere.
+load and needs no scheduler of its own.
 
 The bug that shipped with it: `materialise` only ever *adds* dates that are
 missing, so editing a rule never reached the sixty days of occurrences already
@@ -164,19 +172,30 @@ spring. So the comparison goes through the timezone preference, and a test pins 
 fixed instant to prove it: at 17:30 local (23:30 UTC), a reminder set for 20:00
 is *not* due — a UTC comparison would have fired it two and a half hours early.
 
-**There is no scheduler and no push.** The client asks what is due on an interval
-while it is open, and that is the whole mechanism. A browser notification is
-fired as well where permission was granted, but the in-app banner is the reliable
-path and stays until acknowledged.
+**Delivery is push now** (Phase 0 item 5, live since 2026-10-05). A Cloud
+Scheduler job calls `dispatch_due_reminders` every five minutes, and each due
+reminder goes to every device its owner turned notifications on for. A service
+worker and a manifest receive it. On an iPhone that works only from the Home
+Screen, which Settings says. While the app is open, the client still asks
+what is due, and the in-app banner still stays until it is acknowledged.
 
-The banner says the limit out loud. A notification you half-trust is worse than
-one whose limits you know, and the alternative — a service worker, VAPID keys and
-a process outliving the request — is a large amount of infrastructure for a
-locally-run app.
+This was the infrastructure the note above once declined: "a service worker,
+VAPID keys and a process outliving the request". It was taken deliberately, as
+a phase item, once "a reminder fires only while the app is open" was named
+a promise the app did not keep. Under row security the scheduler reads only
+*which* users have something waiting, and then sends as each user in turn. So a
+reminder can reach only its owner's devices. `tests/test_push.py` holds that.
 
-Permission is requested **when the first reminder is saved**, never on page load
-and never before the save: a prompt with no context is the one people dismiss
-forever, and there is no second chance to ask.
+> **Two traps from turning it on.** The VAPID key was first stored from a
+> `print()`, trailing newline included, and base64 refused it, so every push
+> returned 500. The key is `.strip()`ed now, with a test. And "Send a test"
+> first went to every device, so pressing it on the laptop buzzed the phone.
+> It now names its own endpoint, and the server sends only there, if the
+> endpoint belongs to the caller.
+
+Permission is requested **when it is turned on**, from Settings or when the first
+reminder is saved, never on page load: a prompt with no context is the one people
+dismiss forever, and there is no second chance to ask.
 
 `fired_at` is stamped once and never re-stamped. A reminder surfaced on Monday
 and still not dismissed on Wednesday is the same reminder; re-stamping it would
@@ -184,6 +203,37 @@ make it read as new on every page load, which is how a notification becomes
 something you learn to ignore. Moving the time clears both `fired_at` and
 `dismissed_at`, or pushing one to tomorrow would leave it looking already fired
 and it would never surface again.
+
+## How long it actually took
+
+Every open task has a timer kept **on the server** (`timer_started_at`), so it
+survives a closed tab and a second device. Ticking off a task that has an
+estimate asks how long it took, with the timer's total offered first. Both
+routes land in `actual_minutes` (D35).
+
+A timer left running past **12 hours** (`TIMER_TRUST_HOURS`) records nothing.
+A clock left on overnight is a forgotten clock, not fourteen hours of work, and
+a figure built on it would teach the ratio the wrong lesson.
+
+**The estimate ratio** (D36) is total actual over total estimated, not a mean of
+per-task ratios. A five-minute task that took fifteen is a 3x miss that cost ten
+minutes, and must not outweigh a five-hour task that ran an hour over. It is
+shown from 5 tasks (`RATIO_MIN_TASKS`). A switch in Settings
+(`use_estimate_ratio`) lets the workload forecast scale estimates by it, and
+everywhere the forecast shows an estimate it says when it is scaled. Estimates
+themselves are never rewritten.
+
+## Shared tasks
+
+A one-off task can be shared through a link (D23). Members see the title, notes
+and due date, tick it done for everyone, edit the title and notes, and leave.
+The course, grade, timer, priority and tags stay the owner's, and so do the date,
+deleting it, and who is on it. A shared task shows on members' calendars on its
+due date, with a card pointing back to Tasks.
+
+It counts for its owner alone. A member's week, estimates and partner figure read
+only their own tasks, or one shared chore would be counted once per person who
+can see it. The mechanism is in [isolation-and-sharing.md](isolation-and-sharing.md).
 
 ## Quick capture
 
@@ -240,6 +290,23 @@ Two owners take fields back:
 the dialog appeared. Two forms holding the same two rules is how one of them ends
 up rejecting a save the other allows.
 
+### The tick is visible, and an empty list is a claim
+
+Checking a task used to await the server, reload and regroup in the same frame,
+so the tick never rendered and the row simply vanished. It is optimistic now:
+held crossed out for 300ms in the group it was already in, with the pause
+running alongside the request. The grouping rule is in
+`features/tasks/horizon.ts`.
+
+**"Nothing finished yet." flashed** when "Show completed" was turned on: the
+refetch hadn't landed, and the rows in state were the ones fetched *without*
+the done tasks. An empty message is a claim about the data, so `useTasks` returns
+`stale` (loading, *and* the rows were fetched under a different filter). Every
+`TaskList` shows "Loading…" instead of an empty message while stale, and holds
+back its count too. Plain `loading` couldn't drive this: it is also true during
+an ordinary reload, when the rows on screen are still right. A source test
+checks that every list is actually passed `loading={stale}`.
+
 ## The page
 
 Two columns, split by what you do with each side. Left is the work in front of
@@ -274,10 +341,9 @@ task three weeks out is not work you can start, but it must not vanish either.
 
 ## Still open
 
-Nothing. At-risk-first sorting, priority, completion timing, snooze and reminders
-have all landed; what remains on the Tasks side is whatever the next term turns
-up.
+Nothing on the Tasks side. At-risk-first sorting, priority, completion timing,
+snooze, reminders with push, the timer and the estimate ratio, and shared tasks
+have all landed.
 
-The one thing worth revisiting is delivery: reminders reach you only while the
-app is open. If that proves too weak in practice, the step up is a service
-worker and push, and it should be taken deliberately rather than by degrees.
+`reminder_service.py`'s module docstring still says there is no scheduler and no
+push. It predates Phase 0 and is wrong now; the code it describes is right.

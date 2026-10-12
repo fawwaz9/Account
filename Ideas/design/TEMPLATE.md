@@ -46,6 +46,11 @@ Two things to be explicit about:
 - **What identifies a row** when it is not an id. A recurring thing expanded on
   read has no row per occurrence, so something like `(event_id, on_date)` is the
   identity, and that has to be said or someone will add a duplicate.
+- **Whose row it is.** Every table has a row-security kind: per-user, child,
+  shared-read, sealed, or no-direct-write. `rls.py` refuses a table it cannot
+  classify. If anything crosses between users, name the definer function that
+  does it and what it returns. See
+  [isolation-and-sharing.md](isolation-and-sharing.md).
 
 ## Stages
 
@@ -66,14 +71,20 @@ Include, specifically, the ones that would **fail silently** — the case where 
 wrong answer still looks like an answer. Those are the tests worth naming in a
 design document; the obvious ones will get written anyway.
 
+Every new route goes into the isolation, non-interference and RLS walks. Every
+test runs on SQLite and Postgres, and API tests sign in with real tokens.
+
 ## Verification
 
 Beyond the suite. What convinces you it works on real data.
 
 The recurring items in this project:
 
-- the full suite passes, with a count so a regression is visible
-- migrations tested against a **copy** with the new columns dropped first
+- the full suite passes on both databases, with a count so a regression is
+  visible
+- migrations tested against a **copy** with the new columns dropped first, and
+  the schema step rehearsed on a throwaway Postgres before the owner runs it
+  for real
 - mutation-test each guard: revert it, confirm the named test fails
 - `tsc --noEmit`, a build, and every new CSS class confirmed in the bundle
 - an end-to-end run on a copy of the real database, printing figures to check
@@ -83,6 +94,13 @@ The recurring items in this project:
 
 Anything a person picking this up would otherwise learn the hard way. Short
 bullets. This is where the project's accumulated scar tissue goes.
+
+## Deploy
+
+Which halves ship (API, frontend, or both), whether there is a schema step,
+which halves can roll back alone, and what a rollback leaves behind. The schema
+step is the owner's and `deploy.run.sh` never applies it. A phase's batches are
+written up as a runbook beside its decisions (`overhaul/Phase N/`).
 
 ## Progress
 
