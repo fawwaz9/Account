@@ -61,3 +61,40 @@ An optional amount and period (hourly, monthly or yearly) on an application,
 visible only to you. Later it is what you could choose to submit to co-op
 salary transparency (item 12), opt-in. Nothing reads it across users, and no
 aggregate exists yet.
+
+## D6. No role but the API's keeps a grant on any table (found by batch 1's read-back, 2026-10-12; your call: close it before deploying)
+
+**What the read-back showed:** on `job_applications` and `application_steps`,
+Supabase's `anon`, `authenticated` and `service_role` held every privilege,
+TRUNCATE included, beside `account_app`'s four. My runbook said to expect
+`account_app` alone. It was wrong about why: `rls.py` revoked other grantees on
+shared and sealed tables and on functions (Phase 0 D11), **never on ordinary
+per-user tables**. Supabase's default privileges grant every new table to those
+three roles, so the same grants have sat on every per-user table since each was
+made.
+
+**How exposed:** no row-security policy names those roles, so they can read or
+change no rows. They are reached only through the Data API, which you switched
+off in Phase 0. TRUNCATE ignores row security, so the remaining risk was one
+setting away.
+
+**What changed:** the install now revokes every privilege from every grantee
+but the table's owner and `account_app`, on every model table, and then
+grants the app role exactly what the table's kind allows. A schema run
+therefore closes it on all existing tables at once.
+
+**Evidence:** `test_supabase_default_grants_on_every_table_are_taken_away`
+grants the three roles and PUBLIC everything on every model table, installs,
+and requires them to hold nothing while the app role keeps exactly its kind's
+privileges. `test_a_stray_login_cannot_truncate_a_users_table` checks TRUNCATE
+from a login role. Removing the new revoke fails both. Removing the line that
+spares `account_app` survives: the grants after it restore the app role, in one
+transaction. It is kept so the role is never left with nothing, even
+mid-install.
+
+**Rejected:** deploying first and closing it later, and leaving it on the Data
+API staying off. The fix is one schema run, and data safety comes first.
+
+**Not changed:** Supabase's default privileges themselves (`ALTER DEFAULT
+PRIVILEGES`). They are platform settings, so a future table still arrives
+granted; the next schema run takes the grant back, and the read-back says so.

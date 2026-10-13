@@ -258,7 +258,7 @@ def test_every_identified_user_reads_the_same_shared_rows(worlds, app_session):
         app_session.rollback()
 
 
-SUPABASE_ROLES = ("anon", "authenticated")
+SUPABASE_ROLES = ("anon", "authenticated", "service_role")
 
 
 def test_supabase_default_grants_on_a_shared_table_are_taken_away(owner_engine):
@@ -281,6 +281,56 @@ def test_supabase_default_grants_on_a_shared_table_are_taken_away(owner_engine):
         for table in sorted(rls.SHARED_READ_TABLES):
             for role in SUPABASE_ROLES:
                 assert _privileges(conn, role, table) == set(), f"{role} on {table}"
+
+
+def test_supabase_default_grants_on_every_table_are_taken_away(owner_engine):
+    """Phase 3 D6. The same default grants sat on every per-user table: the
+    install locked down shared and sealed tables only, and batch 1's read-back
+    showed anon, authenticated and service_role holding everything on the two
+    new ones. Every model table now, not a sample, and the app role keeps
+    exactly what its kind allows -- the revoke must not take that too.
+    """
+    with owner_engine.begin() as conn:
+        for role in SUPABASE_ROLES:
+            if not conn.execute(text("SELECT 1 FROM pg_roles WHERE rolname = :r"), {"r": role}).scalar():
+                conn.execute(text(f"CREATE ROLE {role} NOLOGIN"))
+        for table in Base.metadata.sorted_tables:
+            conn.execute(text(f"GRANT ALL ON {table.name} TO PUBLIC"))
+            for role in SUPABASE_ROLES:
+                conn.execute(text(f"GRANT ALL ON {table.name} TO {role}"))
+    rls.install(owner_engine)
+
+    full = {"SELECT", "INSERT", "UPDATE", "DELETE"}
+    with owner_engine.connect() as conn:
+        for table in Base.metadata.sorted_tables:
+            for role in (*SUPABASE_ROLES, "public"):
+                assert _privileges(conn, role, table.name) == set(), f"{role} on {table.name}"
+            expected = (
+                set() if table.name in rls.SEALED_TABLES
+                else {"SELECT"} if table.name in rls.SHARED_READ_TABLES
+                else {"SELECT", "DELETE"} if table.name in rls.NO_DIRECT_WRITE_TABLES
+                else full
+            )
+            assert _privileges(conn, rls.APP_ROLE, table.name) == expected, table.name
+
+
+def test_a_stray_login_cannot_truncate_a_users_table(owner_engine):
+    """TRUNCATE is the one thing row-level security does not stop, so a role
+    granted it by default could empty every user's rows at once."""
+    with owner_engine.begin() as conn:
+        if not conn.execute(text("SELECT 1 FROM pg_roles WHERE rolname = 'rls_outsider'")).scalar():
+            conn.execute(text("CREATE ROLE rls_outsider LOGIN PASSWORD 'outsider_test_only'"))
+        conn.execute(text("GRANT ALL ON job_applications TO rls_outsider"))
+    rls.install(owner_engine)
+    url = make_url(TEST_DATABASE_URL).set(username="rls_outsider", password="outsider_test_only")
+    outsider = create_engine(url, connect_args=connect_args_for(TEST_DATABASE_URL))
+    try:
+        for statement in ("SELECT count(*) FROM job_applications", "TRUNCATE job_applications CASCADE"):
+            with outsider.connect() as conn:
+                with pytest.raises(ProgrammingError, match="permission denied"):
+                    conn.execute(text(statement))
+    finally:
+        outsider.dispose()
 
 
 def test_a_stray_login_cannot_read_or_write_a_shared_table(owner_engine):

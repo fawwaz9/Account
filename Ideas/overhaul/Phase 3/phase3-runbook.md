@@ -16,11 +16,12 @@ and one schema run cover both.
   3. **Undo:** `gcloud scheduler jobs delete account-grade-recount
   --location=us-west1 --project=account-504419` (instant).
 
-## Batch 1: the application tracker (item 1, D2–D5) and pay on set days of the month. NOT YET DEPLOYED
+## Batch 1: the application tracker (item 1, D2–D5), pay on set days of the month, and D6. NOT YET DEPLOYED
 
 | What | Commits | Schema change |
 |---|---|---|
 | Item 1: the tracker | `e11ddbd` on `phase3` | **New tables `job_applications`, `application_steps`** (a per-user table and its child; existing row-security kinds) |
+| D6: no role but the API's keeps a grant | on `phase3` | **Grants only:** every model table loses `anon`, `authenticated` and `service_role`. No data, no columns |
 | Pay on set days of the month | `682da15` on `phase3` (cherry-picked from `76c3a5e`) | **Four columns on `jobs`:** `pay_month_days`, `pay_last_day` (not null, default false), `pay_nth_weekdays`, `pay_weekend`. Nothing is backfilled; every job keeps paying by its rule |
 
 Same order as Phase 2: backup, schema (yours), read-backs, then
@@ -50,7 +51,12 @@ WHERE tablename IN ('job_applications', 'application_steps') ORDER BY 1;
 
 B. **Only the API's role has grants, and only the ordinary four.** Two rows, each
 `account_app` with `DELETE,INSERT,SELECT,UPDATE`. No `anon`, no
-`authenticated`:
+`authenticated`, no `service_role`.
+
+> **First run, 2026-10-12: did not match.** `anon`, `authenticated` and
+> `service_role` held every privilege, as they do on every per-user table
+> (D6). Fixed in the install; re-run the schema step (same command), then
+> this check, and B2 below.
 
 ```sql
 SELECT table_name, grantee, string_agg(privilege_type, ',' ORDER BY privilege_type)
@@ -58,6 +64,18 @@ FROM information_schema.role_table_grants
 WHERE table_name IN ('job_applications', 'application_steps')
   AND grantee <> (SELECT tableowner FROM pg_tables WHERE tablename = table_name)
 GROUP BY 1, 2 ORDER BY 1, 2;
+```
+
+B2. **No role but the API's has a grant on any model table** (D6). Rows for
+`category_budgets` only, if any: the empty orphan from 2026-09-24, not a model
+table, so the install leaves it alone (ROLLBACK.md, "Two orphaned schema
+objects"). Anything else is a mismatch:
+
+```sql
+SELECT DISTINCT table_name, grantee FROM information_schema.role_table_grants
+WHERE table_schema = 'public'
+  AND grantee IN ('anon', 'authenticated', 'service_role', 'PUBLIC')
+ORDER BY 1, 2;
 ```
 
 C. **The pay columns are there.** Four rows; `pay_last_day` is `NO` and `false`:

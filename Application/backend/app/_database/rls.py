@@ -826,12 +826,16 @@ def grant_statements() -> list[str]:
     so a grant on it would hand the app role every user's rows in it.
     """
     tables = Base.metadata.sorted_tables
+    private = [table for table in tables if not is_shared(table) and not is_sealed(table)]
     return [
         "GRANT USAGE ON SCHEMA public TO " + APP_ROLE,
+        # Every other grantee first, so only the app role's grants below stand
+        # (D6). Shared and sealed tables do the same in their own helpers.
+        *(statement for table in private for statement in _revoke_from_others(table.name)),
         *(
             f"GRANT SELECT, INSERT, UPDATE, DELETE ON {table.name} TO {APP_ROLE}"
-            for table in tables
-            if not is_shared(table) and not is_sealed(table) and table.name not in NO_DIRECT_WRITE_TABLES
+            for table in private
+            if table.name not in NO_DIRECT_WRITE_TABLES
         ),
         *(statement for table in tables if is_sealed(table) for statement in _sealed_grants(table)),
         # Read and delete only. The REVOKE takes back a write grant left by
@@ -894,6 +898,23 @@ def _shared_grants(table: Table) -> list[str]:
     """
     name = table.name
     return [
+        *_revoke_from_others(name),
+        f"REVOKE {WRITE_PRIVILEGES} ON {name} FROM {APP_ROLE}",
+        f"GRANT SELECT ON {name} TO {APP_ROLE}",
+    ]
+
+
+def _revoke_from_others(name: str) -> list[str]:
+    """Take every privilege on a table from everyone but its owner and the app role.
+
+    Supabase's default privileges grant every new table to anon, authenticated
+    and service_role by name, TRUNCATE included, which row-level security does
+    not cover. That held for every per-user table until Phase 3 batch 1's
+    read-back showed it (D6): only shared tables had been locked down. Reached
+    only through the Data API, which is off -- but one setting is not a
+    boundary, so no role but the API's keeps a grant.
+    """
+    return [
         f"REVOKE ALL ON {name} FROM PUBLIC",
         f"""DO $$
 DECLARE r record;
@@ -910,8 +931,6 @@ BEGIN
         EXECUTE format('REVOKE ALL ON public.{name} FROM %I', r.rolname);
     END LOOP;
 END $$""",
-        f"REVOKE {WRITE_PRIVILEGES} ON {name} FROM {APP_ROLE}",
-        f"GRANT SELECT ON {name} TO {APP_ROLE}",
     ]
 
 
