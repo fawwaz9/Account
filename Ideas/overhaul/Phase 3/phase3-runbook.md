@@ -16,7 +16,7 @@ and one schema run cover both.
   3. **Undo:** `gcloud scheduler jobs delete account-grade-recount
   --location=us-west1 --project=account-504419` (instant).
 
-## Batch 1: the application tracker (item 1, D2–D5), pay on set days of the month, and D6. NOT YET DEPLOYED
+## Batch 1: the application tracker (item 1, D2–D5), pay on set days of the month, and D6. DEPLOYED 2026-10-13 (`72bb9f2`, `account-api-00046-5dl`)
 
 | What | Commits | Schema change |
 |---|---|---|
@@ -107,3 +107,13 @@ Pages to the `d638bcf` deployment. The schema stays: the older API never reads
 the new tables or columns. A job saved with days of the month would read as a
 plain monthly rule on the older API until redeployed, and applications stay
 stored.
+
+**Result, 2026-10-13.** The schema step was run twice, the second time for D6.
+- The backup before the second run held 53 tables and 1,166 rows.
+- Read-backs A and C matched first time. B did not (D6); after the fix, B2
+  showed only `category_budgets`, and B's first re-run pane was stale. Its real
+  re-run matched.
+- The gate reported row-level security on for 52 of 52 tables.
+- Health ok. The 7 routes answer 401 against two 404 controls.
+- No errors in the new revision's logs. All nine settings carried over.
+- The live site matches the build (38 files).

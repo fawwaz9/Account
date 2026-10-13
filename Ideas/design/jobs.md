@@ -271,6 +271,31 @@ window, paid counts cheques *dated* inside it.
   from a timetable rewrite; the `course_id` match does. Two tests, for two
   different things.
 
+## When a job pays
+
+A job pays by the shared repeat rule (every other Friday, the 25th) or by **set
+days of the month** (2026-10-13): dates such as the 15th and the last day, or an
+Nth weekday such as the last Friday, which stands alone. Never both.
+
+- **A date the month lacks pays on its last day.** This is the opposite of the
+  shared rule, which skips such a month. That's right for rent, where inventing
+  a date would move it, and wrong for pay, where it means no cheque in
+  February.
+- **A weekend date moves as the job says:** previous weekday, next, or keep. An
+  Nth weekday never moves; it was picked as that day.
+- **The first and last pay dates compare the scheduled date,** not the moved
+  one. "The first cheque is the 31st" means the 31st's cheque, though the
+  weekend pays it on the 30th.
+- **Stored as four columns on `jobs`** (`pay_month_days`, `pay_last_day`,
+  `pay_nth_weekdays`, `pay_weekend`). A pattern also sets `recur_freq` to
+  "monthly", so "has a pay schedule" still reads one column.
+
+**One function gives every pay date:** `Jobs/services/pay_schedule.pay_dates`.
+Safe to spend (through `next_pay_on`), the earnings figures, the forecast and
+the year plan all read it. Before, three of them built the rule on their own,
+and a weekend payday read as Saturday made safe to spend count the money a day
+late.
+
 ## Pay dates feed the money room
 
 The forecast and the year plan (see [finances.md](finances.md)) read each current
@@ -285,11 +310,39 @@ being forecast. Jobs owns the schedule; Finances only reads it.
   there is nothing separate to track until one needs chasing.
 - **T4 upload** (D20), scrapped for good.
 
-Two items once listed here have since been built: BC overtime and vacation pay,
-in the cheque check, and a single account for cash tips.
+Three items once listed here have since been built: BC overtime and vacation
+pay in the cheque check, a single account for cash tips, and pay on set days of
+the month.
+
+## Applications: the jobs you're after
+
+Phase 3 item 1 (`overhaul/Phase 3/`, D2–D5), an Applications tab under Jobs.
+`Jobs/services/application_service.py`, two tables: `job_applications` and its
+child `application_steps`.
+
+- **The history is the point.** Every status change is a dated step, never an
+  overwrite: applied, screening, interview (each round), offer, accepted,
+  rejected, no reply, withdrawn. "Applied" is the first step, written with the
+  application, moving with its date and going only with it.
+- **The figures come from the history, on the server:**
+  - heard back: any screening, interview, offer, acceptance or rejection
+  - the median days to the first reply
+  - interviews, and offers (an acceptance counts as an offer even with the
+    offer step skipped)
+  - the Sankey's flows. Interview rounds collapse into one stage, a "no reply"
+    a later answer undid is dropped, and anything still open ends in
+    "waiting".
+- **"No reply yet?"** is asked after 30 days with no new step while still
+  waiting on them, and set only on a tap (D3). A figure that moves on its own is
+  one you stop trusting.
+- **Deadlines and follow-ups** appear on the calendar as all-day items pointing
+  back to the tracker, only while the application is still in play (D4).
+- **An offer's pay** (amount and hourly, monthly or yearly) is private (D5).
+  Later, it's what you could choose to submit to salary transparency.
+- **The Sankey is SVG from a pure layout** (`features/jobs/applications/sankey.ts`).
+  It uses one scale for every column, and every outcome sits in the last
+  column.
 
 ## Still open
 
-Pay on specific days of the month is proposed in `next.md`: set dates, the last
-day of the month, or the Nth weekday, with weekend handling chosen per job. A
-monthly rule today can only repeat on the day of the month it started.
+Nothing on the Jobs side.

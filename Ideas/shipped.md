@@ -884,6 +884,65 @@ production-URL build: 26 of 26 files.
 
 ---
 
+## Phase 3 batch 1: the application tracker, pay on set days of the month, and no stray grants -- SHIPPED 2026-10-13
+Phase 3 opened early by your call (D1), with the one item that needs no other
+users. One schema run (yours), one deploy.
+
+**The job application tracker** (item 1, D2–D5): an Applications tab under Jobs.
+- **Each application is a dated history of steps:** applied, screening,
+  interview rounds, offer, accepted, rejected, no reply, withdrawn. Never an
+  overwritten status.
+- **The figures are read from the history:** how many heard back, the typical
+  wait for a reply, interviews, offers, and an applications → interviews →
+  offers Sankey (SVG, from a pure layout).
+- **"No reply yet?"** shows after 30 quiet days, and nothing changes until you
+  tap it.
+- **Deadlines and follow-ups** show on the calendar as all-day items that point
+  back to the tracker.
+- **An offer's pay is private to you.**
+- **Isolation:** two tables, a per-user one and its child, so the isolation
+  boundary does not move. Both are in every walk, on SQLite and Postgres.
+
+**Pay on set days of the month** (`next.md`, decided 2026-10-03):
+- **Patterns:** dates, the last day of the month, or an Nth weekday.
+- **Short months:** a date the month lacks pays on its last day.
+- **Weekends:** each job chooses previous weekday, next weekday, or keep.
+- **One source of pay dates** (`Jobs/services/pay_schedule.pay_dates`) for safe
+  to spend, earnings, the forecast and the year plan, so a weekend payday
+  counts on the Friday it is paid.
+- **Fixed:** "doesn't repeat" never stopped a pay schedule.
+
+**No role but the API's keeps a grant** (D6). Batch 1's read-back showed
+Supabase's `anon`, `authenticated` and `service_role` holding every privilege,
+TRUNCATE included, on the new tables. This had been true of every per-user
+table, because the install locked down only shared and sealed tables. It now
+revokes them from every model table. They were reachable only through the Data
+API, which is off. The first B read-back was a stale results pane; its re-run
+matched.
+
+**Also:** the phone's bottom bar scrolls the current page's icon into view.
+
+**Tests and mutation checks:**
+- 2,577 backend tests on SQLite and 2,953 on Postgres; 716 frontend tests.
+- Row-security tests ran with none skipped.
+- Mutations: 31 of 31 in the tracker and pay days, after one gap (an
+  accepted offer with its offer step skipped) gained a test; 1 of 2 in D6, the
+  survivor equivalent and recorded there.
+- The schema step was rehearsed on a throwaway Postgres set up like Supabase.
+
+LIVE: API `account-api-00046-5dl` (digest-verified `72bb9f2`, sha256
+`fabc9b19...`) since 2026-10-13 19:35 UTC.
+- The backup before the schema re-run held 53 tables and 1,166 rows.
+- Read-backs A, B, B2 and C matched. B2 shows only `category_budgets`, the
+  orphan left on purpose.
+- The gate reports row-level security on for 52 of 52 tables.
+- Health ok. The 7 new routes answer 401 against two 404 controls.
+- No errors in the new revision's logs. All nine settings carried over.
+- Frontend `main` at `72bb9f2`, matching a production build file by file (38
+  files).
+
+---
+
 ## Jobs: shifts needing confirming come first -- SHIPPED 2026-10-12
 Your ask in `next.md`. The shift list is now, in order:
 1. past shifts nobody confirmed, nearest to today first

@@ -67,12 +67,22 @@ deletable by the app role, never insertable or updatable. Their rows come only
 from a definer function. That is what makes "nobody is put on anything without
 accepting" a property of the database rather than of the routes.
 
-**Grants name model tables, and revoke from everyone else** (D11). A blanket
-`GRANT ... ON ALL TABLES` would have handed the role `category_budgets`, an
-orphan with no policy. Supabase grants every new function to `anon` by name,
-which `REVOKE FROM PUBLIC` misses, so `install` revokes each function from every
-grantee except the owner and `account_app`. Shared-read tables revoke even
-Supabase's own roles, because TRUNCATE ignores row security.
+**Grants name model tables, and revoke from everyone else** (Phase 0 D11,
+Phase 3 D6). A blanket `GRANT ... ON ALL TABLES` would have handed the role
+`category_budgets`, an orphan with no policy. Supabase grants every new function
+**and table** to `anon`, `authenticated` and `service_role` by name, which
+`REVOKE FROM PUBLIC` misses. So `install` takes every privilege on every model
+table, and on every function, from every grantee except the owner and
+`account_app`, then grants the app role exactly what each table's kind allows.
+TRUNCATE ignores row security, which is why "no policy names them" was not
+enough.
+
+> **Until 2026-10-13 that held for shared and sealed tables and functions only.**
+> Phase 3 batch 1's read-back showed the three roles holding everything on the
+> new tables, and so on every per-user table. They were reachable only through
+> the Data API, which is off. A future table still arrives granted, because
+> Supabase's default privileges are platform settings; the next schema run takes
+> the grant back, and read-back B2 checks it.
 
 **Proven three ways, in CI on both databases:**
 - `test_isolation.py` builds two users with one of everything (`isolation_world.py`).
