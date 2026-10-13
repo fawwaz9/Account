@@ -4,7 +4,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, model_validator
 
-from app.Calendar.schemas.event import Recurrence
+from app.Calendar.schemas.event import Recurrence, Weekday
 
 #: Nothing anyone is paid is beyond this, and a figure past it is a slipped
 #: digit rather than a wage.
@@ -28,6 +28,60 @@ class JobKind(str, Enum):
     CONTRACT = "contract"
 
 
+class WeekendRule(str, Enum):
+    """Where a pay date that lands on a Saturday or Sunday goes. Employers differ."""
+
+    PREVIOUS = "previous"
+    NEXT = "next"
+    KEEP = "keep"
+
+
+class NthWeekday(BaseModel):
+    """"The last Friday" is n=-1, day=FR; "the 2nd Thursday" is n=2, day=TH."""
+
+    n: int = Field(..., description="1 to 4, or -1 for the last")
+    day: Weekday
+
+    @model_validator(mode="after")
+    def validate_n(self):
+        if self.n not in (1, 2, 3, 4, -1):
+            raise ValueError("Pick the 1st to 4th, or the last, weekday of the month")
+        return self
+
+
+class PayDays(BaseModel):
+    """Pay on set days of the month: what the shared repeat rule cannot say.
+
+    Three patterns, decided with the owner (next.md, 2026-10-03): set dates
+    ("the 15th and the 30th"), the last day of the month, and an Nth weekday
+    ("the last Friday"). Dates may go with the last day; an Nth weekday stands
+    alone. A date a month lacks pays on its last day, and the weekend rule
+    applies to dates only, since an Nth weekday never lands on one by choice.
+    """
+
+    dates: list[int] = Field(default_factory=list, max_length=4)
+    last_day: bool = False
+    nth_weekdays: list[NthWeekday] = Field(default_factory=list, max_length=4)
+    weekend: WeekendRule = WeekendRule.PREVIOUS
+    #: Inclusive last pay date, or none.
+    until: date | None = None
+
+    @model_validator(mode="after")
+    def validate_pattern(self):
+        if any(day < 1 or day > 31 for day in self.dates):
+            raise ValueError("A pay date is a day of the month, 1 to 31")
+        if len(set(self.dates)) != len(self.dates):
+            raise ValueError("Each pay date only once")
+        if self.nth_weekdays and (self.dates or self.last_day):
+            raise ValueError("A weekday of the month stands alone: not with dates or the last day")
+        if not (self.dates or self.last_day or self.nth_weekdays):
+            raise ValueError("Pick at least one pay day")
+        keys = [(item.n, item.day) for item in self.nth_weekdays]
+        if len(set(keys)) != len(keys):
+            raise ValueError("Each weekday of the month only once")
+        return self
+
+
 class JobBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=120)
     employer: str | None = Field(default=None, max_length=120)
@@ -41,6 +95,8 @@ class JobBase(BaseModel):
     #: the job has no schedule set and nothing is predicted.
     pay_starts_on: date | None = None
     pay_schedule: Recurrence | None = None
+    #: Pay on set days of the month instead of by `pay_schedule`. Never both.
+    pay_days: PayDays | None = None
     archived: bool = False
 
     @model_validator(mode="after")
@@ -65,6 +121,10 @@ class JobBase(BaseModel):
 
         if self.pay_schedule is not None and self.pay_starts_on is None:
             raise ValueError("A pay schedule needs a first pay date")
+        if self.pay_days is not None and self.pay_starts_on is None:
+            raise ValueError("A pay schedule needs a first pay date")
+        if self.pay_schedule is not None and self.pay_days is not None:
+            raise ValueError("Pay by a repeat or by days of the month, not both")
 
         return self
 
@@ -89,6 +149,7 @@ class JobUpdate(BaseModel):
     ended_on: date | None = None
     pay_starts_on: date | None = None
     pay_schedule: Recurrence | None = None
+    pay_days: PayDays | None = None
     archived: bool | None = None
     position: int | None = Field(default=None, ge=0)
 

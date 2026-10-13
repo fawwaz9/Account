@@ -1059,6 +1059,20 @@ class JobModel(Base):
     recur_byday = Column(String, nullable=True)
     recur_until = Column(Date, nullable=True)
     recur_count = Column(Integer, nullable=True)
+    #: Pay on set days of the month (next.md, decided 2026-10-03), the one
+    #: shape the shared rule cannot say. When any of these is set the job pays
+    #: by them instead of by the rule above, and `recur_freq` reads "monthly"
+    #: so "has a pay schedule" keeps one meaning. See Jobs/services/pay_schedule.py.
+    #: "15,30": days of the month. A day the month lacks pays on its last day,
+    #: the opposite of the shared rule, which skips it (rent must not move;
+    #: pay must not vanish in February).
+    pay_month_days = Column(String, nullable=True)
+    #: And the last day of every month.
+    pay_last_day = Column(Boolean, nullable=False, default=False)
+    #: "-1FR" (the last Friday), "2TH,4TH". Stands alone: never with dates.
+    pay_nth_weekdays = Column(String, nullable=True)
+    #: A date landing on a weekend: "previous" weekday, "next", or "keep".
+    pay_weekend = Column(String, nullable=True)
     archived = Column(Boolean, nullable=False, default=False)
     position = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, nullable=False, default=utc_now)

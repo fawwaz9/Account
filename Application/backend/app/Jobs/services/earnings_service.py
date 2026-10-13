@@ -34,6 +34,7 @@ from app.Jobs.schemas.earnings import (
 )
 from app.Jobs.schemas.job import JobKind
 from app.Jobs.services.job_service import list_shifts, next_pay_on
+from app.Jobs.services.pay_schedule import pay_dates
 from app.shared.dates import user_today
 from app.shared.money import money
 
@@ -174,19 +175,7 @@ def periods_in(job: JobModel, start: date, end: date) -> int:
     Zero without a pay rule, which is honest: a salaried job whose schedule
     nobody entered has no way to say what a fortnight of it was worth.
     """
-    if job.pay_starts_on is None or not job.recur_freq:
-        return 0
-
-    from app.Calendar.utils.recurrence import Rule, occurrences, parse_byday
-
-    rule = Rule(
-        freq=job.recur_freq,
-        interval=job.recur_interval or 1,
-        byday=parse_byday(job.recur_byday),
-        until=job.recur_until,
-        count=job.recur_count,
-    )
-    return len(occurrences(rule, job.pay_starts_on, start, end))
+    return len(pay_dates(job, start, end))
 
 
 def effective_rate(

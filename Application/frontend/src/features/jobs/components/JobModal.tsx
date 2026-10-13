@@ -3,6 +3,7 @@ import Modal from "../../../shared/components/Modal";
 import DeleteConfirmModal from "../../grades/components/DeleteConfirmModal";
 import HelpTip from "../../../shared/components/HelpTip";
 import RecurrenceEditor from "../../calender/components/RecurrenceEditor";
+import PayDaysEditor, { startingPayDays } from "./PayDaysEditor";
 import { createJob, deleteJob, updateJob } from "../api";
 import { Job, JOB_KIND_LABELS, JobCreate, JobKind } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
@@ -26,6 +27,7 @@ function blankJob(): JobCreate {
     ended_on: null,
     pay_starts_on: null,
     pay_schedule: null,
+    pay_days: null,
     archived: false,
   };
 }
@@ -42,6 +44,7 @@ function formFor(job: Job | null): JobCreate {
     ended_on: job.ended_on,
     pay_starts_on: job.pay_starts_on,
     pay_schedule: job.pay_schedule,
+    pay_days: job.pay_days ?? null,
     archived: job.archived,
   };
 }
@@ -241,11 +244,43 @@ export default function JobModal({ open, job, onClose, onSaved }: JobModalProps)
           </HelpTip>
 
           {form.pay_starts_on ? (
-            <RecurrenceEditor
-              value={form.pay_schedule}
-            onChange={(schedule) => update("pay_schedule", schedule)}
-              startsOn={form.pay_starts_on}
-            />
+            <>
+              {/* A repeat, or set days of the month: the second says what the
+                  first cannot ("the 15th and the last day", "the last Friday"),
+                  and a job pays by one or the other, never both. */}
+              <div className="calRow" role="radiogroup" aria-label="Pay schedule kind">
+                <label className="payDaysChoice">
+                  <input
+                    type="radio"
+                    checked={form.pay_days === null}
+                    onChange={() => setForm((current) => ({ ...current, pay_days: null }))}
+                  />
+                  A repeat
+                </label>
+                <label className="payDaysChoice">
+                  <input
+                    type="radio"
+                    checked={form.pay_days !== null}
+                    onChange={() => setForm((current) => ({
+                      ...current,
+                      pay_schedule: null,
+                      pay_days: startingPayDays(current.pay_starts_on as string),
+                    }))}
+                  />
+                  Set days of the month
+                </label>
+              </div>
+
+              {form.pay_days ? (
+                <PayDaysEditor value={form.pay_days} onChange={(days) => update("pay_days", days)} />
+              ) : (
+                <RecurrenceEditor
+                  value={form.pay_schedule}
+                  onChange={(schedule) => update("pay_schedule", schedule)}
+                  startsOn={form.pay_starts_on}
+                />
+              )}
+            </>
           ) : (
             <p className="small-text muted">
               Set a first pay date above to say how often it repeats.

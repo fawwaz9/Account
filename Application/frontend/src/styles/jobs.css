@@ -822,3 +822,35 @@
 
 .appStepRemove { margin-left: auto; }
 .appNext { align-items: flex-end; }
+/* ===== Pay on set days of the month =====
+   The job form's alternative to the repeat editor (decided 2026-10-03). */
+.payDays {
+  display: grid;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.payDaysChoice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+.payDaysRows {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.payDaysRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.payDaysDate {
+  width: 4.5rem;
+}

@@ -1,4 +1,4 @@
-import { Recurrence } from "../calender/types";
+import { Recurrence, Weekday } from "../calender/types";
 
 /** Mirrors app/Jobs/schemas/job.py. */
 
@@ -39,6 +39,8 @@ export interface Job {
   ended_on: string | null;
   pay_starts_on: string | null;
   pay_schedule: Recurrence | null;
+  /** Pay on set days of the month instead of by `pay_schedule`. Never both. */
+  pay_days: PayDays | null;
   archived: boolean;
   position: number;
   created_at: string | null;
@@ -57,7 +59,30 @@ export interface JobCreate {
   ended_on: string | null;
   pay_starts_on: string | null;
   pay_schedule: Recurrence | null;
+  pay_days: PayDays | null;
   archived: boolean;
+}
+
+/** Where a pay date that lands on a weekend goes. Employers differ. */
+export type WeekendRule = "previous" | "next" | "keep";
+
+/** "The last Friday" is n = -1; "the 2nd Thursday" is n = 2. */
+export interface NthWeekday {
+  n: 1 | 2 | 3 | 4 | -1;
+  day: Weekday;
+}
+
+/**
+ * Pay on set days of the month (decided 2026-10-03): dates, the last day, or
+ * an Nth weekday. Dates may go with the last day; an Nth weekday stands alone.
+ * A date the month lacks pays on its last day.
+ */
+export interface PayDays {
+  dates: number[];
+  last_day: boolean;
+  nth_weekdays: NthWeekday[];
+  weekend: WeekendRule;
+  until: string | null;
 }
 
 export type JobUpdate = Partial<JobCreate> & { position?: number };
