@@ -884,6 +884,32 @@ production-URL build: 26 of 26 files.
 
 ---
 
+## Jobs: shifts needing confirming come first -- SHIPPED 2026-10-12
+Your ask in `next.md`. The shift list is now, in order:
+1. past shifts nobody confirmed, nearest to today first
+2. upcoming shifts, soonest first
+3. confirmed shifts from the last 20 days, most recent first
+
+An unconfirmed shift stays until it is confirmed, back to 90 days. Before, it
+fell off the fixed 14-day window unnoticed. Older shifts stay in the calendar
+and every figure. The rule is in `features/jobs/shiftOrder.ts`.
+
+**Also fixed:** a job card's "Xh in the next three weeks" summed the whole
+fetched window, the fortnight behind included. It now counts today to three
+weeks out.
+
+Frontend only. 677 frontend tests; 6 mutations of the new rules, all caught
+after a test for the 90-day fetch window was added.
+
+LIVE: `main` at `d638bcf`, matching a production build file by file (35
+files).
+
+**The daily grade recount, same day.** `account-grade-recount` runs at 09:30 UTC
+daily (Phase 2 runbook, item 13 step 3). A test run returned `200` from
+`Google-Cloud-Scheduler`.
+
+---
+
 ## Phone redesign from the owner's sketch, with gold icons -- SHIPPED 2026-10-12
 From the owner's sketch ("Add Course.pdf") and nine icons in
 `frontend/src/assets/icons/`. Frontend only. The owner chose a phone-only

@@ -511,6 +511,9 @@ DATABASE_URL="$SUPABASE_DATABASE_URL" .venv/bin/python -m app._database.schema
 
 ### 3. The daily recount (yours, whenever you like; nothing depends on it before Phase 3)
 
+**DONE 2026-10-12**, at your request: created as below. A test run returned
+`200` from `Google-Cloud-Scheduler` in the API's request log.
+
 ```sh
 gcloud scheduler jobs create http account-grade-recount --location=us-west1 --project=account-504419 \
   --schedule="30 9 * * *" --time-zone="UTC" --http-method=POST \
