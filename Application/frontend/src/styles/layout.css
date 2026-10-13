@@ -166,6 +166,13 @@
 
   .phoneNavList::-webkit-scrollbar { display: none; }
 
+  /* Room past the last icon, so the current page's ring is never clipped by
+     the pill's edge when the bar scrolls it into view. */
+  .phoneNavList::after {
+    content: "";
+    flex: 0 0 8px;
+  }
+
   /* Five and a sliver: 5.4 items across, so the edge of the sixth says the bar
      goes on. */
   .phoneNavItem {

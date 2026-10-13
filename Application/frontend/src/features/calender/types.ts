@@ -91,6 +91,12 @@ export interface EventOccurrence {
    * shows it, and offers leaving.
    */
   shared?: { owner_name: string; member_names: string[]; what: "event" | "task" };
+  /**
+   * A job application's deadline or follow-up date (Phase 3 item 1, D4): an
+   * all-day reminder that points back to the tracker, where the next step is
+   * recorded. Nothing to tick off here.
+   */
+  application?: { id: string; what: "deadline" | "follow_up"; company: string; role: string };
 }
 
 export interface EventCreate {

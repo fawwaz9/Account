@@ -7,8 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from app.api.routes import (
-    calendar, degree, finances, grades, intake, jobs, omnibox, partners, push, recurring, shared_events, shared_tasks,
-    survey, tasks, teams, term_reviews, usage, users, auth,
+    applications, calendar, degree, finances, grades, intake, jobs, omnibox, partners, push, recurring, shared_events,
+    shared_tasks, survey, tasks, teams, term_reviews, usage, users, auth,
 )
 from app._database.db import Base, SessionLocal, engine
 from app._database import models
@@ -168,6 +168,8 @@ app.include_router(tasks.router, prefix="/api/tasks", tags=["Tasks"])
 # Same prefix as tasks: a shared task is a task (Phase 2 item 9a).
 app.include_router(shared_tasks.router, prefix="/api/tasks", tags=["Shared tasks"])
 app.include_router(jobs.router, prefix="/api/jobs", tags=["Jobs"])
+# Phase 3 item 1. After jobs.router, whose own paths never start with /applications.
+app.include_router(applications.router, prefix="/api/jobs", tags=["Applications"])
 app.include_router(finances.router, prefix="/api/finances", tags=["Finances"])
 # Same prefix as finances: a standing instruction is a money concept, and the
 # client should not have to know it lives in its own module.

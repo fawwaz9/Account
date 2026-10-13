@@ -4,6 +4,8 @@ import { EventOccurrence } from "../types";
 import { fetchTasks } from "../../tasks/api";
 import { fetchSharedTasks, SharedTask } from "../../tasks/sharing";
 import { fetchSharedEvents, SharedEvent } from "../sharing";
+import { fetchApplications } from "../../jobs/applications/api";
+import { Application } from "../../jobs/applications/types";
 import { Task } from "../../tasks/types";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { today } from "../../../shared/utils/dateUtils";
@@ -96,13 +98,16 @@ export function useCalender() {
     setError(null);
 
     try {
-      const [nextOccurrences, nextTasks, sharedEvents, sharedTasks] = await Promise.all([
+      const [nextOccurrences, nextTasks, sharedEvents, sharedTasks, applications] = await Promise.all([
         fetchAgenda(userId, windowStart, windowEnd),
         fetchTasks(userId, { start: windowStart, end: windowEnd }),
         // Phase 2 item 9b. A failure here leaves your own calendar as it was
         // rather than taking it down with it.
         fetchSharedEvents(userId, windowStart, windowEnd).catch(() => [] as SharedEvent[]),
         fetchSharedTasks(userId).catch(() => [] as SharedTask[]),
+        // Phase 3 item 1 (D4), likewise: the tracker failing leaves the
+        // calendar as it was.
+        fetchApplications(userId).catch(() => [] as Application[]),
       ]);
       if (ticket !== latestRequest.current) return;
       setOccurrences([
@@ -111,6 +116,7 @@ export function useCalender() {
         ...sharedTasks
           .filter((task) => task.due_date && task.due_date >= windowStart && task.due_date <= windowEnd)
           .map(sharedTaskOccurrence),
+        ...applicationOccurrences(applications, windowStart, windowEnd),
       ]);
       setTasks(nextTasks);
     } catch (err) {
@@ -192,4 +198,31 @@ export function sharedTaskOccurrence(task: SharedTask): EventOccurrence {
     course_id: null, course_code: null, job_id: null, repeats: false, grade_id: null,
     shared: { owner_name: task.owner_name, member_names: task.member_names, what: "task" },
   };
+}
+
+/**
+ * A job application's deadline and follow-up date, as all-day items on the
+ * calendar (Phase 3 item 1, D4). Only while the application is still in play:
+ * a follow-up on one already rejected is nothing to do.
+ */
+export function applicationOccurrences(applications: Application[], start: string, end: string): EventOccurrence[] {
+  const open = new Set(["applied", "screening", "interview", "offer"]);
+  const items: EventOccurrence[] = [];
+  for (const application of applications) {
+    if (!open.has(application.status)) continue;
+    const dates: [string | null, "deadline" | "follow_up"][] = [
+      [application.deadline, "deadline"], [application.follow_up_on, "follow_up"],
+    ];
+    for (const [on_date, what] of dates) {
+      if (!on_date || on_date < start || on_date > end) continue;
+      items.push({
+        event_id: `${application.id}-${what}`, on_date,
+        title: `${what === "deadline" ? "Deadline" : "Follow up"}: ${application.company}`,
+        kind: "deadline", start_time: null, end_time: null, location: null, notes: application.role,
+        course_id: null, course_code: null, job_id: null, repeats: false, grade_id: null,
+        application: { id: application.id, what, company: application.company, role: application.role },
+      });
+    }
+  }
+  return items;
 }

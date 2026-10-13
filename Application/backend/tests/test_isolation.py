@@ -137,6 +137,10 @@ PATH_SOURCES = {
     "partner_id": "partnerships",
     "team_id": "teams",
     "game_id": "games",
+    # Phase 3 item 1. The world's step is its interview, never its first
+    # "applied" step, so deleting it reaches the write.
+    "application_id": "job_applications",
+    "step_id": "application_steps",
     # A membership row's own id (Phase 2 item 9a), as the owner removes it.
     "member_id": "task_members",
 }
@@ -173,6 +177,8 @@ WINDOW_ENDS = {"end", "period_end"}
 BODY_PATCHES: dict[tuple[str, str], list[dict]] = {
     ("POST", "/api/tasks/{user_id}/reminders"): [{"remind_at": "2026-09-14T09:00:00"}],
     ("POST", "/api/jobs/{user_id}/jobs"): [{"hourly_rate": 20.0}],
+    # Phase 3 item 1: "applied" is only ever the first step.
+    ("POST", "/api/jobs/{user_id}/applications/{application_id}/steps"): [{"status": "interview"}],
     ("POST", "/api/jobs/{user_id}/jobs/{job_id}/shifts"): [{"end_time": "17:00:00"}],
     ("PUT", "/api/finances/{user_id}/accounts/{account_id}/month-value"): [{"market_value": 100.0}],
     ("POST", "/api/finances/{user_id}/recurring"): [

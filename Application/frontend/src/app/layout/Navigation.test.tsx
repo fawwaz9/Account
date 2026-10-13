@@ -3,7 +3,7 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { MemoryRouter } from "react-router-dom";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import Sidebar, { NAV } from "./Sidebar";
 import BottomNav, { PHONE_NAV, PHONE_NAV_ORDER } from "./BottomNav";
 
@@ -68,6 +68,20 @@ describe("the phone's bottom bar", () => {
     showAt("/calendar");
     const current = screen.getAllByRole("link").filter((link) => link.getAttribute("aria-current") === "page");
     expect(current.map((link) => link.getAttribute("aria-label"))).toEqual(["Calendar"]);
+  });
+
+  it("scrolls the current page's icon into view, since Fitness and Jobs start past the edge", () => {
+    const scrolled: string[] = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = vi.fn(function (this: Element) {
+      scrolled.push(this.getAttribute("aria-label") ?? "");
+    });
+    try {
+      showAt("/jobs/applications");
+      expect(scrolled).toEqual(["Jobs"]);
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
   });
 
   it("does not mark home as current on every page beneath it", () => {

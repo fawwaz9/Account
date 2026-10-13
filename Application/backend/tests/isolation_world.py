@@ -64,6 +64,8 @@ from app._database.models import (
     GradeDistributionModel,
     TermReviewModel,
     GameModel,
+    JobApplicationModel,
+    ApplicationStepModel,
     TeamInviteModel,
     TeamMemberModel,
     TeamModel,
@@ -319,6 +321,19 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
     add(PrerequisiteProposalModel(id=new_id(), user_id=user_id, course_id=course.id, kind="prerequisite",
                                   rule={"course": "CPSC 110"}, note=f"{marker} note", source="syllabus",
                                   source_text=f"{marker} syllabus sentence", session="2026W"))
+    # Phase 3 item 1: an application at interview, with the marker in the notes
+    # and the private offer figure a leak would carry, and a second step.
+    application = add(JobApplicationModel(
+        id=new_id(), user_id=user_id, company=f"{marker} company", role=f"{marker} role", applied_on=WORLD_DAY,
+        source=f"{marker} source", notes=f"{marker} application notes", status="interview",
+        deadline=WORLD_DAY, follow_up_on=WORLD_DAY, offer_amount=31.5, offer_period="hourly"))
+    first_step = add(ApplicationStepModel(id=new_id(), application_id=application.id, status="applied",
+                                          on_date=WORLD_DAY))
+    # Its own key, so the interview step below stays "application_steps" (the
+    # one a path names) and this row still counts as this user's.
+    ids["application_steps_applied"] = first_step.id
+    add(ApplicationStepModel(id=new_id(), application_id=application.id, status="interview", on_date=WORLD_DAY,
+                             note=f"{marker} step note"))
     _ = (event, transaction, recurring_task)
 
     db.commit()

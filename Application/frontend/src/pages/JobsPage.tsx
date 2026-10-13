@@ -18,6 +18,7 @@ import "../styles/jobs.css";
 import ShiftConflictsPanel from "../features/jobs/components/ShiftConflictsPanel";
 import TaxPacketPanel from "../features/jobs/components/TaxPacketPanel";
 import { upcomingMinutesByJob } from "../features/jobs/shiftOrder";
+import JobsTabs from "../features/jobs/components/JobsTabs";
 import { today } from "../shared/utils/dateUtils";
 
 /**
@@ -107,6 +108,8 @@ export default function JobsPage() {
           </button>
         </div>
       </div>
+
+      <JobsTabs />
 
       {error && <p className="calError">{error}</p>}
       {loading && jobs.length === 0 && <p className="calMuted" role="status">Loading…</p>}

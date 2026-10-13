@@ -38,6 +38,7 @@ const DegreePage = lazy(() => import("../pages/grades/DegreePage"));
 const CalendarPage = lazy(() => import("../pages/CalendarPage"));
 const TasksPage = lazy(() => import("../pages/TasksPage"));
 const JobsPage = lazy(() => import("../pages/JobsPage"));
+const ApplicationsPage = lazy(() => import("../pages/ApplicationsPage"));
 const BudgetPage = lazy(() => import("../pages/BudgetPage"));
 const AccountDetailPage = lazy(() => import("../pages/budget/AccountDetailPage"));
 const SettingsPage = lazy(() => import("../pages/SettingsPage"));
@@ -73,6 +74,7 @@ export default function App() {
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/tasks" element={<TasksPage />} />
               <Route path="/jobs" element={<JobsPage />} />
+              <Route path="/jobs/applications" element={<ApplicationsPage />} />
               {/* Phase 2 item 11: teams, under Fitness. */}
               <Route path="/fitness" element={<FitnessPage />} />
               <Route path="/budget" element={<BudgetPage />} />

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import CalenderView from "../features/calender/components/CalenderView";
 import WeekView from "../features/calender/components/WeekView";
 import EventCard from "../features/calender/components/EventCard";
@@ -266,7 +267,20 @@ export default function CalendarPage() {
         >
           {/* Phase 2 item 9b: someone else's, shared with you. Theirs to
               change, so none of the edit, cancel or delete controls. */}
-          {selected.shared && user ? (
+          {selected.application ? (
+            // Phase 3 item 1 (D4): a tracker date. The next step is recorded
+            // on the application, so this only points there.
+            <div className="calForm">
+              <p>
+                {selected.application.what === "deadline" ? "Application deadline" : "Follow up"} for{" "}
+                <strong>{selected.application.role}</strong> at <strong>{selected.application.company}</strong>.
+              </p>
+              <div className="calFormActions">
+                <button type="button" className="calButton" onClick={() => setSelected(null)}>Close</button>
+                <Link to="/jobs/applications" className="calButton calButtonPrimary">Open in Applications</Link>
+              </div>
+            </div>
+          ) : selected.shared && user ? (
             <SharedOccurrenceCard
               userId={user.id}
               occurrence={selected}

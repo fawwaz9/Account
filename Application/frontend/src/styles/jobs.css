@@ -637,3 +637,188 @@
   padding-top: 8px;
   border-top: 1px solid #1f2a44;
 }
+
+/* ===== Jobs and Applications tabs (Phase 3 item 1) ===== */
+.jobsTabs {
+  display: flex;
+  gap: 4px;
+  margin: -4px 0 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.jobsTab {
+  padding: 8px 14px;
+  color: var(--muted);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.jobsTab:hover { color: var(--text); }
+
+.jobsTabActive {
+  color: var(--gold);
+  border-bottom-color: var(--gold);
+}
+
+/* ===== The application tracker ===== */
+.appFigures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px 30px;
+  padding: 18px 20px;
+  margin-bottom: 18px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: linear-gradient(145deg, var(--panel), var(--panel-2));
+}
+
+.appSankey {
+  margin: 0 0 22px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+}
+
+.appSankey svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.appSankeyNode { fill: var(--gold); }
+.appSankeyNode-rejected, .appSankeyNode-no_reply, .appSankeyNode-withdrawn { fill: #64748b; }
+.appSankeyNode-waiting { fill: #82bbe8; }
+.appSankeyNode-accepted { fill: #6fc7ac; }
+
+.appSankeyBand { fill: rgba(212, 175, 55, 0.28); }
+.appSankeyBand-rejected, .appSankeyBand-no_reply, .appSankeyBand-withdrawn { fill: rgba(100, 116, 139, 0.32); }
+.appSankeyBand-waiting { fill: rgba(130, 187, 232, 0.28); }
+.appSankeyBand-accepted { fill: rgba(111, 199, 172, 0.36); }
+
+/* A halo in the panel's colour, so a label stays readable where a band runs
+   under it. */
+.appSankeyLabel {
+  fill: var(--text);
+  font-size: 12px;
+  paint-order: stroke;
+  stroke: var(--panel);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
+/* The SVG scales down to a phone's width, and its text with it: larger in
+   its own units, so it lands near 10px on screen. */
+@media (max-width: 720px) {
+  .appSankeyLabel { font-size: 20px; stroke-width: 6px; }
+  .appSankey { padding: 10px; }
+}
+
+.appFigure {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.appFigureValue {
+  font-size: 1.7rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.appFigureLabel {
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.appSection { margin-bottom: 22px; }
+.appSection h2 { font-size: 1.05rem; margin: 0 0 10px; }
+
+.appList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.appRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.appRowMain {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  flex: 1 1 200px;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.appRowTitle { font-weight: 600; }
+.appRowDates { flex: 1 1 220px; }
+
+.appStatus {
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  background: rgba(212, 175, 55, 0.16);
+  color: var(--gold);
+  white-space: nowrap;
+}
+
+.appStatus-offer, .appStatus-accepted { background: rgba(86, 179, 154, 0.2); color: #6fc7ac; }
+.appStatus-rejected, .appStatus-no_reply, .appStatus-withdrawn { background: rgba(148, 163, 184, 0.16); color: var(--muted); }
+
+.appQuiet {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: var(--gold);
+}
+
+.appHistory {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.appHistoryTitle { margin: 0 0 8px; font-size: 0.95rem; }
+
+.appSteps {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.appStep {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.appStepRemove { margin-left: auto; }
+.appNext { align-items: flex-end; }

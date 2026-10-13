@@ -135,6 +135,7 @@ class UserModel(Base):
     invites = relationship("InviteModel", cascade=cascade)
     term_reviews = relationship("TermReviewModel", cascade=cascade, overlaps="course,term_reviews")
     teams = relationship("TeamModel", cascade=cascade)
+    job_applications = relationship("JobApplicationModel", cascade=cascade)
     partnerships = relationship(
         "PartnershipModel", cascade=cascade, foreign_keys="PartnershipModel.user_id"
     )
@@ -2043,3 +2044,86 @@ class GameModel(Base):
     created_at = Column(DateTime, nullable=False, default=utc_now)
 
     team = relationship("TeamModel", back_populates="games")
+
+
+#: Phase 3 item 1 (D2, D3): the statuses an application moves through. The
+#: last four end it; "no reply" can still be followed by a late answer.
+APPLICATION_STATUSES = (
+    "applied", "screening", "interview", "offer", "accepted", "rejected", "no_reply", "withdrawn",
+)
+OFFER_PERIODS = ("hourly", "monthly", "yearly")
+
+
+class JobApplicationModel(Base):
+    """One job or internship you applied to (Phase 3 item 1).
+
+    `status` is the latest step, kept on the row so a list need not read every
+    history. The history itself is `application_steps`, and is the point
+    (D2): replies, days to a reply and the Sankey are all read from it.
+
+    The offer's pay (D5) is private to its owner, like every column here.
+    """
+
+    __tablename__ = "job_applications"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('applied','screening','interview','offer','accepted','rejected','no_reply','withdrawn')",
+            name="ck_application_status",
+        ),
+        CheckConstraint(
+            "offer_period IS NULL OR offer_period IN ('hourly','monthly','yearly')",
+            name="ck_application_offer_period",
+        ),
+    )
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    company = Column(String, nullable=False)
+    role = Column(String, nullable=False)
+    applied_on = Column(Date, nullable=False)
+    #: Where you found it: a job board, a referral, a career fair.
+    source = Column(String, nullable=True)
+    link = Column(String, nullable=True)
+    location = Column(String, nullable=True)
+    notes = Column(String, nullable=True)
+    status = Column(String, nullable=False, default="applied")
+    #: Shown on the calendar too (D4).
+    deadline = Column(Date, nullable=True)
+    follow_up_on = Column(Date, nullable=True)
+    offer_amount = Column(Float, nullable=True)
+    offer_period = Column(String, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+    updated_at = Column(DateTime, nullable=False, default=utc_now)
+
+    steps = relationship(
+        "ApplicationStepModel", back_populates="application", cascade=cascade,
+        order_by="(ApplicationStepModel.on_date, ApplicationStepModel.created_at)",
+    )
+
+
+class ApplicationStepModel(Base):
+    """One change in an application's status, with the day it happened (D2).
+
+    A child of the application, so it is its owner's row under the ordinary
+    child policy. The first step, "applied", is written with the application
+    and moves with its date; it cannot be removed on its own.
+    """
+
+    __tablename__ = "application_steps"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('applied','screening','interview','offer','accepted','rejected','no_reply','withdrawn')",
+            name="ck_application_step_status",
+        ),
+    )
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    application_id = Column(
+        Uuid, ForeignKey("job_applications.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    status = Column(String, nullable=False)
+    on_date = Column(Date, nullable=False)
+    note = Column(String, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+
+    application = relationship("JobApplicationModel", back_populates="steps")
