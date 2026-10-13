@@ -17,6 +17,8 @@ import "../styles/calendar.css";
 import "../styles/jobs.css";
 import ShiftConflictsPanel from "../features/jobs/components/ShiftConflictsPanel";
 import TaxPacketPanel from "../features/jobs/components/TaxPacketPanel";
+import { upcomingMinutesByJob } from "../features/jobs/shiftOrder";
+import { today } from "../shared/utils/dateUtils";
 
 /**
  * The jobs page.
@@ -78,15 +80,10 @@ export default function JobsPage() {
     }
   }
 
-  // Minutes per job across the window, so a card can say what it is worth in
-  // time without every card filtering the same list again.
-  const hoursByJob = useMemo(() => {
-    const totals = new Map<string, number>();
-    for (const shift of shifts) {
-      totals.set(shift.job_id, (totals.get(shift.job_id) ?? 0) + shift.counted_minutes);
-    }
-    return totals;
-  }, [shifts]);
+  // Minutes per job over the next three weeks, which is what a card's line
+  // says. It used to sum the whole fetched window, the fortnight behind
+  // included, and that window now reaches back 90 days for unconfirmed shifts.
+  const hoursByJob = useMemo(() => upcomingMinutesByJob(shifts, today()), [shifts]);
 
   return (
     <div className="container">

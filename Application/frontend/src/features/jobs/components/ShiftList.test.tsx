@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ShiftList, { heldTip } from "./ShiftList";
 import { ShiftOccurrence } from "../types";
 
@@ -32,7 +32,13 @@ function show(shift: ShiftOccurrence) {
   );
 }
 
-afterEach(cleanup);
+// Pinned: the list drops confirmed shifts after 20 days, so against the real
+// clock these fixtures would start vanishing on their own.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-10-12T18:00:00Z"));
+});
+afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe("a held cash tip", () => {
   it("shows a red ! on a confirmed shift whose cash tip is not in the budget", () => {
@@ -58,5 +64,25 @@ describe("a held cash tip", () => {
     show(occurrence(over));
     expect(screen.queryByRole("button", { name: "This tip is not in your budget" })).toBeNull();
     expect(heldTip(occurrence(over))).toBe(false);
+  });
+});
+
+describe("the order on the page", () => {
+  it("is the arranged order: needing confirming, then upcoming, then confirmed", () => {
+    const list = [
+      occurrence({ event_id: "done", on_date: "2026-10-08", confirmed: true, tip_amount: 0 }),
+      occurrence({ event_id: "soon", on_date: "2026-10-14", confirmed: false, tip_amount: 0 }),
+      occurrence({ event_id: "late", on_date: "2026-10-09", confirmed: false, assumed: true, tip_amount: 0 }),
+      occurrence({ event_id: "old", on_date: "2026-09-01", confirmed: true, tip_amount: 0 }),
+    ];
+    const { container } = render(
+      <MemoryRouter>
+        <ShiftList shifts={list} onConfirm={() => {}} onRemove={() => {}} busy={false} />
+      </MemoryRouter>,
+    );
+    const rows = [...container.querySelectorAll(".shiftWhen")].map((row) => row.textContent);
+    expect(rows).toHaveLength(3);
+    expect(container.querySelectorAll(".shiftRow")[0].classList.contains("shiftRowAssumed")).toBe(true);
+    expect(container.querySelectorAll(".shiftRow")[2].querySelector(".shiftStateDone")).not.toBeNull();
   });
 });

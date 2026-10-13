@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchEarnings, fetchJobs, fetchPaycheques, fetchShifts } from "../api";
+import { AHEAD_DAYS, UNCONFIRMED_DAYS } from "../shiftOrder";
 import { EarningsSummary, Job, Paycheque, ShiftOccurrence } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { addDays, today } from "../../../shared/utils/dateUtils";
 
-/** How far either side of today the shift list reaches. */
-const BEHIND_DAYS = 14;
-const AHEAD_DAYS = 21;
 
 /**
  * The jobs, and the shifts around today.
@@ -39,7 +37,10 @@ export function useJobs(includeArchived = false) {
     setLoading(true);
     setError(null);
     try {
-      const from = addDays(today(), -BEHIND_DAYS);
+      // Back far enough that a past shift nobody confirmed stays in the list
+      // until it is (shiftOrder.ts); the list itself drops confirmed ones
+      // after 20 days.
+      const from = addDays(today(), -UNCONFIRMED_DAYS);
       const to = addDays(today(), AHEAD_DAYS);
       const [nextJobs, nextShifts, nextCheques, nextEarnings] = await Promise.all([
         fetchJobs(userId, includeArchived),

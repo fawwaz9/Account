@@ -1,6 +1,7 @@
 import { ShiftOccurrence } from "../types";
 import { Link } from "react-router-dom";
-import { clockTime, dueLabel } from "../../../shared/utils/dateUtils";
+import { clockTime, dueLabel, today } from "../../../shared/utils/dateUtils";
+import { arrangeShifts } from "../shiftOrder";
 import HelpTip from "../../../shared/components/HelpTip";
 
 interface ShiftListProps {
@@ -11,7 +12,9 @@ interface ShiftListProps {
 }
 
 /**
- * The shifts around today, with the ones still needing confirming called out.
+ * The shifts around today, with the ones still needing confirming first
+ * (`arrangeShifts`: unconfirmed past shifts, then upcoming, then confirmed
+ * ones from the last 20 days).
  *
  * An unconfirmed past shift is shown with its scheduled hours and marked, not
  * hidden: forgetting the admin is not the same as not having worked, and a
@@ -19,7 +22,8 @@ interface ShiftListProps {
  * question over it.
  */
 export default function ShiftList({ shifts, onConfirm, onRemove, busy }: ShiftListProps) {
-  if (shifts.length === 0) {
+  const shown = arrangeShifts(shifts, today());
+  if (shown.length === 0) {
     return <p className="calMuted">No shifts scheduled. Set a pattern on a job to fill this in.</p>;
   }
 
@@ -37,7 +41,7 @@ export default function ShiftList({ shifts, onConfirm, onRemove, busy }: ShiftLi
       </div>
 
       <ul className="shiftList">
-        {shifts.map((shift) => (
+        {shown.map((shift) => (
           <li
             key={`${shift.event_id}-${shift.on_date}`}
             className={`shiftRow${shift.assumed ? " shiftRowAssumed" : ""}`}
