@@ -39,7 +39,6 @@ from app._database.models import (
     TuitionPaymentModel,
     UserModel,
 )
-from app.Calendar.utils.recurrence import Rule, occurrences, parse_byday
 from app.Finances.schemas.forecast import (
     CashFlowForecast,
     ForecastEvent,
@@ -58,6 +57,7 @@ from app.Jobs.services.earnings_service import (
     upcoming_pay,
 )
 from app.Jobs.services.job_service import list_shifts
+from app.Jobs.services.pay_schedule import pay_dates as job_pay_dates
 from app.shared.dates import user_today
 from app.shared.money import money
 from app.Finances.services.counted import on_counted_accounts
@@ -293,16 +293,8 @@ def recurring_events(
 
 
 def pay_dates(job: JobModel, start: date, end: date) -> list[date]:
-    if job.pay_starts_on is None or not job.recur_freq:
-        return []
-    rule = Rule(
-        freq=job.recur_freq,
-        interval=job.recur_interval or 1,
-        byday=parse_byday(job.recur_byday),
-        until=job.recur_until,
-        count=job.recur_count,
-    )
-    return occurrences(rule, job.pay_starts_on, start, end)
+    """The job's pay dates in the window, by whichever schedule it has."""
+    return job_pay_dates(job, start, end)
 
 
 def spendable_income_share(db: Session, user_id: uuid.UUID, spendable_ids: set[uuid.UUID]) -> float | None:

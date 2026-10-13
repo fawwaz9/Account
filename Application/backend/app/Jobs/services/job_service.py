@@ -38,13 +38,8 @@ from app._database.models import (
 from app.Finances.schemas.transaction import TransactionKind
 from app.Calendar.schemas.event import EventKind
 from app.Calendar.services.event_service import list_occurrences
-from app.Calendar.utils.recurrence import (
-    WEEKLY,
-    Rule,
-    format_byday,
-    occurrences,
-    parse_byday,
-)
+from app.Jobs.services.pay_schedule import apply_pay_days, pattern_of, pay_dates, pay_days_of
+from app.Calendar.utils.recurrence import WEEKLY, format_byday
 from app.Calendar.utils.rule_columns import apply_recurrence, recurrence_of
 from app.Jobs.schemas.job import (
     Job,
@@ -84,26 +79,14 @@ def owned_job(db: Session, user_id: uuid.UUID, job_id: uuid.UUID) -> JobModel | 
 
 
 def next_pay_on(job: JobModel, on_day: date) -> date | None:
-    """The next date this job's pay rule produces, or None without a rule.
+    """The next date this job pays, or None without a schedule.
 
-    Read from the rule rather than stored, like every other repeat in the app.
-    Nothing is ever materialised from it: a cheque exists because one arrived
-    and was entered, never because a date came round.
+    Read from the schedule rather than stored, like every other repeat in the
+    app (`pay_schedule.pay_dates`, which knows both kinds of schedule). Safe to
+    spend measures to the day before it, so a payday the weekend rule moves to
+    Friday must read as Friday here.
     """
-    if job.pay_starts_on is None or not job.recur_freq:
-        return None
-
-    anchor = on_day
-    rule = Rule(
-        freq=job.recur_freq,
-        interval=job.recur_interval or 1,
-        byday=parse_byday(job.recur_byday),
-        until=job.recur_until,
-        count=job.recur_count,
-    )
-    ahead = occurrences(
-        rule, job.pay_starts_on, anchor, anchor + timedelta(days=PAY_LOOKAHEAD_DAYS)
-    )
+    ahead = pay_dates(job, on_day, on_day + timedelta(days=PAY_LOOKAHEAD_DAYS))
     return ahead[0] if ahead else None
 
 
@@ -118,7 +101,10 @@ def as_schema(job: JobModel, on_day: date) -> Job:
         started_on=job.started_on,
         ended_on=job.ended_on,
         pay_starts_on=job.pay_starts_on,
-        pay_schedule=recurrence_of(job),
+        # One or the other: a days-of-the-month job also reads "monthly" on the
+        # rule columns, which is not a schedule of its own.
+        pay_schedule=None if pattern_of(job) else recurrence_of(job),
+        pay_days=pay_days_of(job),
         archived=job.archived,
         position=job.position,
         created_at=job.created_at,
@@ -176,6 +162,7 @@ def create_job(db: Session, user_id: uuid.UUID, data: JobCreate):
         position=(highest.position + 1) if highest else 0,
     )
     apply_recurrence(job, data.pay_schedule)
+    apply_pay_days(job, data.pay_days)
 
     db.add(job)
     db.commit()
@@ -209,15 +196,29 @@ def update_job(db: Session, user_id: uuid.UUID, job_id: uuid.UUID, data: JobUpda
         return None
 
     update_data = data.model_dump(exclude_unset=True)
-    schedule = update_data.pop("pay_schedule", None)
+    touches_schedule = "pay_schedule" in update_data or "pay_days" in update_data
+    update_data.pop("pay_schedule", None)
+    update_data.pop("pay_days", None)
     if "kind" in update_data and update_data["kind"] is not None:
         update_data["kind"] = JobKind(update_data["kind"]).value
 
     for key, value in update_data.items():
         setattr(job, key, value)
 
-    if schedule is not None:
-        apply_recurrence(job, data.pay_schedule)
+    if touches_schedule:
+        # Whichever half the patch leaves out keeps what is stored, and an
+        # explicit null clears. It used to skip a null pay_schedule, so
+        # choosing "doesn't repeat" never stopped a schedule once set.
+        fields = data.model_fields_set
+        pattern = data.pay_days if "pay_days" in fields else pay_days_of(job)
+        rule = data.pay_schedule if "pay_schedule" in fields else (
+            None if pattern_of(job) else recurrence_of(job)
+        )
+        if rule is not None and pattern is not None:
+            raise ValueError("Pay by a repeat or by days of the month, not both")
+        apply_recurrence(job, rule)
+        apply_pay_days(job, pattern)
+
 
     if job.ended_on and job.started_on and job.ended_on < job.started_on:
         raise ValueError("A job cannot end before it starts")
