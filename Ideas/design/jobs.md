@@ -351,6 +351,11 @@ child `application_steps`.
   there, in a fixed order. A parent's bands leave in its children's order and
   every band goes one column, so none can cross; a test checks every pair.
   Each outcome's total is in the legend. One scale throughout.
+- **The list shows what needs you** (D9, `features/jobs/applications/triage.ts`):
+  offers, interviews, screenings and anything with a deadline (14 days) or
+  follow-up (7 days, or overdue) coming up; then the quiet ones with "Mark all
+  as no reply". Waiting and finished applications sit behind "Show …" buttons,
+  and a search bar (company, role, location, source) finds any of them.
 
 ## Still open
 

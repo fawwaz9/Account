@@ -741,6 +741,27 @@
 .appSection { margin-bottom: 22px; }
 .appSection h2 { font-size: 1.05rem; margin: 0 0 10px; }
 
+/* D9: the page lists what needs you; search and "Show ..." find the rest. */
+.appSearch { max-width: 520px; margin-bottom: 18px; }
+
+.appSectionHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-bottom: 4px;
+}
+.appSectionHead h2 { margin: 0; }
+.appSectionNote { margin: 0 0 10px; }
+
+.appReveal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 22px;
+}
+
 .appList {
   list-style: none;
   margin: 0;

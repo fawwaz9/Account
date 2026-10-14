@@ -152,3 +152,35 @@ appear twice); letting skip bands jump a column (accurate, but they cross).
 **On a phone** the chart keeps a readable width and scrolls sideways inside its
 box. Squeezed to 390px, its labels ran into each other. The page itself stays
 phone-width.
+
+## D9. The page lists what needs you; search finds the rest (yours, 2026-10-14)
+
+**Your ask:** replace the lists with a search bar, showing applications only
+when asking about "no reply". There's no use rendering hundreds of applications
+without the need.
+
+**What I pushed back on, and you took:** speed was never the problem (150 rows
+render in milliseconds, and the list is fetched for search anyway); clutter
+was. Hiding everything would also have hidden what matters most: an offer can't
+go quiet, so a pending offer would never have appeared, nor an interview with
+news in the last 30 days. And search needs you to remember a name, while
+"what's still going?" has no search term.
+
+**What was built** (`features/jobs/applications/triage.ts`, a pure function):
+- **A search bar** over the chosen season: every word typed must appear in the
+  company, role, location or source. While you search, the results replace the
+  lists, finished ones included. Notes aren't searched.
+- **Needs you:** offers, interviews and screenings (in that order, even once
+  quiet), and any open application with a deadline in the next 14 days or a
+  follow-up due within 7 days or overdue, soonest first.
+- **No reply yet?:** the quiet ones (D3), longest silent first, with **"Mark all
+  N as no reply"** after a confirm. Marked one at a time; if one fails it stops
+  and says "Marked 1 of 3 as no reply, then stopped: …".
+- **Waiting** (applied, not quiet, nothing due) and **finished** are hidden
+  behind "Show waiting (n)" and "Show finished (n)". "Show waiting" wasn't in
+  the agreed list; it was added so "what am I waiting on?" still has an answer
+  without a search term.
+
+**Rejected:** search plus the quiet ones only (offers and interviews vanish);
+server-side search (the season's list is already on the page); searching notes
+(private text turning up in a search result shown on screen).

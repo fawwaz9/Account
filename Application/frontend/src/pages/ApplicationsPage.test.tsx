@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Application, ApplicationStats } from "../features/jobs/applications/types";
 
-/** The tracker page (Phase 3 item 1): figures, the lists, and "no reply yet?" (D3). */
+/** The tracker page (Phase 3 item 1): figures, what needs you (D9), search, and "no reply yet?" (D3). */
 
 const { fetchApplications, fetchApplicationStats, addStep, fetchSeasons } = vi.hoisted(() => ({
   fetchApplications: vi.fn(), fetchApplicationStats: vi.fn(), addStep: vi.fn(), fetchSeasons: vi.fn(),
@@ -45,6 +45,7 @@ beforeEach(() => {
     application({ id: "a1", company: "Quiet Co", quiet: true }),
     application({ id: "a2", company: "Busy Co", status: "interview" }),
     application({ id: "a3", company: "Done Co", status: "rejected" }),
+    application({ id: "a4", company: "New Co", applied_on: "2026-10-01", last_step_on: "2026-10-01" }),
   ]);
   fetchApplicationStats.mockResolvedValue(STATS);
   addStep.mockResolvedValue({});
@@ -60,14 +61,49 @@ describe("the tracker page", () => {
     expect(screen.getByText("9d")).toBeTruthy();
   });
 
-  it("splits what is in progress from what is finished", async () => {
+  it("lists what needs you and the quiet ones, and nothing else until asked (D9)", async () => {
     show();
     await screen.findByText("Quiet Co");
-    const inProgress = screen.getByRole("heading", { name: "In progress" }).parentElement!;
-    const finished = screen.getByRole("heading", { name: "Finished" }).parentElement!;
-    expect(inProgress.textContent).toContain("Busy Co");
-    expect(finished.textContent).toContain("Done Co");
-    expect(inProgress.textContent).not.toContain("Done Co");
+    const needsYou = screen.getByRole("heading", { name: "Needs you" }).parentElement!;
+    const quiet = screen.getByRole("heading", { name: "No reply yet?" }).closest("section")!;
+    expect(needsYou.textContent).toContain("Busy Co");
+    expect(quiet.textContent).toContain("Quiet Co");
+    expect(screen.queryByText("Done Co")).toBeNull();
+    expect(screen.queryByText("New Co")).toBeNull();
+  });
+
+  it("shows waiting and finished on a tap, and hides them again", async () => {
+    show();
+    await screen.findByText("Quiet Co");
+    fireEvent.click(screen.getByRole("button", { name: "Show finished (1)" }));
+    expect(screen.getByRole("heading", { name: "Finished" }).parentElement!.textContent).toContain("Done Co");
+    expect(screen.queryByText("New Co")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Show waiting (1)" }));
+    expect(screen.getByRole("heading", { name: "Waiting to hear back" }).parentElement!.textContent).toContain("New Co");
+    fireEvent.click(screen.getByRole("button", { name: "Hide finished" }));
+    expect(screen.queryByText("Done Co")).toBeNull();
+  });
+
+  it("finds any application by search, finished ones included, in place of the lists", async () => {
+    show();
+    await screen.findByText("Quiet Co");
+    fireEvent.change(screen.getByLabelText("Find an application"), { target: { value: "done" } });
+    const results = screen.getByRole("region", { name: "Search results" });
+    expect(results.textContent).toContain("1 match");
+    expect(results.textContent).toContain("Done Co");
+    expect(screen.queryByText("Busy Co")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Needs you" })).toBeNull();
+  });
+
+  it("says when nothing matches, and the lists come back once the search is cleared", async () => {
+    show();
+    await screen.findByText("Quiet Co");
+    const search = screen.getByLabelText("Find an application");
+    fireEvent.change(search, { target: { value: "zzz" } });
+    expect(screen.getByText("0 matches")).toBeTruthy();
+    expect(screen.getByText(/Nothing matches “zzz”/)).toBeTruthy();
+    fireEvent.change(search, { target: { value: "" } });
+    expect(screen.getByRole("heading", { name: "Needs you" })).toBeTruthy();
   });
 
   it("asks 'no reply yet?' on a quiet one only, and marks it on a tap (D3)", async () => {
@@ -109,6 +145,55 @@ describe("the tracker page", () => {
     await screen.findByText("Quiet Co");
     expect(screen.getByRole("link", { name: "Applications" }).getAttribute("aria-current")).toBe("page");
     expect(screen.getByRole("link", { name: "Jobs" }).getAttribute("href")).toBe("/jobs");
+  });
+});
+
+describe("marking every quiet one (D9)", () => {
+  const QUIET = [
+    application({ id: "q1", company: "Quiet One", quiet: true }),
+    application({ id: "q2", company: "Quiet Two", quiet: true }),
+    application({ id: "q3", company: "Quiet Three", quiet: true }),
+  ];
+
+  it("asks first, then marks each one no reply", async () => {
+    fetchApplications.mockResolvedValue(QUIET);
+    show();
+    await screen.findByText("Quiet One");
+    fireEvent.click(screen.getByRole("button", { name: "Mark all 3 as no reply" }));
+    expect(addStep).not.toHaveBeenCalled();
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Mark 3 as no reply" }));
+    await waitFor(() => expect(addStep).toHaveBeenCalledTimes(3));
+    for (const id of ["q1", "q2", "q3"]) {
+      expect(addStep).toHaveBeenCalledWith("u1", id, { status: "no_reply", on_date: "2026-10-12", note: null });
+    }
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("marks nothing when cancelled", async () => {
+    fetchApplications.mockResolvedValue(QUIET);
+    show();
+    await screen.findByText("Quiet One");
+    fireEvent.click(screen.getByRole("button", { name: "Mark all 3 as no reply" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(addStep).not.toHaveBeenCalled();
+  });
+
+  it("says how far it got when one fails, and stops there", async () => {
+    fetchApplications.mockResolvedValue(QUIET);
+    addStep.mockResolvedValueOnce({}).mockRejectedValueOnce(new Error("Network down"));
+    show();
+    await screen.findByText("Quiet One");
+    fireEvent.click(screen.getByRole("button", { name: "Mark all 3 as no reply" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Mark 3 as no reply" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("Marked 1 of 3 as no reply, then stopped: Network down");
+    expect(addStep).toHaveBeenCalledTimes(2);
+  });
+
+  it("offers no 'mark all' for a single quiet one", async () => {
+    show();
+    await screen.findByText("Quiet Co");
+    expect(screen.queryByRole("button", { name: /Mark all/ })).toBeNull();
   });
 });
 
