@@ -339,6 +339,11 @@ child `application_steps`.
   back to the tracker, only while the application is still in play (D4).
 - **An offer's pay** (amount and hourly, monthly or yearly) is private (D5).
   Later, it's what you could choose to submit to salary transparency.
+- **Seasons** (D7) are named month-to-month ranges in `application_seasons`. An
+  application belongs to every season whose months include the day it was
+  applied for, so seasons overlap freely. The list, the figures and the Sankey
+  all take the same `season_id`, so no figure disagrees with the list. The page
+  opens on the season including today, or the most recent.
 - **The Sankey is SVG from a pure layout** (`features/jobs/applications/sankey.ts`).
   It uses one scale for every column, and every outcome sits in the last
   column.

@@ -53,7 +53,7 @@ because the vision put it here, and it has its own "Done when".
 
 | # | Item | Status |
 |---|---|---|
-| 1 | Job application tracker | **Deployed 2026-10-13** (`72bb9f2`), with D2–D6 |
+| 1 | Job application tracker | **Deployed 2026-10-13** (`72bb9f2`), with D2–D6; seasons (D7) 2026-10-14 (`e5d5eb6`) |
 | 2 | Shared syllabi | Pipeline built (Phase 1 D16); catalogue built (Phase 2 Part A). Waits on cohorts |
 | 3 | Grade distributions shown | Collection live (Phase 2 item 13), recount job live since 2026-10-12. Waits on 5+ contributors per course-term |
 | 4 | Shared merchant map | Personal categorizer built (Phase 1 D17). Shared layer not started |

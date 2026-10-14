@@ -118,7 +118,7 @@ stored.
 - No errors in the new revision's logs. All nine settings carried over.
 - The live site matches the build (38 files).
 
-## Batch 2: application seasons (D7). NOT YET DEPLOYED
+## Batch 2: application seasons (D7). DEPLOYED 2026-10-14 (`e5d5eb6`, `account-api-00048-985`)
 
 | What | Schema change |
 |---|---|
@@ -173,3 +173,11 @@ for 53 of 53 tables; no errors in the logs; the live site matches the build.
 
 **Rollback:** both halves together, Cloud Run to `account-api-00047-z5d`, Pages to
 the `72bb9f2` deployment. The table stays; the older API never reads it.
+
+**Result, 2026-10-14.**
+- The backup held 54 tables and 1,571 rows.
+- Read-backs A and B matched first time.
+- The gate reported row-level security on for 53 of 53 tables.
+- Health ok. The 6 season requests answer 401 against two 404 controls.
+- No errors in the logs. Settings carried over.
+- The live site matches the build (38 files).

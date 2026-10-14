@@ -884,6 +884,38 @@ production-URL build: 26 of 26 files.
 
 ---
 
+## Phase 3 batch 2: applications by season -- SHIPPED 2026-10-14
+Your ask (D7): seasons you choose, month-year to month-year, with all the
+tracker's data coming from the chosen one.
+- **Named seasons, saved.** "Summer 2027 co-op", Sep 2026 – Jan 2027. Managed from
+  the Applications page; deleting one deletes no application.
+- **Membership by the day applied,** the end month whole. Seasons may overlap,
+  and nothing is filed by hand.
+- **One season drives everything:** the list, the figures and the Sankey.
+  Calendar deadlines aren't filtered.
+- **The page opens on the season you're in,** or the most recent; "All time"
+  shows everything.
+- **One per-user table**, `application_seasons`, in every walk on both
+  databases. Its schema run took back Supabase's grants on it (D6), rehearsed
+  with those defaults on.
+- **Also:** the application and season dialogs' single fields no longer stretch
+  tall on a phone.
+
+2,606 backend tests on SQLite, 2,989 on Postgres; 732 frontend. Mutations: 7 of
+7 backend, 5 of 5 frontend after one vacuous test was strengthened.
+
+LIVE: API `account-api-00048-985` (digest-verified `e5d5eb6`, sha256
+`c8566498...`) since 2026-10-14 07:09 UTC.
+- The backup held 54 tables and 1,571 rows.
+- Read-backs A and B matched: `account_app` only.
+- The gate reports row-level security on for 53 of 53 tables.
+- Health ok. The 6 season requests answer 401 against two 404 controls.
+- No errors in the logs. All nine settings carried over.
+- Frontend `main` at `e5d5eb6`, matching a production build file by file (38
+  files).
+
+---
+
 ## Phase 3 batch 1: the application tracker, pay on set days of the month, and no stray grants -- SHIPPED 2026-10-13
 Phase 3 opened early by your call (D1), with the one item that needs no other
 users. One schema run (yours), one deploy.
