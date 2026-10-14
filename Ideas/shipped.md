@@ -884,6 +884,30 @@ production-URL build: 26 of 26 files.
 
 ---
 
+## Applications: what needs you, and search for the rest -- SHIPPED 2026-10-14
+Your ask (D9): stop rendering hundreds of applications; search instead, and show
+them only to ask about "no reply". Pushed back on hiding everything (a pending
+offer can never go quiet, so it would never have shown), and you took the
+softer version:
+- **Needs you:** offers, interviews, screenings, and anything with a deadline
+  in 14 days or a follow-up due within 7 (or overdue).
+- **No reply yet?:** the quiet ones, longest silent first, with "Mark all N as
+  no reply" behind a confirm; one at a time, stopping with "Marked 1 of 3 …"
+  if one fails.
+- **Waiting and finished** behind "Show waiting (n)" / "Show finished (n)".
+- **Search** over company, role, location and source in the season; results
+  replace the lists while you type. Notes aren't searched.
+
+Frontend only. 759 frontend tests; 14 of 14 mutations caught (the grouping
+rules, the 14- and 7-day windows, ordering, search, the confirm, and the
+part-way error surviving the reload). Screenshots at desktop and phone width;
+the phone page stays 390px wide.
+
+LIVE: `main` at `e8f8d0a`, matching a production build file by file (38
+files).
+
+---
+
 ## The applications Sankey, without crossings -- SHIPPED 2026-10-14
 Your ask: the graph intersected (D8).
 - **A tree:** each stage splits straight into the next stage and the outcomes
