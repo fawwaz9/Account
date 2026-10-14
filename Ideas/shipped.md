@@ -884,6 +884,27 @@ production-URL build: 26 of 26 files.
 
 ---
 
+## The applications Sankey, without crossings -- SHIPPED 2026-10-14
+Your ask: the graph intersected (D8).
+- **A tree:** each stage splits straight into the next stage and the outcomes
+  that ended there ("Rejected 56" after Applied, "Rejected 11" after Interview).
+  The legend shows each outcome's total ("In all: Accepted 1 · Rejected 75 · No
+  reply 65 · Withdrawn 9").
+- **A skipped stage counts as passed:** a stage counts everyone who got at
+  least that far. Every band moves one column, so no two can cross. A test
+  checks every pair of bands, and a HelpTip explains the stage counts.
+- **On a phone** the chart keeps a readable width and scrolls inside its box;
+  the page stays phone-width.
+
+Frontend only. 739 frontend tests; 6 of 6 layout mutations caught. Checked by
+screenshot against the test account's real "summer 26" flows (150
+applications), desktop and phone.
+
+LIVE: `main` at `963ef80`, matching a production build file by file (38
+files).
+
+---
+
 ## Phase 3 batch 2: applications by season -- SHIPPED 2026-10-14
 Your ask (D7): seasons you choose, month-year to month-year, with all the
 tracker's data coming from the chosen one.

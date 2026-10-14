@@ -344,9 +344,13 @@ child `application_steps`.
   applied for, so seasons overlap freely. The list, the figures and the Sankey
   all take the same `season_id`, so no figure disagrees with the list. The page
   opens on the season including today, or the most recent.
-- **The Sankey is SVG from a pure layout** (`features/jobs/applications/sankey.ts`).
-  It uses one scale for every column, and every outcome sits in the last
-  column.
+- **The Sankey is a tree** (D8), SVG from a pure layout
+  (`features/jobs/applications/sankey.ts`). Skipped stages count as passed, so
+  a stage counts everyone who got at least that far. Each column holds one
+  stage's children: the next stage at the top, then the outcomes that ended
+  there, in a fixed order. A parent's bands leave in its children's order and
+  every band goes one column, so none can cross; a test checks every pair.
+  Each outcome's total is in the legend. One scale throughout.
 
 ## Still open
 
