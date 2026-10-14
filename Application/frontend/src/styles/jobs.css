@@ -708,11 +708,13 @@
   stroke-linejoin: round;
 }
 
-/* The SVG scales down to a phone's width, and its text with it: larger in
-   its own units, so it lands near 10px on screen. */
+/* On a phone the chart keeps a readable width and scrolls sideways inside its
+   own box. Shrunk to 390px, its labels ran into the next column's nodes and
+   into each other; the box scrolls, so the page itself stays phone-width. */
 @media (max-width: 720px) {
-  .appSankeyLabel { font-size: 20px; stroke-width: 6px; }
-  .appSankey { padding: 10px; }
+  .appSankey { padding: 10px; overflow-x: auto; overscroll-behavior-x: contain; }
+  .appSankey svg { min-width: 560px; }
+  .appSankeyLabel { font-size: 13px; }
 }
 
 .appFigure {
@@ -885,4 +887,14 @@
   display: inline-flex;
   gap: 6px;
   margin-left: auto;
+}
+
+.appSankeyLegend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  font-size: 0.82rem;
+  color: var(--muted);
 }

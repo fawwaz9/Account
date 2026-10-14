@@ -1,36 +1,44 @@
-import { Flow } from "./types";
-import { STATUS_LABELS } from "./types";
-import { bandPath, layoutSankey, NODE_WIDTH } from "./sankey";
+import { Flow, STATUS_LABELS } from "./types";
+import { bandPath, kindOf, layoutSankey, NODE_WIDTH, totals } from "./sankey";
+import HelpTip from "../../../shared/components/HelpTip";
 
 const WIDTH = 640;
-const HEIGHT = 240;
+const HEIGHT = 260;
 
 function label(id: string): string {
-  return id === "waiting" ? "Waiting" : STATUS_LABELS[id as keyof typeof STATUS_LABELS] ?? id;
+  const kind = kindOf(id);
+  return kind === "waiting" ? "Waiting" : STATUS_LABELS[kind as keyof typeof STATUS_LABELS] ?? kind;
 }
 
 /**
- * Applications → interviews → offers, drawn from each application's history
- * (D2). Hand-drawn SVG, like the app's other charts, from a pure layout
- * (`sankey.ts`). The numbers are in the labels as well as the widths, so the
- * chart says what it shows without anyone measuring a band.
+ * Where applications went, as a tree (D8): each stage splits straight into the
+ * next stage and the ways applications ended there, so no band crosses
+ * another. A stage counts everyone who got at least that far. Hand-drawn SVG
+ * from a pure layout (`sankey.ts`); the numbers are in the labels, the legend
+ * and the accessible name, not only in the widths.
  */
 export default function ApplicationSankey({ flows }: { flows: Flow[] }) {
-  if (flows.length === 0) return null;
-  const layout = layoutSankey(flows, WIDTH - 110, HEIGHT);
+  const layout = layoutSankey(flows, WIDTH - 120, HEIGHT);
+  if (layout.nodes.length === 0) return null;
+  const sums = totals(flows);
+  const legend = sums.map((item) => `${label(item.kind)} ${item.count}`).join(" · ");
+  const bottom = Math.max(...layout.nodes.map((node) => node.y + node.height));
 
   return (
     <figure className="appSankey">
-      <svg viewBox={`-4 -4 ${WIDTH + 8} ${HEIGHT + 8}`} role="img"
-        aria-label={flows.map((flow) => `${label(flow.source)} to ${label(flow.target)}: ${flow.count}`).join("; ")}>
+      <svg viewBox={`-4 -8 ${WIDTH + 8} ${bottom + 16}`} role="img"
+        aria-label={[
+          ...layout.links.map((link) => `${label(link.source)} to ${label(link.target)}: ${link.count}`),
+          `In all: ${legend}`,
+        ].join("; ")}>
         {layout.links.map((link) => (
           <path key={`${link.source}-${link.target}`} d={bandPath(link, layout)}
-            className={`appSankeyBand appSankeyBand-${link.target}`} />
+            className={`appSankeyBand appSankeyBand-${kindOf(link.target)}`} />
         ))}
         {layout.nodes.map((node) => (
           <g key={node.id}>
             <rect x={node.x} y={node.y} width={NODE_WIDTH} height={Math.max(node.height, 2)}
-              className={`appSankeyNode appSankeyNode-${node.id}`} />
+              className={`appSankeyNode appSankeyNode-${node.kind}`} />
             <text x={node.x + NODE_WIDTH + 6} y={node.y + Math.max(node.height, 2) / 2}
               dominantBaseline="middle" className="appSankeyLabel">
               {label(node.id)} {node.count}
@@ -38,6 +46,13 @@ export default function ApplicationSankey({ flows }: { flows: Flow[] }) {
           </g>
         ))}
       </svg>
+      <figcaption className="appSankeyLegend">
+        <span>In all: {legend}</span>
+        <HelpTip label="How to read this chart">
+          Each stage counts every application that got at least that far, so one that went straight to an
+          interview is counted under Screening too. Under each stage are the ones that ended there.
+        </HelpTip>
+      </figcaption>
     </figure>
   );
 }

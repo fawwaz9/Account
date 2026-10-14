@@ -123,3 +123,32 @@ a deadline, whichever season you're looking at.
 
 **Rejected:** a picker remembered on one device only (yours to choose; it keeps
 nothing between devices), and assigning applications by hand.
+
+## D8. The Sankey is a tree: outcomes at the stage they happened, skipped stages passed through (yours, 2026-10-14)
+
+**Your ask:** the graph intersects. It did, for two reasons: every outcome sat in
+the last column, so bands from different stages had to swap order to meet at
+one "Rejected"; and the bands at each node stacked in a fixed order that added
+crossings of its own.
+
+**Your answers:**
+- **Outcomes per stage.** Each stage splits straight into the next stage and the
+  ways applications ended there ("Rejected 56" after Applied, "Rejected 11"
+  after Interview). A legend under the chart gives each outcome's total across
+  stages.
+- **A skipped stage counts as passed.** A stage counts everyone who got at least
+  that far, so a direct interview is drawn through Screening. Every band then
+  moves exactly one column.
+
+With both, every column holds the children of one parent, in the order the
+parent's bands leave it, so no two bands can cross. A test checks this
+geometrically for every pair of bands. The interview and offer figures above
+the chart are unchanged; a HelpTip says how to read the stage counts.
+
+**Rejected:** keeping one node per outcome and only reordering the bands (fewer
+crossings, not none); giving skipped paths their own stage nodes (stages would
+appear twice); letting skip bands jump a column (accurate, but they cross).
+
+**On a phone** the chart keeps a readable width and scrolls sideways inside its
+box. Squeezed to 390px, its labels ran into each other. The page itself stays
+phone-width.

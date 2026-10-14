@@ -81,7 +81,13 @@ describe("the tracker page", () => {
 
   it("draws the Sankey with its numbers in words", async () => {
     show();
-    expect(await screen.findByRole("img", { name: "Applied to Waiting: 2; Applied to Rejected: 1" })).toBeTruthy();
+    expect(await screen.findByRole("img", {
+      name: "Applied to Waiting: 2; Applied to Rejected: 1; In all: Waiting 2 · Rejected 1",
+    })).toBeTruthy();
+    // Outcomes are named for what they are, not for their stage-qualified id (D8).
+    expect(screen.getByText("Rejected 1", { selector: "text" })).toBeTruthy();
+    expect(screen.queryByText(/@/)).toBeNull();
+    expect(screen.getByText("In all: Waiting 2 · Rejected 1")).toBeTruthy();
   });
 
   it("says nothing is there only once it has loaded", async () => {
