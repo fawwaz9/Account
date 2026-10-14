@@ -141,6 +141,7 @@ PATH_SOURCES = {
     # "applied" step, so deleting it reaches the write.
     "application_id": "job_applications",
     "step_id": "application_steps",
+    "season_id": "application_seasons",
     # A membership row's own id (Phase 2 item 9a), as the owner removes it.
     "member_id": "task_members",
 }
@@ -161,6 +162,8 @@ FIELD_SOURCES = {
     "paycheque_id": "paycheques",
     # A scheme picked as a course's grade (Phase 1 D25).
     "scheme_id": "grading_schemes",
+    # A season the tracker is filtered by (Phase 3 D7).
+    "season_id": "application_seasons",
 }
 
 #: Date parameters that open and close a window, by name.
@@ -179,6 +182,9 @@ BODY_PATCHES: dict[tuple[str, str], list[dict]] = {
     ("POST", "/api/jobs/{user_id}/jobs"): [{"hourly_rate": 20.0}],
     # Phase 3 item 1: "applied" is only ever the first step.
     ("POST", "/api/jobs/{user_id}/applications/{application_id}/steps"): [{"status": "interview"}],
+    # Phase 3 D7: a season's months are written YYYY-MM.
+    ("POST", "/api/jobs/{user_id}/applications/seasons"): [{"starts": "2026-09", "ends": "2026-12"}],
+    ("PUT", "/api/jobs/{user_id}/applications/seasons/{season_id}"): [{"starts": "2026-09", "ends": "2026-12"}],
     ("POST", "/api/jobs/{user_id}/jobs/{job_id}/shifts"): [{"end_time": "17:00:00"}],
     ("PUT", "/api/finances/{user_id}/accounts/{account_id}/month-value"): [{"market_value": 100.0}],
     ("POST", "/api/finances/{user_id}/recurring"): [

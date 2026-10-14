@@ -143,11 +143,13 @@ export default function ApplicationModal({ open, application, onClose, onSaved }
                 onChange={(e) => update("link", e.target.value || null)} placeholder="The posting" />
             </label>
           </div>
-          <label className="calField">
-            <span className="calFieldLabel">Notes</span>
-            <textarea className="calInput" rows={2} value={form.notes ?? ""}
-              onChange={(e) => update("notes", e.target.value || null)} />
-          </label>
+          <div className="calRow">
+            <label className="calField">
+              <span className="calFieldLabel">Notes</span>
+              <textarea className="calInput" rows={2} value={form.notes ?? ""}
+                onChange={(e) => update("notes", e.target.value || null)} />
+            </label>
+          </div>
 
           {showsOffer && (
             <div className="calRow">

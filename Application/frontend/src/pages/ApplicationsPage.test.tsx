@@ -6,11 +6,12 @@ import { Application, ApplicationStats } from "../features/jobs/applications/typ
 
 /** The tracker page (Phase 3 item 1): figures, the lists, and "no reply yet?" (D3). */
 
-const { fetchApplications, fetchApplicationStats, addStep } = vi.hoisted(() => ({
-  fetchApplications: vi.fn(), fetchApplicationStats: vi.fn(), addStep: vi.fn(),
+const { fetchApplications, fetchApplicationStats, addStep, fetchSeasons } = vi.hoisted(() => ({
+  fetchApplications: vi.fn(), fetchApplicationStats: vi.fn(), addStep: vi.fn(), fetchSeasons: vi.fn(),
 }));
 vi.mock("../features/jobs/applications/api", () => ({
-  fetchApplications, fetchApplicationStats, addStep,
+  fetchApplications, fetchApplicationStats, addStep, fetchSeasons,
+  createSeason: vi.fn(), updateSeason: vi.fn(), deleteSeason: vi.fn(),
   createApplication: vi.fn(), updateApplication: vi.fn(), deleteApplication: vi.fn(), deleteStep: vi.fn(),
 }));
 vi.mock("../app/auth/AuthContext", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
@@ -47,6 +48,7 @@ beforeEach(() => {
   ]);
   fetchApplicationStats.mockResolvedValue(STATS);
   addStep.mockResolvedValue({});
+  fetchSeasons.mockResolvedValue([]);
 });
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
@@ -101,5 +103,54 @@ describe("the tracker page", () => {
     await screen.findByText("Quiet Co");
     expect(screen.getByRole("link", { name: "Applications" }).getAttribute("aria-current")).toBe("page");
     expect(screen.getByRole("link", { name: "Jobs" }).getAttribute("href")).toBe("/jobs");
+  });
+});
+
+describe("seasons (D7)", () => {
+  const SEASONS = [
+    { id: "fall", name: "Fall 2026 co-op", starts: "2026-09", ends: "2026-12" },
+    { id: "summer", name: "Summer 2026", starts: "2026-05", ends: "2026-08" },
+  ];
+
+  it("opens on the season you're in, and asks for that season's data", async () => {
+    fetchSeasons.mockResolvedValue(SEASONS);
+    show();
+    await screen.findByText("Quiet Co");
+    expect((screen.getByLabelText("Season") as HTMLSelectElement).value).toBe("fall");
+    expect(fetchApplications).toHaveBeenLastCalledWith("u1", "fall");
+    expect(fetchApplicationStats).toHaveBeenLastCalledWith("u1", "fall");
+  });
+
+  it("refetches everything for another season, and for all time", async () => {
+    fetchSeasons.mockResolvedValue(SEASONS);
+    show();
+    await screen.findByText("Quiet Co");
+    fireEvent.change(screen.getByLabelText("Season"), { target: { value: "summer" } });
+    await waitFor(() => expect(fetchApplicationStats).toHaveBeenLastCalledWith("u1", "summer"));
+    expect(fetchApplications).toHaveBeenLastCalledWith("u1", "summer");
+    fireEvent.change(screen.getByLabelText("Season"), { target: { value: "all" } });
+    await waitFor(() => expect(fetchApplications).toHaveBeenLastCalledWith("u1", null));
+  });
+
+  it("says a season is empty in its own words", async () => {
+    fetchSeasons.mockResolvedValue(SEASONS);
+    fetchApplications.mockResolvedValue([]);
+    fetchApplicationStats.mockResolvedValue({ ...STATS, total: 0, flows: [] });
+    show();
+    expect(await screen.findByText("Nothing applied for in Fall 2026 co-op (Sep 2026 – Dec 2026) yet.")).toBeTruthy();
+  });
+
+  it("shows all time, and offers a first season, when there are none", async () => {
+    show();
+    await screen.findByText("Quiet Co");
+    expect((screen.getByLabelText("Season") as HTMLSelectElement).value).toBe("all");
+    expect(fetchApplications).toHaveBeenLastCalledWith("u1", null);
+    expect(screen.getByRole("button", { name: "Add a season" })).toBeTruthy();
+  });
+
+  it("does not fetch before it knows which season to show", () => {
+    fetchSeasons.mockReturnValue(new Promise(() => {}));
+    show();
+    expect(fetchApplications).not.toHaveBeenCalled();
   });
 });

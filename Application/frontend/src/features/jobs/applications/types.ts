@@ -93,3 +93,17 @@ export interface ApplicationStats {
   by_status: Record<string, number>;
   flows: Flow[];
 }
+
+/** A recruiting season (D7): named, month to month, both ends YYYY-MM. */
+export interface Season {
+  id: string;
+  name: string;
+  starts: string;
+  ends: string;
+}
+
+export interface SeasonInput {
+  name: string;
+  starts: string;
+  ends: string;
+}

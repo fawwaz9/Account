@@ -65,6 +65,7 @@ from app._database.models import (
     TermReviewModel,
     GameModel,
     JobApplicationModel,
+    ApplicationSeasonModel,
     ApplicationStepModel,
     TeamInviteModel,
     TeamMemberModel,
@@ -334,6 +335,9 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
     ids["application_steps_applied"] = first_step.id
     add(ApplicationStepModel(id=new_id(), application_id=application.id, status="interview", on_date=WORLD_DAY,
                              note=f"{marker} step note"))
+    # Phase 3 D7: a season covering the world's month, named with the marker.
+    add(ApplicationSeasonModel(id=new_id(), user_id=user_id, name=f"{marker} season",
+                               starts_month=WORLD_MONTH, ends_month=WORLD_MONTH))
     _ = (event, transaction, recurring_task)
 
     db.commit()

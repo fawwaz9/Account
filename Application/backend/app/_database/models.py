@@ -136,6 +136,7 @@ class UserModel(Base):
     term_reviews = relationship("TermReviewModel", cascade=cascade, overlaps="course,term_reviews")
     teams = relationship("TeamModel", cascade=cascade)
     job_applications = relationship("JobApplicationModel", cascade=cascade)
+    application_seasons = relationship("ApplicationSeasonModel", cascade=cascade)
     partnerships = relationship(
         "PartnershipModel", cascade=cascade, foreign_keys="PartnershipModel.user_id"
     )
@@ -2141,3 +2142,25 @@ class ApplicationStepModel(Base):
     created_at = Column(DateTime, nullable=False, default=utc_now)
 
     application = relationship("JobApplicationModel", back_populates="steps")
+
+
+class ApplicationSeasonModel(Base):
+    """A recruiting season you named (Phase 3 D7): month to month, inclusive.
+
+    A filter, not a container: an application belongs to every season whose
+    months include the day it was applied for, so seasons may overlap and
+    nothing is ever filed by hand. Both ends are stored as the first of their
+    month; the end month counts whole.
+    """
+
+    __tablename__ = "application_seasons"
+    __table_args__ = (
+        CheckConstraint("ends_month >= starts_month", name="ck_application_season_order"),
+    )
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    starts_month = Column(Date, nullable=False)
+    ends_month = Column(Date, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=utc_now)

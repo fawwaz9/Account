@@ -1,9 +1,10 @@
 """The job application tracker (Phase 3 item 1, D2-D5)."""
+import re
 from datetime import date, datetime
 from enum import Enum
 from uuid import UUID
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 #: Nobody is offered more than this, and a figure past it is a slipped digit.
 MAX_OFFER = 10_000_000.0
@@ -142,3 +143,43 @@ class ApplicationStats(BaseModel):
     accepted: int
     by_status: dict[str, int]
     flows: list[Flow]
+
+
+#: A season longer than this is a typo, not a recruiting season.
+MAX_SEASON_MONTHS = 24
+MONTH = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
+
+
+class SeasonIn(BaseModel):
+    """A recruiting season (D7): a name, and its first and last months as YYYY-MM."""
+
+    name: str = Field(..., min_length=1, max_length=60)
+    starts: str = Field(..., description="First month, YYYY-MM")
+    ends: str = Field(..., description="Last month, YYYY-MM, counted whole")
+
+    @field_validator("starts", "ends")
+    @classmethod
+    def check_month(cls, value: str) -> str:
+        if not MONTH.match(value):
+            raise ValueError("A month is written YYYY-MM")
+        return value
+
+    @model_validator(mode="after")
+    def check_season(self):
+        if not self.name.strip():
+            raise ValueError("A season needs a name")
+        start_y, start_m = map(int, self.starts.split("-"))
+        end_y, end_m = map(int, self.ends.split("-"))
+        months = (end_y - start_y) * 12 + (end_m - start_m) + 1
+        if months < 1:
+            raise ValueError("A season ends on or after the month it starts")
+        if months > MAX_SEASON_MONTHS:
+            raise ValueError(f"A season is at most {MAX_SEASON_MONTHS} months")
+        return self
+
+
+class Season(BaseModel):
+    id: UUID
+    name: str
+    starts: str
+    ends: str

@@ -3,12 +3,17 @@ import { useAuth } from "../app/auth/AuthContext";
 import JobsTabs from "../features/jobs/components/JobsTabs";
 import ApplicationModal from "../features/jobs/applications/ApplicationModal";
 import ApplicationSankey from "../features/jobs/applications/ApplicationSankey";
-import { addStep, fetchApplications, fetchApplicationStats } from "../features/jobs/applications/api";
-import { Application, ApplicationStats, OPEN_STATUSES, STATUS_LABELS } from "../features/jobs/applications/types";
+import SeasonsModal from "../features/jobs/applications/SeasonsModal";
+import { addStep, fetchApplications, fetchApplicationStats, fetchSeasons } from "../features/jobs/applications/api";
+import { Application, ApplicationStats, OPEN_STATUSES, Season, STATUS_LABELS } from "../features/jobs/applications/types";
+import { defaultSeason, seasonSpan } from "../features/jobs/applications/seasons";
 import { shortDate, today } from "../shared/utils/dateUtils";
 import { useShortcut } from "../shared/hooks/useShortcut";
 import "../styles/calendar.css";
 import "../styles/jobs.css";
+
+/** "All time", in the season picker: no season filter at all. */
+const ALL = "all";
 
 /**
  * The job application tracker (Phase 3 item 1), under Jobs.
@@ -26,13 +31,41 @@ export default function ApplicationsPage() {
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Application | null>(null);
   const [composing, setComposing] = useState(false);
+  const [seasons, setSeasons] = useState<Season[] | null>(null);
+  // null until the seasons have loaded and the page has picked one (D7).
+  const [seasonId, setSeasonId] = useState<string | null>(null);
+  const [managing, setManaging] = useState(false);
   const latest = useRef(0);
 
-  const load = useCallback(async () => {
+  const loadSeasons = useCallback(async (pick?: Season) => {
     if (!userId) return;
-    const ticket = ++latest.current;
     try {
-      const [list, figures] = await Promise.all([fetchApplications(userId), fetchApplicationStats(userId)]);
+      const list = await fetchSeasons(userId);
+      setSeasons(list);
+      // A season just made or edited is the one you want to see; otherwise
+      // open on the season you're in (D7), keeping a choice already made.
+      setSeasonId((was) => {
+        if (pick) return pick.id;
+        if (was && (was === ALL || list.some((season) => season.id === was))) return was;
+        return defaultSeason(list, today())?.id ?? ALL;
+      });
+    } catch {
+      // The tracker still works without seasons: show everything.
+      setSeasons([]);
+      setSeasonId((was) => was ?? ALL);
+    }
+  }, [userId]);
+
+  useEffect(() => { void loadSeasons(); }, [loadSeasons]);
+
+  const load = useCallback(async () => {
+    if (!userId || seasonId === null) return;
+    const ticket = ++latest.current;
+    const filter = seasonId === ALL ? null : seasonId;
+    try {
+      const [list, figures] = await Promise.all([
+        fetchApplications(userId, filter), fetchApplicationStats(userId, filter),
+      ]);
       if (ticket !== latest.current) return;
       setApplications(list);
       setStats(figures);
@@ -42,9 +75,10 @@ export default function ApplicationsPage() {
       if (ticket !== latest.current) return;
       setError(err instanceof Error ? err.message : "Could not load your applications");
     }
-  }, [userId]);
+  }, [userId, seasonId]);
 
   useEffect(() => { void load(); }, [load]);
+  const season = seasons?.find((item) => item.id === seasonId) ?? null;
   useShortcut("n", () => { setEditing(null); setComposing(true); });
 
   async function markNoReply(application: Application) {
@@ -71,6 +105,25 @@ export default function ApplicationsPage() {
       </div>
       <JobsTabs />
 
+      {/* D7: everything below -- the figures, the Sankey and the lists -- is
+          the chosen season's, so no figure ever disagrees with the list. */}
+      {seasons !== null && seasonId !== null && (
+        <div className="appSeasonBar">
+          <label className="calField appSeasonPick">
+            <span className="calFieldLabel">Season</span>
+            <select className="calInput" value={seasonId} onChange={(e) => setSeasonId(e.target.value)}>
+              {seasons.map((item) => (
+                <option key={item.id} value={item.id}>{item.name} ({seasonSpan(item)})</option>
+              ))}
+              <option value={ALL}>All time</option>
+            </select>
+          </label>
+          <button type="button" className="calButton" onClick={() => setManaging(true)}>
+            {seasons.length === 0 ? "Add a season" : "Manage seasons"}
+          </button>
+        </div>
+      )}
+
       {error && <p className="calError" role="alert">{error}</p>}
       {!loaded && !error && <p className="calMuted" role="status">Loading…</p>}
 
@@ -88,7 +141,9 @@ export default function ApplicationsPage() {
 
       {loaded && applications.length === 0 && (
         <p className="calMuted">
-          No applications yet. Add each one as you send it, and this page tracks where they go.
+          {season
+            ? `Nothing applied for in ${season.name} (${seasonSpan(season)}) yet.`
+            : "No applications yet. Add each one as you send it, and this page tracks where they go."}
         </p>
       )}
 
@@ -114,6 +169,13 @@ export default function ApplicationsPage() {
           </ul>
         </section>
       )}
+
+      <SeasonsModal
+        open={managing}
+        seasons={seasons ?? []}
+        onClose={() => setManaging(false)}
+        onSaved={(saved) => void loadSeasons(saved)}
+      />
 
       <ApplicationModal
         open={composing}

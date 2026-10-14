@@ -854,3 +854,35 @@
 .payDaysDate {
   width: 4.5rem;
 }
+
+/* ===== Seasons (Phase 3 D7) ===== */
+.appSeasonBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.appSeasonPick { min-width: 240px; flex: 0 1 360px; }
+
+.appSeasonList {
+  list-style: none;
+  margin: 10px 0 14px;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.appSeasonRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+.appSeasonActions {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: auto;
+}

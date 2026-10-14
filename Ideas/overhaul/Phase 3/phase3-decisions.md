@@ -98,3 +98,28 @@ API staying off. The fix is one schema run, and data safety comes first.
 **Not changed:** Supabase's default privileges themselves (`ALTER DEFAULT
 PRIVILEGES`). They are platform settings, so a future table still arrives
 granted; the next schema run takes the grant back, and the read-back says so.
+
+## D7. Applications are seen by season: saved, named, month to month (yours, 2026-10-13)
+
+**Your ask:** seasons for applications. You choose when one starts and ends, and
+all the data comes from that season (month-year to month-year).
+
+**Your answers:**
+- **Saved, with a name**, such as "Summer 2027 co-op", from Sep 2026 to Jan 2027.
+  A new per-user table, `application_seasons`, which is an existing row-security
+  kind, so the isolation boundary does not move.
+- **Membership is by the date applied.** An application belongs to every season
+  whose months include the day it was applied for, the whole end month counted.
+  Nothing is assigned by hand, so an application can't be filed in the wrong
+  season.
+- **Seasons may overlap.** A season is a filter by months, not a container.
+- **The page opens on the season you're in:** the one including today, or the
+  most recent if none does, with "All time" showing everything.
+
+**What a season filters:** the list, the figures and the Sankey, together. A
+figure from one season beside a list from another would be the two-totals fault
+the app avoids everywhere else. Calendar items are not filtered: a deadline is
+a deadline, whichever season you're looking at.
+
+**Rejected:** a picker remembered on one device only (yours to choose; it keeps
+nothing between devices), and assigning applications by hand.

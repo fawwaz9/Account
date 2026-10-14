@@ -5,7 +5,7 @@ replies, days to a reply and the Sankey are all read from it. "No reply" is
 suggested after 30 quiet days and never set on its own (D3). An offer's pay is
 private (D5); that nobody else reads it is the isolation walks' job.
 """
-from datetime import timedelta
+from datetime import date, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -14,7 +14,7 @@ from pydantic import ValidationError
 import app.main
 from app._database.db import get_db
 from app.Auth.services.session_service import create_access_token
-from app.Jobs.schemas.application import ApplicationIn, ApplicationUpdate, OfferPeriod, StepIn
+from app.Jobs.schemas.application import ApplicationIn, ApplicationUpdate, OfferPeriod, SeasonIn, StepIn
 from app.Jobs.services import application_service as service
 from app.shared.dates import user_today
 
@@ -237,3 +237,110 @@ def test_an_accepted_offer_counts_as_an_offer_even_with_the_offer_step_skipped(d
     step(db, user, made, "accepted", 20)
     stats = service.stats(db, user.id)
     assert (stats.offers, stats.accepted) == (1, 1)
+
+
+# --- seasons (D7) ------------------------------------------------------------
+
+def applied_on(db, user, company, day):
+    return service.create(db, user.id, ApplicationIn(company=company, role="Intern", applied_on=day))
+
+
+def season(db, user, name, starts, ends):
+    return service.create_season(db, user.id, SeasonIn(name=name, starts=starts, ends=ends))
+
+
+def test_a_season_holds_what_was_applied_for_within_its_months_end_month_whole(db, user):
+    for company, day in [("Before", date(2026, 8, 31)), ("First day", date(2026, 9, 1)),
+                         ("Last day", date(2026, 12, 31)), ("After", date(2027, 1, 1))]:
+        applied_on(db, user, company, day)
+    fall = season(db, user, "Fall 2026 co-op", "2026-09", "2026-12")
+    inside = {a.company for a in service.list_applications(db, user.id, fall.id)}
+    assert inside == {"First day", "Last day"}
+
+
+def test_the_figures_come_from_the_season_alone(db, user):
+    early = applied_on(db, user, "Early", date(2026, 5, 10))
+    step(db, user, early, "rejected", 100)
+    applied_on(db, user, "Fall", date(2026, 9, 15))
+    fall = season(db, user, "Fall", "2026-09", "2026-12")
+
+    in_season = service.stats(db, user.id, fall.id)
+    assert in_season.total == 1 and in_season.replied == 0
+    assert {(f.source, f.target) for f in in_season.flows} == {("applied", "waiting")}
+    assert service.stats(db, user.id).total == 2
+
+
+def test_seasons_may_overlap(db, user):
+    applied_on(db, user, "October", date(2026, 10, 5))
+    winter = season(db, user, "Winter co-op", "2026-09", "2026-11")
+    year = season(db, user, "All of 2026", "2026-01", "2026-12")
+    for s in (winter, year):
+        assert [a.company for a in service.list_applications(db, user.id, s.id)] == ["October"]
+
+
+def test_a_season_across_new_year(db, user):
+    applied_on(db, user, "December", date(2026, 12, 20))
+    applied_on(db, user, "January", date(2027, 1, 10))
+    applied_on(db, user, "February", date(2027, 2, 1))
+    winter = season(db, user, "Winter", "2026-12", "2027-01")
+    assert {a.company for a in service.list_applications(db, user.id, winter.id)} == {"December", "January"}
+
+
+@pytest.mark.parametrize("bad", [
+    dict(name="Backwards", starts="2026-12", ends="2026-09"),
+    dict(name="Too long", starts="2026-01", ends="2028-01"),
+    dict(name="Not a month", starts="2026-13", ends="2027-01"),
+    dict(name="Not a month", starts="Sep 2026", ends="2027-01"),
+    dict(name="   ", starts="2026-09", ends="2026-12"),
+])
+def test_a_season_that_cannot_be_is_refused(bad):
+    with pytest.raises(ValidationError):
+        SeasonIn(**bad)
+
+
+def test_a_single_month_and_two_years_are_both_seasons():
+    SeasonIn(name="One month", starts="2026-09", ends="2026-09")
+    SeasonIn(name="Two years", starts="2026-01", ends="2027-12")
+
+
+def test_deleting_a_season_deletes_no_application(db, user):
+    applied_on(db, user, "Kept", date(2026, 10, 1))
+    fall = season(db, user, "Fall", "2026-09", "2026-12")
+    assert service.delete_season(db, user.id, fall.id) is True
+    assert service.list_seasons(db, user.id) == []
+    assert [a.company for a in service.list_applications(db, user.id)] == ["Kept"]
+
+
+def test_editing_a_season_moves_what_it_holds(db, user):
+    applied_on(db, user, "October", date(2026, 10, 1))
+    fall = season(db, user, "Fall", "2026-11", "2026-12")
+    assert service.list_applications(db, user.id, fall.id) == []
+    service.update_season(db, user.id, fall.id, SeasonIn(name="Fall", starts="2026-09", ends="2026-12"))
+    assert len(service.list_applications(db, user.id, fall.id)) == 1
+
+
+def test_seasons_list_newest_first(db, user):
+    season(db, user, "Summer", "2026-05", "2026-08")
+    season(db, user, "Fall", "2026-09", "2026-12")
+    assert [s.name for s in service.list_seasons(db, user.id)] == ["Fall", "Summer"]
+
+
+def test_the_api_filters_by_season_and_refuses_an_unknown_one(db, user):
+    headers = {"Authorization": f"Bearer {create_access_token(user.id, user.session_epoch or 0)}"}
+    app.main.app.dependency_overrides[get_db] = lambda: db
+    try:
+        client = TestClient(app.main.app)
+        base = f"/api/jobs/{user.id}/applications"
+        client.post(base, headers=headers, json={"company": "In", "role": "R", "applied_on": "2026-10-01"})
+        client.post(base, headers=headers, json={"company": "Out", "role": "R", "applied_on": "2026-06-01"})
+        made = client.post(f"{base}/seasons", headers=headers, json={"name": "Fall", "starts": "2026-09", "ends": "2026-12"})
+        assert made.status_code == 200, made.text
+        assert made.json()["starts"] == "2026-09"
+        season_id = made.json()["id"]
+        assert [a["company"] for a in client.get(base, headers=headers, params={"season_id": season_id}).json()] == ["In"]
+        assert client.get(f"{base}/stats", headers=headers, params={"season_id": season_id}).json()["total"] == 1
+        unknown = "00000000-0000-0000-0000-000000000009"
+        assert client.get(base, headers=headers, params={"season_id": unknown}).status_code == 404
+        assert client.get(f"{base}/stats", headers=headers, params={"season_id": unknown}).status_code == 404
+    finally:
+        app.main.app.dependency_overrides.pop(get_db, None)

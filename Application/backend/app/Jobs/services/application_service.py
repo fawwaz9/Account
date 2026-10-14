@@ -16,9 +16,9 @@ from datetime import date
 
 from sqlalchemy.orm import Session, selectinload
 
-from app._database.models import ApplicationStepModel, JobApplicationModel, utc_now
+from app._database.models import ApplicationSeasonModel, ApplicationStepModel, JobApplicationModel, utc_now
 from app.Jobs.schemas.application import (
-    Application, ApplicationIn, ApplicationStats, ApplicationUpdate, Flow, Step, StepIn,
+    Application, ApplicationIn, ApplicationStats, ApplicationUpdate, Flow, Season, SeasonIn, Step, StepIn,
 )
 from app.shared.dates import user_for, user_today
 
@@ -68,21 +68,37 @@ def as_schema(row: JobApplicationModel, today: date) -> Application:
     )
 
 
-def _all(db: Session, user_id: uuid.UUID) -> list[JobApplicationModel]:
-    return (
+def _all(db: Session, user_id: uuid.UUID, season: ApplicationSeasonModel | None = None) -> list[JobApplicationModel]:
+    query = (
         db.query(JobApplicationModel)
         .options(selectinload(JobApplicationModel.steps))
         .filter(JobApplicationModel.user_id == user_id)
-        .order_by(JobApplicationModel.applied_on.desc(), JobApplicationModel.created_at.desc())
-        .all()
     )
+    if season is not None:
+        # The day applied, within the season's months, the end month whole (D7).
+        first, after = season_window(season)
+        query = query.filter(JobApplicationModel.applied_on >= first, JobApplicationModel.applied_on < after)
+    return query.order_by(JobApplicationModel.applied_on.desc(), JobApplicationModel.created_at.desc()).all()
 
 
-def list_applications(db: Session, user_id: uuid.UUID) -> list[Application] | None:
+class NoSuchSeason(Exception):
+    """A season id that isn't the caller's: answered as 404, like any other row."""
+
+
+def _season_for(db: Session, user_id: uuid.UUID, season_id: uuid.UUID | None) -> ApplicationSeasonModel | None:
+    if season_id is None:
+        return None
+    season = _own_season(db, user_id, season_id)
+    if season is None:
+        raise NoSuchSeason
+    return season
+
+
+def list_applications(db: Session, user_id: uuid.UUID, season_id: uuid.UUID | None = None) -> list[Application] | None:
     if user_for(db, user_id) is None:
         return None
     today = user_today(db, user_id)
-    return [as_schema(row, today) for row in _all(db, user_id)]
+    return [as_schema(row, today) for row in _all(db, user_id, _season_for(db, user_id, season_id))]
 
 
 def _clean(text: str | None) -> str | None:
@@ -209,10 +225,10 @@ def path_of(row: JobApplicationModel) -> list[str]:
     return path
 
 
-def stats(db: Session, user_id: uuid.UUID) -> ApplicationStats | None:
+def stats(db: Session, user_id: uuid.UUID, season_id: uuid.UUID | None = None) -> ApplicationStats | None:
     if user_for(db, user_id) is None:
         return None
-    rows = _all(db, user_id)
+    rows = _all(db, user_id, _season_for(db, user_id, season_id))
 
     days_to_reply: list[int] = []
     replied = interviews = offers = accepted = 0
@@ -247,3 +263,71 @@ def stats(db: Session, user_id: uuid.UUID) -> ApplicationStats | None:
         by_status=by_status,
         flows=[Flow(source=s, target=t, count=n) for (s, t), n in sorted(flows.items(), key=lambda item: -item[1])],
     )
+
+
+# --- seasons (D7) -------------------------------------------------------------
+
+def _month(text: str) -> date:
+    year, month = map(int, text.split("-"))
+    return date(year, month, 1)
+
+
+def season_window(season: ApplicationSeasonModel) -> tuple[date, date]:
+    """The season's first day, and the first day after its last month."""
+    end = season.ends_month
+    after = date(end.year + (end.month == 12), end.month % 12 + 1, 1)
+    return season.starts_month, after
+
+
+def season_schema(season: ApplicationSeasonModel) -> Season:
+    return Season(id=season.id, name=season.name,
+                  starts=season.starts_month.strftime("%Y-%m"), ends=season.ends_month.strftime("%Y-%m"))
+
+
+def _own_season(db: Session, user_id: uuid.UUID, season_id: uuid.UUID) -> ApplicationSeasonModel | None:
+    return (
+        db.query(ApplicationSeasonModel)
+        .filter(ApplicationSeasonModel.id == season_id, ApplicationSeasonModel.user_id == user_id)
+        .first()
+    )
+
+
+def list_seasons(db: Session, user_id: uuid.UUID) -> list[Season] | None:
+    if user_for(db, user_id) is None:
+        return None
+    rows = (
+        db.query(ApplicationSeasonModel)
+        .filter(ApplicationSeasonModel.user_id == user_id)
+        .order_by(ApplicationSeasonModel.starts_month.desc(), ApplicationSeasonModel.name)
+        .all()
+    )
+    return [season_schema(row) for row in rows]
+
+
+def create_season(db: Session, user_id: uuid.UUID, data: SeasonIn) -> Season | None:
+    if user_for(db, user_id) is None:
+        return None
+    row = ApplicationSeasonModel(id=uuid.uuid4(), user_id=user_id, name=data.name.strip(),
+                                 starts_month=_month(data.starts), ends_month=_month(data.ends), created_at=utc_now())
+    db.add(row)
+    db.commit()
+    return season_schema(row)
+
+
+def update_season(db: Session, user_id: uuid.UUID, season_id: uuid.UUID, data: SeasonIn) -> Season | None:
+    row = _own_season(db, user_id, season_id)
+    if row is None:
+        return None
+    row.name, row.starts_month, row.ends_month = data.name.strip(), _month(data.starts), _month(data.ends)
+    db.commit()
+    return season_schema(row)
+
+
+def delete_season(db: Session, user_id: uuid.UUID, season_id: uuid.UUID) -> bool | None:
+    """Only the season goes: its applications were never in it, only within its months."""
+    row = _own_season(db, user_id, season_id)
+    if row is None:
+        return None
+    db.delete(row)
+    db.commit()
+    return True

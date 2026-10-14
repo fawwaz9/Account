@@ -117,3 +117,59 @@ stored.
 - Health ok. The 7 routes answer 401 against two 404 controls.
 - No errors in the new revision's logs. All nine settings carried over.
 - The live site matches the build (38 files).
+
+## Batch 2: application seasons (D7). NOT YET DEPLOYED
+
+| What | Schema change |
+|---|---|
+| Seasons: named, month to month; the list, figures and Sankey filtered by one | **New table `application_seasons`** (per-user; existing row-security kind). Nothing altered |
+
+Rehearsed 2026-10-13 on a throwaway Postgres with Supabase's default privileges
+switched on, so the new table was granted to `anon`, `authenticated` and
+`service_role` the moment it was made. The same schema run took those grants
+back (D6), leaving `account_app` alone.
+
+### 1. Apply the schema (one new table)
+
+```sh
+cd ~/VS_Code/Account/Application/backend
+git checkout phase3 && git pull
+set -a; source ../.env; set +a
+DATABASE_URL="$SUPABASE_DATABASE_URL" .venv/bin/python -m app._database.schema
+```
+
+**Verify, in the SQL editor:**
+
+A. **Row security, with the per-user policy for the API's role only.** One row,
+`{account_app}` and `ALL`:
+
+```sql
+SELECT tablename, roles, cmd FROM pg_policies WHERE tablename = 'application_seasons';
+```
+
+B. **Only the API's role has grants.** One row, `account_app` with
+`DELETE,INSERT,SELECT,UPDATE`:
+
+```sql
+SELECT grantee, string_agg(privilege_type, ',' ORDER BY privilege_type)
+FROM information_schema.role_table_grants
+WHERE table_name = 'application_seasons'
+  AND grantee <> (SELECT tableowner FROM pg_tables WHERE tablename = 'application_seasons')
+GROUP BY 1;
+```
+
+**Undo:** not needed. The table is new, and the current API never reads it.
+
+### 2. Deploy (mine, after the read-backs and your go-ahead)
+
+```sh
+./Application/deploy.run.sh all --yes
+```
+
+**Verify:** the 4 season routes (`GET`/`POST /api/jobs/<id>/applications/seasons`,
+`PUT`/`DELETE /applications/seasons/<season>`) and `?season_id=` on the list and
+stats answer 401 against a 404 control; the gate reports row-level security on
+for 53 of 53 tables; no errors in the logs; the live site matches the build.
+
+**Rollback:** both halves together, Cloud Run to `account-api-00047-z5d`, Pages to
+the `72bb9f2` deployment. The table stays; the older API never reads it.
