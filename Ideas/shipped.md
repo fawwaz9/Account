@@ -884,6 +884,23 @@ production-URL build: 26 of 26 files.
 
 ---
 
+## Exam strip: an exam leaves once it's over -- SHIPPED 2026-10-16
+Your report: at 10pm, this morning's midterm was still in "Coming up". The strip
+filtered by date alone, so an exam stayed until midnight.
+- An exam now goes at its **end time**, or at its **start** when it has no end
+  (sitting it is no time to be told it's coming). One with **no time** stays
+  the whole day, since nothing says it's done.
+- Read on the **Settings zone's clock**, ticking each minute (the same `useNow`
+  as the calendar's now-line), so it drops on the minute.
+- It **refetches when the day changes**, so a tab left open overnight moves on.
+- The effect now depends on the user's id, not the user object.
+
+Frontend only. 766 frontend tests; 7 of 7 mutations caught.
+
+LIVE: `main` at `46c0550`, matching a production build file by file (38 files).
+
+---
+
 ## Applications: what needs you, and search for the rest -- SHIPPED 2026-10-14
 Your ask (D9): stop rendering hundreds of applications; search instead, and show
 them only to ask about "no reply". Pushed back on hiding everything (a pending
