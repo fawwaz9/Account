@@ -3,6 +3,7 @@ import { fetchAccountActivity, fetchCategories, fetchTransactions } from "../api
 import { AccountActivity, SpendCategory, Transaction } from "../types";
 import { firstOfMonth, today } from "../../../shared/utils/dateUtils";
 import { useAuth } from "../../../app/auth/AuthContext";
+import { useApiRefresh } from "../../../shared/hooks/useApiRefresh";
 
 /** One account's selected month: its figures, its ledger and the category list. */
 export function useAccountActivity(accountId: string | undefined) {
@@ -64,6 +65,9 @@ export function useAccountActivity(accountId: string | undefined) {
       if (ticket === latestRequest.current) setLoading(false);
     }
   }, [userId, accountId, month]);
+
+  // Catch up when a background refetch finds something new (audit #35).
+  useApiRefresh(load);
 
   useEffect(() => {
     load();

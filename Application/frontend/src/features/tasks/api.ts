@@ -1,4 +1,5 @@
 import { del, get, patch, post } from "../../services/apiClient";
+import { clearApiCache } from "../../services/apiCache";
 import { endpoints } from "../../services/endpoints";
 import {
   CompletionTiming,
@@ -118,7 +119,9 @@ export async function fetchReminders(userId: string, includeDismissed = false) {
  * surfaced, which is why it is not called on every render.
  */
 export async function fetchDueReminders(userId: string) {
-  return get<Reminder[]>(endpoints.tasks.remindersDue(userId));
+  // Never the cached answer: this read marks reminders surfaced, so an answer
+  // held back for the next poll would be a reminder that never shows.
+  return get<Reminder[]>(endpoints.tasks.remindersDue(userId), { fresh: true });
 }
 
 export async function createReminder(userId: string, payload: ReminderCreate) {
@@ -173,7 +176,11 @@ export async function deleteRepeating(userId: string, ruleId: string, dropPendin
  * scheduler running anywhere.
  */
 export async function runRepeating(userId: string) {
-  return post<RecurringTaskRun>(endpoints.tasks.repeatingRun(userId), {});
+  // Run on every load and usually writes nothing, so it clears the GET cache
+  // only when it wrote something (apiCache.ts).
+  const run = await post<RecurringTaskRun>(endpoints.tasks.repeatingRun(userId), {}, { keepCache: true });
+  if (run.created > 0) clearApiCache();
+  return run;
 }
 
 /** Cancel one occurrence without ending the repeat. */

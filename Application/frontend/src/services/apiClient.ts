@@ -1,5 +1,6 @@
 import { ValidationError } from "../features/grades/types"; // adjust path to wherever these live
 import { DEFAULT_API_BASE_URL } from "./apiBase";
+import { cachedGet, clearApiCache } from "./apiCache";
 
 function stripTrailingSlashes(value: string) {
   let end = value.length;
@@ -15,6 +16,11 @@ const API_BASE_URL = stripTrailingSlashes(
 
 interface RequestOptions extends RequestInit {
   data?: unknown;
+  /**
+   * Leave the GET cache alone: a catch-up write run on every page load, which
+   * usually writes nothing, clears it itself only when it did (apiCache.ts).
+   */
+  keepCache?: boolean;
 }
 
 function buildUrl(path: string) {
@@ -67,7 +73,19 @@ function getAuthHeaders(): HeadersInit {
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { data, headers, ...init } = options;
+  // A write empties the GET cache, before it goes and after it lands, so no
+  // read from before it is shown or stored once it's done (apiCache.ts).
+  const writes = options.method !== undefined && options.method !== "GET" && !options.keepCache;
+  if (writes) clearApiCache();
+  try {
+    return await send<T>(path, options);
+  } finally {
+    if (writes) clearApiCache();
+  }
+}
+
+async function send<T>(path: string, options: RequestOptions): Promise<T> {
+  const { data, headers, keepCache: _keepCache, ...init } = options;
   const body = (data == null) ? undefined : JSON.stringify(data);
   const response = await fetch(buildUrl(path), {
     ...init,
@@ -81,6 +99,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   if (response.status === 401) {
     sessionStorage.removeItem("access_token");
+    clearApiCache();
     window.location.href = "/login";
     throw new Error("Session expired");
   }
@@ -99,12 +118,18 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   return json as T;
 }
 
-export function get<T>(path: string) {
-  return request<T>(path, { method: "GET" });
+/**
+ * A read, through the cache: a page you come back to is shown at once and
+ * refetched behind it (apiCache.ts). `fresh` waits for this request's answer
+ * instead, for a poll that would otherwise always be one round behind.
+ */
+export function get<T>(path: string, { fresh = false }: { fresh?: boolean } = {}) {
+  return cachedGet<T>(path, sessionStorage.getItem("access_token"),
+    () => request<T>(path, { method: "GET" }), fresh);
 }
 
-export function post<T>(path: string, data: unknown) {
-  return request<T>(path, { method: "POST", data });
+export function post<T>(path: string, data: unknown, { keepCache = false }: { keepCache?: boolean } = {}) {
+  return request<T>(path, { method: "POST", data, keepCache });
 }
 
 export function patch<T>(path: string, data: unknown) {

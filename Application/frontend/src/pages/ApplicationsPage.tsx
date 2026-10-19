@@ -11,6 +11,7 @@ import { arrange, matches } from "../features/jobs/applications/triage";
 import Modal from "../shared/components/Modal";
 import { shortDate, today } from "../shared/utils/dateUtils";
 import { useShortcut } from "../shared/hooks/useShortcut";
+import { useApiRefresh } from "../shared/hooks/useApiRefresh";
 import "../styles/calendar.css";
 import "../styles/jobs.css";
 
@@ -87,6 +88,9 @@ export default function ApplicationsPage() {
       setError(err instanceof Error ? err.message : "Could not load your applications");
     }
   }, [userId, seasonId]);
+
+  // Catch up when a background refetch finds something new (audit #35).
+  useApiRefresh(load);
 
   useEffect(() => { void load(); }, [load]);
   const season = seasons?.find((item) => item.id === seasonId) ?? null;

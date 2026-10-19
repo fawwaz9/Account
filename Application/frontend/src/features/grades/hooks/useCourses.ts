@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { fetchCourses } from "../api";
 import { Course } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
+import { useApiRefresh } from "../../../shared/hooks/useApiRefresh";
 
 export function useCourses() {
   const { user } = useAuth();
@@ -34,6 +35,9 @@ export function useCourses() {
       setLoading(false);
     }
   }, [userId]);
+
+  // Catch up when a background refetch finds something new (audit #35).
+  useApiRefresh(loadCourses);
 
   useEffect(() => {
     loadCourses();

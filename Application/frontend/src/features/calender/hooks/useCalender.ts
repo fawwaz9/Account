@@ -20,6 +20,7 @@ import {
   viewsFor,
   windowDays,
 } from "../views";
+import { useApiRefresh } from "../../../shared/hooks/useApiRefresh";
 
 export type { CalendarView } from "../views";
 
@@ -126,6 +127,9 @@ export function useCalender() {
       if (ticket === latestRequest.current) setLoading(false);
     }
   }, [userId, windowStart, windowEnd]);
+
+  // Catch up when a background refetch finds something new (audit #35).
+  useApiRefresh(load);
 
   useEffect(() => {
     load();

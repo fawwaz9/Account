@@ -171,6 +171,22 @@ confirming it fails.
 > columns production lacks, and prints this fix. Locally the default is still on
 > and nothing changes.
 
+**Reads go through a cache; writes empty it** (audit #35,
+`services/apiCache.ts`). `get()` answers a revisit from memory at once and
+refetches behind it every time. A changed answer tells every hook using
+`useApiRefresh` / `useApiRefreshCount`, and they reread from the cache. Any
+POST, PATCH, PUT or DELETE empties it, so a reload after a save waits for the
+network. Three exceptions:
+- A write run on every load that usually changes nothing passes `keepCache`:
+  the recurring-payments and repeating-tasks catch-ups (they clear it
+  themselves only when `created > 0`) and the visit counter.
+- A GET that changes something on the server passes `fresh` (due reminders,
+  which marks them surfaced).
+- Nothing older than five minutes is shown, and a new session token empties it.
+
+A new data hook should call `useApiRefresh(load)`, or its page shows a stale
+copy until the next visit.
+
 **A new table needs a row-security kind.** Per-user (`user_id`), child (exactly
 one foreign key to an owned table), shared-read, sealed or no-direct-write.
 `rls.py` refuses to generate policies for a table it cannot classify. The

@@ -1,4 +1,5 @@
 import { del, get, patch, post, put } from "../../services/apiClient";
+import { clearApiCache } from "../../services/apiCache";
 import { endpoints } from "../../services/endpoints";
 import {
   ContributionRequest,
@@ -289,7 +290,11 @@ export async function deleteRecurring(userId: string, ruleId: string) {
  * when you open the app, with no scheduler anywhere.
  */
 export async function runRecurring(userId: string) {
-  return post<RecurringRun>(endpoints.finances.recurringRun(userId), {});
+  // Run on every load and usually writes nothing, so it clears the GET cache
+  // only when it wrote something (apiCache.ts).
+  const run = await post<RecurringRun>(endpoints.finances.recurringRun(userId), {}, { keepCache: true });
+  if (run.created > 0) clearApiCache();
+  return run;
 }
 
 /** What is committed but has not happened. Projections, never ledger rows. */

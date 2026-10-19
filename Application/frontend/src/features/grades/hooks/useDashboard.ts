@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { fetchDashboard } from "../api";
 import { UserGradeDashboard } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
+import { useApiRefresh } from "../../../shared/hooks/useApiRefresh";
 
 /** The cross-course rollup: averages, CGPA, credits, and year summaries. */
 export function useDashboard() {
@@ -32,6 +33,9 @@ export function useDashboard() {
       setLoading(false);
     }
   }, [userId]);
+
+  // Catch up when a background refetch finds something new (audit #35).
+  useApiRefresh(load);
 
   useEffect(() => {
     load();

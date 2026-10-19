@@ -442,7 +442,7 @@ found nothing there.
 **What is open, as of this pass.** The deployment pass above says "one item plus a
 sweep", which was true when it was written and is superseded here:
 
-- **#35 — no request caching**, both halves. Unchanged since 2026-09-14.
+- **#35 — no request caching.** The first half is CLOSED 2026-10-18: a revisited page is drawn from an in-memory cache and refetched behind it (`services/apiCache.ts`). The second half is still open: a save still rereads everything its page shows, because any write empties the cache on purpose.
 - **Inputs labelled by placeholder only**, the sweep across a dozen forms.
 - **#57-#65**, from this pass. #58 is the one worth doing first: it is the only
   item on the list that makes a figure wrong rather than making a page awkward,

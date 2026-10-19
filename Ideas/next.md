@@ -37,9 +37,19 @@ this section as the reasoning behind the ordering.
   PROMOTED 2026-10-02: this is now a **gate on open signup** in
   `account-vision.md` §4 Phase 2, not a loose cheap win. Open signup does not ship
   before it does.
+  DONE 2026-10-08 (Phase 2 item 12a, D18): `client_address.py` reads the
+  forwarded position named by `TRUSTED_PROXY_HOPS`, and the owner switched it
+  on (`TRUSTED_PROXY_HOPS=1`) and checked it the same day. Each caller now has
+  its own throttle budget. See `shipped.md`.
 - Request caching on the frontend (audit #35). Every navigation refetches what
   it already has, and every reload() refetches all four endpoints when one row
   changed. This was invisible on localhost and is not from a phone.
+  BUILT 2026-10-18, the first half: a page you come back to is drawn at once
+  from an in-memory cache and refetched behind it, every time (your call).
+  See `shipped.md`, "Pages come back at once". STILL OPEN, the second half:
+  after a save, the page still rereads everything it shows, not just the row
+  that changed. Any write empties the cache on purpose, so that reread goes
+  to the network.
 
 ### Parked, now that the question is answered
 - A dropped course's dollar figure. The open question was whether a refund
@@ -427,6 +437,12 @@ are the size of each job rather than an impression of it.
 ---
 
 ## A decision owed: the orphaned table, found 2026-09-28
+DECIDED 2026-10-18: **drop it.** A fresh backup ran first (GitHub Actions run
+39193747095, succeeded). The drop is the owner's to run against Supabase; the
+SQL reads the two rows back before dropping, and the drop has no CASCADE, so
+it refuses if anything turns out to depend on the table. Mark this DONE once it
+has run and `to_regclass('public.category_budgets')` reads null.
+
 - category_budgets is still in the production database. f0dfede created it for
   whole-budget category limits; 394cb7c removed that feature entirely -- model,
   service, routes, frontend -- and left the table, its four indexes, and TWO

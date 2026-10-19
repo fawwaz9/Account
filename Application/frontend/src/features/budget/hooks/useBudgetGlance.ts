@@ -3,6 +3,7 @@ import { fetchAccounts, fetchBudgetSummary, fetchNetWorth } from "../api";
 import { Account, BudgetSummary, NetWorth } from "../types";
 import { firstOfMonth, today } from "../../../shared/utils/dateUtils";
 import { useAuth } from "../../../app/auth/AuthContext";
+import { useApiRefreshCount } from "../../../shared/hooks/useApiRefresh";
 
 /**
  * Just what the dashboard shows: balances and this month's plan against spend.
@@ -19,6 +20,8 @@ export function useBudgetGlance() {
   const [summary, setSummary] = useState<BudgetSummary | null>(null);
   const [worth, setWorth] = useState<NetWorth | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Read again when a background refetch finds something new (audit #35).
+  const refreshed = useApiRefreshCount();
 
   useEffect(() => {
     if (!userId) return;
@@ -44,7 +47,7 @@ export function useBudgetGlance() {
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, refreshed]);
 
   // Was a client-side sum of every balance, which counted a credit card as
   // savings and money someone else was holding as money in your pocket. The

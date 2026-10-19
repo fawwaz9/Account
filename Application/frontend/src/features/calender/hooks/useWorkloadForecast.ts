@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { fetchFreeBlocks, fetchWeekLoad } from "../api";
 import { addDays, today } from "../../../shared/utils/dateUtils";
 import { useAuth } from "../../../app/auth/AuthContext";
+import { useApiRefreshCount } from "../../../shared/hooks/useApiRefresh";
 
 export interface WorkloadForecast {
   /** Minutes estimated against open tasks due in the window. */
@@ -35,6 +36,8 @@ export function useWorkloadForecast() {
   const { user } = useAuth();
   const userId = user?.id;
   const [forecast, setForecast] = useState<WorkloadForecast | null>(null);
+  // Read again when a background refetch finds something new (audit #35).
+  const refreshed = useApiRefreshCount();
 
   useEffect(() => {
     if (!userId) return;
@@ -59,7 +62,7 @@ export function useWorkloadForecast() {
       });
 
     return () => { cancelled = true; };
-  }, [userId]);
+  }, [userId, refreshed]);
 
   return forecast;
 }

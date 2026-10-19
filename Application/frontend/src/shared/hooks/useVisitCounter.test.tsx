@@ -52,7 +52,7 @@ describe("useVisitCounter", () => {
     cleanup();
     visit("/grades/courses/abc");
     expect(post).toHaveBeenCalledTimes(1);
-    expect(post).toHaveBeenCalledWith("usage/u1/visits", { module: "grades" });
+    expect(post).toHaveBeenCalledWith("usage/u1/visits", { module: "grades" }, { keepCache: true });
   });
 
   it("counts each room separately", () => {
@@ -75,7 +75,7 @@ describe("visits a notification caused", () => {
   it("are counted as prompted, and the marker leaves the address bar", () => {
     window.history.replaceState(null, "", "/tasks?from=push");
     visit("/tasks");
-    expect(post).toHaveBeenCalledWith("usage/u1/visits", { module: "tasks", prompted: true });
+    expect(post).toHaveBeenCalledWith("usage/u1/visits", { module: "tasks", prompted: true }, { keepCache: true });
     expect(window.location.search).toBe("");
   });
 
@@ -92,6 +92,6 @@ describe("visits a notification caused", () => {
     cleanup();
     visit("/tasks");
     expect(post).toHaveBeenCalledTimes(2);
-    expect(post).toHaveBeenLastCalledWith("usage/u1/visits", { module: "tasks" });
+    expect(post).toHaveBeenLastCalledWith("usage/u1/visits", { module: "tasks" }, { keepCache: true });
   });
 });

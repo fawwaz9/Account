@@ -45,6 +45,9 @@ export function useVisitCounter() {
     const prompted = isPrompted();
     const key = `account.visit.${userId}.${today()}.${module}${prompted ? ".prompted" : ""}`;
     if (alreadyCounted(key)) return;
-    post(endpoints.usage.visits(userId), prompted ? { module, prompted } : { module }).catch(() => {});
+    // Leaves the GET cache alone: nothing on screen reads a visit back, and
+    // this runs on every page, so clearing would empty the cache each time.
+    post(endpoints.usage.visits(userId), prompted ? { module, prompted } : { module }, { keepCache: true })
+      .catch(() => {});
   }, [userId, module]);
 }

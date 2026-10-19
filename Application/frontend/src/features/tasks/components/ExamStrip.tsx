@@ -6,6 +6,7 @@ import { useAuth } from "../../../app/auth/AuthContext";
 import { addDays, clockTime, dueLabel, minutesOfDay } from "../../../shared/utils/dateUtils";
 import { ZonedNow } from "../../../shared/utils/zonedNow";
 import { useNow } from "../../calender/hooks/useNow";
+import { useApiRefreshCount } from "../../../shared/hooks/useApiRefresh";
 
 /** How far ahead an exam is worth knowing about while looking at this week's work. */
 const HORIZON_DAYS = 30;
@@ -45,6 +46,8 @@ export default function ExamStrip() {
   const now = useNow(user?.preferences?.timezone);
   const from = now.date;
   const userId = user?.id;
+  // Read again when a background refetch finds something new (audit #35).
+  const refreshed = useApiRefreshCount();
 
   useEffect(() => {
     if (!userId) return;
@@ -58,7 +61,7 @@ export default function ExamStrip() {
       .catch(() => { if (!cancelled) setExams([]); });
 
     return () => { cancelled = true; };
-  }, [userId, from]);
+  }, [userId, from, refreshed]);
 
   const ahead = exams.filter((exam) => stillAhead(exam, now));
 

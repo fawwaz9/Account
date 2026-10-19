@@ -4,6 +4,7 @@ import { AHEAD_DAYS, UNCONFIRMED_DAYS } from "../shiftOrder";
 import { EarningsSummary, Job, Paycheque, ShiftOccurrence } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { addDays, today } from "../../../shared/utils/dateUtils";
+import { useApiRefresh } from "../../../shared/hooks/useApiRefresh";
 
 
 /**
@@ -60,6 +61,9 @@ export function useJobs(includeArchived = false) {
       if (ticket === latestRequest.current) setLoading(false);
     }
   }, [userId, includeArchived]);
+
+  // Catch up when a background refetch finds something new (audit #35).
+  useApiRefresh(load);
 
   useEffect(() => { void load(); }, [load]);
 

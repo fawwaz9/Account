@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchRepeating, fetchTasks, runRepeating } from "../api";
 import { RecurringTask, Task } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
+import { useApiRefresh } from "../../../shared/hooks/useApiRefresh";
 
 interface UseTasksOptions {
   /** Checked-off tasks are archived, so history needs both flags. */
@@ -71,6 +72,9 @@ export function useTasks({ includeDone, includeArchived, courseId }: UseTasksOpt
       if (ticket === latestRequest.current) setLoading(false);
     }
   }, [userId, includeDone, includeArchived, courseId, filterKey]);
+
+  // Catch up when a background refetch finds something new (audit #35).
+  useApiRefresh(load);
 
   useEffect(() => {
     load();

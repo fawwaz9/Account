@@ -27,6 +27,7 @@ import BulkGradesModal from "../../features/grades/components/BulkGradesModal";
 import { getErrorMessage } from "../../features/grades/components/AddCourseModal";
 import GradeCategoryColumn from "../../features/grades/components/GradeCategoryColumn";
 import ClassScheduleModal from "../../features/calender/components/ClassScheduleModal";
+import { useApiRefreshCount } from "../../shared/hooks/useApiRefresh";
 import "../../styles/calendar.css";
 
 
@@ -68,6 +69,9 @@ export default function CourseDetailPage() {
   const [confirmDeleteCourse, setConfirmDeleteCourse] = useState(false);
   const [deleteCourseError, setDeleteCourseError] = useState<string | null>(null);
 
+  // Read again when a background refetch finds something new (audit #35).
+  const refreshed = useApiRefreshCount();
+
   useEffect(() => {
     let mounted = true;
 
@@ -97,7 +101,7 @@ export default function CourseDetailPage() {
     return () => {
       mounted = false;
     };
-  }, [courseId, user, navigate, reloadNonce]);
+  }, [courseId, user, navigate, reloadNonce, refreshed]);
 
   const gradesByCategory = useMemo(() => {
     if (!course) return {} as Record<GradeCategory, Grade[]>;

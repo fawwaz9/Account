@@ -8,6 +8,7 @@ import {
   fetchTeam, fetchTeams, leaveTeam, makeTeamLink, recordGame, recordLine, removeGame, removeTeam,
   removeTeamMember, teamInviteLink,
 } from "../features/teams/api";
+import { useApiRefresh } from "../shared/hooks/useApiRefresh";
 import "../styles/teams.css";
 
 /**
@@ -40,6 +41,8 @@ export default function FitnessPage() {
   }, [user]);
 
   useEffect(() => { void load(); }, [load]);
+  // Catch up when a background refetch finds something new (audit #35).
+  useApiRefresh(load);
 
   async function create(event: FormEvent) {
     event.preventDefault();
@@ -134,6 +137,8 @@ function TeamView({ userId, teamId, onGone, onChanged }: ViewProps) {
   }, [userId, teamId]);
 
   useEffect(() => { void load(); }, [load]);
+  // Catch up when a background refetch finds something new (audit #35).
+  useApiRefresh(load);
 
   async function act(step: () => Promise<unknown>) {
     setBusy(true);

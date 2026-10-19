@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { fetchBlindSpots } from "../api";
 import { CategoryBlindSpot } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
+import { useApiRefresh } from "../../../shared/hooks/useApiRefresh";
 
 /** A category worse than the student's own average, in more than one course. */
 export function useBlindSpots() {
@@ -24,6 +25,9 @@ export function useBlindSpots() {
       setLoading(false);
     }
   }, [user]);
+
+  // Catch up when a background refetch finds something new (audit #35).
+  useApiRefresh(load);
 
   useEffect(() => {
     load();

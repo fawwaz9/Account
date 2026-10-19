@@ -22,6 +22,7 @@ import {
 } from "../types";
 import { addDays, firstOfMonth, today } from "../../../shared/utils/dateUtils";
 import { useAuth } from "../../../app/auth/AuthContext";
+import { useApiRefresh } from "../../../shared/hooks/useApiRefresh";
 
 /** Accounts with their balances, and the recent ledger, loaded together. */
 export function useBudget() {
@@ -171,6 +172,9 @@ export function useBudget() {
   // Which month the summary currently holds, and which user has had its first
   // load. Both are refs rather than state because nothing renders from them --
   // they only decide whether an effect has work to do.
+  // Catch up when a background refetch finds something new (audit #35).
+  useApiRefresh(load);
+
   const loadedMonth = useRef<string | null>(null);
   const loadedFor = useRef<string | null>(null);
 

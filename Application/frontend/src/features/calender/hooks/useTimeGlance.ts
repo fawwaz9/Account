@@ -3,6 +3,7 @@ import { fetchAgenda, fetchFreeBlocks, fetchWeekLoad } from "../api";
 import { EventOccurrence, EXAM_KINDS, FreeBlock, WeekLoad } from "../types";
 import { addDays, startOfWeek, today } from "../../../shared/utils/dateUtils";
 import { useAuth } from "../../../app/auth/AuthContext";
+import { useApiRefreshCount } from "../../../shared/hooks/useApiRefresh";
 
 /** This week's exams (midterms and finals) and shifts, counted off the calendar. */
 export interface WeekCounts {
@@ -39,6 +40,8 @@ export function useTimeGlance() {
   // Read apart from the rest: a failure here hides two figures on the phone
   // dashboard and nothing else, so it must not take the week down with it.
   const [counts, setCounts] = useState<WeekCounts | null>(null);
+  // Read again when a background refetch finds something new (audit #35).
+  const refreshed = useApiRefreshCount();
 
   useEffect(() => {
     if (!userId) return;
@@ -71,7 +74,7 @@ export function useTimeGlance() {
       });
 
     return () => { cancelled = true; };
-  }, [userId]);
+  }, [userId, refreshed]);
 
   return { blocks, load, loaded, counts };
 }
