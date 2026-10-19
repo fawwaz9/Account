@@ -16,6 +16,7 @@ from app._database.identity import act_as
 from app._database.models import InviteModel, PartnershipModel, TaskModel, utc_now
 from app.Auth.services.session_service import create_access_token
 from app.Partners.services import partner_service as partners
+from app.shared.dates import user_today
 from app.Users.services.user_service import DELETION_GRACE_DAYS, delete_user, purge_expired_users
 from conftest import make_user
 
@@ -142,7 +143,9 @@ def test_a_week_with_nothing_due_has_no_percentage(db):
 def test_each_partner_sees_the_others_figure(db):
     sam, alex = person(db, "Sam"), person(db, "Alex")
     pair(db, sam, alex)
-    task(db, alex, date.today(), True)
+    # The app's today for this user, not the machine's: in CI (UTC) on a Sunday
+    # evening west of Greenwich, date.today() is already next week.
+    task(db, alex, user_today(db, alex.id), True)
     act_as(db, alex.id)
     partners.overview(db, alex.id)                 # Alex opens the app: their figure is written
     act_as(db, sam.id)
@@ -164,7 +167,7 @@ def test_a_one_sided_row_shows_nothing(db):
     function could write. Sam must see nothing of Kim's."""
     sam, kim, alex = person(db, "Sam"), person(db, "Kim"), person(db, "Alex")
     pair(db, kim, alex)
-    task(db, kim, date.today(), True)
+    task(db, kim, user_today(db, kim.id), True)
     act_as(db, kim.id)
     partners.overview(db, kim.id)                  # Kim's figure is now written, in Kim's row
     db.add(PartnershipModel(id=uuid.uuid4(), user_id=sam.id, partner_id=kim.id, partner_name="Kim"))
@@ -180,7 +183,7 @@ def test_a_row_naming_you_shows_nothing_unless_yours_names_them(db):
     from app._database.sharing import partner_figures
     sam, kim = person(db, "Sam"), person(db, "Kim")
     db.add(PartnershipModel(id=uuid.uuid4(), user_id=kim.id, partner_id=sam.id, partner_name="Sam",
-                            week_percent=90.0, streak_weeks=3, figure_on=date.today()))
+                            week_percent=90.0, streak_weeks=3, figure_on=user_today(db, kim.id)))
     db.commit()
     act_as(db, sam.id)
     assert partner_figures(db, sam.id) == {}
