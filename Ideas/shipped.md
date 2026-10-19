@@ -884,6 +884,41 @@ production-URL build: 26 of 26 files.
 
 ---
 
+## Pages come back at once: a GET cache, always refetched -- SHIPPED 2026-10-18
+Audit #35, the first half. Your call: **always refetch in the background**.
+- **A revisit is drawn from memory at once,** then the same requests go out
+  behind it. If an answer changed, the hooks (`useApiRefresh` /
+  `useApiRefreshCount`) reread from the cache. Checked in a browser against a
+  mock API slowed to 1.5 s a request: Dashboard → Calendar → Dashboard drew
+  the dashboard, figures and all, 0.15 s after the click, with its 10
+  refetches running behind.
+- **Any write empties it,** so a save's reload waits for the network and your
+  own change is never shown stale. A request sent before a write isn't stored
+  after it (a generation counter).
+- **Never older than five minutes, never another session's, never shared:**
+  older entries wait on the network, a new session token empties it, and
+  callers get copies.
+- **The trap found in the browser:** the visit counter POSTs on every page, so
+  "any write empties it" emptied the cache on every navigation and nothing was
+  ever reused. The visit counter, and the recurring-payments and
+  repeating-tasks catch-ups (which clear it themselves only when
+  `created > 0`), pass `keepCache`. Due reminders always skip the cache,
+  because reading them marks them surfaced.
+- **Still open, the second half of #35:** a save still rereads everything its
+  page shows.
+
+Also fixed on the way: `test_partners` dated tasks with the machine's
+`date.today()`. CI runs in UTC, so on a Sunday evening west of Greenwich the
+task fell into next week. The tests now use `user_today()`.
+
+Frontend only. 792 frontend tests; 16 cache mutations caught (one survivor
+closed by a stronger test).
+
+LIVE: `main` at `28662be` (caching in `b1e112a`), matching a production build
+file by file (39 files).
+
+---
+
 ## Exam strip: an exam leaves once it's over -- SHIPPED 2026-10-16
 Your report: at 10pm, this morning's midterm was still in "Coming up". The strip
 filtered by date alone, so an exam stayed until midnight.
