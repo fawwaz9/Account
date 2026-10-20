@@ -154,9 +154,10 @@ def test_every_table_has_row_security_and_a_policy(owner_engine):
 def test_the_app_role_is_granted_the_model_tables_and_nothing_else(owner_engine):
     """A table no model builds gets no policy, so it must get no grant either.
 
-    Production still holds ``category_budgets``, left by a rollback. A blanket
-    ``GRANT ... ON ALL TABLES`` would hand the app role every user's rows in
-    it, with no row policy in the way.
+    Production held ``category_budgets``, left by a rollback, until it was
+    dropped on 2026-10-19. A blanket ``GRANT ... ON ALL TABLES`` would have
+    handed the app role every user's rows in it, with no row policy in the way
+    -- and the next leftover would be the same.
     """
     with owner_engine.begin() as conn:
         conn.execute(text("CREATE TABLE rls_stray (id int, user_id uuid)"))

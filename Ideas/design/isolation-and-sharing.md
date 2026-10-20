@@ -69,7 +69,8 @@ accepting" a property of the database rather than of the routes.
 
 **Grants name model tables, and revoke from everyone else** (Phase 0 D11,
 Phase 3 D6). A blanket `GRANT ... ON ALL TABLES` would have handed the role
-`category_budgets`, an orphan with no policy. Supabase grants every new function
+`category_budgets`, an orphan with no policy (dropped 2026-10-19, but the rule
+stands for the next one). Supabase grants every new function
 **and table** to `anon`, `authenticated` and `service_role` by name, which
 `REVOKE FROM PUBLIC` misses. So `install` takes every privilege on every model
 table, and on every function, from every grantee except the owner and

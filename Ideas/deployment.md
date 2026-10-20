@@ -34,7 +34,7 @@ the watch actually showed.
 | Frontend URL | `https://account-2a7.pages.dev` — Cloudflare Pages, builds from `main` |
 | API URL | `https://account-api-210502804146.us-west1.run.app` |
 | Serving | revision `account-api-00024-hj7`, image `backend:2ee1e0e`, traffic on **LATEST** |
-| Database | Supabase `kujxxairehpwhxhnkbct`, `us-west-2`, Postgres 17.6. **27 tables live, 26 in the schema** — the extra one is `category_budgets`, left behind by a rollback; see `session-handoff.md`. `account_month_values` joined the schema on 2026-10-01 |
+| Database | Supabase `kujxxairehpwhxhnkbct`, `us-west-2`, Postgres 17.6. **27 tables live, 26 in the schema** — the extra one is `category_budgets`, left behind by a rollback; see `session-handoff.md`. *(Dropped 2026-10-19: live now matches the schema. See Phase 1 D23.)* `account_month_values` joined the schema on 2026-10-01 |
 | Size | 912 rows, 13 MB against a 500 MB cap — measured 2026-09-28 |
 | Backups | nightly GitHub Action, 09:00 UTC, 90-day artifacts — **restored once, for real** |
 | Monitoring | UptimeRobot on `/health` and on the frontend |

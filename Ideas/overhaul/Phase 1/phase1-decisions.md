@@ -781,6 +781,20 @@ judged against one account's share of the spending. If it comes back, it would
 be keyed on account and category, and it would get a model, which gives it a
 row policy automatically.
 
+**SUPERSEDED: dropped 2026-10-19.** On 2026-10-18 you chose to drop it when
+asked again. I recommended that from `next.md`, which had never recorded this
+decision and still called it "a decision owed". I missed D23 when I
+recommended it; flagged to you after the drop. A backup ran first (GitHub
+Actions run 39193747095, artifact kept 90 days). You read the rows back,
+confirmed nothing depended on it, ran `DROP TABLE category_budgets` (no
+CASCADE), and `to_regclass` read null. The two rows, exactly as read back
+before the drop, so they can be put back without the backup:
+
+| id | user_id | category_id | month | limit_amount |
+|---|---|---|---|---|
+| `e1166e45-ed6b-48c8-a784-4f4407af3bb8` | `45f20d8d-a5d7-4cbc-a066-11eefe2248a6` | `55bfdb49-7d53-4ea0-a401-c1689862ccea` | 2026-10-01 | 70 |
+| `7e124920-19a3-4b05-bf55-55ae68f65055` | `45f20d8d-a5d7-4cbc-a066-11eefe2248a6` | `d5a0a249-f892-4296-93d0-69f310657d42` | 2026-09-01 | 41040 |
+
 ## D24. Where kept syllabus files live: Google Cloud Storage (yours, 2026-10-05, after a correction; BUILT, waiting)
 
 You agreed to Supabase Storage on my recommendation. My reason was that "its

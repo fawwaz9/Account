@@ -436,34 +436,16 @@ are the size of each job rather than an impression of it.
 
 ---
 
-## A decision owed: the orphaned table, found 2026-09-28
-DECIDED 2026-10-18: **drop it.** A fresh backup ran first (GitHub Actions run
-39193747095, succeeded). The drop is the owner's to run against Supabase; the
-SQL reads the two rows back before dropping, and the drop has no CASCADE, so
-it refuses if anything turns out to depend on the table. Mark this DONE once it
-has run and `to_regclass('public.category_budgets')` reads null.
+## The orphaned table: DONE, dropped 2026-10-19
+`category_budgets`, left behind by the whole-budget category limits rolled back
+on 2026-09-24, is gone from production. Backup first (GitHub Actions run
+39193747095), then the owner's read-back (2 rows), a check that nothing depended
+on it, `DROP TABLE category_budgets` (no CASCADE), and `to_regclass` read null.
+Production's tables now match the models again.
 
-- category_budgets is still in the production database. f0dfede created it for
-  whole-budget category limits; 394cb7c removed that feature entirely -- model,
-  service, routes, frontend -- and left the table, its four indexes, and TWO
-  ROWS: $41,040 against September 2026 and $70 against October. Nothing reads
-  it, no foreign key points at it, and nothing has since 2026-09-24.
-- So production has 26 tables where python -m app._database.schema builds 25.
-  Nothing is broken by that. What is broken is that the schema module is the
-  file every other document treats as the description of this database, and it
-  has quietly stopped being it.
-- THE CHOICE IS YOURS AND IT IS NOT URGENT. Either is fine:
-    * DROP IT. Clean, and it destroys those two rows permanently. Back up first
-      -- the nightly artifact counts. The $41,040 row is the student-loan figure
-      from the feature that was removed, so it is probably not worth keeping,
-      but "probably" is not a reason to delete someone's data without asking.
-    * KEEP IT, and write here that it is kept deliberately. Costs nothing: it
-      is 2 rows in a 13 MB database against a 500 MB cap.
-  What is NOT fine is leaving it undecided, because the next person to count
-  tables has to work out which of the two numbers is wrong.
-- shipping.md step 18 now exists so a removal names its orphaned table at the
-  time, rather than being found by counting four days later. Audit #66.
-
+**This overrode an earlier decision this file never recorded:** Phase 1 D23
+(2026-10-05) had kept it ("dont cut category_budgets, it is useful"). The two
+rows are written out in D23, so they can be restored without the backup.
 
 ---
 

@@ -316,6 +316,10 @@ safely under budget. It shipped, and was rolled back the same day. Keying on the
 pair means the limit and the spending it is measured against cover the same
 money.
 
+> **Update, 2026-10-19: `category_budgets` has been dropped** (Phase 1 D23,
+> where its two rows are written out). `spend_categories.monthly_limit` is still
+> there. What follows is the history.
+>
 > **That rollback left its table in production, deliberately.** `category_budgets`
 > and `spend_categories.monthly_limit` are read and written by nothing. The
 > removal took out the model, the service, the routes and the frontend, and

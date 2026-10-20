@@ -105,7 +105,7 @@ second since 2026-10-06 (`81d099c`), and the review loops since 2026-10-06
 | 9 | Foresight: forecast, runway, run-rate | **Built** (D9). Safe-to-spend-today already existed |
 | 10 | Annual planner and hours-to-goal solver | **Live** (D10). Plan versus actual: **live** (D37) |
 | 11 | Paycheque verification and vacation pay | **Live** (D11). The second review loop ("were we right?"): offered, not chosen (D32) |
-| 12 | Cuts | **Closed:** `category_budgets` kept (D23), sinking funds kept as they are (D28) |
+| 12 | Cuts | **Closed:** `category_budgets` kept (D23), then **dropped 2026-10-19** (D23, superseded); sinking funds kept as they are (D28) |
 | 13 | Measurement for this phase's gate | **Live** (D12). Every exit number now prints from the usage report (D38) |
 | 14 | Unofficial transcript parsing | **Deferred** (D3) |
 | — | Click acknowledgement, the (?) sweep, reminders on the scheduler | **Done** before Phase 1 |

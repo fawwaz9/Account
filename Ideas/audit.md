@@ -491,7 +491,7 @@ Everything else in this document is closed.
 | 63 | Low | UX | The grade trend axis can label 105 |
 | 64 | Low | A11y | Two priority selects can carry the same accessible name |
 | 65 | Low | A11y | The study-hours start input is labelled "Study hours", the end one "Study hours end" |
-| 66 | Medium | Database | A rolled-back feature left `category_budgets`, and two rows, in production |
+| 66 | Medium | Database | A rolled-back feature left `category_budgets`, and two rows, in production. **Closed 2026-10-19: dropped** (Phase 1 D23) |
 | 67 | Low | CSS | Two dead Tailwind utility rules are emitted from English in code comments |
 | 68 | **High** | Correctness | Every figure anchored to "today" used the server's UTC clock, not the student's |
 
