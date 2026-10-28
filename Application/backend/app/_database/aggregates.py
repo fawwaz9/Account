@@ -15,7 +15,8 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app._database.models import (
-    COHORT_FLOOR, COUNTED_AFTER_DAYS, CourseIntelModel, GradeDistributionModel, TermReviewModel, UserModel, utc_now,
+    COHORT_FLOOR, COUNTED_AFTER_DAYS, OFFICE_HOUR_WINDOW_DAYS, CourseIntelModel, GradeDistributionModel,
+    OfficeHourCheckinModel, OfficeHourSlotModel, TermReviewModel, UserModel, utc_now,
 )
 
 #: Month and day each term code's term ends, and the years to add to the code's
@@ -222,3 +223,94 @@ def course_intel(db: Session, course_key: str) -> CourseIntel | None:
         _at_floor(row.clarity_answers, row.clarity_answers), _at_floor(row.clarity_answers, row.clarity_mean),
         _at_floor(row.again_answers, row.again_answers), _at_floor(row.again_answers, row.again_share),
     )
+
+
+@dataclass(frozen=True)
+class Slot:
+    """How busy one weekday-and-hour of a course's office hours usually is.
+
+    Attributes:
+        weekday: Local weekday, 0 Monday to 6 Sunday.
+        hour: Local hour, 0-23.
+        people: Distinct people whose check-in counted.
+        none_votes: How many found no line.
+        short_votes: How many found a short line.
+        long_votes: How many found a long line.
+    """
+    weekday: int
+    hour: int
+    people: int
+    none_votes: int
+    short_votes: int
+    long_votes: int
+
+
+def recount_office_hours(db: Session, now: datetime | None = None) -> int:
+    """Rebuild the office-hour slots from scratch from recent check-ins.
+
+    Each person's latest check-in per course, weekday and hour in the last
+    `OFFICE_HOUR_WINDOW_DAYS` counts once; live accounts only; no slot below the floor.
+
+    Args:
+        db: Open session; needs no acting user.
+        now: The moment to measure the window from, on SQLite only (naive UTC).
+
+    Returns:
+        The number of slot rows written.
+
+    Note:
+        Deletes every existing row before writing, and commits.
+    """
+    if _is_postgres(db):
+        written = db.execute(text("SELECT account_recount_office_hours()")).scalar()
+        db.commit()
+        return int(written or 0)
+    since = (now or utc_now()) - timedelta(days=OFFICE_HOUR_WINDOW_DAYS)
+    db.query(OfficeHourSlotModel).delete(synchronize_session=False)
+    latest: dict[tuple, OfficeHourCheckinModel] = {}
+    rows = (
+        db.query(OfficeHourCheckinModel)
+        .join(UserModel, UserModel.id == OfficeHourCheckinModel.user_id)
+        .filter(UserModel.deleted_at.is_(None), OfficeHourCheckinModel.checked_at > since)
+        .all()
+    )
+    for row in rows:
+        key = (row.user_id, row.course_key, row.weekday, row.hour)
+        if key not in latest or row.checked_at > latest[key].checked_at:
+            latest[key] = row
+    slots: dict[tuple, list[str]] = defaultdict(list)
+    for (_, course_key, weekday, hour), row in latest.items():
+        slots[(course_key, weekday, hour)].append(row.wait)
+    written = 0
+    stamp = utc_now()
+    for (course_key, weekday, hour), waits in slots.items():
+        if len(waits) < COHORT_FLOOR:
+            continue
+        db.add(OfficeHourSlotModel(course_key=course_key, weekday=weekday, hour=hour, people=len(waits),
+                                   none_votes=waits.count("none"), short_votes=waits.count("short"),
+                                   long_votes=waits.count("long"), computed_at=stamp))
+        written += 1
+    db.commit()
+    return written
+
+
+def office_hours(db: Session, course_key: str) -> list[Slot]:
+    """Return a course's office-hour slots at the floor, by weekday then hour.
+
+    Args:
+        db: Open session; on Postgres it must act as a signed-in user.
+        course_key: The course, such as "UBCV CPSC 221".
+
+    Returns:
+        The slots; empty when none has reached the floor.
+    """
+    if _is_postgres(db):
+        rows = db.execute(text("SELECT * FROM account_office_hours(:k)"), {"k": course_key}).all()
+        return [Slot(*row) for row in rows]
+    rows = (
+        db.query(OfficeHourSlotModel)
+        .filter(OfficeHourSlotModel.course_key == course_key, OfficeHourSlotModel.people >= COHORT_FLOOR)
+        .order_by(OfficeHourSlotModel.weekday, OfficeHourSlotModel.hour)
+        .all()
+    )
+    return [Slot(r.weekday, r.hour, r.people, r.none_votes, r.short_votes, r.long_votes) for r in rows]

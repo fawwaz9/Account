@@ -31,6 +31,10 @@ export const endpoints = {
     checkPrerequisite: (userId: string) => `grades/${userId}/prerequisites/check`,
     /** What past classes' shared answers say about a course, above each floor. */
     classFigures: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/class-figures`,
+    /** Check in at a course's office hours. */
+    officeHours: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/office-hours`,
+    /** One of your own check-ins, to undo it. */
+    officeHoursCheckIn: (userId: string, checkinId: string) => `grades/${userId}/office-hours/${checkinId}`,
   },
   calendar: {
     /** Occurrences in a window; takes ?start= and ?end=. */

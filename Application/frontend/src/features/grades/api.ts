@@ -3,6 +3,8 @@ import { endpoints } from "../../services/endpoints";
 import { CheapestPath,
   CatalogueChoice,
   ClassFigures,
+  OfficeHourCheckIn,
+  OfficeHourWait,
   CatalogueCourse,
   CatalogueLink,
   PrerequisiteKindName,
@@ -229,4 +231,14 @@ export async function previewPrerequisites(userId: string, code: string, year: n
 /** What past classes' shared answers say about a course, through each figure's floor. */
 export async function fetchClassFigures(userId: string, courseId: string) {
   return get<ClassFigures>(endpoints.grades.classFigures(userId, courseId));
+}
+
+/** Check in at a course's office hours, saying how the line is; a second tap soon after changes it. */
+export async function checkInOfficeHours(userId: string, courseId: string, wait: OfficeHourWait) {
+  return post<OfficeHourCheckIn>(endpoints.grades.officeHours(userId, courseId), { wait });
+}
+
+/** Take back a check-in just made; nothing to confirm, it is seconds old. */
+export async function undoOfficeHoursCheckIn(userId: string, checkinId: string) {
+  return del<{ deleted: boolean }>(endpoints.grades.officeHoursCheckIn(userId, checkinId));
 }

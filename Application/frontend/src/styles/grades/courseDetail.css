@@ -1212,3 +1212,40 @@
   margin: 0;
   font-size: 0.92rem;
 }
+
+/* The office-hours radar (Phase 3 item 11): the three taps, then the slots. */
+.classFiguresOffice {
+  margin: 0 0 12px;
+  padding: 0 0 12px;
+  border-bottom: 1px dashed var(--border);
+}
+
+.classFiguresOfficeAsk,
+.classFiguresOfficeDone {
+  margin: 0 0 8px;
+  font-size: 0.82rem;
+}
+
+.classFiguresOfficeButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 8px;
+}
+
+.classFiguresSlots {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.82rem;
+}
+
+.classFiguresSlots li {
+  padding: 2px 0;
+}
+
+/* The answer just given stays lit, so a second tap reads as a change. */
+.classFiguresOfficeButtons .calButton[aria-pressed="true"] {
+  border-color: var(--gold);
+  color: var(--gold);
+}

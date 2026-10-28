@@ -2,12 +2,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
-const api = { fetchClassFigures: vi.fn() };
+const api = { fetchClassFigures: vi.fn(), checkInOfficeHours: vi.fn(), undoOfficeHoursCheckIn: vi.fn() };
 vi.mock("../api", () => ({
   fetchClassFigures: (...a: unknown[]) => api.fetchClassFigures(...a),
+  checkInOfficeHours: (...a: unknown[]) => api.checkInOfficeHours(...a),
+  undoOfficeHoursCheckIn: (...a: unknown[]) => api.undoOfficeHoursCheckIn(...a),
 }));
 
-import ClassFigures, { bandLabel, filledBands, intelLines } from "./ClassFigures";
+import ClassFigures, { bandLabel, filledBands, intelLines, slotLabel } from "./ClassFigures";
 import { ClassFigures as Figures, CourseIntel, TermDistribution } from "../types";
 
 /** Phase 3 items 3 and 5: past students' shared grades and reviews on the course page (D11). */
@@ -24,16 +26,17 @@ const winter: TermDistribution = {
 function figures(over: Partial<Figures> = {}): Figures {
   return {
     course_key: "CPSC 221", floor: 5, distributions: [fall, winter], your_grade: 74.25, your_bucket: 70, intel: null,
+    office_hours: [],
     ...over,
   };
 }
 
-function show() {
-  return render(<ClassFigures userId="u1" courseId="c1" nonce={0} />);
+function show(current = false) {
+  return render(<ClassFigures userId="u1" courseId="c1" current={current} nonce={0} />);
 }
 
 // Braced: a hook that returns the mock would have it called as a teardown.
-beforeEach(() => { api.fetchClassFigures.mockReset(); });
+beforeEach(() => { Object.values(api).forEach((fn) => fn.mockReset()); });
 afterEach(cleanup);
 
 describe("bandLabel and filledBands", () => {
@@ -124,5 +127,56 @@ describe("ClassFigures", () => {
     const { container } = show();
     await waitFor(() => expect(api.fetchClassFigures).toHaveBeenCalled());
     expect(container.textContent).toBe("");
+  });
+
+  it("offers office hours only for a course in the current term", async () => {
+    api.fetchClassFigures.mockResolvedValue(figures());
+    show(false);
+    await screen.findByRole("list", { name: "Grades in Fall 2024" });
+    expect(screen.queryByRole("group", { name: "How's the line?" })).toBeNull();
+  });
+
+  it("checks in, shows where it counted, and undoes it", async () => {
+    api.fetchClassFigures.mockResolvedValue(figures());
+    api.checkInOfficeHours.mockResolvedValue({ id: "k1", weekday: 1, hour: 14, wait: "long" });
+    api.undoOfficeHoursCheckIn.mockResolvedValue({ deleted: true });
+    show(true);
+    const group = await screen.findByRole("group", { name: "How's the line?" });
+    fireEvent.click(within(group).getByRole("button", { name: "Long" }));
+    expect(await screen.findByText(/Counted for Tue 2pm/)).toBeTruthy();
+    expect(api.checkInOfficeHours).toHaveBeenCalledWith("u1", "c1", "long");
+    expect(within(group).getByRole("button", { name: "Long" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(screen.queryByText(/Counted for/)).toBeNull());
+    expect(api.undoOfficeHoursCheckIn).toHaveBeenCalledWith("u1", "k1");
+  });
+
+  it("says why a check-in couldn't be counted", async () => {
+    api.fetchClassFigures.mockResolvedValue(figures());
+    api.checkInOfficeHours.mockRejectedValue(new Error("Transfer credit has no office hours to check in to."));
+    show(true);
+    fireEvent.click(await screen.findByRole("button", { name: "Short" }));
+    expect((await screen.findByRole("alert")).textContent).toMatch(/Transfer credit/);
+  });
+
+  it("lists the busy slots, or what they wait for", async () => {
+    api.fetchClassFigures.mockResolvedValue(figures({
+      office_hours: [{ weekday: 1, hour: 14, people: 6, reading: "long" }, { weekday: 3, hour: 9, people: 5, reading: "none" }],
+    }));
+    show(true);
+    const list = await screen.findByRole("list", { name: "Office hours, usually" });
+    expect(within(list).getAllByRole("listitem").map((li) => li.textContent)).toEqual(
+      ["Tue 2pm: usually a long line (6)", "Thu 9am: usually no line (5)"]);
+    cleanup();
+    api.fetchClassFigures.mockResolvedValue(figures());
+    show(true);
+    expect(await screen.findByText("Busy times show once 5 people have checked in at the same hour.")).toBeTruthy();
+  });
+});
+
+describe("slotLabel", () => {
+  it("reads hours on a twelve-hour clock", () => {
+    expect([slotLabel(0, 0), slotLabel(1, 9), slotLabel(2, 12), slotLabel(6, 23)]).toEqual(
+      ["Mon 12am", "Tue 9am", "Wed 12pm", "Sun 11pm"]);
   });
 });

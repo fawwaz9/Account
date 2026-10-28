@@ -481,6 +481,8 @@ DEFINER_SIGNATURES = (
     "account_grade_distribution(text)",
     "account_recount_course_intel()",
     "account_course_intel(text)",
+    "account_recount_office_hours()",
+    "account_office_hours(text)",
     "account_on_team(uuid)",
     "account_team_invite_preview(text)",
     "account_accept_team_invite(text)",
@@ -539,6 +541,8 @@ def test_only_the_app_role_can_call_the_cross_user_functions(owner_engine):
             "SELECT account_recount_course_intel()",
             "SELECT * FROM account_course_intel('x')",
             "SELECT account_term_counted('2020W1')",
+            "SELECT account_recount_office_hours()",
+            "SELECT * FROM account_office_hours('x')",
             "SELECT account_on_team(gen_random_uuid())",
             "SELECT * FROM account_team_invite_preview('x')",
             "SELECT account_accept_team_invite('x')",
@@ -1102,6 +1106,33 @@ def test_the_course_figures_are_rebuilt_at_the_floor_and_read_only_through_it(wo
     app_session.rollback()
     app_session.info.clear()
     assert app_session.execute(text("SELECT * FROM account_course_intel('UBCV CPSC 110')")).all() == []
+
+
+def test_office_hour_slots_are_counted_at_the_floor_and_read_only_through_it(worlds, app_session):
+    """Phase 3 item 11: the recount, as the app role, writes a slot only at 5
+    people; the door answers it to a signed-in caller, and nothing without one."""
+    from app._database.models import CourseModel, OfficeHourCheckinModel
+    owner = worlds[0]
+    for key, n in (("UBCV CPSC 110", 5), ("UBCV CPSC 121", 4)):
+        for i in range(n):
+            person = make_user(owner, f"rls-office-{key[-3:]}-{i}@example.com")
+            course = CourseModel(id=uuid.uuid4(), user_id=person.id, code=key[5:], name="x", semester="Fall",
+                                 year=2, credits=4.0)
+            owner.add(course)
+            owner.flush()
+            owner.add(OfficeHourCheckinModel(user_id=person.id, course_id=course.id, course_key=key, weekday=2,
+                                             hour=13, wait="long" if i else "none"))
+    owner.commit()
+    act_as(app_session, worlds[1].id)
+    assert app_session.execute(text("SELECT account_recount_office_hours()")).scalar() == 1
+    app_session.commit()
+    act_as(app_session, worlds[1].id)
+    row = app_session.execute(text("SELECT * FROM account_office_hours('UBCV CPSC 110')")).one()
+    assert tuple(row) == (2, 13, 5, 1, 0, 4)
+    assert app_session.execute(text("SELECT * FROM account_office_hours('UBCV CPSC 121')")).all() == []
+    app_session.rollback()
+    app_session.info.clear()
+    assert app_session.execute(text("SELECT * FROM account_office_hours('UBCV CPSC 110')")).all() == []
 
 
 def test_with_no_identity_the_recount_still_reveals_nothing(worlds, app_session):

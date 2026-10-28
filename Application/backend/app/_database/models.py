@@ -174,6 +174,8 @@ class UserModel(Base):
     prerequisite_proposals = relationship("PrerequisiteProposalModel", cascade=cascade)
     invites = relationship("InviteModel", cascade=cascade)
     term_reviews = relationship("TermReviewModel", cascade=cascade, overlaps="course,term_reviews")
+    office_hour_checkins = relationship("OfficeHourCheckinModel", cascade=cascade,
+                                        overlaps="course,office_hour_checkins")
     teams = relationship("TeamModel", cascade=cascade)
     job_applications = relationship("JobApplicationModel", cascade=cascade)
     application_seasons = relationship("ApplicationSeasonModel", cascade=cascade)
@@ -330,6 +332,8 @@ class CourseModel(Base):
     tasks = relationship("TaskModel", back_populates="course", cascade=cascade)
     term_reviews = relationship("TermReviewModel", back_populates="course", cascade=cascade,
                                 overlaps="term_reviews")
+    office_hour_checkins = relationship("OfficeHourCheckinModel", back_populates="course", cascade=cascade,
+                                        overlaps="office_hour_checkins")
     grading_schemes = relationship("GradingSchemeModel", cascade=cascade)
     prerequisite_proposals = relationship("PrerequisiteProposalModel", cascade=cascade)
 
@@ -2353,6 +2357,83 @@ class CourseIntelModel(Base):
     clarity_mean = Column(Float, nullable=True)
     again_answers = Column(Integer, nullable=True)
     again_share = Column(Float, nullable=True)
+    computed_at = Column(DateTime, nullable=False, default=utc_now)
+
+
+#: Phase 3 item 11. How a line at office hours looked, from a check-in.
+OFFICE_HOUR_WAITS = ("none", "short", "long")
+#: Check-ins older than this many days no longer count toward a slot.
+OFFICE_HOUR_WINDOW_DAYS = 120
+
+
+class OfficeHourCheckinModel(Base):
+    """Per-user row: the student was at a course's office hours and said how the line was.
+
+    Keeps the local weekday and hour it was made at, in the student's own time zone,
+    and the course key it is counted under, as snapshots; the daily recount reads
+    them into the sealed slot counts. Never shown to anyone else as a row.
+
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        course_id: The course whose office hours these were.
+        course_key: Snapshot of the key counts are grouped by, such as "UBCV CPSC 221".
+        weekday: Local weekday, 0 Monday to 6 Sunday.
+        hour: Local hour, 0-23.
+        wait: How the line was: "none", "short" or "long".
+        checked_at: When it was made (naive UTC).
+    """
+
+    __tablename__ = "office_hour_checkins"
+    __table_args__ = (
+        CheckConstraint("weekday BETWEEN 0 AND 6", name="ck_office_hour_checkin_weekday"),
+        CheckConstraint("hour BETWEEN 0 AND 23", name="ck_office_hour_checkin_hour"),
+        CheckConstraint(_one_of("wait", OFFICE_HOUR_WAITS), name="ck_office_hour_checkin_wait"),
+    )
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    course_id = Column(Uuid, ForeignKey("courses.id"), nullable=False, index=True)
+    course_key = Column(String, nullable=False)
+    weekday = Column(Integer, nullable=False)
+    hour = Column(Integer, nullable=False)
+    wait = Column(String, nullable=False)
+    checked_at = Column(DateTime, nullable=False, default=utc_now)
+
+    course = relationship("CourseModel", back_populates="office_hour_checkins", overlaps="office_hour_checkins")
+
+
+class OfficeHourSlotModel(Base):
+    """Sealed: how busy a course's office hours usually are, per weekday and hour.
+
+    The API's role can neither read nor write it. Only `account_recount_office_hours`
+    writes it, rebuilding it whole from each person's latest check-in per slot in the
+    last `OFFICE_HOUR_WINDOW_DAYS`, and writing no slot below `COHORT_FLOOR` people.
+    Unique per course, weekday and hour.
+
+    Attributes:
+        id: Primary key.
+        course_key: Course, such as "UBCV CPSC 221".
+        weekday: Local weekday, 0 Monday to 6 Sunday.
+        hour: Local hour, 0-23.
+        people: Distinct people whose check-in counted.
+        none_votes: How many found no line.
+        short_votes: How many found a short line.
+        long_votes: How many found a long line.
+        computed_at: When the recount wrote it.
+    """
+
+    __tablename__ = "office_hour_slots"
+    __table_args__ = (UniqueConstraint("course_key", "weekday", "hour", name="uq_office_hour_slot"),)
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    course_key = Column(String, nullable=False)
+    weekday = Column(Integer, nullable=False)
+    hour = Column(Integer, nullable=False)
+    people = Column(Integer, nullable=False)
+    none_votes = Column(Integer, nullable=False)
+    short_votes = Column(Integer, nullable=False)
+    long_votes = Column(Integer, nullable=False)
     computed_at = Column(DateTime, nullable=False, default=utc_now)
 
 

@@ -340,7 +340,14 @@ export default function CourseDetailPage() {
 
       {/* Other students' shared grades for this course (Phase 3 item 3), under
           the course's own figures. Nothing for a code that isn't a course. */}
-      {user && courseId && <ClassFigures userId={user.id} courseId={courseId} nonce={reloadNonce} />}
+      {user && courseId && (
+        <ClassFigures
+          userId={user.id}
+          courseId={courseId}
+          current={course?.term_bucket === "current"}
+          nonce={reloadNonce}
+        />
+      )}
 
       {user && course && (
         <GradingSchemes

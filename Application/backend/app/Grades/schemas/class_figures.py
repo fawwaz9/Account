@@ -1,4 +1,7 @@
-"""Schemas for what other students' answers say about a course (Phase 3 items 3 and 5)."""
+"""Schemas for what other students' answers say about a course (Phase 3 items 3, 5 and 11)."""
+from typing import Literal
+from uuid import UUID
+
 from pydantic import BaseModel
 
 
@@ -56,6 +59,48 @@ class CourseIntelOut(BaseModel):
     again_share: int | None
 
 
+class OfficeHourSlotOut(BaseModel):
+    """One weekday-and-hour of a course's office hours, at the floor.
+
+    Attributes:
+        weekday: Local weekday, 0 Monday to 6 Sunday.
+        hour: Local hour, 0-23.
+        people: How many people's check-ins it is read from.
+        reading: How the line usually is: "none", "short" or "long".
+    """
+
+    weekday: int
+    hour: int
+    people: int
+    reading: Literal["none", "short", "long"]
+
+
+class OfficeHourCheckIn(BaseModel):
+    """Request body for checking in at a course's office hours.
+
+    Attributes:
+        wait: How the line is right now.
+    """
+
+    wait: Literal["none", "short", "long"]
+
+
+class OfficeHourCheckInOut(BaseModel):
+    """A saved check-in, as its owner sees it.
+
+    Attributes:
+        id: The check-in, for undoing it.
+        weekday: Local weekday it counts under, 0 Monday to 6 Sunday.
+        hour: Local hour it counts under, 0-23.
+        wait: How the line was.
+    """
+
+    id: UUID
+    weekday: int
+    hour: int
+    wait: Literal["none", "short", "long"]
+
+
 class ClassFigures(BaseModel):
     """What other students' shared answers say about one of the caller's courses.
 
@@ -70,6 +115,8 @@ class ClassFigures(BaseModel):
         your_bucket: The band `your_grade` falls in; None without one.
         intel: What past students' reviews say; None while no figure has reached the
             floor.
+        office_hours: The course's office-hour slots at the floor, by weekday then
+            hour; empty while none has.
     """
 
     course_key: str | None
@@ -78,3 +125,4 @@ class ClassFigures(BaseModel):
     your_grade: float | None
     your_bucket: int | None
     intel: CourseIntelOut | None = None
+    office_hours: list[OfficeHourSlotOut] = []

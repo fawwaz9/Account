@@ -34,7 +34,7 @@ SHARED_READ_TABLES = frozenset({"catalogue_courses", "catalogue_prerequisites"})
 #: security with no policy, and every grant revoked, the app role's included.
 #: Only a definer function, running as the owner, writes them. By name, like
 #: the shared list, and refused if the table has an owner.
-SEALED_TABLES = frozenset({"grade_distributions", "course_intel"})
+SEALED_TABLES = frozenset({"grade_distributions", "course_intel", "office_hour_slots"})
 
 #: Who may read a shared row: anyone the API has identified. Not ``true``, so an
 #: un-identified query still sees nothing -- the same fail-closed rule as every
@@ -79,6 +79,9 @@ FUNCTIONS = (
     # Phase 3 item 5 (D11): what term reviews say, rebuilt daily, read through the floor.
     "account_recount_course_intel",
     "account_course_intel",
+    # Phase 3 item 11 (D11): office-hour check-ins, counted per slot above the floor.
+    "account_recount_office_hours",
+    "account_office_hours",
     # Phase 2 item 11 (D26): teams and games.
     "account_on_team",
     "account_team_invite_preview",
@@ -522,6 +525,45 @@ CREATE OR REPLACE FUNCTION account_course_intel(p_course_key text)
           FROM course_intel i
           WHERE account_current_user() IS NOT NULL AND i.course_key = p_course_key $$;
 
+-- Phase 3 item 11 (D11): how busy each course's office hours usually are,
+-- rebuilt whole. Each person's latest check-in per slot (course, local weekday
+-- and hour) in the last 120 days (models.OFFICE_HOUR_WINDOW_DAYS), live
+-- accounts only; no slot below 5 people (models.COHORT_FLOOR).
+CREATE OR REPLACE FUNCTION account_recount_office_hours() RETURNS integer
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$
+DECLARE
+    written integer;
+BEGIN
+    DELETE FROM office_hour_slots;
+    WITH latest AS (
+        SELECT DISTINCT ON (c.user_id, c.course_key, c.weekday, c.hour)
+               c.course_key, c.weekday, c.hour, c.wait
+        FROM office_hour_checkins c JOIN users u ON u.id = c.user_id
+        WHERE u.deleted_at IS NULL
+          AND c.checked_at > (now() AT TIME ZONE 'utc') - interval '120 days'
+        ORDER BY c.user_id, c.course_key, c.weekday, c.hour, c.checked_at DESC
+    )
+    INSERT INTO office_hour_slots (id, course_key, weekday, hour, people, none_votes, short_votes, long_votes,
+                                   computed_at)
+        SELECT gen_random_uuid(), course_key, weekday, hour, count(*),
+               count(*) FILTER (WHERE wait = 'none'), count(*) FILTER (WHERE wait = 'short'),
+               count(*) FILTER (WHERE wait = 'long'), now() AT TIME ZONE 'utc'
+        FROM latest GROUP BY course_key, weekday, hour HAVING count(*) >= 5;
+    GET DIAGNOSTICS written = ROW_COUNT;
+    RETURN written;
+END $$;
+
+-- A course's slots, to anyone signed in, at the floor (checked again here).
+CREATE OR REPLACE FUNCTION account_office_hours(p_course_key text)
+    RETURNS TABLE(weekday integer, hour integer, people integer, none_votes integer, short_votes integer,
+                  long_votes integer)
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ SELECT s.weekday, s.hour, s.people, s.none_votes, s.short_votes, s.long_votes
+          FROM office_hour_slots s
+          WHERE account_current_user() IS NOT NULL AND s.course_key = p_course_key AND s.people >= 5
+          ORDER BY s.weekday, s.hour $$;
+
 -- Phase 2 item 11 (D26): teams. "On the team" means the captain or a member,
 -- of a captain whose account is not being deleted. Every game write goes
 -- through these, the captain's included.
@@ -719,6 +761,8 @@ REVOKE ALL ON FUNCTION account_grade_distribution(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_term_counted(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_recount_course_intel() FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_course_intel(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_recount_office_hours() FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_office_hours(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_on_team(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_team_invite_preview(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_accept_team_invite(text) FROM PUBLIC;
@@ -1011,6 +1055,8 @@ def grant_statements() -> list[str]:
         "GRANT EXECUTE ON FUNCTION account_grade_distribution(text) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_recount_course_intel() TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_course_intel(text) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_recount_office_hours() TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_office_hours(text) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_on_team(uuid) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_team_invite_preview(text) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_accept_team_invite(text) TO " + APP_ROLE,

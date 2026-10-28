@@ -142,6 +142,8 @@ PATH_SOURCES = {
     "application_id": "job_applications",
     "step_id": "application_steps",
     "season_id": "application_seasons",
+    # Phase 3 item 11: a check-in at office hours.
+    "checkin_id": "office_hour_checkins",
     # A membership row's own id (Phase 2 item 9a), as the owner removes it.
     "member_id": "task_members",
 }

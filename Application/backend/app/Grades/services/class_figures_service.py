@@ -12,7 +12,10 @@ from sqlalchemy.orm import Session
 from app._database import aggregates
 from app._database.distributions import bucket_of
 from app._database.models import COHORT_FLOOR, CourseModel
-from app.Grades.schemas.class_figures import ClassFigures, CourseIntelOut, GradeBandOut, TermDistribution
+from app.Grades.schemas.class_figures import (
+    ClassFigures, CourseIntelOut, GradeBandOut, OfficeHourSlotOut, TermDistribution,
+)
+from app.Grades.services.office_hours_service import reading
 from app.Grades.services.term_review_service import course_key_of
 from app.Grades.utils.terms import course_result_grade
 
@@ -104,8 +107,13 @@ def class_figures(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> Clas
     key = None if course.transfer_credit else course_key_of(db, course)
     distributions = []
     intel = None
+    office_hours = []
     if key is not None:
         intel = intel_out(aggregates.course_intel(db, key))
+        office_hours = [
+            OfficeHourSlotOut(weekday=slot.weekday, hour=slot.hour, people=slot.people, reading=reading(slot))
+            for slot in aggregates.office_hours(db, key)
+        ]
         by_term: dict[str, list[aggregates.Band]] = {}
         for band in aggregates.grade_distribution(db, key, _utc_today()):
             by_term.setdefault(band.term_code, []).append(band)
@@ -124,4 +132,5 @@ def class_figures(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> Clas
         your_grade=grade,
         your_bucket=bucket_of(grade) if grade is not None else None,
         intel=intel,
+        office_hours=office_hours,
     )

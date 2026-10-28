@@ -63,6 +63,8 @@ from app._database.models import (
     EventMemberModel,
     GradeDistributionModel,
     CourseIntelModel,
+    OfficeHourCheckinModel,
+    OfficeHourSlotModel,
     TermReviewModel,
     GameModel,
     JobApplicationModel,
@@ -339,6 +341,11 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
     # Phase 3 D7: a season covering the world's month, named with the marker.
     add(ApplicationSeasonModel(id=new_id(), user_id=user_id, name=f"{marker} season",
                                starts_month=WORLD_MONTH, ends_month=WORLD_MONTH))
+    # Phase 3 item 11: a check-in at the world's course's office hours, with the
+    # marker in the snapshot key a leak would carry.
+    add(OfficeHourCheckinModel(id=new_id(), user_id=user_id, course_id=course.id, course_key=f"{marker} key",
+                               weekday=day.weekday(), hour=14, wait="long",
+                               checked_at=datetime.combine(day, time(21, 0))))
     _ = (event, transaction, recurring_task)
 
     db.commit()
@@ -418,6 +425,7 @@ CATALOGUE_IDS = {
     "catalogue_prerequisites": uuid.uuid5(uuid.NAMESPACE_URL, "account-test/catalogue_prerequisites"),
     "grade_distributions": uuid.uuid5(uuid.NAMESPACE_URL, "account-test/grade_distributions"),
     "course_intel": uuid.uuid5(uuid.NAMESPACE_URL, "account-test/course_intel"),
+    "office_hour_slots": uuid.uuid5(uuid.NAMESPACE_URL, "account-test/office_hour_slots"),
 }
 
 
@@ -449,10 +457,14 @@ def seed_catalogue(db) -> dict[str, uuid.UUID]:
                              hours_median=9.0, difficulty_answers=6, difficulty_mean=3.5, clarity_answers=6,
                              clarity_mean=4.0, again_answers=6, again_share=50.0)
     db.add(intel)
+    # Phase 3 item 11: a busy office-hours slot for the same course.
+    slot = OfficeHourSlotModel(id=CATALOGUE_IDS["office_hour_slots"], course_key="UBCV CPSC 221", weekday=1, hour=14,
+                               people=6, none_votes=1, short_votes=1, long_votes=4)
+    db.add(slot)
     # Read before the commit: after it, touching an attribute refreshes the row
     # and leaves a transaction open holding a lock that blocks rls.install.
     ids = {"catalogue_courses": course.id, "catalogue_prerequisites": rule.id, "grade_distributions": sealed.id,
-           "course_intel": intel.id}
+           "course_intel": intel.id, "office_hour_slots": slot.id}
     db.commit()
     missing = (SHARED_READ_TABLES | SEALED_TABLES) - set(ids)
     assert not missing, f"the catalogue seed has nothing in: {sorted(missing)}"

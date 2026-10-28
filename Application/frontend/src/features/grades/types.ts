@@ -583,6 +583,28 @@ export interface CourseIntel {
   again_share: number | null;
 }
 
+/** How a line at office hours looked. */
+export type OfficeHourWait = "none" | "short" | "long";
+
+/** One weekday-and-hour of a course's office hours, above the floor. */
+export interface OfficeHourSlot {
+  /** 0 Monday to 6 Sunday, local. */
+  weekday: number;
+  /** 0-23, local. */
+  hour: number;
+  people: number;
+  /** How the line usually is. */
+  reading: OfficeHourWait;
+}
+
+/** A check-in you just made, with the slot it counts under. */
+export interface OfficeHourCheckIn {
+  id: string;
+  weekday: number;
+  hour: number;
+  wait: OfficeHourWait;
+}
+
 /** What other students' shared answers say about one of your courses. */
 export interface ClassFigures {
   /** Null when the course's code isn't a course code, so nothing can be shown. */
@@ -595,4 +617,6 @@ export interface ClassFigures {
   your_bucket: number | null;
   /** Null while no review figure has reached the floor. */
   intel: CourseIntel | null;
+  /** Busy office-hour slots above the floor, by weekday then hour. */
+  office_hours: OfficeHourSlot[];
 }
