@@ -8,26 +8,14 @@ import {
 import { formatMoney } from "../../budget/money";
 import { dueLabel } from "../../../shared/utils/dateUtils";
 
+/** Props: the earnings summary, or null while loading. */
 interface EarningsProps {
   readonly earnings: EarningsSummary | null;
 }
 
 /**
- * What the jobs came to.
- *
- * Earned and paid are shown apart throughout, because they answer different
- * questions: earned comes from the shifts and is a prediction, paid comes from
- * cheques that arrived. One combined figure would hide the thing this page
- * exists to surface -- a fortnight worked that nobody has paid for yet.
- *
- * So the split is by source, not by window. The cards at the top are money
- * that arrived -- net paid, the gross and deduction behind it, and which jobs
- * it came from. Everything the shifts merely predict lives under Estimates.
- *
- * The two are not a sum and a remainder, and separating them makes that easier
- * to forget rather than harder: earned counts shifts falling INSIDE a window,
- * paid counts cheques DATED inside it, and a cheque arriving this week usually
- * pays for last fortnight. They are two accounts of different work.
+ * What the jobs came to: money paid in cards, everything the shifts predict under Estimates.
+ * Earned and paid are never added: they count different work in the same window.
  */
 export default function Earnings({ earnings }: EarningsProps) {
   if (!earnings) return null;
@@ -63,6 +51,7 @@ export default function Earnings({ earnings }: EarningsProps) {
   );
 }
 
+/** One window's money that arrived: net paid, its gross and deductions, and which jobs paid. */
 function WindowCard({ window }: { readonly window: EarningsWindow }) {
   // Jobs that were actually paid in this window. Filtering on the paid figure
   // rather than on `per_job.length` matters now that the rows show pay: the
@@ -105,6 +94,7 @@ function WindowCard({ window }: { readonly window: EarningsWindow }) {
   );
 }
 
+/** Net and gross pay per hour actually paid; says so when nothing is paid yet. */
 function RateCard({ rate }: { readonly rate: EffectiveRate }) {
   if (rate.net_per_hour === null) {
     return (
@@ -130,12 +120,7 @@ function RateCard({ rate }: { readonly rate: EffectiveRate }) {
   );
 }
 
-/**
- * Work beside classes for the current week.
- *
- * The one figure here that is not about money: forty hours of commitment is
- * worth seeing whoever it is owed to.
- */
+/** This week's hours of work beside classes and tasks. */
 function CommitmentCard({ week }: { readonly week: HoursAgainstClasses }) {
   const total = week.work_minutes + week.class_minutes + week.task_minutes;
   if (total === 0) return null;
@@ -162,27 +147,15 @@ function CommitmentCard({ week }: { readonly week: HoursAgainstClasses }) {
   );
 }
 
+/** Props for the estimates block. */
 interface EstimatesProps {
   readonly windows: EarningsWindow[];
   readonly rows: UpcomingPay[];
 }
 
 /**
- * Everything the shifts say, in one place.
- *
- * This was "Not paid yet" and already was an estimates section in substance --
- * per job, the hours no cheque has covered since the last period closed, what
- * they are probably worth, and when the next cheque is due. The figures the
- * window cards used to carry moved in beside it when those cards became purely
- * about money that arrived.
- *
- * Folded into the existing block rather than added as a third one: two headings
- * both answering "what do the shifts say", differing only by window, is two
- * places to look for one answer.
- *
- * Every figure here is a projection. The unconfirmed count is said per window
- * rather than totalled, because month and term overlap and adding them would
- * count the same unconfirmed shift twice.
+ * Everything the shifts predict: per job, unpaid hours, their likely worth and the next cheque.
+ * Unconfirmed shifts are counted per window, since month and term overlap.
  */
 function Estimates({ windows, rows }: EstimatesProps) {
   const owed = rows.filter((row) => row.unpaid_minutes > 0 || row.next_pay_on);
@@ -238,10 +211,12 @@ function Estimates({ windows, rows }: EstimatesProps) {
   );
 }
 
+/** Minutes as hours to one decimal, e.g. "7.5h". */
 function hours(minutes: number): string {
   return `${Math.round((minutes / 60) * 10) / 10}h`;
 }
 
+/** Part of total as a percent; 0 when the total is 0. */
 function share(part: number, total: number): number {
   return total === 0 ? 0 : (part / total) * 100;
 }

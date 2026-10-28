@@ -1,69 +1,46 @@
-/**
- * The GET cache (audit #35): a page you come back to shows what it had at once,
- * and is refetched in the background every time.
- *
- * - **Always refetched** (your call, 2026-10-18). A cached answer is shown
- *   while the same request goes out again; if the answer changed, the cache is
- *   updated and every listener is told, so the page re-reads it. Nothing waits
- *   on the network that didn't before, and nothing is trusted for long.
- * - **Any write empties it.** A POST, PATCH, PUT or DELETE clears every entry,
- *   so your own change is never shown stale: the reload after a save goes to
- *   the network, as it always did. Which reads a write touches isn't tracked
- *   -- a transaction moves the budget, the dashboard and the forecast -- so
- *   all of it goes, which is never wrong.
- * - **Five minutes at most.** An entry older than that isn't shown at all; the
- *   request waits on the network as before. A tab left open overnight never
- *   opens a page on yesterday's figures.
- * - **One user's.** Entries are dropped whenever the session token changes, so
- *   signing in as someone else on the same tab can't show the last person's.
- * - **In memory only.** Nothing is written to the browser's storage; a reload
- *   starts empty.
- *
- * Callers get a copy, never the cached object, so code that sorts or edits
- * what it was handed can't change what the next page is shown.
- */
+/** In-memory GET cache: a revisit answers at once and refetches behind; any write empties it. */
 
-/** Shown no older than this; older waits on the network. */
+/** Oldest cached answer still shown; anything older waits on the network. */
 export const MAX_AGE_MS = 5 * 60_000;
-/**
- * Not refetched again within this of the last answer. A change notice makes
- * every listening page re-read, and those re-reads must come from the cache
- * rather than each start another round.
- */
+/** No background refetch within this long of the last answer, so notice re-reads stay cached. */
 export const RECHECK_GAP_MS = 2_000;
 
+/** One cached GET answer. */
 interface Entry {
   data: unknown;
-  /** The answer as JSON, to tell a changed answer from the same one again. */
+  /** The answer as JSON, compared to spot a changed answer. */
   text: string;
-  /** When the network last answered for it. */
+  /** Epoch ms of the last network answer. */
   at: number;
 }
 
+/** Cached answers keyed by request path. */
 let entries = new Map<string, Entry>();
+/** Requests in flight by path, so concurrent reads share one. */
 let inflight = new Map<string, Promise<unknown>>();
-// Bumped by every clear: an answer to a request sent before a write describes
-// the data before it, so it must not be stored after.
+/** Bumped by every clear; an answer to a request sent before it is not stored. */
 let generation = 0;
+/** Session token the entries belong to; a different token empties the cache. */
 let owner: string | null = null;
+/** Callbacks told when a background refetch brings a changed answer. */
 const listeners = new Set<() => void>();
+/** True while a change notice is queued for this task. */
 let noticePending = false;
 
-/** Drop everything. Every write calls this, before and after it is sent. */
+/** Empty the cache; every write not sent with `keepCache` calls this before and after. */
 export function clearApiCache(): void {
   entries = new Map();
   inflight = new Map();
   generation += 1;
 }
 
-/** Called with nothing whenever a background refetch found a changed answer. */
+/** Subscribe to changed-answer notices; returns the unsubscribe. */
 export function onApiRefresh(listener: () => void): () => void {
   listeners.add(listener);
   return () => { listeners.delete(listener); };
 }
 
-// One notice per task, however many answers changed in it: a page reading
-// four endpoints re-reads once, not four times.
+/** Queue one change notice per task, however many answers changed. */
 function notify() {
   if (noticePending) return;
   noticePending = true;
@@ -73,6 +50,7 @@ function notify() {
   }, 0);
 }
 
+/** Run or join the request for a path; store the answer unless a clear came since. */
 function fromNetwork(path: string, load: () => Promise<unknown>): Promise<unknown> {
   const running = inflight.get(path);
   if (running) return running;
@@ -96,9 +74,8 @@ function fromNetwork(path: string, load: () => Promise<unknown>): Promise<unknow
 }
 
 /**
- * A GET through the cache. `token` is the session it's read for; `load` is the
- * real request. `fresh` skips the cached answer (a poll wants this minute's,
- * not the last one's) but still stores what comes back.
+ * GET through the cache: a hit under five minutes returns a copy and refetches behind.
+ * `fresh` skips the hit but still stores the answer.
  */
 export async function cachedGet<T>(
   path: string, token: string | null, load: () => Promise<T>, fresh = false,

@@ -9,13 +9,16 @@ import { Job, JOB_KIND_LABELS, JobCreate, JobKind } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { today } from "../../../shared/utils/dateUtils";
 
+/** Props for the job dialog. */
 interface JobModalProps {
   readonly open: boolean;
+  /** The job to edit, or null for a new one. */
   readonly job: Job | null;
   readonly onClose: () => void;
   readonly onSaved: () => void;
 }
 
+/** A new hourly job starting today, with no pay rule yet. */
 function blankJob(): JobCreate {
   return {
     name: "",
@@ -32,6 +35,7 @@ function blankJob(): JobCreate {
   };
 }
 
+/** Form values from a job, or a blank one. */
 function formFor(job: Job | null): JobCreate {
   if (!job) return blankJob();
   return {
@@ -49,6 +53,10 @@ function formFor(job: Job | null): JobCreate {
   };
 }
 
+/**
+ * Create or edit a job: kind and pay, dates, and its pay rule as a repeat or set days.
+ * Changing kind clears the other kind's pay; removing a job confirms first.
+ */
 export default function JobModal({ open, job, onClose, onSaved }: JobModalProps) {
   const { user } = useAuth();
   const [form, setForm] = useState<JobCreate>(formFor(job));

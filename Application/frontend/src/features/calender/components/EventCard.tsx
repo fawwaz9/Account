@@ -5,18 +5,13 @@ import { clockTime, duration } from "../../../shared/utils/dateUtils";
 import { kindStyle } from "../kindColors";
 import { useKindColors } from "../hooks/useKindColors";
 
+/** The occurrence a chip shows, and its select handler. */
 interface EventCardProps {
   readonly occurrence: EventOccurrence;
   readonly onSelect: (occurrence: EventOccurrence) => void;
 }
 
-/**
- * One item in a day cell.
- *
- * Themed by kind: a midterm and a final each replace the class-block styling
- * with an exam card, so the week you actually have to worry about is legible at
- * a glance rather than reading like seven more lectures.
- */
+/** One event in a day cell, coloured by kind; midterms and finals get the exam style. */
 export function EventChip({ occurrence, onSelect }: EventCardProps) {
   const exam = EXAM_KINDS.includes(occurrence.kind);
   const colors = useKindColors();
@@ -38,25 +33,13 @@ export function EventChip({ occurrence, onSelect }: EventCardProps) {
   );
 }
 
+/** The task a chip shows, and its select handler. */
 interface TaskChipProps {
   readonly task: Task;
   readonly onSelect: (task: Task) => void;
 }
 
-/**
- * A due task, in the day it is due.
- *
- * Opens the task editor -- the same one the task page opens, so a task has one
- * editor rather than two that can drift apart. This chip used to tick the task
- * off instead, which meant the calendar could do exactly one thing to a task
- * and a click meant to look at one finished it. Completing moved into the
- * editor, where it is a button that says what it does.
- *
- * Shows the time when it has one. The month grid has no time axis to place it
- * on, so the alternative is a due time that is stored, entered and then never
- * shown anywhere -- which is how it went unnoticed that the calendar ignored it
- * entirely. The week view puts the same task on the clock instead.
- */
+/** A due task in its day, showing its time when one was chosen; opens the task editor. */
 export function TaskChip({ task, onSelect }: TaskChipProps) {
   // Not the end-of-day sentinel: "11:59pm" on nearly every chip is noise, and
   // says nothing the day it sits in has not already said.
@@ -80,6 +63,7 @@ export function TaskChip({ task, onSelect }: TaskChipProps) {
   );
 }
 
+/** The selected occurrence and its edit, skip, delete and close handlers. */
 interface EventDetailProps {
   readonly occurrence: EventOccurrence;
   readonly onEdit: () => void;
@@ -89,7 +73,7 @@ interface EventDetailProps {
   readonly busy: boolean;
 }
 
-/** What one occurrence expands to when it is selected. */
+/** A selected occurrence's details and actions; a grade's block offers only Close. */
 export default function EventCard({
   occurrence,
   onEdit,
@@ -161,7 +145,7 @@ export default function EventCard({
   );
 }
 
-/** "1h 30m" for an occurrence, where both ends are known. */
+/** An occurrence's length, e.g. "1h 30m", when both ends are known; else "". */
 export function occurrenceLength(occurrence: EventOccurrence): string {
   if (!occurrence.start_time || !occurrence.end_time) return "";
 

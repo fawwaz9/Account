@@ -1,12 +1,13 @@
 // Course
-/** One place a course lives: Canvas, Piazza, a syllabus. */
+/** One place a course lives online: Canvas, Piazza, a syllabus. */
 export interface CourseLink {
   title: string;
   url: string;
 }
 
+/** A course as listed, with its server-computed average, letter, points and term bucket. */
 export interface Course {
-  /** The grading scheme that is this course's grade, when one was picked. */
+  /** Grading scheme counted as the course's grade; null or absent uses its own weights. */
   counting_scheme_id?: string | null;
   id: string;
   code: string;
@@ -16,47 +17,40 @@ export interface Course {
   credits: number;
   required: boolean;
   professor: string | null;
-  /** The section you are in ("101"); a syllabus belongs to one section. */
+  /** The student's section, e.g. "101"; a syllabus belongs to one section. */
   section: string | null;
+  /** Recorded final percentage; 0 means none recorded. */
   final_grade: number;
-  /**
-   * The course's grade just before the final was marked or the result
-   * entered: the app's last real prediction, kept to set against the result.
-   * Server-set; null when there was nothing to predict from.
-   */
+  /** Server-set projection from just before the final was marked; null when there was none. */
   projected_before_final?: number | null;
+  /** Day `projected_before_final` was taken, YYYY-MM-DD. */
   projected_on?: string | null;
-  /** null uses the account default from Settings */
+  /** Target percentage; null uses the Settings default. */
   target_grade: number | null;
   category_weights: Partial<Record<GradeCategory, number>>;
-  /**
-   * Null when the course has no marked work, rather than 0. Zero is a real
-   * grade and "not marked yet" is not, and showing the second as the first
-   * makes a course you have not started read as one you are failing.
-   */
+  /** Average of marked work only; null when nothing is marked, never 0. */
   average: number | null;
   start_date: string | null;
   end_date: string | null;
-  /** No final exam, so a missing final grade is not flagged in Attention. */
+  /** No final exam, so a missing final grade is never flagged in Attention. */
   no_final: boolean;
   /** Credit granted without taking the course: counts credits, carries no grade. */
   transfer_credit: boolean;
-  /** Searchable and still in the average, but out of credits completed. */
+  /** Still searchable and in the average, but out of credits completed. */
   archived: boolean;
-  /**
-   * Where the course lives, in the order they were arranged. Sent and stored
-   * whole -- there is no per-link endpoint, because the list carries no ids.
-   */
+  /** Where the course lives, in display order; always sent and saved whole. */
   links: CourseLink[];
-  /** Letter for the course's result; "" when nothing is recorded yet. */
+  /** Letter for the course's grade; "" when nothing is recorded yet. */
   letter_grade: string;
-  /** Grade points on the configured scale */
+  /** Grade points on the configured scale. */
   grade_points: number;
   term_bucket: TermBucket;
 }
 
+/** Where a course's term sits against the student's current term. */
 export type TermBucket = "past" | "current" | "future";
 
+/** Term names as the API spells them. */
 export enum Semester {
   FALL = "Fall",
   WINTER = "Winter",
@@ -64,6 +58,7 @@ export enum Semester {
   SPRING = "Spring"
 }
 
+/** Request body for creating a course. */
 export interface CourseCreate {
   code: string;
   name: string;
@@ -72,30 +67,29 @@ export interface CourseCreate {
   credits: number;
   required: boolean;
   professor: string | null;
-  /** The section you are in ("101"); a syllabus belongs to one section. */
+  /** The student's section, e.g. "101"; a syllabus belongs to one section. */
   section: string | null;
+  /** Recorded final percentage; 0 means none recorded. */
   final_grade: number;
-  /** The grade you are aiming for; null falls back to the account default */
+  /** Target percentage; null uses the Settings default. */
   target_grade: number | null;
   category_weights: Partial<Record<GradeCategory, number>>;
-  // ISO yyyy-mm-dd, or null for a course with no set term dates
+  /** YYYY-MM-DD; null when the course has no set term dates. */
   start_date: string | null;
   end_date: string | null;
-  /** No final exam, so a missing final grade is not flagged in Attention. */
+  /** No final exam, so a missing final grade is never flagged in Attention. */
   no_final: boolean;
   /** Credit granted without taking the course: counts credits, carries no grade. */
   transfer_credit: boolean;
-  /** Searchable and still in the average, but out of credits completed. */
+  /** Still searchable and in the average, but out of credits completed. */
   archived: boolean;
-  /**
-   * Where the course lives, in the order they were arranged. Sent and stored
-   * whole -- there is no per-link endpoint, because the list carries no ids.
-   */
+  /** Where the course lives, in display order; always sent and saved whole. */
   links: CourseLink[];
 }
 
+/** One course with its grades and per-category figures, as the course page reads it. */
 export interface CourseDetail {
-  /** The grading scheme that is this course's grade, when one was picked. */
+  /** Grading scheme counted as the course's grade; null or absent uses its own weights. */
   counting_scheme_id?: string | null;
   id: string;
   code: string;
@@ -105,11 +99,12 @@ export interface CourseDetail {
   credits: number;
   required: boolean;
   professor: string | null;
-  /** The section you are in ("101"); a syllabus belongs to one section. */
+  /** The student's section, e.g. "101"; a syllabus belongs to one section. */
   section: string | null;
+  /** Recorded final percentage; 0 means none recorded. */
   final_grade: number;
   category_weights: Partial<Record<GradeCategory, number>>;
-  /** Null when nothing is marked. See Course.average. */
+  /** Null when nothing is marked; see `Course.average`. */
   average: number | null;
   target_grade: number | null;
   letter_grade: string;
@@ -117,29 +112,22 @@ export interface CourseDetail {
   grades: Grade[];
   start_date: string | null;
   end_date: string | null;
-  /** No final exam, so a missing final grade is not flagged in Attention. */
+  /** No final exam, so a missing final grade is never flagged in Attention. */
   no_final: boolean;
   /** Credit granted without taking the course: counts credits, carries no grade. */
   transfer_credit: boolean;
-  /** Searchable and still in the average, but out of credits completed. */
+  /** Still searchable and in the average, but out of credits completed. */
   archived: boolean;
-  /** past, current or future against the student's term, computed by the API. */
   term_bucket: TermBucket;
-  /**
-   * Where the course lives, in the order they were arranged. Sent and stored
-   * whole -- there is no per-link endpoint, because the list carries no ids.
-   */
+  /** Where the course lives, in display order; always sent and saved whole. */
   links: CourseLink[];
-  // Point-weighted average per category, computed by the API. Render these
-  // rather than recomputing -- the component used to do its own arithmetic and
-  // disagreed with the course average on the same screen.
+  /** Server-computed average per category, 0-100; render as sent, never recompute. */
   category_averages: Partial<Record<GradeCategory, number>>;
-  // What each category contributes, in marks out of its weight. Sent rather
-  // than derived: multiplying the rounded average above by the weight rounds a
-  // second time, and showed 11.82 for a figure that is exactly 11.825.
+  /** Marks each category contributes out of its weight; sent because deriving it rounds twice. */
   category_points: Partial<Record<GradeCategory, number>>;
 }
 
+/** Patch body for a course; callers send a `Partial` holding only the changed fields. */
 export interface CourseUpdate{
   code: string | null;
   name: string | null;
@@ -148,7 +136,7 @@ export interface CourseUpdate{
   credits: number | null;
   required: boolean | null;
   professor: string | null;
-  /** The section you are in ("101"); a syllabus belongs to one section. */
+  /** The student's section, e.g. "101"; "" clears it. */
   section: string | null;
   final_grade: number | null;
   target_grade: number | null;
@@ -163,40 +151,36 @@ export interface CourseUpdate{
 
 
 // Grade
+/** One gradebook item of a course. */
 export interface Grade {
   id: string;
   name: string;
-  // null until the assignment has been marked
+  /** Null until marked; unmarked is not zero. */
   score: number | null;
   max_score: number;
   category: GradeCategory;
   weight: number;
-  /** When the work is due, as opposed to when it was marked. */
+  /** When the work is due or sat, YYYY-MM-DD; null for an undated item. */
   due_date: string | null;
-  /** The time of day, where there is a particular one. Null is not midnight. */
+  /** "HH:MM[:SS]" on the due date; null means no set time, not midnight. */
   due_time: string | null;
-  /** How long a calendar-bound grade runs. Null for a task or an all-day block. */
+  /** Length of a calendar block; null for a task or an all-day block. */
   duration_minutes: number | null;
-  /** What that date means. Ignored when there is no date. */
+  /** Whether the date raises a task or a calendar block; ignored without a date. */
   schedule_as: GradeSchedule;
-  /** Kept on the course but left out of every average, e.g. a dropped quiz. */
+  /** Dropped: kept on the course but left out of every average. */
   excluded: boolean;
 }
 
-/**
- * How a dated grade shows up outside the gradebook.
- *
- * Two different things wear a date: an assignment due Friday is work you tick
- * off, a midterm on the 15th is something you sit. Forcing both through a task
- * made the second read as a chore that never quite closes.
- */
+/** What a dated grade raises outside the gradebook. */
 export enum GradeSchedule {
-  /** Raises a task that closes itself when the score lands. */
+  /** A task that closes itself when the score lands. */
   TASK = "task",
-  /** Draws a block on the calendar and nothing else. */
+  /** A calendar block and nothing else. */
   EVENT = "event",
 }
 
+/** Grade categories as the API spells them. */
 export enum GradeCategory {
   ASSIGNMENT = "Assignment",
   LAB = "Lab",
@@ -206,17 +190,11 @@ export enum GradeCategory {
   PROJECT = "Project",
   OTHER = "Other",
   FINAL = "Final",
-  /** Adds to the course average rather than forming part of it. See bonus.ts. */
+  /** Adds on top of the course average instead of forming part of it; see bonus.ts. */
   BONUS = "Bonus"
 }
 
-/**
- * Where a course can still finish.
- *
- * A running average cannot answer this: 78% with everything marked is a result,
- * 78% with the final still to come is anywhere between a fail and an A.
- */
-/** One unmarked item, and what doing it is worth. */
+/** One unmarked item and what doing it is worth. */
 export interface RemainingItem {
   grade_id: string;
   name: string;
@@ -225,37 +203,36 @@ export interface RemainingItem {
   due_date: string | null;
   /** Points of final course average this item still controls. */
   leverage: number;
-  /** The student's own estimate, off the task this grade raised. */
+  /** The student's own estimate, from the task this grade raised. */
   estimated_minutes: number | null;
-  /**
-   * Leverage per hour, null when there is no estimate. Never defaulted: a
-   * missing estimate would sort as free or infinite and both are lies.
-   */
+  /** Leverage per hour; null without an estimate, never defaulted. */
   per_hour: number | null;
 }
 
+/** "Worth doing next": the cheapest unmarked work toward the target. */
 export interface CheapestPath {
   target: number;
   current: number;
   /** The average if everything outstanding went perfectly. */
   best: number;
-  /** Whether the target is still arithmetically available at all. */
+  /** Whether the target can still be reached at all. */
   reachable: boolean;
-  /** The top three, ranked by points per hour and then by points. */
+  /** The top three, ranked by points per hour, then by points. */
   items: RemainingItem[];
-  /** How many were outstanding before the cut to three. */
+  /** How many items were outstanding before the cut to three. */
   remaining_count: number;
-  /** Both counted over the three shown, not over everything outstanding. */
+  /** Counted over the three shown, as is `unestimated_count`. */
   estimated_count: number;
   unestimated_count: number;
 }
 
+/** The best-to-worst range a course can still finish in. */
 export interface GradeBand {
-  /** Every outstanding item at full marks. */
+  /** Average with every outstanding item at full marks. */
   best: number;
-  /** Every outstanding item at nothing. */
+  /** Average with every outstanding item at zero. */
   worst: number;
-  /** The live average, which sits between them. */
+  /** The live average, between the two. */
   current: number;
   /** Nothing left to mark, so best and worst have met. */
   settled: boolean;
@@ -264,23 +241,25 @@ export interface GradeBand {
   empty_categories: string[];
 }
 
-/** Answer from the "what do I need on the final" calculation. */
+/** The score needed on the final to reach the target. */
 export interface RequiredFinal {
-  /** Score needed on the final, as a percentage. Can fall outside 0-100. */
+  /** Percentage needed on the final; can fall outside 0-100. */
   needed: number;
-  /** False when `needed` is unreachable — above 100 or already below 0. */
+  /** False when `needed` is above 100 or already below 0. */
   possible: boolean;
-  /** Weighted categories with no marks yet, which the figure does not count. */
+  /** Weighted categories with no marks yet, which the figure leaves out. */
   unfinished_categories: string[];
 }
 
+/** Request body replacing a course's category weights. */
 export interface CategoryWeightsUpdate {
   category_weights: Partial<Record<GradeCategory, number>>;
 }
 
+/** Request body for adding a grade. */
 export interface GradeCreate{
   name: string;
-  // omit or send null to add an assignment that is not graded yet
+  /** Null adds the item unmarked. */
   score: number | null;
   max_score: number;
   category: GradeCategory;
@@ -290,6 +269,7 @@ export interface GradeCreate{
   schedule_as: GradeSchedule;
 }
 
+/** Patch body for a grade. */
 export interface GradeUpdate{
   name: string | null;
   score: number | null;
@@ -299,16 +279,18 @@ export interface GradeUpdate{
   due_time: string | null;
   duration_minutes: number | null;
   schedule_as: GradeSchedule | null;
-  /** Kept on the course but left out of every average. */
+  /** Dropped: kept on the course but left out of every average. */
   excluded: boolean | null;
 }
 
 
 // Error Handling
+/** FastAPI's 422 body. */
 export interface HTTPValidationError {
   detail: ValidationError[];
 }
 
+/** One entry of a FastAPI validation error. */
 export interface ValidationError {
   loc: (string | number)[];
   msg: string;
@@ -319,18 +301,20 @@ export interface ValidationError {
 
 
 // User
+/** A user's id, name and email. */
 export interface User {
   id: string;
   name: string;
   email: string;
 }
 
+/** Request body for creating a user. */
 export interface UserCreate {
   name: string;
   email: string;
-  // add current_semester in the future
 }
 
+/** A user with their courses. */
 export interface UserDetail {
   id: string;
   name: string;
@@ -338,6 +322,7 @@ export interface UserDetail {
   courses: Course[];
 }
 
+/** Patch body for a user's name and email. */
 export interface UserUpdate{
   name: string | null;
   email: string | null;
@@ -345,15 +330,18 @@ export interface UserUpdate{
 
 
 // Dashboard
+/** One school year's average and course count. */
 export interface YearSummary {
   school_year: number;
-  /** null when no course that year has anything recorded */
+  /** Null when no course that year has anything recorded. */
   average: number | null;
   course_count: number;
 }
 
+/** Why a course is listed in Attention. */
 export type AttentionKind = "missing_final" | "below_target" | "weight_problem" | "missing_section";
 
+/** One Attention entry: a course and the problem to act on. */
 export interface AttentionItem {
   kind: AttentionKind;
   course_id: string;
@@ -361,44 +349,46 @@ export interface AttentionItem {
   message: string;
 }
 
-/* ===== Category blind spots =====
-   Mirrors app/Grades/schemas/blind_spot.py. Pooled across every graded course,
-   so there is no course_id here -- course_codes names which courses fed the
-   finding, not one course to link to. */
+/* ===== Category blind spots ===== */
 
+/** How far a category trails the student's overall average. */
 export type BlindSpotSeverity = "mild" | "moderate" | "severe";
 
+/** A category pooled across every graded course that trails the overall average. */
 export interface CategoryBlindSpot {
   category: string;
-  /** Pooled percentage across every marked item in this category. */
+  /** Pooled percentage over every marked item in this category. */
   average: number;
-  /** The same pooling done across every marked item in every category. */
+  /** The same pooling over every marked item in every category. */
   overall_average: number;
-  /** overall_average - average. Always positive -- a strength never appears here. */
+  /** `overall_average` minus `average`; always positive. */
   gap: number;
   severity: BlindSpotSeverity;
   course_count: number;
   item_count: number;
+  /** Courses that fed the finding; there is no single course to link to. */
   course_codes: string[];
 }
 
+/** One term on the grade trend chart. */
 export interface TermPoint {
   school_year: number;
   semester: string;
   label: string;
-  /** Plain mean across that term's courses */
+  /** Plain mean of that term's courses. */
   term_average: number;
-  /** Credit-weighted cumulative up to that term; null until a course has a final */
+  /** Credit-weighted cumulative up to that term; null until a course has a final. */
   cumulative_average: number | null;
 }
 
+/** The grades dashboard: averages, credits, Attention and the term history. */
 export interface UserGradeDashboard {
   total_courses: number;
-  /** Credit-weighted mean */
+  /** Credit-weighted mean. */
   cumulative_average: number;
-  /** Plain mean across the current term only */
+  /** Plain mean over the current term only. */
   semester_average: number;
-  /** null when the GPA scale is switched off in settings */
+  /** Null when the GPA scale is switched off in Settings. */
   cgpa: number | null;
   credits_completed: number;
   credits_in_progress: number;
@@ -415,36 +405,40 @@ export interface UserGradeDashboard {
   unfinished_categories_by_course: Record<string, string[]>;
 }
 
+/** A course named on the dashboard, with the final score it needs. */
 export interface CourseDashboardEntry {
   course_id: string;
   course_code: string;
   course_name: string;
-  /** Null when nothing is marked. See Course.average. */
+  /** Null when nothing is marked; see `Course.average`. */
   average: number | null;
   needed_final_score: number | null;
   unfinished_categories: string[];
 }
 
+/** A course still waiting on its final, with the score it needs. */
 export interface CourseNeedingFinalScore {
   course_id: string;
   course_code: string;
   course_name: string;
-  /** Null when nothing is marked. See Course.average. */
+  /** Null when nothing is marked; see `Course.average`. */
   average: number | null;
   needed_final_score: number | null;
   unfinished_categories: string[];
 }
 /* ===== Grading schemes (Phase 1 item 4) ===== */
 
+/** One category's part in a grading scheme. */
 export interface SchemeComponent {
   category: GradeCategory;
   weight: number;
-  /** Leave out this many of the category's lowest marks. */
+  /** How many of the category's lowest marks to leave out. */
   drop_lowest: number;
   /** A category whose higher average stands in for this one. */
   replace_with: GradeCategory | null;
 }
 
+/** An alternative grading scheme saved on a course. */
 export interface GradingScheme {
   id: string;
   course_id: string;
@@ -453,32 +447,39 @@ export interface GradingScheme {
   created_at: string;
 }
 
+/** One category's line in a scheme's result. */
 export interface SchemeLine {
   category: GradeCategory;
   weight: number;
+  /** The category's average after the scheme's rules; null with nothing marked. */
   average: number | null;
+  /** How many marks the drop rule left out. */
   dropped: number;
   replaced_by: GradeCategory | null;
 }
 
+/** A scheme applied to the course's marks. */
 export interface SchemeResult {
+  /** Null for the course's own weights. */
   id: string | null;
   label: string;
   average: number;
   lines: SchemeLine[];
-  /** The scheme as written, rules included: what the editor starts from. */
+  /** The scheme as written, rules included; what the editor starts from. */
   components: SchemeComponent[];
 }
 
+/** The course's own weights beside each saved scheme, with the best and the counted one. */
 export interface SchemeComparison {
   current: SchemeResult;
   schemes: SchemeResult[];
+  /** The scheme with the highest average when one beats the course's own; else null. */
   best_id: string | null;
   /** The scheme picked as the course's grade; null when its own weights are. */
   counting_id?: string | null;
 }
 
-/** A course as the school offers it: shared, the same for everyone (Phase 2). */
+/** A course as the school offers it: a shared catalogue row, the same for everyone. */
 export interface CatalogueCourse {
   id: string;
   campus: "UBCV" | "UBCO" | string;
@@ -488,21 +489,27 @@ export interface CatalogueCourse {
   credits: number | null;
 }
 
-/** chosen: you picked it. matched: automatic, by campus and code. none_chosen:
- *  you said there is none. not_found: automatic, and nothing matches yet. */
+/**
+ * A course's catalogue link: chosen by hand, matched by campus and code, none_chosen
+ * when the student said there is none, or not_found when nothing matches yet.
+ */
 export interface CatalogueLink {
   how: "chosen" | "matched" | "none_chosen" | "not_found";
   course: CatalogueCourse | null;
 }
 
+/** The student's catalogue choice: automatic matching, none, or a picked course. */
 export type CatalogueChoice =
   | { mode: "auto" }
   | { mode: "none" }
   | { mode: "chosen"; catalogue_course_id: string };
 
+/** A prerequisite rule's outcome against the student's courses. */
 export type RuleStatus = "met" | "on_track" | "not_met";
+/** Which kind of requisite a rule is. */
 export type PrerequisiteKindName = "prerequisite" | "corequisite";
 
+/** A rule evaluated, as a tree of groups and single requirements. */
 export interface RuleResult {
   status: RuleStatus;
   text: string;
@@ -512,8 +519,7 @@ export interface RuleResult {
   group: "all" | "any" | null;
 }
 
-/** One version of a rule. source: typed/syllabus are yours; reviewed and
- *  ubc-calendar are the shared catalogue's. */
+/** One version of a rule: typed or syllabus are the student's, reviewed or ubc-calendar shared. */
 export interface PrerequisiteSide {
   source: "typed" | "syllabus" | "reviewed" | "ubc-calendar";
   rule: Record<string, unknown>;
@@ -525,6 +531,7 @@ export interface PrerequisiteSide {
   result: RuleResult;
 }
 
+/** The student's and the catalogue's versions of one requisite kind, and which applies. */
 export interface PrerequisiteKind {
   kind: PrerequisiteKindName;
   yours: PrerequisiteSide | null;
@@ -532,12 +539,14 @@ export interface PrerequisiteKind {
   applies: "yours" | "shared" | null;
 }
 
+/** A course's catalogue link and requisite rules. */
 export interface Prerequisites {
   course_id: string;
   link: CatalogueLink;
   kinds: PrerequisiteKind[];
 }
 
+/** Requisites for a course not yet added, looked up from the catalogue. */
 export interface PrerequisitePreview {
   catalogue: CatalogueCourse | null;
   kinds: PrerequisiteKind[];

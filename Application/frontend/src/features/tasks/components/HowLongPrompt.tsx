@@ -2,9 +2,10 @@ import { useState } from "react";
 import { Task } from "../types";
 import { duration } from "../../../shared/utils/dateUtils";
 
-/** Mirrors MAX_ESTIMATED_MINUTES in app/Tasks/schemas/task.py. */
+/** Longest answer, in minutes; mirrors MAX_ESTIMATED_MINUTES in app/Tasks/schemas/task.py. */
 const MAX_MINUTES = 2400;
 
+/** The task just finished, and the answer and skip handlers. */
 interface HowLongPromptProps {
   /** The task just ticked off, as the server returned it. */
   readonly task: Task;
@@ -12,15 +13,14 @@ interface HowLongPromptProps {
   readonly onSkip: () => void;
 }
 
+/** Round minutes and keep them between 1 and `MAX_MINUTES`. */
 function clamp(minutes: number): number {
   return Math.min(MAX_MINUTES, Math.max(1, Math.round(minutes)));
 }
 
 /**
- * "How long did it take?", after a task with an estimate is ticked off (Phase 1
- * D35). A card on the page rather than a dialog: finishing a task must not be
- * held up by a question, and skipping leaves the time blank, which counts for
- * nothing. When a timer ran, its total is the first answer offered.
+ * "How long did it take?" card after an estimated task is ticked off, offering quick picks
+ * (the timer's total first, when it ran) or a typed figure; skipping records nothing.
  */
 export default function HowLongPrompt({ task, onAnswer, onSkip }: HowLongPromptProps) {
   const [typed, setTyped] = useState("");

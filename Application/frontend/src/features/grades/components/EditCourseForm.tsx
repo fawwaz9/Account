@@ -2,6 +2,7 @@ import { CourseCreate, Semester } from "../types"
 import CategoryWeights from "./CategoryWeights";
 import CourseFlags from "./CourseFlags";
 
+/** The course's form state and setter, its save and cancel actions, and status text. */
 interface EditCourseFormProps {
   readonly form: CourseCreate;
   readonly updateField: <K extends keyof CourseCreate>(key: K, value: CourseCreate[K]) => void;
@@ -11,6 +12,7 @@ interface EditCourseFormProps {
   readonly error?: string | null;
 }
 
+/** The edit-course form: the same fields as `AddCourseForm`, with ids prefixed `edit-`. */
 export default function EditCourseForm({
   form,
   updateField,

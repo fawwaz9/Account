@@ -10,17 +10,24 @@ import { today } from "../../../shared/utils/dateUtils";
 import Modal from "../../../shared/components/Modal";
 import { formatMoney } from "../money";
 
+/** Props for the money dialog. */
 interface AddMoneyModalProps {
   readonly open: boolean;
   readonly accounts: readonly Account[];
   readonly categories: readonly SpendCategory[];
+  /** Courses an expense can be tagged to. */
   readonly courses: readonly Course[];
   readonly onClose: () => void;
   readonly onSaved: () => void;
 }
 
+/** The dialog's four tabs. */
 type Mode = "expense" | "income" | "transfer" | "deposit";
 
+/**
+ * Record money: an expense, income, a transfer, or a deposit split across accounts.
+ * The server previews the deposit split, so it rounds exactly as recording will.
+ */
 export default function AddMoneyModal({
   open,
   accounts,

@@ -7,11 +7,8 @@ import { useAuth } from "../../../app/auth/AuthContext";
 import { useDebounce } from "../../../shared/hooks/useDebounce";
 
 /**
- * Typeahead over every course, not just the ones on screen.
- *
- * The list beside it shows the current term only, so filtering that list could
- * never reach a past course. This searches server-side across all terms and
- * opens whichever course you pick.
+ * Typeahead over every course in every term, searched on the server after a 250 ms pause.
+ * A combobox: arrow keys move the active option, Enter opens it, Escape closes the list.
  */
 export default function CourseSearch() {
   const { user } = useAuth();

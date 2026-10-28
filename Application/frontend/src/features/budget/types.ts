@@ -2,114 +2,67 @@
 // class times and standing payments alike, and a second copy here would drift.
 import { Recurrence } from "../calender/types";
 
+/** Kinds of money account; the kind gives an account its roles. */
 export type AccountKind =
   | "spending"
   | "savings"
   | "investment"
   | "emergency"
   | "other"
-  /**
-   * Money owed rather than held. Its balance is the ordinary signed sum of its
-   * rows, so it reads negative -- buying with the card is an expense on the
-   * account, paying it down is a transfer toward zero. Nothing special-cases
-   * the sign, which is why a total that adds every balance subtracts debt.
-   */
+  /** Money owed: its balance reads negative, so any total of balances subtracts it. */
   | "debt";
 
 /**
- * What an investment account's holding is worth, over and above what went into it.
- *
- * Null on anything that is not an investment account, and on an investment nobody
- * has recorded a reading for -- one nullable object rather than several nullable
- * numbers, so "no reading yet" is a single check.
- *
- * `difference_amount` is a **level**, not a month's gain: how far above (positive)
- * or below (negative) the ledger balance the holding sat, as of `as_of`. A list of
- * these must never be summed; the newest one already describes the whole gain.
+ * An investment's latest reading: how far its value sits above or below the ledger.
+ * A level, not a month's gain: never sum a list of these.
  */
 export interface InvestmentReturn {
-  /** Positive is up on what you put in. */
+  /** Market value less ledger balance; positive is up. */
   difference_amount: number;
-  /**
-   * `difference_amount` over `ledger_balance`, already rounded to 1dp by the
-   * server. **Null when the balance is zero or negative**, where the division is
-   * undefined or flips the sign -- show the dollar figure and no percentage.
-   *
-   * Not recomputed in the client: the server rounds and we render, or the two
-   * disagree at the boundary. Same rule as `used_percent` on ProgressBar.
-   */
+  /** Server-rounded percent of `ledger_balance`; null when that is zero or negative. */
   return_percent: number | null;
-  /** The month this reading was taken for, `YYYY-MM-01`. */
+  /** Month the reading is for, YYYY-MM-01. */
   as_of: string;
-  /**
-   * True when nothing was recorded for the month being shown and the last known
-   * reading is standing in. The UI must date the figure when this is set, or a
-   * reading from March reads as today's.
-   */
+  /** No reading for the month shown, so the last one stands in; the UI must date it. */
   is_carried_forward: boolean;
-  /** The denominator the percentage used, so the UI states what it measured against. */
+  /** Balance the percentage was measured against. */
   ledger_balance: number;
-  /** What was originally typed, so a form can show it back unchanged. */
+  /** Value as typed, so a form can show it back. */
   market_value: number | null;
-  /**
-   * How much the holding moved **during** the month asked for. Null in three
-   * cases that all mean "not knowable", and none of which is zero: no month was
-   * asked for (the account card), the month has no reading of its own and this
-   * figure was carried forward, or it is the first reading ever taken. Rendering
-   * a null as "$0.00" would claim the holding was flat.
-   */
+  /** Movement during the month asked for; null when unknowable, which is not zero. */
   month_gain: number | null;
 }
 
+/** A money account with its derived balance. */
 export interface Account {
   id: string;
   name: string;
   kind: AccountKind;
-  /** Default share of income, as a percentage */
+  /** Default share of income, percent. */
   income_share: number;
   archived: boolean;
   position: number;
-  /**
-   * Whether this balance reaches the net worth figure. Any account may turn it
-   * off -- the case it exists for is money someone else is holding, whether
-   * that is lent out, joint, or kept on their behalf, and only the owner knows
-   * which pot that is. A debt account needs no flag: its balance is already
-   * negative, so it subtracts itself.
-   */
+  /** Counted account: false leaves it out of every multi-account figure. */
   counts_toward_net_worth: boolean;
-  /** Derived from the account's transactions, not stored */
+  /** Signed sum of its transactions, derived on read. */
   balance: number;
-  /**
-   * The last non-archived account of a kind the app depends on. The server
-   * refuses to delete, archive or re-kind it; this is the same rule, sent
-   * along so the controls can say so before you click them.
-   */
+  /** Last active account of a kind the app needs: no delete, archive or change of kind. */
   role_locked: boolean;
-  /**
-   * Null unless this is an investment account with at least one reading. The
-   * latest reading overall, since a card is not scoped to a month.
-   */
+  /** Latest reading overall; null unless an investment account has one. */
   investment_return: InvestmentReturn | null;
 }
 
+/** The net worth headline. */
 export interface NetWorth {
-  /**
-   * The sum of the balances that count, **plus** the latest recorded gain on each
-   * investment account, so the figure reflects what the holdings are worth rather
-   * than only what was paid for them. Debt needs no arithmetic of its own: a debt
-   * account's balance is already negative, so it subtracts itself.
-   */
+  /** Counted balances plus each investment's latest gain; debt is already negative. */
   net_worth: number;
-  /** The same money as a positive figure -- "Debt -1,000" reads as a double negative. */
+  /** Debt as a positive figure, for display. */
   debt_total: number;
-  /**
-   * How much of `net_worth` is investment gain rather than money that has passed
-   * through the ledger. Sent separately so the headline can disclose it: a figure
-   * that moves with how recently a reading was recorded has to say so.
-   */
+  /** Part of `net_worth` that is investment gain, disclosed beside the headline. */
   investment_gain: number;
 }
 
+/** Body to create an account. */
 export interface AccountCreate {
   name: string;
   kind: AccountKind;
@@ -119,41 +72,45 @@ export interface AccountCreate {
   counts_toward_net_worth?: boolean;
 }
 
+/** What a ledger row records. */
 export type TransactionKind = "income" | "expense" | "transfer";
 
+/** One ledger row, sent as a magnitude plus its signed amount. */
 export interface Transaction {
   id: string;
   kind: TransactionKind;
   account_id: string;
   category_id: string | null;
-  /** Always positive */
+  /** Magnitude, always positive. */
   amount: number;
-  /** Positive into the account, negative out of it */
+  /** Positive into the account, negative out of it. */
   signed_amount: number;
   description: string | null;
   occurred_on: string;
-  /** Present on both halves of a transfer */
+  /** Ties a transfer's two rows or a deposit's allocations; null when alone. */
   group_id: string | null;
-  /** How many rows share this group; 1 when ungrouped */
+  /** Rows sharing `group_id`; 1 when ungrouped. */
   group_size: number;
-  /** What it was bought for, on expenses. Tuition never sets this. */
+  /** Course an expense was bought for; tuition never sets it. */
   course_id: string | null;
-  /** Set when a tuition payment owns this row, so it opens the right editor. */
+  /** Set when a tuition payment owns this row, so it opens that editor. */
   tuition_payment_id: string | null;
 }
 
+/** Body to record income or an expense. */
 export interface TransactionCreate {
   kind: "income" | "expense";
   account_id: string;
   amount: number;
   description: string | null;
   occurred_on: string;
-  /** Only meaningful on expenses; the server ignores it on income */
+  /** Expense category; ignored on income. */
   category_id: string | null;
-  /** Which course this was bought for. Expense-only, like the category. */
+  /** Course it was bought for; expenses only. */
   course_id: string | null;
 }
 
+/** A spending category. */
 export interface SpendCategory {
   id: string;
   name: string;
@@ -161,57 +118,35 @@ export interface SpendCategory {
   position: number;
 }
 
+/** One account's month: planned against actual spending. */
 export interface AccountBudget {
   account_id: string;
   account_name: string;
   planned: number;
-  /**
-   * Expenses **plus the outgoing half of a transfer**: money moved out of a pot
-   * has left it as surely as money spent from it, so a target ignoring transfers
-   * would under-report. Only the negative leg counts; the matching positive one
-   * lands on the receiving account as money arriving.
-   *
-   * This said "expenses only -- transfers move money rather than spending it",
-   * which is the opposite of what budget_service does. The numbers were right;
-   * the comment was a trap for whoever read it next.
-   */
+  /** Expenses plus outgoing transfers this month. */
   actual: number;
   remaining: number;
   used_percent: number;
-  /**
-   * True when `planned` is the sum of this account's category limits rather
-   * than a figure typed into Planned spend. When it is, the figure is shown
-   * but not editable: one number with two places to set it is the shape where
-   * whichever you edited last quietly wins.
-   */
+  /** `planned` is the sum of category limits, so it is shown but not editable. */
   planned_is_derived: boolean;
 }
 
+/** One category's spending for the month, with its limit where known. */
 export interface CategorySpend {
   category_id: string | null;
   category_name: string;
   actual: number;
-  /**
-   * What this account means to spend here, or `null` for no limit.
-   *
-   * Populated **only on an account's own page**, where the limit and the
-   * spending cover the same money. The budget summary spans every account and
-   * sends `null`, so its rows stay plain totals -- showing a per-account limit
-   * there would judge it against the wrong money, which is what got the first
-   * attempt at this removed.
-   *
-   * Also `null` for Uncategorised, which has no row to hang a limit on. A row
-   * with `null` here must render exactly as it did before limits existed.
-   */
+  /** Monthly limit, sent only on an account's own page; null for none or Uncategorised. */
   limit: number | null;
-  /** limit - actual. Negative is overspent. 0 when there is no limit. */
+  /** Limit less actual; negative is overspent, 0 with no limit. */
   remaining: number;
-  /** The server's figure, 0-100+, deliberately not clamped so the bar can go red. */
+  /** Server's percent, not clamped, so a bar can go red past 100. */
   used_percent: number;
-  /** True when this month differs from the account's standing limit. */
+  /** This month's limit differs from the account's standing one. */
   limit_is_override: boolean;
 }
 
+/** A month's budget across every account. */
 export interface BudgetSummary {
   month: string;
   total_planned: number;
@@ -220,6 +155,7 @@ export interface BudgetSummary {
   by_category: CategorySpend[];
 }
 
+/** Body to move money between two accounts. */
 export interface TransferCreate {
   from_account_id: string;
   to_account_id: string;
@@ -228,49 +164,50 @@ export interface TransferCreate {
   occurred_on: string;
 }
 
+/** One account's part of a deposit. */
 export interface DepositAllocation {
   account_id: string;
   amount: number;
 }
 
+/** How a deposit would split, before it is recorded. */
 export interface DepositPreview {
   amount: number;
   allocations: DepositAllocation[];
-  /** True when no account carries an income share, so nothing can be split */
+  /** No account has an income share, so nothing can be split. */
   needs_shares: boolean;
 }
 
+/** Body to record income split across accounts. */
 export interface DepositCreate {
   amount: number;
   occurred_on: string;
   description: string | null;
-  /** Empty means split by each account's income share */
+  /** Explicit split; empty splits by income share. */
   allocations: DepositAllocation[];
 }
 
+/** Money in and out on one day. */
 export interface DayFlow {
-  /** YYYY-MM-DD */
   day: string;
   money_in: number;
   money_out: number;
 }
 
+/** Balance at the end of a day with movement. */
 export interface BalancePoint {
   day: string;
   balance: number;
 }
 
+/** One account's month: totals, daily flow, categories and balance history. */
 export interface AccountActivity {
   account_id: string;
   account_name: string;
   month: string;
-  /**
-   * Which pot this is. Carried so the page can tell an investment account from a
-   * spending one -- it could not before, which is why every account showed the
-   * same tiles whatever it was for.
-   */
+  /** Account kind, so the page shows the tiles that fit it. */
   kind: AccountKind;
-  /** All-time, matching the account card */
+  /** All-time balance, matching the account card. */
   balance: number;
   total_in: number;
   total_out: number;
@@ -279,73 +216,48 @@ export interface AccountActivity {
   planned: number;
   remaining: number;
   used_percent: number;
-  /**
-   * True when `planned` is the sum of this account's category limits rather
-   * than a figure typed into Planned spend. When it is, the figure is shown
-   * but not editable: one number with two places to set it is the shape where
-   * whichever you edited last quietly wins.
-   */
+  /** `planned` is the sum of category limits, so it is shown but not editable. */
   planned_is_derived: boolean;
-  /** One entry per day of the month, zero-filled */
+  /** One entry per day of the month, zero-filled. */
   daily: DayFlow[];
   by_category: CategorySpend[];
-  /** All time, one point per day that had movement */
+  /** All time, one point per day with movement. */
   balance_history: BalancePoint[];
-  /**
-   * The investment reading that applies to the month being shown -- that month's
-   * own, or the last one taken before it with `is_carried_forward` set. Null for
-   * every non-investment account.
-   */
+  /** Reading for the month shown, carried forward if needed; null if not an investment. */
   investment_return: InvestmentReturn | null;
-  /**
-   * The latest reading overall, measured against the **all-time** balance -- the
-   * same figure the account card shows.
-   *
-   * Separate from `investment_return` above on purpose: this page's header is an
-   * all-time figure, and deriving it from the month-scoped reading would add
-   * March's gain to today's balance the moment anyone stepped the month picker
-   * back. Use this for the header, that one for the month's panel.
-   */
+  /** Latest reading against the all-time balance; the header uses this one. */
   all_time_return: InvestmentReturn | null;
-  /**
-   * What the ledger said at the end of the month shown, or today if the month has
-   * not ended. The figure a typed market value is subtracted from. Not `balance`,
-   * which is all-time and would be wrong for any past month.
-   */
+  /** Ledger balance at the month's end, or today for the current month. */
   ledger_balance_at_month: number;
 }
 
 /* ===== Standing instructions ===== */
 
-/** The four shapes money moves in, matching the money dialog's tabs. */
+/** The four shapes a standing instruction takes, as in the money dialog's tabs. */
 export type RecurringKind = "income" | "expense" | "transfer" | "deposit";
 
-/**
- * A standing instruction: rent on the 1st, Spotify on the 14th.
- *
- * Stores the rule, never the payments. An occurrence on or before today is
- * written as a real transaction; one after today stays a projection, because a
- * balance is the sum of its rows and money that has not moved must not be in it.
- */
+/** Standing instruction: the rule only; each payment is written once it falls due. */
 export interface RecurringTransaction {
   id: string;
   kind: RecurringKind;
   amount: number;
   description: string | null;
-  /** The pot it comes from, or the source of a transfer. Null for a deposit. */
+  /** Paying account, or a transfer's source; null for a deposit. */
   account_id: string | null;
   to_account_id: string | null;
   category_id: string | null;
   starts_on: string;
   recurrence: Recurrence;
   active: boolean;
+  /** Occurrences cancelled one at a time. */
   skipped_dates: string[];
-  /** The most recent date already charged, or null if it never has been. */
+  /** Latest date already written; null if never. */
   last_run_on: string | null;
-  /** The next date owed, or null once the rule has run out. */
+  /** Next date owed; null once the rule has run out. */
   next_due_on: string | null;
 }
 
+/** Body to create a standing instruction. */
 export interface RecurringCreate {
   kind: RecurringKind;
   amount: number;
@@ -358,17 +270,18 @@ export interface RecurringCreate {
   active: boolean;
 }
 
+/** Fields a standing instruction can change after creation. */
 export type RecurringUpdate = Partial<
   Pick<RecurringCreate, "amount" | "description" | "category_id" | "starts_on" | "recurrence" | "active">
 >;
 
-/** A payment the rules say is coming. Never a ledger row — nothing has moved. */
+/** A payment a rule says is coming: a projection, never a ledger row. */
 export interface UpcomingCharge {
   recurring_id: string;
   on_date: string;
   kind: RecurringKind;
   amount: number;
-  /** Negative for money leaving, so projections and balances sum alike. */
+  /** Negative for money leaving, so projections sum like balances. */
   signed_amount: number;
   description: string | null;
   account_id: string | null;
@@ -377,62 +290,66 @@ export interface UpcomingCharge {
   category_id: string | null;
 }
 
-/** What materialising due payments actually did. */
+/** What the catch-up run wrote. */
 export interface RecurringRun {
   created: number;
   transactions: Transaction[];
-  /** Rules that could not run, and why. One broken rule does not stop the rest. */
+  /** Rules that could not run, with why; one broken rule does not stop the rest. */
   skipped: string[];
 }
 
-/** One deduction on a tuition bill: money that lowered it without being income. */
+/** A deduction on a tuition bill, such as a bursary: lowers it without being income. */
 export interface TuitionDeduction {
   description: string;
   amount: number;
 }
 
+/** A course a tuition payment covers. */
 export interface TuitionCourse {
   course_id: string;
   code: string;
   name: string;
   credits: number;
+  /** Dollars of the gross its credits account for. */
   share: number;
 }
 
 /**
- * The arithmetic of a tuition payment, before anything is written.
- *
- * Both totals are here on purpose. `gross` is what the term is worth and is what
- * the course pages will report; `payable` is what leaves the account. They are
- * different numbers and the form shows both rather than implying one.
+ * A tuition payment's arithmetic before anything is written.
+ * `gross` is what the term is worth; `payable` is what leaves the account.
  */
 export interface TuitionPreview {
   school_year: number | null;
   semester: string | null;
-  /** The term as a person would write it; school_year is a year of standing. */
+  /** Term as a person writes it; `school_year` is a year of standing. */
   term_name: string;
   courses: TuitionCourse[];
   credits_counted: number;
   cost_per_credit: number;
+  /** Credits times rate, before fees and deductions. */
   gross: number;
   fees: number;
   deductions_total: number;
   payable: number;
-  /** Rate already recorded this term, so instalments are visibly additive. */
+  /** Rate already recorded this term; instalments add up. */
   already_recorded_per_credit: number;
   can_record: boolean;
+  /** Why it cannot be recorded, when `can_record` is false. */
   reason: string | null;
 }
 
+/** Body to record a tuition payment. */
 export interface TuitionCreate {
   account_id: string;
   occurred_on: string;
+  /** The rate, not the total; a term's payments add up. */
   cost_per_credit: number;
   fees: number;
   description: string | null;
   deductions: TuitionDeduction[];
 }
 
+/** A recorded tuition payment; it owns one ledger row. */
 export interface TuitionPayment {
   id: string;
   transaction_id: string;
@@ -445,17 +362,19 @@ export interface TuitionPayment {
   deductions: TuitionDeduction[];
 }
 
+/** Body to edit a tuition payment. */
 export interface TuitionUpdate extends TuitionCreate {
-  /** Re-count the term's credits as they stand now, rather than as billed. */
+  /** Recount the term's credits as they stand now, not as billed. */
   recount_credits: boolean;
 }
 
+/** One item bought for a course. */
 export interface CourseCostLine {
   label: string;
   amount: number;
 }
 
-/** What a course cost: gross tuition share plus anything bought for it. */
+/** What a course cost: its gross tuition share plus anything bought for it. */
 export interface CourseCost {
   course_id: string;
   credits: number;
@@ -466,16 +385,10 @@ export interface CourseCost {
   total: number;
 }
 
-/**
- * What a term cost, measured over the term rather than a calendar month.
- *
- * A month is the wrong unit for a student: tuition lands once and textbooks land
- * in the first fortnight. Grades knows when a term runs, per course, so the span
- * is assembled from the courses in it.
- */
+/** What a term cost, measured over its span rather than a calendar month. */
 export interface TermBudget {
   term_name: string;
-  /** null when no course in the term carries dates; `reason` then says why. */
+  /** Null when no course in the term has dates; `reason` says why. */
   starts_on: string | null;
   ends_on: string | null;
   dated_courses: number;
@@ -483,7 +396,7 @@ export interface TermBudget {
   spent: number;
   received: number;
   net: number;
-  /** Spend tagged to a course in this term, tuition included. */
+  /** Spending tagged to this term's courses, tuition included. */
   on_courses: number;
   by_category: CategorySpend[];
   days_elapsed: number;
@@ -496,39 +409,44 @@ export interface TermBudget {
 
 /** Mirrors app/Finances/schemas/safe.py. */
 
+/** A spending account counted in safe-to-spend. */
 export interface SpendableAccount {
   account_id: string;
   name: string;
   balance: number;
 }
 
+/** A payment due before the window ends. */
 export interface Commitment {
   on_date: string;
   description: string | null;
-  /** Positive. Every commitment reduces what is safe; the sign is in the name. */
+  /** Positive; every commitment reduces what is safe. */
   amount: number;
 }
 
+/** Safe-to-spend until the next payday, with its workings. */
 export interface SafeToSpend {
+  /** Today. */
   starts_on: string;
-  /** The day before the next pay date, or month end when no job has a pay rule. */
+  /** Day before the next pay date, or month end when no job has a pay rule. */
   ends_on: string;
   days: number;
-  /** True when the window ends at a real pay date rather than a fallback. */
+  /** The window ends at a real pay date, not the fallback. */
   until_payday: boolean;
 
   spendable: number;
   committed: number;
   /** This period's sinking-fund contributions not yet transferred. */
   earmarked: number;
-  /** The answer: money in a spending account, less what is committed. */
+  /** The answer: spendable less committed and earmarked. */
   safe_now: number;
 
-  /** Confirmed work no cheque has covered yet. Context, never the headline. */
+  /** Confirmed work no cheque has covered yet; context, never the headline. */
   owed_to_you: number;
+  /** `safe_now` plus `owed_to_you`. */
   safe_soon: number;
 
-  /** Null when safe_now is negative — a daily allowance of minus money is not guidance. */
+  /** Safe per remaining day; null when `safe_now` is negative. */
   per_day: number | null;
 
   accounts: SpendableAccount[];
@@ -539,14 +457,18 @@ export interface SafeToSpend {
 
 /** Mirrors app/Finances/schemas/sinking.py. */
 
+/** One month's transfer into a sinking fund. */
 export interface SinkingContribution {
   id: string;
+  /** First of the month it counts for. */
   for_month: string;
   amount: number;
+  /** The transfer's group; null only if that transfer was deleted. */
   group_id: string | null;
   confirmed_at: string | null;
 }
 
+/** Sinking fund: a target by a due date, its monthly need derived on read. */
 export interface SinkingFund {
   id: string;
   name: string;
@@ -557,24 +479,22 @@ export interface SinkingFund {
   archived: boolean;
   created_at: string | null;
 
+  /** Transferred so far. */
   saved: number;
   remaining: number;
-  /** Contributions left, counting this month. Zero once the due date has passed. */
+  /** Contributions left, counting this month; 0 once past due. */
   months_left: number;
-  /** Derived on every read, never stored: a missed month corrects itself. */
+  /** Monthly need, derived on every read, so a missed month corrects itself. */
   per_month: number;
   funded_this_month: boolean;
-  /**
-   * What safe-to-spend subtracts — this month's contribution while it is still
-   * a promise. Zero once transferred, because the money is then in a savings
-   * account that safe-to-spend already excludes.
-   */
+  /** This month's contribution while still unpaid; safe-to-spend subtracts it. */
   unfunded_this_month: number;
   overdue: boolean;
 
   contributions: SinkingContribution[];
 }
 
+/** Body to create a sinking fund. */
 export interface SinkingFundCreate {
   name: string;
   target_amount: number;
@@ -584,10 +504,12 @@ export interface SinkingFundCreate {
   archived: boolean;
 }
 
+/** Partial sinking-fund edit. */
 export type SinkingFundUpdate = Partial<SinkingFundCreate>;
 
+/** Body to transfer this month's contribution. */
 export interface ContributionRequest {
-  /** Null uses the derived monthly figure. A smaller month is allowed. */
+  /** Null uses the derived monthly figure; a smaller amount is allowed. */
   amount: number | null;
   occurred_on: string | null;
 }
@@ -597,16 +519,19 @@ export interface ContributionRequest {
    every fetch re-derives the pattern from the ledger, so there is no id to
    dismiss by, only charges to act on. */
 
+/** How often a detected subscription charges. */
 export type SubscriptionCadence = "weekly" | "fortnightly" | "monthly";
 
+/** One charge in a detected subscription. */
 export interface SubscriptionOccurrence {
   transaction_id: string;
   on_date: string;
   amount: number;
 }
 
+/** A repeating charge spotted in the ledger; derived on each fetch, never stored. */
 export interface SubscriptionCandidate {
-  /** The most recent charge's own text, so what is shown matches the ledger. */
+  /** Latest charge's own text, so it matches the ledger. */
   description: string;
   account_id: string;
   category_id: string | null;
@@ -616,49 +541,63 @@ export interface SubscriptionCandidate {
   last_seen: string;
   next_expected_on: string;
   occurrences: SubscriptionOccurrence[];
-  /** Ready to submit as-is: confirming turns this straight into a standing instruction. */
+  /** Ready-to-submit standing instruction, for confirming it. */
   suggested: RecurringCreate;
 }
 
 /* ===== Cash-flow forecast (Phase 1 item 9) ===== */
 
+/** Spending-account balance at the end of a day. */
 export interface ForecastPoint {
   on_date: string;
   balance: number;
 }
 
+/** A dated movement the forecast expects: a standing instruction or pay. */
 export interface ForecastEvent {
   on_date: string;
   description: string;
-  /** Signed: negative is money leaving the spending accounts. */
+  /** Signed: negative leaves the spending accounts. */
   amount: number;
   source: "recurring" | "pay";
+  /** Divided by the income split on the way in. */
   split: boolean;
 }
 
+/** How long held money lasts at the recent pace. */
 export interface Runway {
+  /** Spending, savings and emergency balances; no investments or debt. */
   liquid: number;
+  /** Average net money out per day, all accounts. */
   daily_burn: number;
+  /** Null when nothing is burning or there is nothing to burn. */
   lasts_until: string | null;
 }
 
+/** One merchant's one-off spending, projected to the horizon. */
 export interface MerchantRunRate {
   merchant: string;
+  /** Total over the look-back. */
   spent: number;
   occurrences: number;
+  /** That pace carried to the forecast's end. */
   projected: number;
 }
 
-/** Where the spending accounts are heading. Every figure is a projection. */
+/** Forecast: projected spending-account balance to the term's end. */
 export interface CashFlowForecast {
   starts_on: string;
   ends_on: string;
+  /** False when the term is unknown and sixteen weeks stand in. */
   ends_at_term_end: boolean;
   starting_balance: number;
+  /** Average one-off spending per day, from spending accounts. */
   daily_spending: number;
+  /** Days of history behind that average. */
   spending_history_days: number;
   points: ForecastPoint[];
   events: ForecastEvent[];
+  /** First day the balance goes below zero; null if it never does. */
   negative_on: string | null;
   lowest_balance: number;
   lowest_on: string;
@@ -670,33 +609,42 @@ export interface CashFlowForecast {
 
 /* ===== Year plan and hours-to-goal (Phase 1 item 10) ===== */
 
+/** One month of the year plan. */
 export interface PlanMonth {
-  /** The first of the month. */
+  /** First of the month. */
   month: string;
   money_in: number;
   /** Positive: what leaves. */
   money_out: number;
+  /** Liquid balance on the month's last day. */
   end_balance: number;
 }
 
+/** End balance with this many extra hours a week. */
 export interface PlanScenario {
   extra_hours_per_week: number;
   end_balance: number;
 }
 
+/** Hours-to-goal: extra weekly work needed to reach a target. */
 export interface PlanGoal {
   target: number;
   target_on: string;
+  /** Where the plan ends with no extra work. */
   base_end_balance: number;
   /** Negative when the target is already met. */
   shortfall: number;
+  /** Hourly job the extra hours are priced at. */
   job_name: string;
+  /** What one extra hour adds to liquid money, after deductions and shares. */
   net_hourly: number;
   weeks: number;
+  /** Null when the target is already met. */
   extra_hours_per_week: number | null;
   scenarios: PlanScenario[];
 }
 
+/** Year plan: liquid balance month by month to the school year's end. */
 export interface AnnualPlan {
   starts_on: string;
   ends_on: string;
@@ -705,12 +653,14 @@ export interface AnnualPlan {
   ending_balance: number;
   lowest_balance: number;
   lowest_on: string;
+  /** Present when a target was asked for and an hourly job can price it. */
   goal: PlanGoal | null;
   assumptions: string[];
 }
 
 /* ===== The plan against what happened (Phase 1 D37) ===== */
 
+/** A saved copy of the year plan. */
 export interface SavedPlan {
   id: string;
   saved_on: string;
@@ -718,7 +668,7 @@ export interface SavedPlan {
   ends_on: string;
 }
 
-/** One finished month, compared with the newest plan saved before it began. */
+/** One finished month against the newest plan saved before it began. */
 export interface MonthReview {
   month: string;
   plan_saved_on: string;
@@ -728,10 +678,11 @@ export interface MonthReview {
   actual_in: number;
   actual_out: number;
   actual_end: number;
-  /** Part of actual_out. The plan leaves tuition out, so this much of a gap is that. */
+  /** Part of `actual_out`; the plan leaves tuition out. */
   tuition_out: number;
 }
 
+/** Saved plans compared with what happened. */
 export interface PlanReview {
   latest: SavedPlan | null;
   months: MonthReview[];
@@ -739,35 +690,48 @@ export interface PlanReview {
 
 /* ===== CSV import (Phase 1 item 7) ===== */
 
+/** Which CSV column means what; detected, then adjustable. */
 export interface ImportMapping {
   has_header: boolean;
+  /** Column index of the date. */
   date: number;
+  /** Columns joined to make the description. */
   description: number[];
+  /** One signed amount column, or null to use `debit` and `credit`. */
   amount: number | null;
   debit: number | null;
   credit: number | null;
+  /** Order for ambiguous dates like 03/04. */
   date_order: "mdy" | "dmy";
+  /** Flip every amount, for card exports that list purchases as positive. */
   invert: boolean;
 }
 
+/** One parsed CSV line and what importing it would do. */
 export interface ImportRow {
+  /** 1-based line in the file; a commit names rows by it. */
   line: number;
   on_date: string | null;
   description: string;
   /** Signed: negative is money out. */
   amount: number | null;
   status: "new" | "duplicate" | "error";
+  /** Existing row a duplicate matches. */
   duplicate_of: string | null;
   reason: string | null;
-  /** A suggested category for an expense, or null to ask. */
+  /** Suggested expense category, or null to ask. */
   category_id: string | null;
+  /** Where the suggestion came from. */
   category_source: "learned" | "rule" | "bayes" | null;
 }
 
+/** A CSV import before it is committed. */
 export interface ImportPreview {
   account_id: string;
   mapping: ImportMapping;
+  /** Header cells, so column indexes have names. */
   columns: string[];
+  /** Every date reads either way; the person should confirm the order. */
   date_order_assumed: boolean;
   rows: ImportRow[];
   new_count: number;
@@ -777,15 +741,19 @@ export interface ImportPreview {
   money_out: number;
 }
 
+/** A committed import, undoable while its rows remain. */
 export interface ImportSummary {
   id: string;
   account_id: string;
   account_name: string;
   filename: string | null;
   created_at: string;
+  /** Rows written at the time. */
   row_count: number;
+  /** Still in the ledger: what undo would remove. */
   rows_remaining: number;
   first_date: string | null;
   last_date: string | null;
+  /** Subscriptions the audit now sees; only on the commit's answer. */
   subscription_candidates: number | null;
 }

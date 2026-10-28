@@ -3,18 +3,27 @@ import { getCurrentUser, CurrentUser } from "../../services/currentUserClient";
 import { setClockZone } from "../../shared/utils/dateUtils";
 import { forgetThisDevice } from "../../features/notifications/push";
 
+/** What `useAuth` exposes: the session token, the user, and the sign-in actions. */
 interface AuthContextType {
+  /** Bearer token, mirrored in sessionStorage. */
   token: string | null;
   user: CurrentUser | null;
+  /** True once both the token and its user are present. */
   isAuthenticated: boolean;
+  /** True while the user for the current token is loading. */
   isLoading: boolean;
+  /** Store a new token; its user is fetched afterwards. */
   login: (token: string) => Promise<void>;
+  /** Unsubscribe this device from push, then drop the session. */
   logout: () => void;
+  /** Re-read the user after a server-side change; a failure keeps the old one. */
   refreshUser: () => Promise<void>;
 }
 
+/** Session context; undefined outside the provider. */
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/** Session provider: the token, its user from `users/me`, and the clock set to their zone. */
 export function AuthProvider({ children }: { readonly children: ReactNode }) {
   const [token, setToken] = useState<string | null>(
     () => sessionStorage.getItem("access_token")
@@ -86,6 +95,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
   );
 }
 
+/** Read the session; throws outside the provider. */
 export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");

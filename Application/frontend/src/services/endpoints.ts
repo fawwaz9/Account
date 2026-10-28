@@ -1,3 +1,4 @@
+/** Every API path, grouped by module; the functions fill in the ids. */
 export const endpoints = {
   users: {
     base: "users",
@@ -22,15 +23,15 @@ export const endpoints = {
     courseGrades: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/grades`,
     bulkGrades: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/grades/bulk`,
     gradeDetail: (userId: string, courseId: string, gradeId: string) => `grades/${userId}/courses/${courseId}/grades/${gradeId}`,
-    /** The shared catalogue (Phase 2 item 3): search, and one course's link. */
+    /** Search the shared course catalogue. */
     catalogue: (userId: string) => `grades/${userId}/catalogue`,
     courseCatalogue: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/catalogue`,
-    /** Phase 2 items 4 and 7: yours, the shared one, met or not. */
+    /** A course's prerequisites, yours and the catalogue's, met or not. */
     prerequisites: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/prerequisites`,
     checkPrerequisite: (userId: string) => `grades/${userId}/prerequisites/check`,
   },
   calendar: {
-    /** Materialised occurrences for a window; takes ?start= and ?end=. */
+    /** Occurrences in a window; takes ?start= and ?end=. */
     agenda: (userId: string) => `calendar/${userId}/agenda`,
     freeBlocks: (userId: string) => `calendar/${userId}/free-blocks`,
     weekLoad: (userId: string) => `calendar/${userId}/week-load`,
@@ -49,24 +50,24 @@ export const endpoints = {
     detail: (userId: string, taskId: string) => `tasks/${userId}/tasks/${taskId}`,
     repeating: (userId: string) => `tasks/${userId}/repeating`,
     repeatingRule: (userId: string, ruleId: string) => `tasks/${userId}/repeating/${ruleId}`,
-    /** Writes each repeat's window. Idempotent, so it is safe on every load. */
+    /** Writes each repeat's window; idempotent, so safe on every load. */
     repeatingRun: (userId: string) => `tasks/${userId}/repeating/run`,
     repeatingSkip: (userId: string, ruleId: string) =>
       `tasks/${userId}/repeating/${ruleId}/skip`,
-    /** GET previews what a line means; POST creates the task it describes. */
+    /** GET previews what a line means; POST creates that task. */
     quickCapture: (userId: string) => `tasks/${userId}/quick-capture`,
-    /** Declared above /tasks/{task_id} on the server, or "timing" parses as an id. */
+    /** Literal path: the server declares it above the task-id route. */
     timing: (userId: string) => `tasks/${userId}/tasks/timing`,
     snooze: (userId: string, taskId: string) => `tasks/${userId}/tasks/${taskId}/snooze`,
     reminders: (userId: string) => `tasks/${userId}/reminders`,
-    /** Declared above /reminders/{id} on the server, or "due" parses as an id. */
+    /** Literal path: the server declares it above the reminder-id route. */
     remindersDue: (userId: string) => `tasks/${userId}/reminders/due`,
     reminder: (userId: string, reminderId: string) =>
       `tasks/${userId}/reminders/${reminderId}`,
     dismissReminder: (userId: string, reminderId: string) =>
       `tasks/${userId}/reminders/${reminderId}/dismiss`,
     snoozes: (userId: string, taskId: string) => `tasks/${userId}/tasks/${taskId}/snoozes`,
-    /** Declared above /tasks/{task_id} on the server, like `timing`. */
+    /** Literal path: the server declares it above the task-id route. */
     estimates: (userId: string) => `tasks/${userId}/tasks/estimates`,
     timerStart: (userId: string, taskId: string) => `tasks/${userId}/tasks/${taskId}/timer/start`,
     timerStop: (userId: string, taskId: string) => `tasks/${userId}/tasks/${taskId}/timer/stop`,
@@ -75,17 +76,17 @@ export const endpoints = {
     list: (userId: string) => `jobs/${userId}/jobs`,
     detail: (userId: string, jobId: string) => `jobs/${userId}/jobs/${jobId}`,
     schedule: (userId: string, jobId: string) => `jobs/${userId}/jobs/${jobId}/schedule`,
-    /** Declared above /jobs/{job_id} on the server, or "shifts" parses as an id. */
+    /** Literal path: the server declares it above the job-id route. */
     shifts: (userId: string) => `jobs/${userId}/jobs/shifts`,
     addShift: (userId: string, jobId: string) => `jobs/${userId}/jobs/${jobId}/shifts`,
     shift: (userId: string, eventId: string) => `jobs/${userId}/jobs/shifts/${eventId}`,
     shiftRecord: (userId: string, eventId: string, onDate: string) =>
       `jobs/${userId}/jobs/shifts/${eventId}/${onDate}`,
     earnings: (userId: string) => `jobs/${userId}/earnings`,
-    /** A sibling of /earnings, never under /jobs/, so it cannot parse as a job id. */
+    /** Sits beside /earnings, outside /jobs/, so it never parses as a job id. */
     cashTipAccount: (userId: string) => `jobs/${userId}/cash-tip-account`,
     paycheques: (userId: string) => `jobs/${userId}/paycheques`,
-    /** Declared above /paycheques/{id} on the server, or "preview" parses as an id. */
+    /** Literal path: the server declares it above the paycheque-id route. */
     paychequePreview: (userId: string) => `jobs/${userId}/paycheques/preview`,
     paycheque: (userId: string, paychequeId: string) =>
       `jobs/${userId}/paycheques/${paychequeId}`,
@@ -129,7 +130,7 @@ export const endpoints = {
     safeToSpend: (userId: string) => `finances/${userId}/safe-to-spend`,
     forecast: (userId: string) => `finances/${userId}/forecast`,
     plan: (userId: string) => `finances/${userId}/plan`,
-    /** POST keeps the plan as it stands; each save is a new row. */
+    /** POST saves the plan as it stands, a new row each time. */
     planSaved: (userId: string) => `finances/${userId}/plan/saved`,
     planReview: (userId: string) => `finances/${userId}/plan/review`,
     imports: (userId: string) => `finances/${userId}/imports`,
@@ -172,9 +173,9 @@ export const endpoints = {
       `finances/${userId}/courses/${courseId}/cost`,
     recurring: (userId: string) => `finances/${userId}/recurring`,
     recurringRule: (userId: string, ruleId: string) => `finances/${userId}/recurring/${ruleId}`,
-    /** Writes any payment that is owed. Idempotent, so it is safe on every load. */
+    /** Writes any payment now owed; idempotent, so safe on every load. */
     recurringRun: (userId: string) => `finances/${userId}/recurring/run`,
-    /** Projections, not rows: what is committed but has not happened yet. */
+    /** Committed payments still to come: projections, not rows. */
     recurringUpcoming: (userId: string) => `finances/${userId}/recurring/upcoming`,
     recurringSkip: (userId: string, ruleId: string) =>
       `finances/${userId}/recurring/${ruleId}/skip`,

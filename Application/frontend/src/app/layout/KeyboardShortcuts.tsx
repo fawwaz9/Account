@@ -4,17 +4,12 @@ import Modal from "../../shared/components/Modal";
 import { isTypingContext } from "../../shared/hooks/useShortcut";
 import { NAV } from "./Sidebar";
 
-/** How long G waits for its second key before it means nothing. */
+/** How long after G the second key still counts. */
 export const SEQUENCE_MS = 1500;
 
 /**
- * The shortcuts that work on every page: G then a letter to go somewhere, and ?
- * for the list of everything. Page shortcuts (N, the calendar's arrows) live on
- * their pages with useShortcut.
- *
- * Two keys to navigate rather than one, so a stray letter can never move you
- * off a page. The listener is on the capture phase: the key after G is consumed
- * before any page hears it, or G T on the calendar would also jump to today.
+ * Global shortcuts: G then a letter navigates, ? opens the list.
+ * Listens in the capture phase so the key after G never reaches a page.
  */
 export default function KeyboardShortcuts() {
   const navigate = useNavigate();

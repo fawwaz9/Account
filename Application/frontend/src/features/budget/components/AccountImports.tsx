@@ -3,21 +3,19 @@ import DeleteConfirmModal from "../../grades/components/DeleteConfirmModal";
 import { deleteImport, fetchImports } from "../api";
 import { ImportSummary } from "../types";
 
+/** Props for the account's import list. */
 interface AccountImportsProps {
   readonly userId: string;
   readonly accountId: string;
-  /** Bumped by the page when it reloads, so a fresh import shows up. */
+  /** Bumped when the page reloads, so a fresh import shows up. */
   readonly nonce: number;
   /** Called after an undo, so the page reloads its balance and ledger. */
   readonly onUndone: () => void;
 }
 
 /**
- * This account's CSV imports, each undoable as one unit.
- *
- * Undo is permanent -- it deletes every row the import wrote, including any
- * edited since -- so it is confirmed first, and the dialog says how many rows
- * it will remove. Silent when nothing has been imported.
+ * This account's CSV imports, each undoable as one unit after a confirm.
+ * Undo deletes every row the import wrote, edited ones included; renders nothing with no imports.
  */
 export default function AccountImports({ userId, accountId, nonce, onUndone }: AccountImportsProps) {
   const [imports, setImports] = useState<ImportSummary[]>([]);

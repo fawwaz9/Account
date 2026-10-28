@@ -2,28 +2,21 @@ import { useEffect, useRef, useState } from "react";
 import { Course } from "../../grades/types";
 import { resolveCourse } from "../api";
 
+/** Props for the course picker. */
 interface CoursePickerProps {
   readonly userId: string;
   readonly courses: readonly Course[];
   readonly value: string;
   readonly onChange: (courseId: string) => void;
-  /** Watched for a course code, so the picker can pre-fill itself. */
+  /** Watched for a course code, to pre-fill the choice. */
   readonly description: string;
+  /** Prefix for the select's id, unique per form. */
   readonly idPrefix: string;
 }
 
 /**
- * Which course an expense was for, with the code read out of the description.
- *
- * The matching is a server call rather than a filter over `courses` here,
- * because the rules are not obvious: letters match as a prefix so "cpsc 210"
- * finds "CPSC_V 210", and an ambiguous prefix resolves to nothing rather than
- * guessing, since filing a textbook against the wrong course is worse than
- * filing it against none. Those rules already exist in one place and should not
- * be reimplemented here to drift from quick capture and the omnibox.
- *
- * A suggestion never overwrites a choice already made. It fills an empty field
- * and then gets out of the way.
+ * Which course an expense was for, pre-filled from a code in the description.
+ * The server resolves the code; a suggestion only ever fills an empty choice.
  */
 export default function CoursePicker({
   userId,

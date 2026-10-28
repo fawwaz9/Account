@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { fetchGradeBand } from "../api";
 import { GradeBand as Band } from "../types";
 
+/** The course to show, and a counter the page bumps to refetch. */
 interface GradeBandProps {
   readonly userId: string;
   readonly courseId: string;
@@ -10,15 +11,8 @@ interface GradeBandProps {
 }
 
 /**
- * Where this course can still finish.
- *
- * The running average cannot answer this on its own: 78% with everything marked
- * is a result, 78% with the final still to come is anywhere between a fail and
- * an A, and which one it is decides whether this is the course to spend the
- * weekend on.
- *
- * Hidden entirely once nothing is outstanding. A band that has closed is just
- * the average again, written three times.
+ * The best-to-worst range a course can still finish in, on a 0-100 track marking the average now.
+ * Renders nothing once nothing is left to mark.
  */
 export default function GradeBand({ userId, courseId, nonce }: GradeBandProps) {
   const [band, setBand] = useState<Band | null>(null);

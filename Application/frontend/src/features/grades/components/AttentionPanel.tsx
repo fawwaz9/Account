@@ -1,11 +1,13 @@
 import { useNavigate } from "react-router-dom";
 import { AttentionItem, AttentionKind } from "../types";
 
+/** The Attention items to list, and the signed-in user's id. */
 interface AttentionPanelProps {
   readonly items: readonly AttentionItem[];
   readonly userId: string | undefined;
 }
 
+/** Tag text for each kind of Attention item. */
 const LABELS: Record<AttentionKind, string> = {
   missing_final: "Missing final",
   below_target: "Below target",
@@ -13,11 +15,7 @@ const LABELS: Record<AttentionKind, string> = {
   missing_section: "No section",
 };
 
-/**
- * Things worth acting on. Ordered by the API, most actionable first: a
- * finished course with no final drops silently out of your cumulative, so it
- * leads.
- */
+/** The grades Attention list, in the API's order; each item opens its course. */
 export default function AttentionPanel({ items, userId }: AttentionPanelProps) {
   const navigate = useNavigate();
 

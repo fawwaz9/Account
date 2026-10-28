@@ -2,43 +2,10 @@ import { Component, type ErrorInfo, type ReactNode } from "react";
 import { isChunkLoadError, shouldAutoReload } from "../utils/chunkErrors";
 import "../../styles/errorBoundary.css";
 
-/**
- * The last thing standing between a render exception and a white screen.
- *
- * React unmounts the whole tree when a render throws and nothing catches it.
- * On your own machine that is fine -- the console has the stack and you fix it.
- * For anyone else it is a blank page with no explanation, no way to report what
- * happened, and no reason to come back. This turns that into a page that says
- * what went wrong and offers the two things that actually help.
- *
- * Still a class component in React 19: `getDerivedStateFromError` has no hook
- * equivalent, and error boundaries are the one thing hooks never replaced.
- *
- * It catches exceptions thrown while **rendering**, in lifecycle methods, and
- * in constructors below it. It does *not* catch errors in event handlers, in
- * `setTimeout`, or in rejected promises -- those never interrupt a render, so
- * React does not route them here. Those are handled where they happen, which
- * for this app means the error state each page already keeps for a failed fetch.
- *
- * **It also catches a route chunk that failed to load**, since React re-throws
- * a rejected `lazy()` import during render. That one is not a fault at all --
- * see `utils/chunkErrors.ts` -- so it is answered differently below.
- */
-
-/** Where the last automatic reload is recorded. */
+/** Session-storage key holding the epoch ms of the last automatic reload. */
 const RELOAD_KEY = "chunk-reload-at";
 
-/**
- * Both halves wrapped, because `sessionStorage` does not merely return null
- * when it is unavailable -- reading the property *throws* where a browser is
- * set to block site data. An exception here would be thrown from inside the
- * error boundary's own handler, which is the one place in the app with nothing
- * above it to catch anything.
- *
- * Failing to read means "no record", and failing to write means the reload is
- * not attempted at all. Both fall through to the crash screen, which is exactly
- * the behaviour this app had before reloading was automatic.
- */
+/** Epoch ms of the last automatic reload; null when none is recorded or storage throws. */
 function readLastReload(): number | null {
   try {
     const raw = sessionStorage.getItem(RELOAD_KEY);
@@ -51,6 +18,7 @@ function readLastReload(): number | null {
   }
 }
 
+/** Store the reload time; false when storage refuses, and then no reload is attempted. */
 function recordReload(at: number): boolean {
   try {
     sessionStorage.setItem(RELOAD_KEY, String(at));
@@ -60,9 +28,15 @@ function recordReload(at: number): boolean {
   }
 }
 
+/** The tree the boundary guards. */
 type Props = { children: ReactNode };
+/** The caught error and its React component stack; both null until something throws. */
 type State = { error: Error | null; componentStack: string | null };
 
+/**
+ * App-wide render error boundary: a crash page offering a reload or the dashboard.
+ * A route chunk lost to a deploy reloads the page once instead (see `chunkErrors`).
+ */
 export default class ErrorBoundary extends Component<Props, State> {
   state: State = { error: null, componentStack: null };
 

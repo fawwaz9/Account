@@ -6,6 +6,7 @@ import { useAuth } from "../../../app/auth/AuthContext";
 import { getErrorMessage } from "./AddCourseModal";
 import Modal from "../../../shared/components/Modal";
 
+/** Whether the dialog is open, the course and category, and close and added callbacks. */
 interface AddGradeModalProps {
   readonly open: boolean;
   readonly courseId: string;
@@ -14,6 +15,7 @@ interface AddGradeModalProps {
   readonly onGradeAdded: () => void;
 }
 
+/** A blank, unmarked grade in `category`; midterms and finals start as calendar events. */
 function buildDefaultForm(category: GradeCategory | null): GradeCreate {
   return {
     name: "",
@@ -37,6 +39,7 @@ function buildDefaultForm(category: GradeCategory | null): GradeCreate {
   };
 }
 
+/** Add-grade dialog for one category of a course; reset when opened or the category changes. */
 export default function AddGradeModal({
   open,
   courseId,

@@ -3,21 +3,14 @@ import { buildTimeline } from "../timeline";
 import { Course } from "../../grades/types";
 import { monthName, today } from "../../../shared/utils/dateUtils";
 
+/** The student's courses; only current-term ones are charted. */
 interface TermTimelineProps {
   readonly courses: Course[];
 }
 
 /**
- * Every course in the term on one axis.
- *
- * The month grid answers "what is this week"; this answers "what shape is the
- * term" — which courses overlap, where the gaps are, and how much of it has
- * already gone. Those are not visible anywhere else: a course's dates live on
- * its own page, so comparing six of them means six visits and a memory.
- *
- * Pure CSS bars, like the crunch radar. What matters is relative length and
- * overlap, and a charting dependency for two divs and a percentage would be a
- * poor trade.
+ * The current term's courses as bars on one date axis, with today marked.
+ * Courses without dates are named below rather than dropped; nothing renders with no course.
  */
 export default function TermTimeline({ courses }: TermTimelineProps) {
   // Only the term you are in. A finished course on this chart is history, and a

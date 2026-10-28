@@ -6,6 +6,7 @@ import { checkPaycheque } from "../api";
 import { useAuth } from "../../../app/auth/AuthContext";
 import PayCheckPanel from "./PayCheckPanel";
 
+/** Props for the paycheque list. */
 interface PaychequeListProps {
   readonly paycheques: Paycheque[];
   readonly onEdit: (paycheque: Paycheque) => void;
@@ -14,10 +15,8 @@ interface PaychequeListProps {
 }
 
 /**
- * The cheques that have arrived.
- *
- * Gross and net both shown, because the gap between them is the thing this
- * page can answer and the ledger cannot: the ledger only ever saw the net.
+ * Recorded paycheques with gross and net, each checkable against its shifts on request.
+ * A check is fetched only when asked, and dropped whenever the list changes.
  */
 export default function PaychequeList({
   paycheques,
@@ -126,16 +125,18 @@ export default function PaychequeList({
   );
 }
 
+/** A cheque's deductions, summed. */
 function deducted(cheque: Paycheque): number {
   return cheque.deductions.reduce((total, entry) => total + entry.amount, 0);
 }
 
-/** Only a short cheque is worth colouring; matching or over is not a problem. */
+/** Row class for the variance: only a short cheque is coloured. */
 function varianceClass(cheque: Paycheque): string {
   if (cheque.variance === null) return "payVariance";
   return cheque.variance < -0.01 ? "payVariance payVarianceShort" : "payVariance";
 }
 
+/** The variance in words: short, over, or as expected, within a cent. */
 function varianceLabel(cheque: Paycheque): string {
   if (cheque.variance === null) return "";
   if (cheque.variance < -0.01) return `${formatMoney(-cheque.variance)} short`;

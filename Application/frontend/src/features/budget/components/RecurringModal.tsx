@@ -12,6 +12,7 @@ import {
 import { useAuth } from "../../../app/auth/AuthContext";
 import { today } from "../../../shared/utils/dateUtils";
 
+/** Display label per kind. */
 const KIND_LABELS: Record<RecurringKind, string> = {
   expense: "Expense",
   income: "Income",
@@ -19,7 +20,7 @@ const KIND_LABELS: Record<RecurringKind, string> = {
   deposit: "Deposit",
 };
 
-/** What each kind means when it repeats, since the differences matter. */
+/** What each kind does when it repeats, shown under the picker. */
 const KIND_HINTS: Record<RecurringKind, string> = {
   expense: "Leaves the account on each date — rent, a subscription.",
   income: "Arrives in one account on each date.",
@@ -27,9 +28,10 @@ const KIND_HINTS: Record<RecurringKind, string> = {
   deposit: "Splits across your accounts by income share, worked out on the day.",
 };
 
+/** Props for the standing-instruction dialog. */
 interface RecurringModalProps {
   readonly open: boolean;
-  /** The instruction being edited, or null to set up a new one. */
+  /** The instruction being edited, or null for a new one. */
   readonly rule: RecurringTransaction | null;
   readonly accounts: Account[];
   readonly categories: SpendCategory[];
@@ -37,6 +39,7 @@ interface RecurringModalProps {
   readonly onSaved: () => void;
 }
 
+/** A new monthly expense from the first account, starting today. */
 function blankRule(accounts: Account[]): RecurringCreate {
   return {
     kind: "expense",
@@ -53,6 +56,7 @@ function blankRule(accounts: Account[]): RecurringCreate {
   };
 }
 
+/** The form's starting values: the rule's own, or a blank one. */
 function formFor(rule: RecurringTransaction | null, accounts: Account[]): RecurringCreate {
   if (!rule) return blankRule(accounts);
 
@@ -69,6 +73,10 @@ function formFor(rule: RecurringTransaction | null, accounts: Account[]): Recurr
   };
 }
 
+/**
+ * Create or edit a standing instruction; its kind and accounts cannot change once it exists.
+ * Changing kind clears the fields that kind cannot carry.
+ */
 export default function RecurringModal({
   open,
   rule,

@@ -4,7 +4,7 @@ import { UserGradeDashboard } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { useApiRefresh } from "../../../shared/hooks/useApiRefresh";
 
-/** The cross-course rollup: averages, CGPA, credits, and year summaries. */
+/** The grades dashboard summary with loading, error and `reload`. */
 export function useDashboard() {
   const { user } = useAuth();
   // The id, not the object. `refreshUser()` builds a fresh `user` every time,

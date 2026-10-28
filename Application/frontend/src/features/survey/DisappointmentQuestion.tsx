@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { answerQuestion, fetchPendingQuestion, SurveyAnswer } from "./api";
 
+/** The three answers, in order, with their labels. */
 const CHOICES: { answer: SurveyAnswer; label: string }[] = [
   { answer: "very", label: "Very disappointed" },
   { answer: "somewhat", label: "Somewhat disappointed" },
@@ -8,12 +9,8 @@ const CHOICES: { answer: SurveyAnswer; label: string }[] = [
 ];
 
 /**
- * One question, asked once: how would you feel without Account?
- *
- * The Phase 1 exit gate counts "very disappointed" answers (account-vision.md
- * §11), and nothing else can read that. The server decides when to ask (after a
- * week of use) and never asks again after an answer -- "don't ask again"
- * included. Every press is acknowledged, and the card says thanks, then goes.
+ * The one-time "how would you feel without Account?" card, shown when the server says it is due.
+ * Any answer, dismissal included, ends it; the card thanks you, then goes.
  */
 export default function DisappointmentQuestion({ userId }: { readonly userId: string }) {
   const [asking, setAsking] = useState(false);

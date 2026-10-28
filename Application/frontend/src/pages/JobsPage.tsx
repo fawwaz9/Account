@@ -22,14 +22,8 @@ import JobsTabs from "../features/jobs/components/JobsTabs";
 import { today } from "../shared/utils/dateUtils";
 
 /**
- * The jobs page.
- *
- * Time and money are deliberately split across the app rather than gathered
- * here: a shift is a block on the calendar because it competes with lectures
- * for the same hours, and a paycheque is a line in the ledger because that is
- * where money that actually moved belongs. What lives here is everything about
- * the jobs themselves -- what they are, when they are worked, and (from the
- * next stage) what they earn.
+ * The Jobs page: conflicts, earnings, job cards, the shift list, paycheques and the tax packet.
+ * Removing a shift asks in a dialog, and asks again natively when the shift was confirmed.
  */
 export default function JobsPage() {
   const { user } = useAuth();

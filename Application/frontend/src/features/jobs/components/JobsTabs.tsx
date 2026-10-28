@@ -1,10 +1,6 @@
 import { NavLink } from "react-router-dom";
 
-/**
- * Jobs and Applications, side by side under Jobs (Phase 3 item 1). The jobs you
- * have and the ones you're after are different pages, but one place in the
- * sidebar.
- */
+/** Tabs between Jobs and Applications, which share one place in the sidebar. */
 export default function JobsTabs() {
   return (
     <nav className="jobsTabs" aria-label="Jobs sections">

@@ -4,6 +4,7 @@ import { Figure, Partners } from "./types";
 import HelpTip from "../../shared/components/HelpTip";
 import { shortDate } from "../../shared/utils/dateUtils";
 
+/** A completion figure in words: this week's percent done and the good-week streak. */
 export function figureWords(figure: Figure) {
   const week = figure.week_percent === null ? "nothing due this week" : `${Math.round(figure.week_percent)}% of this week's tasks done`;
   const streak = figure.streak_weeks > 0
@@ -12,16 +13,14 @@ export function figureWords(figure: Figure) {
   return `${week}${streak}`;
 }
 
+/** Props for the partners panel. */
 interface Props {
   readonly userId: string;
 }
 
 /**
- * Accountability partners (Phase 2 item 10): completion, never outcomes.
- *
- * A partner sees the share of this week's tasks you have done and your run of
- * good weeks -- never a task's name, a grade or money. You invite with a link
- * you send yourself; either of you can end it at any time.
+ * Accountability partners: your figure, theirs, invite links and ending a partnership.
+ * Partners see completion only, never a task's name, a grade or money.
  */
 export default function PartnersPanel({ userId }: Props) {
   const [data, setData] = useState<Partners | null>(null);

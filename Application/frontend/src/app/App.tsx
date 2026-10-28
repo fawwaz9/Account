@@ -7,44 +7,36 @@ import MainLayout from "./layout/MainLayout";
 import LoginPage from "../pages/LoginPage";
 
 /**
- * Every signed-in page is fetched when it is first opened, not with the app.
- *
- * Before this the build was a single 487 KB file, so the login screen
- * downloaded Grades, Calendar, Tasks, Jobs, Budget and Settings before it could
- * draw a password field -- and paid it again on every cache miss. Almost none
- * of that code can run until somebody signs in.
- *
- * `LoginPage` is deliberately **not** lazy. It is the only thing an
- * unauthenticated visitor needs, so loading it on demand would add a second
- * round trip to the one screen that has nothing else to wait for.
- *
- * The shell is eager too -- `MainLayout`, `ProtectedRoute`, `AuthProvider`,
- * `ErrorBoundary` -- because every signed-in page needs all four, so deferring
- * them would buy nothing and cost a request.
- *
- * Two consequences worth knowing before adding a route:
- *
- * - **A new page belongs here as another `lazy()`.** A static import silently
- *   folds it back into the first download, and nothing fails to tell you.
- * - **A chunk can now fail to load** -- notably for a tab left open across a
- *   deploy, which is asking for file names this release no longer serves.
- *   React re-throws that during render, `ErrorBoundary` catches it, and
- *   `shared/utils/chunkErrors.ts` is what tells it apart from a real fault.
+ * Home page. Every signed-in page is fetched on first visit, not with the app.
+ * Add new pages as another `lazy` import: a plain import folds them into the first download.
  */
 const Dashboard = lazy(() => import("../pages/Dashboard"));
+/** Grades page: the course list. */
 const GradesPage = lazy(() => import("../pages/grades/GradesPage"));
+/** One course's grades, weights and projections. */
 const CourseDetailPage = lazy(() => import("../pages/grades/CourseDetailPage"));
+/** Degree requirements and progress. */
 const DegreePage = lazy(() => import("../pages/grades/DegreePage"));
+/** Calendar page. */
 const CalendarPage = lazy(() => import("../pages/CalendarPage"));
+/** Tasks page. */
 const TasksPage = lazy(() => import("../pages/TasksPage"));
+/** Jobs page: jobs, shifts and pay. */
 const JobsPage = lazy(() => import("../pages/JobsPage"));
+/** Job applications and their seasons. */
 const ApplicationsPage = lazy(() => import("../pages/ApplicationsPage"));
+/** Budget page (Finances). */
 const BudgetPage = lazy(() => import("../pages/BudgetPage"));
+/** One money account's activity. */
 const AccountDetailPage = lazy(() => import("../pages/budget/AccountDetailPage"));
+/** Settings page. */
 const SettingsPage = lazy(() => import("../pages/SettingsPage"));
+/** Opens an invite link: partner, shared task, shared event or team. */
 const InvitePage = lazy(() => import("../pages/InvitePage"));
+/** Fitness page: teams. */
 const FitnessPage = lazy(() => import("../pages/FitnessPage"));
 
+/** Root: error boundary, session, router; signed-in pages share one guard and shell. */
 export default function App() {
   return (
     /* Outside the provider as well as the router, not just around the routes.

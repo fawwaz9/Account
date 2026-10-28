@@ -23,6 +23,10 @@ import { useAuth } from "../../app/auth/AuthContext";
 import "../../styles/budget.css";
 import "../../styles/budget/accountDetail.css";
 
+/**
+ * One account's page: worth or balance, the month's tiles, charts, ledger, limits and imports.
+ * Tuition rows open the tuition editor; other rows the plain one.
+ */
 export default function AccountDetailPage() {
   const { accountId } = useParams<{ accountId: string }>();
   const navigate = useNavigate();
@@ -334,12 +338,15 @@ export default function AccountDetailPage() {
   );
 }
 
+/** Props for a summary tile. */
 interface TileProps {
   readonly label: string;
   readonly value: string;
+  /** Colours the value as money in or out. */
   readonly tone?: "in" | "out";
 }
 
+/** One summary tile: a label over a value. */
 function Tile({ label, value, tone }: TileProps) {
   return (
     <li className="tile">
@@ -349,6 +356,7 @@ function Tile({ label, value, tone }: TileProps) {
   );
 }
 
+/** What the target tile says: no target, over, or left. */
 function targetNote(planned: number, remaining: number) {
   if (planned === 0) return "Set a target on the budget page to track this account.";
   if (remaining < 0) return `${formatMoney(-remaining)} over`;

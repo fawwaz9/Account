@@ -9,18 +9,8 @@ import { useVisitCounter } from "../../shared/hooks/useVisitCounter";
 import "../../styles/layout.css";
 
 /**
- * Shell for every signed-in page. Replaces the per-page back arrows that were
- * the only navigation across seven pages.
- *
- * The boundary sits here, around `<Outlet />`, rather than around `<Routes>` in
- * `App`. Every page is loaded on demand now, and wrapping the router would blank
- * the sidebar and the topbar while a route's code arrived -- so a navigation
- * would clear the very controls you had just used, which reads as the app
- * restarting rather than as a page turning. This way the shell stays put and
- * only the content area waits.
- *
- * One boundary covers all nine signed-in routes, since they all render through
- * this outlet.
+ * Signed-in shell: sidebar, header and phone bar around the routed page.
+ * Suspense wraps only the outlet, so the shell stays put while a page's code loads.
  */
 export default function MainLayout() {
   useVisitCounter();

@@ -1,9 +1,11 @@
+/** The three course flags a form holds. */
 interface CourseFlagState {
   no_final: boolean;
   transfer_credit: boolean;
   archived: boolean;
 }
 
+/** The form's flag values, its field setter, and an id prefix. */
 interface CourseFlagsProps {
   readonly form: CourseFlagState;
   readonly updateField: <K extends keyof CourseFlagState>(key: K, value: boolean) => void;
@@ -11,6 +13,7 @@ interface CourseFlagsProps {
   readonly idPrefix: string;
 }
 
+/** One flag's key, its label, and a hint saying what it changes. */
 interface FlagDefinition {
   readonly key: keyof CourseFlagState;
   readonly label: string;
@@ -18,6 +21,7 @@ interface FlagDefinition {
   readonly hint: string;
 }
 
+/** The three flags in display order. */
 const FLAGS: FlagDefinition[] = [
   {
     key: "no_final",
@@ -36,14 +40,7 @@ const FLAGS: FlagDefinition[] = [
   },
 ];
 
-/**
- * The three course flags, on both the add and edit forms.
- *
- * Each one subtracts the course from a different rule, and the rules overlap --
- * a transfer credit still counts credits, an archived course still counts in the
- * average. So each carries its own sentence rather than a shared heading: a
- * checkbox labelled only "Archived" does not tell you which number moves.
- */
+/** The course-flag checkboxes shared by the add and edit forms, each with its own hint. */
 export default function CourseFlags({ form, updateField, idPrefix }: CourseFlagsProps) {
   return (
     <fieldset className="courseFlags">

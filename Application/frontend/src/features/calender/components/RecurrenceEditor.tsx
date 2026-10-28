@@ -1,33 +1,32 @@
 import { Frequency, Recurrence, Weekday } from "../types";
 import { WEEKDAY_CODES, weekdayCode } from "../../../shared/utils/dateUtils";
 
+/** One-letter label for each weekday button. */
 const WEEKDAY_LABELS: Record<Weekday, string> = {
   MO: "M", TU: "T", WE: "W", TH: "T", FR: "F", SA: "S", SU: "S",
 };
 
+/** The unit word for each frequency, as in "every 2 weeks". */
 const FREQUENCY_LABELS: Record<Frequency, string> = {
   daily: "day",
   weekly: "week",
   monthly: "month",
 };
 
-/** Which end the repeat has. Only one may be set, so the form asks which. */
+/** Which end a repeat has; only one of until or count may be set. */
 type EndMode = "never" | "until" | "count";
 
+/** The repeat rule (null for none), its setter, and the event's start date. */
 interface RecurrenceEditorProps {
   readonly value: Recurrence | null;
   readonly onChange: (recurrence: Recurrence | null) => void;
-  /** The event's start date, which is what a weekly repeat anchors to. */
+  /** The event's start date, which a weekly repeat anchors to. */
   readonly startsOn: string;
 }
 
 /**
- * The repeat half of the event form.
- *
- * Offers exactly what the engine understands -- frequency, interval, weekdays,
- * and one end -- rather than a free-text RRULE. A control that can only express
- * supported rules is a cheaper guarantee than validating a richer string and
- * rejecting most of it.
+ * The repeat part of the event form: frequency, interval, weekdays and one end.
+ * Offers only rules the recurrence engine supports; a weekly rule always keeps one day.
  */
 export default function RecurrenceEditor({ value, onChange, startsOn }: RecurrenceEditorProps) {
   const endMode: EndMode = value?.until ? "until" : value?.count ? "count" : "never";

@@ -1,3 +1,4 @@
+/** Credits completed and in progress against the target, and the required and elective split. */
 interface CreditsBarProps {
   readonly completed: number;
   readonly inProgress: number;
@@ -6,6 +7,7 @@ interface CreditsBarProps {
   readonly elective?: number;
 }
 
+/** Credit progress against the target: completed and in-progress fills, ticks at 50% and 80%. */
 export default function CreditsBar({
   completed,
   inProgress,

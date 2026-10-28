@@ -5,6 +5,7 @@ import { addToCourse, AddPreview, AddResult, previewAdd, readSyllabus } from "./
 import { asBase64 } from "./file";
 import "../../styles/budget.css";
 
+/** The course to add to, and the close and added callbacks. */
 interface SyllabusAddModalProps {
   readonly userId: string;
   readonly courseId: string;
@@ -14,11 +15,8 @@ interface SyllabusAddModalProps {
 }
 
 /**
- * A syllabus adding to a course you already have -- add-only (Phase 1 D27).
- *
- * Only what the course lacks is offered, each ticked to add. What it already
- * has is listed so you can see it was recognised, and is never changed: not a
- * mark, a weight, a date or a name. Weights that differ are said, not applied.
+ * Add from a syllabus to an existing course, add-only: missing assessments are offered ticked,
+ * existing ones are listed and never changed, and differing weights are only noted.
  */
 export default function SyllabusAddModal({ userId, courseId, onClose, onAdded }: SyllabusAddModalProps) {
   const [busy, setBusy] = useState<"reading" | "adding" | null>(null);

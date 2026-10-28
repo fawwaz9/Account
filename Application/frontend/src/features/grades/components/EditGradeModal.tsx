@@ -7,6 +7,7 @@ import { useAuth } from "../../../app/auth/AuthContext";
 import { getErrorMessage } from "./AddCourseModal";
 import Modal from "../../../shared/components/Modal";
 
+/** Whether the dialog is open, the course and grade, and the updated and deleted callbacks. */
 interface EditGradeModalProps {
   readonly open: boolean;
   readonly courseId: string;
@@ -16,6 +17,7 @@ interface EditGradeModalProps {
   readonly onGradeDeleted: () => void;
 }
 
+/** Form state for a grade, its time cut to "HH:MM" for the time input. */
 function buildFormFromGrade(grade: Grade | null) {
   return {
     name: grade?.name ?? "",
@@ -31,6 +33,7 @@ function buildFormFromGrade(grade: Grade | null) {
   };
 }
 
+/** Edit-grade dialog sending every field, with a confirmed delete; resets when `grade` changes. */
 export default function EditGradeModal({
   open,
   courseId,

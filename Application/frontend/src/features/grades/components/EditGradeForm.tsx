@@ -2,26 +2,28 @@ import { GradeCategory, GradeSchedule } from "../types";
 import ScheduleChoice from "./ScheduleChoice";
 import BonusNote, { scoreInputClass } from "./BonusNote";
 
+/** The fields the edit-grade form holds. */
 interface EditGradeFormState {
   name: string;
-  /** null while the work has not been marked */
+  /** Null while unmarked. */
   score: number | null;
   max_score: number;
-  /** null for an assignment with no deadline */
+  /** Null for no date. */
   due_date: string | null;
-  /** The time of day, where there is a particular one. Null is not midnight. */
+  /** "HH:MM"; null means no set time, not midnight. */
   due_time: string | null;
-  /** How long a calendar block runs. Null for a task or an all-day block. */
+  /** Length of a calendar block; null for a task or an all-day block. */
   duration_minutes: number | null;
-  /** What the date means: work to tick off, or a block on the calendar. */
+  /** Whether the date raises a task or a calendar block. */
   schedule_as: GradeSchedule;
-  /** Kept on the course but out of every average, e.g. a dropped quiz. */
+  /** Dropped: kept on the course, out of every average. */
   excluded: boolean;
 }
 
+/** The grade's form state and setter, its category, its actions, and status text. */
 interface EditGradeFormProps {
   readonly form: EditGradeFormState;
-  /** Only used to word the calendar option for a midterm or a final. */
+  /** Only words the calendar option for a midterm or a final. */
   readonly category: GradeCategory | null;
   readonly updateField: <K extends keyof EditGradeFormState>(key: K, value: EditGradeFormState[K]) => void;
   readonly onSubmit: () => void;
@@ -30,6 +32,7 @@ interface EditGradeFormProps {
   readonly error?: string | null;
 }
 
+/** The edit-grade form: name, score out of a maximum, the dropped toggle, and the date choice. */
 export default function EditGradeForm({
   form,
   category,

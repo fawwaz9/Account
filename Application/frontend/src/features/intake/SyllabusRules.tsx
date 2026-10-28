@@ -1,11 +1,14 @@
 import { ConfirmedRule, ExtractedRule } from "./api";
 
+/** The two requisite kinds a syllabus can state. */
 export type RuleKind = "prerequisites" | "corequisites";
+/** Editable text and note for each requisite kind. */
 export type RuleDrafts = Record<RuleKind, { text: string; note: string }>;
 
+/** Display title for each requisite kind. */
 const TITLE: Record<RuleKind, string> = { prerequisites: "Prerequisites", corequisites: "Co-requisites" };
 
-/** Drafts to start from: what the reader found, in the typed form. */
+/** Starting drafts: what the reader found, in the typed form, blank where it found nothing. */
 export function draftsFrom(found: Partial<Record<RuleKind, ExtractedRule | null | undefined>>): RuleDrafts {
   return {
     prerequisites: { text: found.prerequisites?.text ?? "", note: found.prerequisites?.note ?? "" },
@@ -13,8 +16,7 @@ export function draftsFrom(found: Partial<Record<RuleKind, ExtractedRule | null 
   };
 }
 
-/** What to send: a kind only when its field is filled in. Cleared, nothing is
- *  filed -- nothing becomes a record without confirmation. */
+/** The rules to send: offered kinds with text only, so a cleared field files nothing. */
 export function confirmedRules(drafts: RuleDrafts, offered: Record<RuleKind, boolean>) {
   const out: { prerequisites?: ConfirmedRule; corequisites?: ConfirmedRule } = {};
   for (const kind of ["prerequisites", "corequisites"] as RuleKind[]) {
@@ -24,6 +26,7 @@ export function confirmedRules(drafts: RuleDrafts, offered: Record<RuleKind, boo
   return out;
 }
 
+/** What the syllabus stated, the drafts and their setter, and your current rules. */
 interface Props {
   readonly found: Partial<Record<RuleKind, ExtractedRule | null | undefined>>;
   readonly drafts: RuleDrafts;
@@ -33,9 +36,8 @@ interface Props {
 }
 
 /**
- * The prerequisites a syllabus states, editable before anything is filed
- * (Phase 2 item 5). Kept as your own rule; it reaches anyone else only after
- * review, and then as the rule alone -- never the syllabus's wording.
+ * The requisites a syllabus states, editable and filed as your own only once confirmed.
+ * Renders nothing when the syllabus stated none.
  */
 export default function SyllabusRules({ found, drafts, onChange, own }: Props) {
   const kinds = (["prerequisites", "corequisites"] as RuleKind[]).filter((kind) => found[kind]);

@@ -1,22 +1,25 @@
 import { BalancePoint } from "../types";
 import { formatMoney } from "../money";
 
+/** Props: the account's balance after each day with movement. */
 interface AccountBalanceChartProps {
   readonly points: readonly BalancePoint[];
 }
 
+/** Chart width, in viewBox units. */
 const WIDTH = 560;
+/** Chart height, in viewBox units. */
 const HEIGHT = 180;
+/** Space around the plot for the axes. */
 const PAD = { top: 16, right: 12, bottom: 30, left: 46 };
+/** Plot width inside the padding. */
 const INNER_W = WIDTH - PAD.left - PAD.right;
+/** Plot height inside the padding. */
 const INNER_H = HEIGHT - PAD.top - PAD.bottom;
 
 /**
- * The account's whole history, not the selected month.
- *
- * Kept as its own figure rather than laid over the daily bars: a balance in the
- * tens of thousands and a day's flow in the hundreds share no sensible scale,
- * and two y-axes on one chart is the surest way to make both unreadable.
+ * The account's balance across its whole history, as its own line chart.
+ * The axis floats to show the shape of change; zero appears only when the balance goes negative.
  */
 export default function AccountBalanceChart({ points }: AccountBalanceChartProps) {
   if (points.length === 0) {

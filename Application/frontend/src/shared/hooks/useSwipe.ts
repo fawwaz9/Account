@@ -1,19 +1,12 @@
 import { RefObject, useEffect, useRef } from "react";
 
-/** Shortest horizontal travel that counts as a swipe rather than a tap. */
+/** Minimum horizontal travel in pixels for a touch to count as a swipe. */
 export const SWIPE_DISTANCE = 50;
 
-/** How much more horizontal than vertical a swipe must be. */
+/** How many times its vertical travel a swipe's horizontal travel must be. */
 const SWIPE_RATIO = 1.5;
 
-/**
- * Call `onSwipe(1)` for a swipe to the left and `onSwipe(-1)` for one to the
- * right -- forward and back, the way a page is turned.
- *
- * Only clearly sideways movement counts, so scrolling through the hours, which
- * is vertical and never perfectly so, cannot step the calendar by accident.
- * The listeners are passive: this only watches, and never holds up a scroll.
- */
+/** Call `onSwipe` with 1 for a left swipe and -1 for a right one; one finger, passive listeners. */
 export function useSwipe(
   ref: RefObject<HTMLElement | null>,
   onSwipe: (direction: 1 | -1) => void,

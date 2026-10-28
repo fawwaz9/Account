@@ -24,6 +24,7 @@ import { useApiRefresh } from "../../../shared/hooks/useApiRefresh";
 
 export type { CalendarView } from "../views";
 
+/** One grid day: its event occurrences and the tasks due on it. */
 export interface CalendarDay {
   date: string;
   occurrences: EventOccurrence[];
@@ -31,14 +32,8 @@ export interface CalendarDay {
 }
 
 /**
- * One window of the calendar -- a month, or a week, three days or one day
- * against the clock -- with events expanded by the API and the tasks due in
- * the same span.
- *
- * Two requests rather than one combined endpoint, because a deadline is edited
- * on the task and a lecture is edited on the event -- merging them server-side
- * would create a third shape that belongs to neither and has to be unpicked
- * before anything can be saved.
+ * The calendar's view, cursor and date window, with that window's events and due tasks.
+ * Shared items and application dates are merged in; if they fail, the rest still loads.
  */
 export function useCalender() {
   const { user } = useAuth();
@@ -153,7 +148,7 @@ export function useCalender() {
   };
 }
 
-/** One bucket per grid square, so the view never filters inside a render loop. */
+/** Bucket occurrences and tasks by grid day; untimed tasks first, then by due time. */
 function groupByDay(
   days: string[],
   occurrences: EventOccurrence[],
@@ -180,7 +175,7 @@ function groupByDay(
   return days.map((date) => buckets.get(date)!);
 }
 
-/** Someone else's event, as an occurrence on your calendar (Phase 2 item 9b). */
+/** Someone else's shared event as an occurrence on your calendar. */
 export function sharedEventOccurrence(event: SharedEvent): EventOccurrence {
   return {
     event_id: event.event_id, on_date: event.starts_on, title: event.title,
@@ -191,10 +186,7 @@ export function sharedEventOccurrence(event: SharedEvent): EventOccurrence {
   };
 }
 
-/**
- * Someone else's task, on the day it is due. Shown with the day's all-day
- * items rather than on the clock: it is a deadline, not a block of time.
- */
+/** Someone else's shared task as an all-day deadline on its due date, ticked when done. */
 export function sharedTaskOccurrence(task: SharedTask): EventOccurrence {
   return {
     event_id: task.task_id, on_date: task.due_date as string, title: task.done ? `✓ ${task.title}` : task.title,
@@ -204,11 +196,7 @@ export function sharedTaskOccurrence(task: SharedTask): EventOccurrence {
   };
 }
 
-/**
- * A job application's deadline and follow-up date, as all-day items on the
- * calendar (Phase 3 item 1, D4). Only while the application is still in play:
- * a follow-up on one already rejected is nothing to do.
- */
+/** Open job applications' deadline and follow-up dates in the window, as all-day items. */
 export function applicationOccurrences(applications: Application[], start: string, end: string): EventOccurrence[] {
   const open = new Set(["applied", "screening", "interview", "offer"]);
   const items: EventOccurrence[] = [];

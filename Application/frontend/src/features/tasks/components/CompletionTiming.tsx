@@ -1,20 +1,13 @@
 import { CompletionTiming as Timing, TimingWindow } from "../types";
 
+/** The completion-timing figures, or null before they load. */
 interface CompletionTimingProps {
   readonly timing: Timing | null;
 }
 
 /**
- * Whether work is actually getting done on time.
- *
- * Two readings per window, because each hides what the other shows. The signed
- * mean carries magnitude but lets a fortnight late cancel against a fortnight
- * early; the on-time share cannot be skewed by one forgotten task but counts a
- * day late and a month late the same. Shown together, the pair is honest.
- *
- * The early/late split sits under the mean for the same reason: "0.0 days" can
- * mean a punctual fortnight or two weeks of chaos averaging out, and only the
- * split tells you which.
+ * How early or late dated work gets finished, past week and this month: the signed mean beside
+ * the on-time share, with the early and late split. Renders nothing until something counts.
  */
 export default function CompletionTiming({ timing }: CompletionTimingProps) {
   // Nothing finished with a date on it yet, so every figure would be blank.
@@ -40,6 +33,7 @@ export default function CompletionTiming({ timing }: CompletionTimingProps) {
   );
 }
 
+/** One window's headline, on-time share and early-late split. */
 function Window({ window }: { readonly window: TimingWindow }) {
   return (
     <div className="timingWindow">
@@ -63,7 +57,7 @@ function Window({ window }: { readonly window: TimingWindow }) {
   );
 }
 
-/** "1.2 days early", "half a day late", "on time". */
+/** The mean in words: "1.2 days early", "0.5 days late", or on time. */
 function headline(meanDays: number | null): string {
   if (meanDays === null) return "on time";
 
@@ -75,6 +69,7 @@ function headline(meanDays: number | null): string {
   return `${size} ${size === 1 ? "day" : "days"} ${meanDays > 0 ? "late" : "early"}`;
 }
 
+/** How many finished early and late, and by how many days on average. */
 function splitLine(window: TimingWindow): string {
   const parts: string[] = [];
   if (window.early_count > 0) {
@@ -86,7 +81,7 @@ function splitLine(window: TimingWindow): string {
   return parts.length > 0 ? parts.join(" · ") : "all exactly on the day";
 }
 
-/** Late is worth noticing; early and on-time are not worth colouring. */
+/** The class marking a late mean; early and on time get none. */
 function toneOf(meanDays: number | null): string {
   return meanDays !== null && meanDays > 0.05 ? "timingHeadlineLate" : "";
 }

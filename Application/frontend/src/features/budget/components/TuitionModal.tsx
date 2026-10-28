@@ -15,27 +15,22 @@ import { today } from "../../../shared/utils/dateUtils";
 import Modal from "../../../shared/components/Modal";
 import DeleteConfirmModal from "../../grades/components/DeleteConfirmModal";
 
+/** Props for the tuition dialog. */
 interface TuitionModalProps {
   readonly open: boolean;
   readonly accounts: readonly Account[];
-  /** Editing an existing payment rather than recording a new one. */
+  /** Edit this payment instead of recording a new one. */
   readonly paymentId?: string | null;
   readonly onClose: () => void;
   readonly onSaved: () => void;
 }
 
+/** An empty deduction row. */
 const BLANK: TuitionDeduction = { description: "", amount: 0 };
 
 /**
- * Paying tuition, which is not shaped like any other payment.
- *
- * A bill is a rate times a number of credits, plus fees that belong to no
- * course, less deductions that never touched the account. What leaves the
- * account is the net, and that is the single line the ledger gets. What each
- * course is worth is the gross, and that is what the course pages report.
- *
- * The form shows both totals on purpose. They are different numbers answering
- * different questions, and showing only one would imply they are the same.
+ * Record or edit a tuition payment: rate times credits, plus fees, less deductions.
+ * Shows both the term's gross and what leaves the account; only the net reaches the ledger.
  */
 export default function TuitionModal({
   open,

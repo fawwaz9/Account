@@ -3,16 +3,14 @@ import HelpTip from "../../../shared/components/HelpTip";
 import { dueLabel } from "../../../shared/utils/dateUtils";
 import { SharedTask, fetchSharedTasks, leaveSharedTask, updateSharedTask } from "../sharing";
 
+/** The signed-in user's id. */
 interface Props {
   readonly userId: string;
 }
 
 /**
- * Other people's tasks you are on (Phase 2 item 9a, D23).
- *
- * You see what the owner shared and nothing else of theirs. One tick closes it
- * for everyone; you can edit its title and notes, and leave. It doesn't count
- * in your own week, estimates or partner figure: it is the owner's task.
+ * Other people's tasks you are on: tick for everyone, edit the title and notes, or leave once
+ * confirmed. Renders nothing when there are none or the read fails.
  */
 export default function SharedTasks({ userId }: Props) {
   const [tasks, setTasks] = useState<SharedTask[] | null>(null);

@@ -9,7 +9,7 @@ import { formatMoney } from "../budget/money";
 import HelpTip from "../../shared/components/HelpTip";
 import { PHONE_QUERY, useMediaQuery } from "../../shared/hooks/useMediaQuery";
 
-/** Where each kind lands, so the confirmation can offer to go and look. */
+/** Where a filed line landed, for the confirmation's Go to it link. */
 function destination(result: OmniboxResult): string {
   if (result.kind === "grade" && result.course_id) {
     return `/grades/courses/${result.course_id}`;
@@ -18,16 +18,8 @@ function destination(result: OmniboxResult): string {
 }
 
 /**
- * One input, anywhere: "coffee 4.50", "cosc121 midterm 78/100", "lab due fri".
- *
- * The module it is heading for is shown as a badge *before* you commit, which
- * is the whole reason this is safe to have. An omnibox that routes silently is
- * the one shape of this feature worth not building: filing a mark as an expense
- * is a mistake you would find weeks later, in a number you had stopped
- * questioning.
- *
- * Reachable with Ctrl/Cmd-K from any page, since the point is not having to be
- * on the right one.
+ * One input for a task, an expense or a mark, its module shown as a badge before filing.
+ * Ctrl or Cmd+K focuses it from any page.
  */
 export default function Omnibox() {
   const { user } = useAuth();

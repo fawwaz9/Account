@@ -4,21 +4,21 @@ import { TaxPacket } from "../types";
 import { formatMoney } from "../../budget/money";
 import { today } from "../../../shared/utils/dateUtils";
 
+/** Props for the tax packet panel. */
 interface Props {
   readonly userId: string;
   readonly nonce: number;
 }
 
-/** Before May the year people are filing for is last year's. */
+/** The year people are filing for on a given day: last year until the end of April. */
 export function defaultYear(day: string) {
   const [year, month] = day.split("-").map(Number);
   return month <= 4 ? year - 1 : year;
 }
 
 /**
- * The tax packet (Phase 2 item 14): a calendar year's employment income from
- * what you recorded. Never from a T4 -- the app does not read them (D20) -- so
- * it says to check these sums against your slips. Not tax advice.
+ * A calendar year's employment income from recorded cheques, never a T4, with tuition paid.
+ * A summary to check against the slips, not tax advice.
  */
 export default function TaxPacketPanel({ userId, nonce }: Props) {
   const [year, setYear] = useState(() => defaultYear(today()));

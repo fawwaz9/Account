@@ -1,21 +1,14 @@
+/** The current day and minute in one time zone. */
 export interface ZonedNow {
-  /** The calendar day where the student is, as YYYY-MM-DD. */
+  /** Local calendar day, YYYY-MM-DD. */
   readonly date: string;
   /** Minutes since that day's midnight, 0-1439. */
   readonly minutes: number;
 }
 
 /**
- * Now, on the clock of the time zone in Settings rather than the browser's.
- *
- * The backend reads "today" from that zone (`app/shared/dates.py`), and a week
- * view drawing the current time from a different clock would put the line in a
- * different column from the one every server figure treats as today. The two
- * only differ when the device and the setting disagree -- travelling, usually --
- * which is exactly when a quietly wrong line is most misleading.
- *
- * An unusable zone falls back to the browser clock rather than throwing, the
- * same choice the backend makes: a missing line is worse than an approximate one.
+ * Now on the Settings time zone's clock, matching the backend's "today".
+ * A missing or invalid zone falls back to the browser clock instead of throwing.
  */
 export function nowIn(zone: string | null | undefined, at: Date = new Date()): ZonedNow {
   try {

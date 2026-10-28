@@ -1,9 +1,7 @@
-/**
- * What unticking an account does (Phase 1 D39), said the same way wherever the
- * switch appears: Settings → Financial and the account's own edit dialog.
- */
+/** Label for the counted-account switch, shared by Settings and the account dialog. */
 export const COUNTED_LABEL = "Counts toward net worth and analytics";
 
+/** Help text for that switch: what leaving an account uncounted does. */
 export const COUNTED_HELP =
   "An account you untick leaves net worth and every figure: safe to spend, the forecast, " +
   "the year plan, spending summaries. It and its history stay on the Budget page. Use it " +

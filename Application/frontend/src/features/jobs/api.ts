@@ -18,25 +18,28 @@ import {
   TaxPacket,
 } from "./types";
 
+/** Fetch jobs; archived ones only on request. */
 export async function fetchJobs(userId: string, includeArchived = false) {
   const base = endpoints.jobs.list(userId);
   return get<Job[]>(includeArchived ? `${base}?include_archived=true` : base);
 }
 
+/** Create a job. */
 export async function createJob(userId: string, payload: JobCreate) {
   return post<Job>(endpoints.jobs.list(userId), payload);
 }
 
+/** Edit a job. */
 export async function updateJob(userId: string, jobId: string, payload: JobUpdate) {
   return patch<Job>(endpoints.jobs.detail(userId, jobId), payload);
 }
 
-/** Removes the job and the calendar blocks it put up. Ending one is `ended_on`. */
+/** Delete a job with its shifts and paycheques; ledger rows stay. Ending a job is `ended_on`. */
 export async function deleteJob(userId: string, jobId: string) {
   return del<Job>(endpoints.jobs.detail(userId, jobId));
 }
 
-/** Replaces the job's recurring shifts with the pattern given. */
+/** Replace the job's repeating shifts with the pattern given. */
 export async function setShiftSchedule(
   userId: string,
   jobId: string,
@@ -45,18 +48,14 @@ export async function setShiftSchedule(
   return put<string[]>(endpoints.jobs.schedule(userId, jobId), payload);
 }
 
+/** Shift occurrences between two dates, inclusive. */
 export async function fetchShifts(userId: string, start: string, end: string) {
   return get<ShiftOccurrence[]>(
     `${endpoints.jobs.shifts(userId)}?start=${start}&end=${end}`
   );
 }
 
-/**
- * Confirm what was actually worked on one date.
- *
- * A PUT because `(event_id, on_date)` names the thing being written: confirming
- * the same Friday twice must leave one answer rather than two.
- */
+/** Record one shift date's actuals; a PUT, so confirming twice leaves one answer. */
 export async function recordShift(
   userId: string,
   eventId: string,
@@ -68,12 +67,13 @@ export async function recordShift(
 
 /* ===== Paycheques ===== */
 
+/** Fetch paycheques, optionally one job's. */
 export async function fetchPaycheques(userId: string, jobId?: string) {
   const base = endpoints.jobs.paycheques(userId);
   return get<Paycheque[]>(jobId ? `${base}?job_id=${jobId}` : base);
 }
 
-/** What the shifts in a period say the cheque should come to. */
+/** What a period's shifts say the cheque should come to. */
 export async function previewPaycheque(
   userId: string,
   jobId: string,
@@ -86,10 +86,12 @@ export async function previewPaycheque(
   );
 }
 
+/** Record a paycheque; its net is deposited by income share or as split. */
 export async function recordPaycheque(userId: string, payload: PaychequeCreate) {
   return post<Paycheque>(endpoints.jobs.paycheques(userId), payload);
 }
 
+/** Edit a paycheque. */
 export async function updatePaycheque(
   userId: string,
   paychequeId: string,
@@ -98,53 +100,45 @@ export async function updatePaycheque(
   return patch<Paycheque>(endpoints.jobs.paycheque(userId, paychequeId), payload);
 }
 
-/** Removes the cheque and the ledger rows it wrote. */
+/** Delete a paycheque and the ledger rows it wrote. */
 export async function deletePaycheque(userId: string, paychequeId: string) {
   return del<Paycheque>(endpoints.jobs.paycheque(userId, paychequeId));
 }
 
-/** Hours and money over a week, a month and the term, in one call. */
-/** A cheque against its shifts, BC overtime and vacation pay applied. */
+/** Check a cheque against its shifts, BC overtime and vacation pay applied. */
 export async function checkPaycheque(userId: string, paychequeId: string) {
   return get<PayCheck>(endpoints.jobs.paychequeCheck(userId, paychequeId));
 }
 
+/** Hours and money over a week, a month and the term, in one call. */
 export async function fetchEarnings(userId: string) {
   return get<EarningsSummary>(endpoints.jobs.earnings(userId));
 }
 
-/**
- * Add one shift on one date.
- *
- * The ordinary path: part-time hours are rarely the same twice, so a shift is
- * entered as it is given to you. A weekly pattern is the exception, and goes
- * through setShiftSchedule instead.
- */
+/** Add one shift on one date, the usual way hours arrive; patterns use `setShiftSchedule`. */
 export async function addShift(userId: string, jobId: string, payload: ShiftCreate) {
   return post<string>(endpoints.jobs.addShift(userId, jobId), payload);
 }
 
-/** Remove a one-off shift. A date from a pattern is cancelled on the calendar. */
+/** Delete a one-off shift; a pattern's date is cancelled on the calendar instead. */
 export async function deleteShift(userId: string, eventId: string) {
   return del<string>(endpoints.jobs.shift(userId, eventId));
 }
 
+/** Answer to choosing the cash-tip account. */
 export interface CashTipAccountResult {
   account_id: string | null;
-  /** How many held cash tips this choice filed into the account. */
+  /** Held cash tips this choice filed into the account. */
   filed: number;
 }
 
-/**
- * Choose the one account cash tips go to, or null to hold them. Choosing files
- * every tip that was waiting; tips already in the budget stay where they are.
- */
+/** Choose the account cash tips go to, or null to hold them; choosing files every held tip. */
 export async function chooseCashTipAccount(userId: string, accountId: string | null) {
   return put<CashTipAccountResult>(endpoints.jobs.cashTipAccount(userId), { account_id: accountId });
 }
 
 
-/** Shifts that run into, or crowd, an exam (Phase 2 item 14). */
+/** Shifts that run into, or crowd, an exam. */
 export async function fetchShiftConflicts(userId: string, start?: string, end?: string) {
   const query = new URLSearchParams();
   if (start) query.set("start", start);

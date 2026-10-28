@@ -5,7 +5,10 @@ import { firstOfMonth, today } from "../../../shared/utils/dateUtils";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { useApiRefresh } from "../../../shared/hooks/useApiRefresh";
 
-/** One account's selected month: its figures, its ledger and the category list. */
+/**
+ * One account's chosen month: its figures, its transactions and the category list.
+ * Only the newest load may write state, so a quick month change never shows stale figures.
+ */
 export function useAccountActivity(accountId: string | undefined) {
   const [activity, setActivity] = useState<AccountActivity | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);

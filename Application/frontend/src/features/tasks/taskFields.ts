@@ -1,28 +1,16 @@
 import { END_OF_DAY } from "./dueTime";
 
-/**
- * The rules a task form has to follow, in one place.
- *
- * Both of these exist in two forms now -- the inline add row on the task page
- * and the edit dialog opened from a row or a calendar chip -- and both fail
- * silently when they drift: one produces a save the API rejects, the other
- * quietly drops what was typed.
- */
+/** Field rules shared by the inline add row and the edit dialog, so the two forms can't drift. */
 
-/** The shape both forms hold a deadline in. */
+/** A form's due date and time. */
 export interface Deadline {
   due_date: string | null;
   due_time: string | null;
 }
 
 /**
- * Set the date, keeping the time honest.
- *
- * The two move together. A time of day with no date is refused by the API --
- * "A time of day needs a date to go with it" -- so clearing the date has to
- * clear the time. Setting one pre-fills the end of that day, because a deadline
- * with no time really is "by the end of Friday", and `hasSpecificTime` reads
- * 23:59 back as no particular time so nothing renders it as a real deadline.
+ * Set the due date: clearing it clears the time, and a new date with no time gets `END_OF_DAY`.
+ * The API refuses a time of day without a date.
  */
 export function withDueDate<T extends Deadline>(current: T, value: string | null): T {
   return {
@@ -32,28 +20,17 @@ export function withDueDate<T extends Deadline>(current: T, value: string | null
   };
 }
 
-/**
- * "reading, cpsc 221 , ,lab" -> ["reading", "cpsc 221", "lab"].
- *
- * Blanks dropped rather than stored: a trailing comma is how anyone types a
- * list, and an empty tag renders as a stray chip nothing can remove.
- */
+/** Split comma-separated text into trimmed tags, dropping blanks. */
 export function parseTags(text: string): string[] {
   return text.split(",").map((tag) => tag.trim()).filter(Boolean);
 }
 
-/** The reverse, for loading an existing task back into a text box. */
+/** Join tags back into the text box's comma-separated form. */
 export function tagText(tags: readonly string[]): string {
   return tags.join(", ");
 }
 
-/**
- * What a number box means when it is empty.
- *
- * `Number("")` is 0, so reading the box directly records "takes no time"
- * where the student meant "no estimate given" -- and a 0-minute estimate is
- * counted in the week's hours as a task that costs nothing.
- */
+/** A number box's value, or null when it is empty, since `Number` reads "" as 0. */
 export function numberOrNull(value: string): number | null {
   return value === "" ? null : Number(value);
 }

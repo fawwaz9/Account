@@ -1,17 +1,11 @@
 import { CategoryBlindSpot } from "../types";
 
+/** The blind spots to list. */
 interface BlindSpotsPanelProps {
   readonly spots: readonly CategoryBlindSpot[];
 }
 
-/**
- * A category worse than the student's own average, in more than one course.
- *
- * Pooled across every graded course, so this never links to a single course --
- * the point is that no one course explains it. Nothing shows here unless it
- * repeats in at least two of them; a category weak in one course is that
- * course's problem, not a pattern.
- */
+/** Categories trailing the student's overall average across courses; renders nothing when none. */
 export default function BlindSpotsPanel({ spots }: BlindSpotsPanelProps) {
   if (spots.length === 0) return null;
 

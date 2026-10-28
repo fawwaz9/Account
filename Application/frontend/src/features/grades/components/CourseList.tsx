@@ -1,19 +1,17 @@
 import { Course } from "../types";
 import { useNavigate } from "react-router-dom";
 
+/** The courses to show as cards. */
 interface CourseListProps {
   readonly courses: readonly Course[];
 }
 
+/** The course a card shows. */
 interface CourseCardProps {
   readonly course: Course;
 }
 
-/**
- * The grade a course should be represented by: the professor's final grade
- * once submitted, otherwise the running average. Mirrors course_result_grade
- * on the backend, which is what letter_grade is derived from.
- */
+/** The grade a course card shows: the recorded final, else a nonzero average, else null. */
 export function displayGrade(course: Course): number | null {
   if (course.final_grade > 0) return course.final_grade;
   // Null already means "nothing marked"; the > 0 test remains for a course
@@ -22,6 +20,7 @@ export function displayGrade(course: Course): number | null {
   return null;
 }
 
+/** The course cards, in the order given. */
 export default function CourseList({ courses }: CourseListProps) {
   return (
     <div className="courseList">
@@ -32,6 +31,7 @@ export default function CourseList({ courses }: CourseListProps) {
   );
 }
 
+/** One course card: code, section and professor, letter, and the grade to the nearest whole. */
 export function CourseCard({ course }: CourseCardProps) {
   const navigate = useNavigate();
   const grade = displayGrade(course);

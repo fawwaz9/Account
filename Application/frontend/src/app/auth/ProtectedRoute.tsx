@@ -2,6 +2,10 @@ import { Navigate, useLocation } from "react-router-dom";
 import Loading from "../../shared/components/Loading";
 import { useAuth } from "./AuthContext";
 
+/**
+ * Route guard: shows a loader while the session loads.
+ * Sends signed-out visitors to /login, keeping where they were headed.
+ */
 export default function ProtectedRoute({ children }: { readonly children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
   const location = useLocation();

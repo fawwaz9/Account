@@ -28,8 +28,13 @@ import { Account, RecurringTransaction, Transaction } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { useShortcut } from "../../../shared/hooks/useShortcut";
 
+/** Reason shown wherever money cannot be recorded for want of an account. */
 const NO_ACCOUNTS_YET = "Add an account first -- money has to go somewhere.";
 
+/**
+ * The Budget page: safe-to-spend, net worth, accounts, ledger, standing instructions, plans.
+ * Owns every budget dialog and reloads the page after each write.
+ */
 export default function BudgetView() {
   const { user } = useAuth();
   const {

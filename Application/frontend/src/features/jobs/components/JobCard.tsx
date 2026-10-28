@@ -2,22 +2,17 @@ import { Job, JOB_KIND_LABELS, JobKind } from "../types";
 import { formatMoney } from "../../budget/money";
 import { dueLabel } from "../../../shared/utils/dateUtils";
 
+/** Props for a job card. */
 interface JobCardProps {
   readonly job: Job;
+  /** Minutes of shifts in the next three weeks, despite the name. */
   readonly hours: number;
   readonly onEdit: (job: Job) => void;
   readonly onSchedule: (job: Job) => void;
   readonly busy: boolean;
 }
 
-/**
- * One job, and what it pays.
- *
- * The pay line says whichever thing the job's kind makes true, rather than
- * forcing all three into an hourly figure -- a salaried job has no hourly rate,
- * and inventing one by dividing would make working a long week read as a pay
- * cut.
- */
+/** One job: its kind, its pay in the terms that kind makes true, hours ahead and next cheque. */
 export default function JobCard({ job, hours, onEdit, onSchedule, busy }: JobCardProps) {
   return (
     <li className={`jobCard${job.is_current ? "" : " jobCardEnded"}`}>
@@ -53,6 +48,7 @@ export default function JobCard({ job, hours, onEdit, onSchedule, busy }: JobCar
   );
 }
 
+/** The pay line: hourly rate, amount per pay period, or billed per invoice. */
 function payLine(job: Job): string {
   if (job.kind === JobKind.HOURLY && job.hourly_rate !== null) {
     return `${formatMoney(job.hourly_rate)} an hour`;
@@ -63,7 +59,7 @@ function payLine(job: Job): string {
   return "Billed per invoice";
 }
 
-/** "5" rather than "5.0", but "5.5" when it matters. */
+/** Minutes as hours to one decimal, without a trailing ".0". */
 function trimHours(minutes: number): string {
   return String(Math.round((minutes / 60) * 10) / 10);
 }

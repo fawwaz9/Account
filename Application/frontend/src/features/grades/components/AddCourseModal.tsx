@@ -6,12 +6,14 @@ import { CourseCreate, GradeCategory, Semester } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
 import Modal from "../../../shared/components/Modal";
 
+/** Whether the dialog is open, and its close and course-added callbacks. */
 interface AddCourseModalProps {
   readonly open: boolean;
   readonly onClose: () => void;
   readonly onCourseAdded: () => void;
 }
 
+/** A blank course form: Fall, year 1, 3 credits, required, no weights set. */
 const defaultForm: CourseCreate = {
   code: "",
   name: "",
@@ -32,6 +34,7 @@ const defaultForm: CourseCreate = {
   links: [],
 };
 
+/** Add-course dialog: sends the form with every unset category weight as 0, then resets it. */
 export default function AddCourseModal({
   open,
   onClose,
@@ -110,6 +113,7 @@ export default function AddCourseModal({
   );
 }
 
+/** A readable message from what an API call threw: an Error's text, a validation list, or JSON. */
 export function getErrorMessage(apiError: unknown): string {
   // apiClient throws a plain Error whose message is already the unpacked
   // detail, so this has to come first -- JSON.stringify(new Error("x")) is "{}".

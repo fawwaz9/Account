@@ -2,17 +2,21 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import HelpTip from "../../shared/components/HelpTip";
 
-/** One thing a new student does to get the app working for them. */
+/** One first-run step: a label, where it is done, and whether it is. */
 export interface Step {
   readonly id: string;
   readonly label: string;
+  /** Route that does the step. */
   readonly to: string;
   readonly done: boolean;
 }
 
+/** What the dashboard knows that decides each step. */
 export interface StepInputs {
   readonly termSet: boolean;
+  /** Saved Settings time zone. */
   readonly zone: string | undefined;
+  /** The browser's zone; when unknown, the zone step counts as done. */
   readonly browserZone: string | undefined;
   readonly courseCount: number;
   readonly hasMoney: boolean;
@@ -20,16 +24,8 @@ export interface StepInputs {
 }
 
 /**
- * What "set up" means, derived entirely from data the dashboard already has.
- *
- * Nothing is stored about the checklist itself: a step is done when the thing
- * it asks for exists, so a student who did it some other way -- through the
- * omnibox, say -- is not told to do it again.
- *
- * The time zone step is done when the saved zone matches the browser's. A new
- * account starts on America/Regina, which is right for the first users and
- * wrong for anyone else, and "today" -- what is due, what is overdue -- comes
- * from it everywhere.
+ * The five first-run steps, each done once the thing it asks for exists.
+ * The zone step is done when the saved zone matches the browser's.
  */
 export function steps(inputs: StepInputs): Step[] {
   return [
@@ -66,10 +62,12 @@ export function steps(inputs: StepInputs): Step[] {
   ];
 }
 
+/** localStorage key remembering a dismissed checklist, per user. */
 function hiddenKey(userId: string) {
   return `account.getStarted.hidden.${userId}`;
 }
 
+/** Whether this user dismissed the checklist in this browser; false if storage is refused. */
 function readHidden(userId: string): boolean {
   try {
     return window.localStorage.getItem(hiddenKey(userId)) === "1";
@@ -78,19 +76,15 @@ function readHidden(userId: string): boolean {
   }
 }
 
+/** Props for the first-run checklist. */
 interface GetStartedProps {
   readonly userId: string;
   readonly steps: readonly Step[];
 }
 
 /**
- * The first-run checklist on the dashboard, Phase 0's onboarding item: a new
- * account opens on empty screens, and this turns "where do I start" into five
- * links, each going straight to the place that does the step.
- *
- * Gone once every step is done, or once hidden. Hiding is remembered per user
- * in this browser only -- a convenience, not a setting, so it does not need the
- * server.
+ * Dashboard first-run checklist linking to each step; gone once all are done or it is dismissed.
+ * Dismissal is remembered per user in this browser only.
  */
 export default function GetStarted({ userId, steps: list }: GetStartedProps) {
   const [hidden, setHidden] = useState(() => readHidden(userId));

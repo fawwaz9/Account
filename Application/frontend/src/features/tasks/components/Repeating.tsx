@@ -1,11 +1,12 @@
 import { RecurringTask } from "../types";
 import { dueLabel, duration, shortDate } from "../../../shared/utils/dateUtils";
 
+/** Short weekday names by byday code. */
 const WEEKDAY_NAMES: Record<string, string> = {
   MO: "Mon", TU: "Tue", WE: "Wed", TH: "Thu", FR: "Fri", SA: "Sat", SU: "Sun",
 };
 
-/** The rule in words: "every Monday", "every 2 weeks, 6 times". */
+/** A repeat rule in words, e.g. "every Mon, Wed" or "every 2 weeks, 6 times". */
 function ruleInWords(rule: RecurringTask): string {
   const { freq, interval, byday } = rule.recurrence;
   const unit = freq === "daily" ? "day" : freq === "weekly" ? "week" : "month";
@@ -23,6 +24,7 @@ function ruleInWords(rule: RecurringTask): string {
   return base;
 }
 
+/** The repeating tasks, the add, edit and stop handlers, and a busy flag. */
 interface RepeatingProps {
   readonly rules: RecurringTask[];
   readonly onAdd: () => void;
@@ -31,14 +33,7 @@ interface RepeatingProps {
   readonly busy: boolean;
 }
 
-/**
- * The repeats themselves, listed apart from the tasks they produce.
- *
- * Two lists rather than one, because they answer different questions: the task
- * list is what to do this week, and this is what keeps coming back. Showing a
- * rule inline among its own occurrences would make it look like a seventh thing
- * to tick off.
- */
+/** The repeating tasks, listed apart from the occurrences they write, with edit and stop. */
 export default function Repeating({ rules, onAdd, onEdit, onStop, busy }: RepeatingProps) {
   const weekly = rules
     .filter((rule) => rule.active && rule.estimated_minutes)

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { EstimateRatio } from "../types";
 
+/** The estimate ratio, and the handler that turns its use on or off. */
 interface EstimateRatioCardProps {
   readonly ratio: EstimateRatio | null;
   /** Turn the forecast's use of the ratio on or off. */
@@ -8,9 +9,8 @@ interface EstimateRatioCardProps {
 }
 
 /**
- * How long tasks really take against their estimates (Phase 1 D36), and the
- * switch that lets the workload forecast use it. The estimates themselves are
- * never rewritten, so switching it off undoes it completely.
+ * How long tasks really take against their estimates, with the switch for the forecast to use it.
+ * Until enough tasks qualify it says how many; the estimates themselves are never rewritten.
  */
 export default function EstimateRatioCard({ ratio, onApply }: EstimateRatioCardProps) {
   const [saving, setSaving] = useState(false);

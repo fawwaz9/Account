@@ -1,5 +1,6 @@
 import Modal from "../../../shared/components/Modal";
 
+/** The dialog's title and message, its confirm and cancel handlers, and its status. */
 interface DeleteConfirmModalProps {
   readonly open: boolean;
   readonly title: string;
@@ -10,11 +11,11 @@ interface DeleteConfirmModalProps {
   readonly error?: string | null;
   /** Label for the primary button. Defaults to "Delete". */
   readonly confirmLabel?: string;
-  /** A second, narrower destructive choice -- deleting one row of a group
-      rather than the whole thing. Omitted, only the primary button renders. */
+  /** A narrower destructive choice, such as one row of a group; omitted, only the primary shows. */
   readonly secondaryAction?: { readonly label: string; readonly onConfirm: () => void };
 }
 
+/** The confirmation each permanent delete goes through, with an optional narrower second choice. */
 export default function DeleteConfirmModal({
   open,
   title,

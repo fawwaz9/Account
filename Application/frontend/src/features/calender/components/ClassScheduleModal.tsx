@@ -14,23 +14,27 @@ import {
 import { useAuth } from "../../../app/auth/AuthContext";
 import { WEEKDAY_CODES } from "../../../shared/utils/dateUtils";
 
+/** One-letter label for each weekday button. */
 const DAY_INITIALS: Record<Weekday, string> = {
   MO: "M", TU: "T", WE: "W", TH: "T", FR: "F", SA: "S", SU: "S",
 };
 
+/** Full weekday names, Monday first, for the buttons' accessible names. */
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
+/** The course and its term dates, and the close and saved callbacks. */
 interface ClassScheduleModalProps {
   readonly open: boolean;
   readonly courseId: string;
   readonly courseCode: string;
-  /** Used only to say which dates the timetable will run between. */
+  /** Only used to say which dates the timetable runs between, as is `endDate`. */
   readonly startDate: string | null;
   readonly endDate: string | null;
   readonly onClose: () => void;
   readonly onSaved: () => void;
 }
 
+/** A new weekly lecture row, 09:00 to 10:00, with no days chosen. */
 function blankMeeting(): ClassMeeting {
   return {
     kind: "lecture", days: [], start_time: "09:00", end_time: "10:00",
@@ -38,7 +42,7 @@ function blankMeeting(): ClassMeeting {
   };
 }
 
-/** The stored events back into the rows the form edits. */
+/** Stored class events as editable rows; a non-weekly event's start date is its first meeting. */
 function meetingsFrom(events: CalendarEvent[]): ClassMeeting[] {
   return events.map((event) => ({
     kind: event.kind,
@@ -56,12 +60,8 @@ function meetingsFrom(events: CalendarEvent[]): ClassMeeting[] {
 }
 
 /**
- * A course's class times, as a timetable rather than as events.
- *
- * Each row becomes one weekly repeat bounded by the course's own term dates, so
- * a term of lectures is three rows of form and three rows in the database. The
- * whole timetable is replaced on save: fixing a room must not leave the old room
- * on the calendar beside the new one.
+ * A course's class times as a timetable; each row becomes one repeating event within the term.
+ * Saving replaces the whole timetable, and rows with no days chosen are dropped.
  */
 export default function ClassScheduleModal({
   open,

@@ -1,71 +1,56 @@
-/**
- * Calendar date arithmetic. "Today" is read in the student's Settings time zone
- * (see `setClockZone`); everything else here is plain date arithmetic.
- *
- * Every date in this app is a plain YYYY-MM-DD: a lecture at 10:00 is at 10:00
- * wherever you read it from. So the rule here matches `features/budget/dates.ts`
- * -- never `toISOString()`, which is UTC and, west of Greenwich, reports
- * tomorrow's date all evening.
- */
+/** YYYY-MM-DD date helpers in local time, never `toISOString`; today reads the Settings zone. */
 
 import { nowIn } from "./zonedNow";
 
+/** Short English weekday names, Monday first. */
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 
-/** Matches the API's byday codes, and the index matches `weekdayIndex`. */
+/** The API's byday codes, Monday first; each index matches `weekdayIndex`. */
 export const WEEKDAY_CODES = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"] as const;
 
+/** One of the API's two-letter byday codes. */
 export type WeekdayCode = (typeof WEEKDAY_CODES)[number];
 
+/** Zero-pad a number to two digits. */
 function pad(value: number) {
   return String(value).padStart(2, "0");
 }
 
-/** A Date as YYYY-MM-DD, read in local time. */
+/** Format a Date as YYYY-MM-DD in local time. */
 export function isoDate(day: Date): string {
   return `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}`;
 }
 
 /**
- * A YYYY-MM-DD string as a local Date at midnight.
- *
- * `new Date("2026-09-08")` parses as UTC midnight, which renders as the 7th
- * anywhere west of Greenwich -- an off-by-one that only shows up for some
- * readers, which is the worst kind.
+ * Parse YYYY-MM-DD as local midnight.
+ * Never `new Date(value)`, which reads UTC and lands on the day before west of Greenwich.
  */
 export function fromIso(value: string): Date {
   const [year, month, day] = value.split("-").map(Number);
   return new Date(year, month - 1, day);
 }
 
-/**
- * The time zone "today" is read in: the student's Settings zone once the
- * signed-in user is known, and the browser's until then.
- *
- * Module state, set by AuthProvider, rather than a zone passed to every caller:
- * over forty places ask for today, and each one threading a zone through is
- * forty chances to forget it. The backend reads today from the same setting
- * (`app/shared/dates.py`), so the page and every figure the server sends now
- * agree about which day it is -- which they did not when the device's zone and
- * the setting differed, travelling for instance.
- */
+/** Zone `today` reads, set from Settings by AuthProvider; null means the browser's zone. */
 let clockZone: string | null = null;
 
-/** Called by AuthProvider whenever the signed-in user changes. */
+/** Set the zone `today` reads; AuthProvider calls it whenever the signed-in user changes. */
 export function setClockZone(zone: string | null | undefined): void {
   clockZone = zone || null;
 }
 
+/** Today as YYYY-MM-DD in the Settings time zone, or the browser's before sign-in. */
 export function today(): string {
   return nowIn(clockZone).date;
 }
 
+/** Shift a YYYY-MM-DD date by `count` days; negative goes back. */
 export function addDays(value: string, count: number): string {
   const day = fromIso(value);
   day.setDate(day.getDate() + count);
   return isoDate(day);
 }
 
+/** The 1st of the month `count` months from `value`'s month (the day is not kept). */
 export function addMonths(value: string, count: number): string {
   const day = fromIso(value);
   // Anchor to the 1st first: stepping from the 31st lands in the month after
@@ -81,45 +66,39 @@ export function startOfWeek(value: string): string {
   return addDays(value, -weekdayIndex(day));
 }
 
-/** 0 for Monday through 6 for Sunday, so a week starts where a timetable does. */
+/** Weekday of a Date as 0 (Monday) to 6 (Sunday). */
 export function weekdayIndex(day: Date): number {
   return (day.getDay() + 6) % 7;
 }
 
+/** The API byday code of a YYYY-MM-DD date. */
 export function weekdayCode(value: string): WeekdayCode {
   return WEEKDAY_CODES[weekdayIndex(fromIso(value))];
 }
 
+/** First day of `value`'s month. */
 export function firstOfMonth(value: string): string {
   return `${value.slice(0, 7)}-01`;
 }
 
+/** Last day of `value`'s month. */
 export function lastOfMonth(value: string): string {
   return addDays(addMonths(firstOfMonth(value), 1), -1);
 }
 
-/**
- * The six weeks a month grid draws: whole weeks, Monday-first, covering the
- * month and the days either side of it that share those weeks.
- *
- * Always six rows rather than however many the month needs, so the grid does
- * not change height as you page through the term.
- */
+/** The 42 days of six Monday-first weeks covering `month`, so the grid never changes height. */
 export function monthGrid(month: string): string[] {
   const start = startOfWeek(firstOfMonth(month));
   return Array.from({ length: 42 }, (_, index) => addDays(start, index));
 }
 
-/** The seven days of the week `value` falls in, Monday first. */
+/** The seven days, Monday first, of the week `value` falls in. */
 export function weekGrid(value: string): string[] {
   const start = startOfWeek(value);
   return Array.from({ length: 7 }, (_, index) => addDays(start, index));
 }
 
-/**
- * "HH:MM[:SS]" as minutes since midnight, which is what a timed grid positions
- * against. Null for an all-day item, which has no position on that axis.
- */
+/** "HH:MM[:SS]" as minutes since midnight; null when there is no time (an all-day item). */
 export function minutesOfDay(value: string | null): number | null {
   if (!value) return null;
 
@@ -127,44 +106,41 @@ export function minutesOfDay(value: string | null): number | null {
   return hours * 60 + minutes;
 }
 
-/** "9am", "1pm" — an hour label for a time axis, where minutes are always zero. */
+/** Hour 0-23 as a time-axis label: "12am", "9am", "1pm". */
 export function hourLabel(hour: number): string {
   const suffix = hour < 12 ? "am" : "pm";
   const display = hour % 12 === 0 ? 12 : hour % 12;
   return `${display}${suffix}`;
 }
 
+/** True when both dates share a year and month. */
 export function isSameMonth(value: string, month: string): boolean {
   return value.slice(0, 7) === month.slice(0, 7);
 }
 
-/** "Tue 8 Sep" -- short enough for a chip, unambiguous about the weekday. */
+/** "Tue 8 Sep": English weekday, day of month, short month in the browser's locale. */
 export function shortDate(value: string): string {
   const day = fromIso(value);
   return `${WEEKDAY_LABELS[weekdayIndex(day)]} ${day.getDate()} ${monthName(value, true)}`;
 }
 
+/** Month name of a date in the browser's locale, long or short. */
 export function monthName(value: string, short = false): string {
   return fromIso(value).toLocaleString(undefined, { month: short ? "short" : "long" });
 }
 
-/** "September 2026", for a calendar heading. */
+/** Month and year for a heading, e.g. "September 2026". */
 export function monthLabel(value: string): string {
   return `${monthName(value)} ${fromIso(value).getFullYear()}`;
 }
 
-/** "8 – 14 Sep 2026", for the week `value` falls in. */
+/** Range label for the Monday-to-Sunday week holding `value`, e.g. "8 – 14 Sep 2026". */
 export function weekLabel(value: string): string {
   const days = weekGrid(value);
   return rangeLabel(days[0], days[6]);
 }
 
-/**
- * "8 – 14 Sep 2026", collapsing whatever the two ends share.
- *
- * A span that straddles a month or a year has to say so; one that does not
- * should not repeat itself.
- */
+/** "8 – 14 Sep 2026": a date range that repeats the month or year only when they differ. */
 export function rangeLabel(first: string, last: string): string {
   const start = fromIso(first);
   const end = fromIso(last);
@@ -179,7 +155,7 @@ export function rangeLabel(first: string, last: string): string {
   return `${start.getDate()} – ${endPart}`;
 }
 
-/** "09:30" -> "9:30 am". Times arrive from the API as HH:MM or HH:MM:SS. */
+/** "09:30" or "09:30:00" as "9:30am", "14:00" as "2pm"; "" for null. */
 export function clockTime(value: string | null): string {
   if (!value) return "";
 
@@ -189,7 +165,7 @@ export function clockTime(value: string | null): string {
   return minutes === 0 ? `${hour}${suffix}` : `${hour}:${pad(minutes)}${suffix}`;
 }
 
-/** "1h 30m" from a count of minutes; "" for nothing. */
+/** Minutes as "45m", "2h" or "1h 30m"; "" for null, zero or negative. */
 export function duration(minutes: number | null | undefined): string {
   if (!minutes || minutes <= 0) return "";
 
@@ -200,10 +176,8 @@ export function duration(minutes: number | null | undefined): string {
 }
 
 /**
- * How a deadline reads relative to today: "Overdue", "Today", "in 3 days".
- *
- * Whole days apart rather than hours, so something due at 9am tomorrow reads as
- * tomorrow all evening rather than becoming "in 14 hours".
+ * A date relative to today: "Today", "Tomorrow", "in 3 days", "Yesterday", "4 days ago".
+ * Fourteen or more days ahead reads as `shortDate`; "" for null.
  */
 export function dueLabel(value: string | null): string {
   if (!value) return "";
@@ -216,7 +190,7 @@ export function dueLabel(value: string | null): string {
   return shortDate(value);
 }
 
-/** Whole days from `from` to `to`; negative when `to` is earlier. */
+/** Whole calendar days from `from` to `to`; negative when `to` is earlier. */
 export function daysBetween(from: string, to: string): number {
   const millis = fromIso(to).getTime() - fromIso(from).getTime();
   return Math.round(millis / 86_400_000);

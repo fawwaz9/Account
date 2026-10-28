@@ -5,6 +5,7 @@ import { applySyllabus, Assessment, ParseResult, readSyllabus } from "./api";
 import { asBase64 } from "./file";
 import SyllabusRules, { confirmedRules, draftsFrom, RuleDrafts } from "./SyllabusRules";
 
+/** The close handler, and a callback given the new course's id. */
 interface SyllabusModalProps {
   readonly userId: string;
   readonly onClose: () => void;
@@ -12,16 +13,12 @@ interface SyllabusModalProps {
   readonly onBuilt: (courseId: string) => void;
 }
 
+/** Every grade category, for the row selects. */
 const CATEGORIES = Object.values(GradeCategory);
 
 /**
- * A syllabus in, a course out -- Phase 1 item 1.
- *
- * The verification screen is the product (account-vision.md §13.8): what was
- * read is laid out with every field editable, the checks the server made sit
- * on top, and nothing is created until "Create course". The weights' total is
- * live and the button waits for 100%, because a gradebook whose weights do not
- * add up projects every grade wrong.
+ * A syllabus in, a course out: every field read is editable, and nothing is created until
+ * "Create course", which waits for the non-bonus weights to total 100% (within 0.5).
  */
 export default function SyllabusModal({ userId, onClose, onBuilt }: SyllabusModalProps) {
   const [busy, setBusy] = useState<"reading" | "building" | null>(null);

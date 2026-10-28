@@ -3,6 +3,7 @@ import { fetchCheapestPath } from "../api";
 import { CheapestPath as Path, RemainingItem } from "../types";
 import { duration } from "../../../shared/utils/dateUtils";
 
+/** The course to rank, and a counter the page bumps to refetch. */
 interface CheapestPathProps {
   readonly userId: string;
   readonly courseId: string;
@@ -10,11 +11,12 @@ interface CheapestPathProps {
   readonly nonce: number;
 }
 
-/** "+4.2 pts" — the share of the final average this item still controls. */
+/** A signed points figure to one decimal, e.g. "+4.2 pts". */
 function points(value: number): string {
   return `${value > 0 ? "+" : ""}${value.toFixed(1)} pts`;
 }
 
+/** One ranked item: its rate per hour when estimated, its points, and its estimate. */
 function Row({ item }: { readonly item: RemainingItem }) {
   return (
     <li className="pathItem">
@@ -40,25 +42,8 @@ function Row({ item }: { readonly item: RemainingItem }) {
 }
 
 /**
- * Which remaining item is worth doing next.
- *
- * The average says where the course is; this says what to do about it. Each
- * item is scored by how much of the final average it still controls -- the
- * difference between finishing it perfectly and not at all.
- *
- * Three items, ranked by points per hour and then by points. The rate leads
- * because the question is what to spend the next hour on, and the server does
- * both the ranking and the cut -- a slice taken here would be a second rule
- * with nothing testing it.
- *
- * An item with no estimate has no rate and ranks below every item that has one,
- * so a single estimate anywhere in a course takes the top row whatever it is
- * worth. That is why the prompt to add estimates stays on screen rather than
- * being a hint that fades: it is the only thing that makes this ranking mean
- * anything.
- *
- * Hidden once nothing is outstanding, matching GradeBand: a course with nothing
- * left has no next thing to do.
+ * "Worth doing next": the server's top three unmarked items by points per hour, then points.
+ * Hidden when nothing is outstanding; says first when the target is out of reach.
  */
 export default function CheapestPath({ userId, courseId, nonce }: CheapestPathProps) {
   const [path, setPath] = useState<Path | null>(null);

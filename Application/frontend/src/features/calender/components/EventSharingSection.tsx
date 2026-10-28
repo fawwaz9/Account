@@ -3,15 +3,12 @@ import { useAuth } from "../../../app/auth/AuthContext";
 import SharingSection from "../../../shared/components/SharingSection";
 import { cancelEventLink, eventInviteLink, fetchEventSharing, makeEventLink, removeEventMember } from "../sharing";
 
+/** The event to share. */
 interface Props {
   readonly eventId: string;
 }
 
-/**
- * Sharing one of your own events (Phase 2 item 9b, D24), inside its editor.
- * Whoever joins sees when and where on their own calendar, and can leave.
- * They change nothing of it.
- */
+/** The Share panel in an event's editor; members see it on their calendar but change nothing. */
 export default function EventSharingSection({ eventId }: Props) {
   const { user } = useAuth();
   const userId = user?.id ?? "";

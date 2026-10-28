@@ -1,5 +1,6 @@
-/** Mirrors app/Calendar/schemas/event.py. */
+/** Calendar types; they mirror app/Calendar/schemas/event.py. */
 
+/** What an event is; decides its colour and grouping. */
 export type EventKind =
   | "lecture"
   | "lab"
@@ -10,16 +11,19 @@ export type EventKind =
   | "personal"
   | "shift";
 
+/** How often a recurrence repeats. */
 export type Frequency = "daily" | "weekly" | "monthly";
 
+/** Two-letter weekday codes, as the API's byday uses them. */
 export type Weekday = "MO" | "TU" | "WE" | "TH" | "FR" | "SA" | "SU";
 
-/** The kinds a course timetable is built from. */
+/** Kinds a course timetable is built from. */
 export const CLASS_KINDS: EventKind[] = ["lecture", "lab", "discussion"];
 
-/** The kinds the calendar themes as an exam rather than a class. */
+/** Kinds the calendar themes as an exam rather than a class. */
 export const EXAM_KINDS: EventKind[] = ["midterm", "final"];
 
+/** Display label for each event kind. */
 export const EVENT_KIND_LABELS: Record<EventKind, string> = {
   lecture: "Lecture",
   lab: "Lab",
@@ -31,18 +35,20 @@ export const EVENT_KIND_LABELS: Record<EventKind, string> = {
   shift: "Shift",
 };
 
+/** How an event repeats. */
 export interface Recurrence {
   freq: Frequency;
-  /** Every N days/weeks/months. */
+  /** Every N days, weeks or months, per `freq`. */
   interval: number;
-  /** Weekly only. Empty means the weekday the event starts on. */
+  /** Weekly only; empty means the weekday the event starts on. */
   byday: Weekday[];
-  /** Inclusive last date. Never set alongside `count`. */
+  /** Inclusive last date; never set alongside `count`. */
   until: string | null;
+  /** Number of occurrences; never set alongside `until`. */
   count: number | null;
 }
 
-/** One stored event -- one row, however often it repeats. */
+/** One stored event: a single row however often it repeats. */
 export interface CalendarEvent {
   id: string;
   title: string;
@@ -50,8 +56,9 @@ export interface CalendarEvent {
   course_id: string | null;
   location: string | null;
   notes: string | null;
+  /** First date, YYYY-MM-DD. */
   starts_on: string;
-  /** Both null means an all-day event. */
+  /** "HH:MM[:SS]"; null together with `end_time` for an all-day event. */
   start_time: string | null;
   end_time: string | null;
   recurrence: Recurrence | null;
@@ -59,12 +66,7 @@ export interface CalendarEvent {
   skipped_dates: string[];
 }
 
-/**
- * One date a series actually falls on.
- *
- * Materialised by the API per request and never stored, so it has no id of its
- * own: `(event_id, on_date)` is what identifies it.
- */
+/** One date an event falls on, built per request, never stored; keyed by `(event_id, on_date)`. */
 export interface EventOccurrence {
   event_id: string;
   on_date: string;
@@ -76,29 +78,19 @@ export interface EventOccurrence {
   notes: string | null;
   course_id: string | null;
   course_code: string | null;
-  /** Set on a shift, the way course_id is set on a lecture. */
+  /** Set on a shift, as `course_id` is on a lecture. */
   job_id: string | null;
+  /** True when the event has a repeat rule. */
   repeats: boolean;
-  /**
-   * Set when a dated grade produced this block. The gradebook owns it, so there
-   * is no delete here — removing it would only bring it back the next time the
-   * grade was saved.
-   */
+  /** Set when a dated grade made this block; the gradebook owns it, so it has no delete here. */
   grade_id: string | null;
-  /**
-   * Phase 2 item 9b: set when this is someone else's, shared with you -- their
-   * event, or their task's due date. It is theirs to change: the calendar only
-   * shows it, and offers leaving.
-   */
+  /** Set when someone else shared their event or task date with you; theirs to change. */
   shared?: { owner_name: string; member_names: string[]; what: "event" | "task" };
-  /**
-   * A job application's deadline or follow-up date (Phase 3 item 1, D4): an
-   * all-day reminder that points back to the tracker, where the next step is
-   * recorded. Nothing to tick off here.
-   */
+  /** A job application's deadline or follow-up: an all-day pointer back to the tracker. */
   application?: { id: string; what: "deadline" | "follow_up"; company: string; role: string };
 }
 
+/** Request body for creating an event. */
 export interface EventCreate {
   title: string;
   kind: EventKind;
@@ -109,15 +101,11 @@ export interface EventCreate {
   start_time: string | null;
   end_time: string | null;
   recurrence: Recurrence | null;
-  /**
-   * Dates this series does not run — a cancelled lecture, a week away.
-   *
-   * Set while editing, rather than only by skipping occurrences after the fact.
-   * A reading break that applies to every class is a TermBlackout instead.
-   */
+  /** Dates the series skips; a break for every class is a `TermBlackout` instead. */
   skipped_dates: string[];
 }
 
+/** Patch body for an event. */
 export type EventUpdate = Partial<EventCreate>;
 
 /** One recurring block of a course's timetable. */
@@ -127,26 +115,16 @@ export interface ClassMeeting {
   start_time: string;
   end_time: string;
   location: string | null;
-  /**
-   * Every N weeks. 1 is weekly, 2 is fortnightly.
-   *
-   * On the meeting rather than the schedule, because a course routinely mixes
-   * them: a weekly lecture beside a fortnightly lab is the ordinary case.
-   */
+  /** Every N weeks (1 weekly, 2 fortnightly); per meeting, since courses mix them. */
   interval: number;
-  /**
-   * Which week the cycle starts on, for anything that is not weekly.
-   *
-   * Without it every fortnightly meeting is pinned to the odd weeks of term,
-   * because the whole timetable shares one start date — and labs commonly begin
-   * in week two. Ignored when the interval is 1.
-   */
+  /** First date of a non-weekly cycle, e.g. a lab starting in week two; ignored when weekly. */
   first_on: string | null;
 }
 
-/** Weekly through every eight weeks. Past that it is a mistake, not a schedule. */
+/** Longest meeting cycle allowed, in weeks. */
 export const MAX_MEETING_INTERVAL = 8;
 
+/** Labels for the common meeting intervals, keyed by weeks. */
 export const INTERVAL_LABELS: Record<number, string> = {
   1: "Every week",
   2: "Every 2 weeks",
@@ -154,14 +132,15 @@ export const INTERVAL_LABELS: Record<number, string> = {
   4: "Every 4 weeks",
 };
 
+/** Request body building a course's timetable from its weekly meetings. */
 export interface ClassScheduleCreate {
   meetings: ClassMeeting[];
-  /** Null falls back to the course's own term dates. */
+  /** Null falls back to the course's own term dates, as does a null `ends_on`. */
   starts_on: string | null;
   ends_on: string | null;
 }
 
-/** A gap between commitments long enough to be worth putting something in. */
+/** A gap between commitments long enough to use, inside the study window. */
 export interface FreeBlock {
   on_date: string;
   starts_at: string;
@@ -169,28 +148,23 @@ export interface FreeBlock {
   minutes: number;
 }
 
-/**
- * What a window costs, in hours rather than item counts.
- *
- * Booked and estimated stay apart: booked time is not optional, estimated time
- * is a guess you wrote down, and one combined number would hide which half is
- * which — and hide that most tasks carry no estimate at all.
- */
+/** A window's load in minutes, with booked events and task estimates kept apart. */
 export interface WeekLoad {
   starts_on: string;
   ends_on: string;
   booked_minutes: number;
-  /** Scaled by `estimate_ratio` when that is set. */
+  /** Task estimates, scaled by `estimate_ratio` when that is set. */
   estimated_minutes: number;
   /** The estimates as typed, before any scaling. */
   typed_estimated_minutes?: number;
-  /** How long tasks really take against their estimates, when the forecast uses it. */
+  /** Actual over estimated task time, when the forecast applies it. */
   estimate_ratio?: number | null;
   task_count: number;
   unestimated_tasks: number;
   event_count: number;
 }
 
+/** One week of the crunch strip. */
 export interface CrunchWeek {
   starts_on: string;
   /** Weighted by kind: a final outweighs a midterm outweighs a deadline. */
@@ -201,29 +175,28 @@ export interface CrunchWeek {
   is_current: boolean;
 }
 
+/** The coming weeks' crunch, with the peak the bars are scaled against. */
 export interface CrunchStrip {
   weeks: CrunchWeek[];
-  /** The heaviest week, so a bar is a share of the worst week rather than a guess. */
+  /** The heaviest week's weight; each bar is a share of it. */
   peak: number;
 }
 
 /**
- * A stretch of term when classes do not run.
- *
- * Set once and subtracted from every recurring event that belongs to a course,
- * because one reading break applies to all six of your classes. Scoped to
- * course-linked events on purpose: the same recurrence engine drives recurring
- * payments and repeating tasks, and rent is still due during reading break.
+ * A break when classes don't run, cancelling every course-linked recurring event in range.
+ * Course events only on purpose: payments and repeating tasks still fall due.
  */
 export interface TermBlackout {
   id: string;
   label: string;
   starts_on: string;
-  /** Inclusive, and equal to starts_on for a single day. */
+  /** Inclusive; equals `starts_on` for a single day. */
   ends_on: string;
+  /** Dates covered, counting both ends. */
   days: number;
 }
 
+/** Request body for a term blackout. */
 export interface TermBlackoutCreate {
   label: string;
   starts_on: string;

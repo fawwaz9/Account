@@ -1,21 +1,13 @@
+/** Props for a spend bar. */
 interface ProgressBarProps {
   readonly value: number;
   readonly max: number;
-  /**
-   * The server's `used_percent`. Passed rather than derived, because the server
-   * already computes this figure and rounds it to 1dp: recomputing `value / max`
-   * here is a second opinion, and the two disagree at the `close` boundary --
-   * 89.96 rounds to 90.0 there and stays 0.8996 here, so one says "close" and
-   * the other does not for the same money.
-   */
+  /** Server's `used_percent`; passed, not derived, so it matches the server's rounding. */
   readonly percent?: number;
   readonly label?: string;
 }
 
-/**
- * Spend against a target. Overspending is shown by colour rather than by a bar
- * running past its track, which would just look broken.
- */
+/** Spend against a target; overspending shows by colour, never by a bar past its track. */
 export default function ProgressBar({ value, max, percent, label }: ProgressBarProps) {
   const hasTarget = max > 0;
   // Falls back to deriving it only when the caller has no server figure to give.

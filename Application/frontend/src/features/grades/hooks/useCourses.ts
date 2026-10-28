@@ -4,6 +4,7 @@ import { Course } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { useApiRefresh } from "../../../shared/hooks/useApiRefresh";
 
+/** The student's courses with loading, error and `reload`; reloads after a changed refetch. */
 export function useCourses() {
   const { user } = useAuth();
   // The id, not the object. `refreshUser()` builds a fresh `user` every time,

@@ -1,13 +1,7 @@
 import { PayCheck } from "../types";
 import { formatMoney } from "../../budget/money";
 
-/**
- * A cheque's check, with the working shown -- Phase 1 item 11.
- *
- * The verdict first, then every line of the arithmetic with the rule it came
- * from, then what was assumed and what was not checked. A "you're short" that
- * cannot show its working is the kind of claim this exists not to make.
- */
+/** A cheque's check with its working shown: the verdict, each line with its rule, then notes. */
 export default function PayCheckPanel({ check }: { readonly check: PayCheck }) {
   const flagged = check.status === "short";
   return (

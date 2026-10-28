@@ -3,6 +3,7 @@ import {CourseCreate, Semester } from "../types"
 import CategoryWeights from "./CategoryWeights"
 import CourseFlags from "./CourseFlags";
 
+/** The new course's form state and setter, the form's actions, and status text. */
 interface AddCourseFormProps {
   readonly form: CourseCreate;
   readonly updateField: <K extends keyof CourseCreate>(key: K, value: CourseCreate[K]) => void;
@@ -15,6 +16,7 @@ interface AddCourseFormProps {
   readonly notice?: ReactNode;
 }
 
+/** The add-course form: details, dates, flags and category weights, submitted as a real form. */
 export default function AddCourseForm({
   form,
   updateField,

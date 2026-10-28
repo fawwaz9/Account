@@ -4,21 +4,18 @@ import { Account, InvestmentReturn } from "../types";
 import { formatMoney, formatPercent } from "../money";
 import { monthLabel } from "../../../shared/utils/dateUtils";
 
+/** Props for the account cards. */
 interface SectorsProps {
   readonly accounts: readonly Account[];
   readonly onEdit: (account: Account) => void;
   readonly onAdd: () => void;
-  /** Saves a new order, given every account id in it. No handles without it. */
+  /** Save a new order, given every account id in it; without it there are no handles. */
   readonly onReorder?: (orderedIds: string[]) => Promise<void>;
 }
 
 /**
- * Which accounts need a new `position` for the cards to read in `orderedIds`.
- *
- * Only the ones whose stored position differs from their new index, so a move
- * of one card writes as few rows as it can. Every index is written out rather
- * than nudged: accounts created before ordering existed can share a position,
- * and only distinct ones make the order mean anything.
+ * Accounts whose stored position differs from their index in `orderedIds`.
+ * Every index is written out, since older accounts can share a position.
  */
 export function positionChanges(
   accounts: readonly Account[],
@@ -30,13 +27,14 @@ export function positionChanges(
     .filter(({ id, position }) => stored.get(id) !== position);
 }
 
+/** The ids with one moved to a new index, clamped to the ends. */
 function moved(ids: readonly string[], id: string, to: number) {
   const next = ids.filter((each) => each !== id);
   next.splice(Math.max(0, Math.min(to, next.length)), 0, id);
   return next;
 }
 
-/** The pots money sits in, with what each currently holds. */
+/** Display label per account kind. */
 const KIND_LABELS: Record<string, string> = {
   spending: "Spending",
   savings: "Savings",
@@ -46,12 +44,7 @@ const KIND_LABELS: Record<string, string> = {
   debt: "Debt",
 };
 
-/**
- * The return, in words, for anyone who cannot see the figure beside the balance.
- *
- * Always dated. The card shows the latest reading there is, which may have been
- * taken months ago, and "up 3.2%" with no date invites reading it as today's.
- */
+/** An investment's return in words for screen readers, always dated: "up 3.2% … as of March". */
 function returnInWords(figure: InvestmentReturn, percent: number) {
   const direction = percent < 0 ? "down" : "up";
   // The magnitude, because "down" already carries the sign. Passing the signed
@@ -63,24 +56,17 @@ function returnInWords(figure: InvestmentReturn, percent: number) {
   );
 }
 
-/**
- * What the card's headline figure is: for an investment account with a reading,
- * what the holding is worth; for everything else, the ledger balance.
- *
- * The ledger balance alone could not be the headline once recorded gain reached
- * net worth, because then adding up the cards would never reach the total above
- * them -- and this component's own comment warns that two totals on one page
- * will sooner or later disagree in front of you. It did. This closes it.
- *
- * `balance` plus the level, because the level is market minus ledger by
- * definition. There is a backend test asserting those two stay addable.
- */
+/** A card's headline: an investment's value with its latest gain, else the ledger balance. */
 function worthOf(account: Account) {
   return account.investment_return
     ? account.balance + account.investment_return.difference_amount
     : account.balance;
 }
 
+/**
+ * Account cards with balances, linking to each account; reorder by drag or arrow keys.
+ * A failed reorder falls back to the order the server last sent.
+ */
 export default function Sectors({ accounts, onEdit, onAdd, onReorder }: SectorsProps) {
   const gridRef = useRef<HTMLDivElement>(null);
   // The order on screen while a card is being moved or saved; null otherwise,

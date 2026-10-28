@@ -8,12 +8,14 @@ import { EVENT_LINK_PREFIX, EventAcceptStatus, acceptEventInvite, previewEventIn
 import { shortDate } from "../shared/utils/dateUtils";
 import { TEAM_LINK_PREFIX, TeamAcceptStatus, acceptTeamInvite, previewTeamInvite } from "../features/teams/api";
 
+/** Why a partner invite was refused, by status, phrased as what to do. */
 const REFUSED: Record<Exclude<AcceptStatus, "accepted">, string> = {
   invalid: "That invite link has expired, been used, or been cancelled. Ask for a new one.",
   own: "That's your own invite link. Send it to the person you want as a partner.",
   already: "You're already partners.",
 };
 
+/** Why a shared-task link was refused, by status. */
 const TASK_REFUSED: Record<Exclude<TaskAcceptStatus, "accepted">, string> = {
   invalid: "That link has expired or been cancelled. Ask for a new one.",
   own: "That's a link to your own task. Send it to the people you're working with.",
@@ -21,6 +23,7 @@ const TASK_REFUSED: Record<Exclude<TaskAcceptStatus, "accepted">, string> = {
   full: "That task already has as many people on it as it can hold.",
 };
 
+/** Why a shared-event link was refused, by status. */
 const EVENT_REFUSED: Record<Exclude<EventAcceptStatus, "accepted">, string> = {
   invalid: "That link has expired or been cancelled. Ask for a new one.",
   own: "That's a link to your own event. Send it to the people you're meeting.",
@@ -28,6 +31,7 @@ const EVENT_REFUSED: Record<Exclude<EventAcceptStatus, "accepted">, string> = {
   full: "That event already has as many people on it as it can hold.",
 };
 
+/** Why a team link was refused, by status. */
 const TEAM_REFUSED: Record<Exclude<TeamAcceptStatus, "accepted">, string> = {
   invalid: "That link has expired or been cancelled. Ask for a new one.",
   own: "That's a link to your own team. Send it to your teammates.",
@@ -35,9 +39,10 @@ const TEAM_REFUSED: Record<Exclude<TeamAcceptStatus, "accepted">, string> = {
   full: "That team already has as many players as it can hold.",
 };
 
+/** What an invite link is for. */
 type Kind = "partner" | "task" | "event" | "team";
 
-/** What the link is for: a partner (the plain fragment, as item 10 sent them), a task or an event. */
+/** Kind and token from the fragment: a task, event or team prefix, else a partner token. */
 function parse(hash: string): { kind: Kind; token: string } {
   const raw = decodeURIComponent(hash.replace(/^#/, ""));
   if (raw.startsWith(TASK_LINK_PREFIX)) return { kind: "task", token: raw.slice(TASK_LINK_PREFIX.length) };
@@ -47,10 +52,8 @@ function parse(hash: string): { kind: Kind; token: string } {
 }
 
 /**
- * Opening an invite link (Phase 2 items 10, 9a and 9b; D16, D23, D24). The
- * token is in the fragment (/invite#token, #task:token or #event:token), so it never reaches a
- * server log; it is sent to the API in a request body. Shows who sent it, and
- * for what, then asks before anything happens.
+ * Open an invite link: show who sent it and for what, then accept on a press.
+ * The token rides in the fragment and goes to the API only in a request body.
  */
 export default function InvitePage() {
   const { user } = useAuth();

@@ -11,7 +11,7 @@ import {
   RecurringTaskCreate,
 } from "../types";
 
-/** 1..5, for the select. */
+/** Every priority step, lowest first, for the select. */
 const PRIORITY_STEPS = Array.from(
   { length: MAX_PRIORITY - MIN_PRIORITY + 1 },
   (_, index) => MIN_PRIORITY + index
@@ -20,6 +20,7 @@ import { Course } from "../../grades/types";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { today, weekdayCode } from "../../../shared/utils/dateUtils";
 
+/** Whether the dialog is open, the rule to edit, the courses, and the close and saved callbacks. */
 interface RepeatingModalProps {
   readonly open: boolean;
   /** The repeat being edited, or null to set up a new one. */
@@ -29,6 +30,7 @@ interface RepeatingModalProps {
   readonly onSaved: () => void;
 }
 
+/** A new repeat starting today, weekly on today's weekday, at the default priority. */
 function blankRule(): RecurringTaskCreate {
   const start = today();
 
@@ -48,6 +50,7 @@ function blankRule(): RecurringTaskCreate {
   };
 }
 
+/** Form state for a repeating task, or a blank one; its time is cut to "HH:MM". */
 function formFor(rule: RecurringTask | null): RecurringTaskCreate {
   if (!rule) return blankRule();
 
@@ -66,6 +69,7 @@ function formFor(rule: RecurringTask | null): RecurringTaskCreate {
   };
 }
 
+/** Add or edit a repeating task's template and rule; the rule always keeps a frequency. */
 export default function RepeatingModal({
   open,
   rule,

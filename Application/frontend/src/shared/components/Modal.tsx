@@ -1,28 +1,9 @@
 import { useEffect, useId, useRef } from "react";
 
-/**
- * The dialog shell every modal in the app shares.
- *
- * Ten modals were hand-rolled as a bare `<div className="popup">` before this
- * existed. None of them trapped focus, closed on Escape, restored focus on close
- * or carried `role="dialog"`, so a keyboard user tabbed straight through the page
- * *behind* the overlay and a screen-reader user was never told a dialog had
- * opened. Writing it once fixes all ten.
- *
- * Deliberately does *not* close on a backdrop click: most of these dialogs hold a
- * part-filled form, and a stray click outside would discard it with no undo.
- * Escape is a deliberate keystroke; a misplaced click is not.
- */
-
-/**
- * Every dialog currently mounted, innermost last. EditGradeModal opens a delete
- * confirmation on top of itself, so without this both would answer the same
- * Escape and one keystroke would dismiss the confirmation *and* the editor
- * underneath it. Only the top of the stack responds.
- */
+/** Mounted dialogs, innermost last; only the top one answers Escape and Tab. */
 const stack: symbol[] = [];
 
-/** Elements that can hold focus inside the dialog. */
+/** Selector for the elements that can take focus inside a dialog. */
 const FOCUSABLE = [
   "a[href]",
   "button:not([disabled])",
@@ -32,15 +13,20 @@ const FOCUSABLE = [
   "[tabindex]:not([tabindex='-1'])",
 ].join(",");
 
+/** A dialog's title, close handler, body and optional extra panel class. */
 interface ModalProps {
-  /** Names the dialog, and is what `aria-labelledby` points at. */
+  /** Dialog heading; `aria-labelledby` points at it. */
   readonly title: React.ReactNode;
   readonly onClose: () => void;
   readonly children: React.ReactNode;
-  /** Extra class on the panel, for the few dialogs that need a wider one. */
+  /** Extra class on the panel, for the few dialogs that need more width. */
   readonly panelClassName?: string;
 }
 
+/**
+ * Shared dialog shell: traps focus, closes on Escape and hands focus back on close.
+ * Never closes on a backdrop click, so a stray click cannot discard a part-filled form.
+ */
 export default function Modal({ title, onClose, children, panelClassName }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const titleId = useId();

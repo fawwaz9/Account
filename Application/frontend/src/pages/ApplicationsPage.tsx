@@ -15,18 +15,12 @@ import { useApiRefresh } from "../shared/hooks/useApiRefresh";
 import "../styles/calendar.css";
 import "../styles/jobs.css";
 
-/** "All time", in the season picker: no season filter at all. */
+/** Season picker value meaning all time: no season filter. */
 const ALL = "all";
 
 /**
- * The job application tracker (Phase 3 item 1), under Jobs.
- *
- * Every application, its status and its history, and your own figures: how
- * many replied, how long replies took, and the Sankey of where they went. All
- * single-user -- nothing here is seen by anyone else, the offers' pay included.
- *
- * The page lists only what needs you (D9); everything else is a search away,
- * or one tap on "Show waiting" / "Show finished".
+ * The application tracker by season: what needs you, quiet ones to mark, figures and the Sankey.
+ * Waiting and finished applications sit behind Show buttons or the search.
  */
 export default function ApplicationsPage() {
   const { user } = useAuth();
@@ -331,6 +325,7 @@ export default function ApplicationsPage() {
   );
 }
 
+/** One headline figure with its label. */
 function Figure({ value, label }: { value: string; label: string }) {
   return (
     <div className="appFigure">
@@ -340,6 +335,7 @@ function Figure({ value, label }: { value: string; label: string }) {
   );
 }
 
+/** One application in a list: company, role, status, dates, and Mark no reply when quiet. */
 function Row({ application, onOpen, onNoReply, asked = false }: {
   application: Application; onOpen: () => void; onNoReply?: () => void;
   /** Under the "No reply yet?" heading, which already asks. */

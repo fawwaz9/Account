@@ -1,5 +1,6 @@
 import { YearSummary } from "../types";
 
+/** A section's title, its year summaries, the empty text, and the selected year and handler. */
 interface YearCoursesProps {
   readonly title: string;
   readonly years: readonly YearSummary[];
@@ -8,14 +9,7 @@ interface YearCoursesProps {
   readonly onSelectYear?: (schoolYear: number) => void;
 }
 
-/**
- * Past or Future courses, grouped by school year. Averages come from the API
- * so the "final grade, else average, else skip" rule lives in one place.
- *
- * Each card opens that year's courses in the list beside it. Without that these
- * were dead ends: once the current term has no courses, every course in the
- * account sits behind one of these cards.
- */
+/** Past or future school years as cards with the API's average; each opens that year's courses. */
 export default function YearCourses({
   title,
   years,

@@ -1,25 +1,22 @@
 import { Season } from "./types";
 
+/** Short month names, January first. */
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-/** "2026-09" -> "Sep 2026". */
+/** "2026-09" to "Sep 2026". */
 export function monthLabel(month: string): string {
   const [year, number] = month.split("-");
   return `${MONTHS[Number(number) - 1]} ${year}`;
 }
 
-/** "Sep 2026 – Jan 2027", or one month alone. */
+/** A season's months as "Sep 2026 – Jan 2027", or one month alone. */
 export function seasonSpan(season: Pick<Season, "starts" | "ends">): string {
   return season.starts === season.ends
     ? monthLabel(season.starts)
     : `${monthLabel(season.starts)} – ${monthLabel(season.ends)}`;
 }
 
-/**
- * What the page opens on (D7): the season whose months include today, or the
- * most recent one if none does, or all time (null) when there are none. YYYY-MM
- * strings compare in calendar order, so no dates are needed.
- */
+/** Season the page opens on: the one holding today, else the latest; null for all time. */
 export function defaultSeason(seasons: Season[], today: string): Season | null {
   const month = today.slice(0, 7);
   const current = seasons

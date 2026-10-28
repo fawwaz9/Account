@@ -3,6 +3,7 @@ import { formatMoney } from "../money";
 import HelpTip from "../../../shared/components/HelpTip";
 import { dueLabel, shortDate } from "../../../shared/utils/dateUtils";
 
+/** Display label per standing-instruction kind. */
 const KIND_LABELS: Record<string, string> = {
   expense: "Expense",
   income: "Income",
@@ -10,7 +11,7 @@ const KIND_LABELS: Record<string, string> = {
   deposit: "Deposit",
 };
 
-/** "every month", "every 2 weeks" — the rule in words rather than as fields. */
+/** A rule in words, e.g. "every 2 weeks, until Mar 3"; weekdays are not spelled out. */
 function ruleInWords(rule: RecurringTransaction): string {
   const { freq, interval } = rule.recurrence;
   const unit = freq === "daily" ? "day" : freq === "weekly" ? "week" : "month";
@@ -21,26 +22,22 @@ function ruleInWords(rule: RecurringTransaction): string {
   return every;
 }
 
+/** Props for the standing-instructions panel. */
 interface RecurringProps {
   readonly rules: RecurringTransaction[];
   readonly upcoming: UpcomingCharge[];
   readonly onAdd: () => void;
   readonly onEdit: (rule: RecurringTransaction) => void;
+  /** Ask to stop a rule; the page confirms first. */
   readonly onDelete: (rule: RecurringTransaction) => void;
   readonly busy: boolean;
-  /** Accounts unticked in Settings (D39): their charges stay listed, out of the totals. */
+  /** Accounts left out of counted figures: their charges stay listed, out of the totals. */
   readonly uncounted?: ReadonlySet<string>;
 }
 
 /**
- * Standing instructions, and what they commit you to next.
- *
- * The two halves answer different questions: the list is what is set up, and
- * the upcoming strip is what it costs you in the near future. The second is
- * deliberately not a ledger — nothing in it has moved any money yet, and
- * showing it beside real transactions would invite exactly that confusion.
- * Side by side rather than stacked, so the near-term reason to change a rule
- * sits next to the rule instead of below the whole list of them.
+ * Standing instructions beside what they commit you to next.
+ * The upcoming strip is projections, never ledger rows; its totals skip uncounted accounts.
  */
 export default function Recurring({
   rules,

@@ -1,4 +1,4 @@
-/** A chosen file as base64, for the JSON upload the intake routes take. */
+/** Read a file as base64, the data URL minus its prefix, for the JSON intake uploads. */
 export function asBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

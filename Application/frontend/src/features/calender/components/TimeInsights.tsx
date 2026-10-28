@@ -3,8 +3,9 @@ import { fetchCrunch, fetchFreeBlocks, fetchWeekLoad } from "../api";
 import { CrunchStrip, FreeBlock, WeekLoad } from "../types";
 import { clockTime, duration, fromIso } from "../../../shared/utils/dateUtils";
 
+/** The week on screen, the crunch horizon's end, the user, and a refetch counter. */
 interface TimeInsightsProps {
-  /** Monday of the week on screen, ISO. */
+  /** Monday of the week on screen, YYYY-MM-DD; `weekEnd` is its Sunday. */
   readonly weekStart: string;
   readonly weekEnd: string;
   /** End of the horizon the crunch strip covers. */
@@ -14,11 +15,8 @@ interface TimeInsightsProps {
 }
 
 /**
- * What the week costs and where the room in it is.
- *
- * Three readings of one window, kept in one component because they are really
- * one question — what does this week cost and where is the gap — and splitting
- * them would mean three fetches of overlapping data on the same screen.
+ * The week's load, its free blocks (two per day until expanded), and the crunch of weeks ahead.
+ * Renders nothing when all three are empty or the read fails.
  */
 export default function TimeInsights({
   weekStart, weekEnd, horizonEnd, userId, nonce,

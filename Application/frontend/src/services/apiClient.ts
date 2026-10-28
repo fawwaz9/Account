@@ -2,6 +2,7 @@ import { ValidationError } from "../features/grades/types"; // adjust path to wh
 import { DEFAULT_API_BASE_URL } from "./apiBase";
 import { cachedGet, clearApiCache } from "./apiCache";
 
+/** Drop every trailing slash from a URL. */
 function stripTrailingSlashes(value: string) {
   let end = value.length;
   while (end > 0 && value[end - 1] === "/") {
@@ -10,24 +11,26 @@ function stripTrailingSlashes(value: string) {
   return value.slice(0, end);
 }
 
+/** API base from `VITE_API_BASE_URL` or the local default, without trailing slashes. */
 const API_BASE_URL = stripTrailingSlashes(
   (import.meta.env.VITE_API_BASE_URL ?? DEFAULT_API_BASE_URL).trim()
 );
 
+/** Fetch options plus a JSON body and the GET-cache opt-out. */
 interface RequestOptions extends RequestInit {
+  /** Request body, sent as JSON; null or undefined sends none. */
   data?: unknown;
-  /**
-   * Leave the GET cache alone: a catch-up write run on every page load, which
-   * usually writes nothing, clears it itself only when it did (apiCache.ts).
-   */
+  /** Leave the GET cache alone: for catch-up writes that clear it only when they wrote. */
   keepCache?: boolean;
 }
 
+/** Join a path onto the API base. */
 function buildUrl(path: string) {
   const cleanPath = path.replace(/^\/+/, "");
   return cleanPath ? `${API_BASE_URL}/${cleanPath}` : API_BASE_URL;
 }
 
+/** True when an error detail is FastAPI's list of validation errors. */
 function isValidationErrorArray(detail: unknown): detail is ValidationError[] {
   return (
     Array.isArray(detail) &&
@@ -35,19 +38,14 @@ function isValidationErrorArray(detail: unknown): detail is ValidationError[] {
   );
 }
 
-/**
- * Pydantic prefixes any message from a `ValueError` in a validator with
- * "Value error, ", so a carefully worded rule reached the user as
- * "Value error, A transfer needs somewhere to go". The prefix names an
- * implementation detail of the server's validation library and tells the reader
- * nothing, so it is dropped.
- */
+/** One validation error as `field: message`, minus Pydantic's "Value error, " prefix. */
 function formatValidationError(err: ValidationError): string {
   const message = err.msg.replace(/^Value error,\s*/, "");
   const field = err.loc.slice(1).join(".");
   return field ? `${field}: ${message}` : message;
 }
 
+/** Readable message from an error body's `detail` or `message`, else the fallback. */
 function extractErrorMessage(json: unknown, fallback: string): string {
   const detail = (json as { detail?: unknown; message?: unknown })?.detail
     ?? (json as { message?: unknown })?.message;
@@ -67,11 +65,13 @@ function extractErrorMessage(json: unknown, fallback: string): string {
   return fallback;
 }
 
+/** Bearer header from the session token; empty when signed out. */
 function getAuthHeaders(): HeadersInit {
   const token = sessionStorage.getItem("access_token");
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+/** Send a request; a write without `keepCache` empties the GET cache before and after. */
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   // A write empties the GET cache, before it goes and after it lands, so no
   // read from before it is shown or stored once it's done (apiCache.ts).
@@ -84,6 +84,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 }
 
+/** Fetch and parse the JSON answer; any 401 drops the token and reloads /login. */
 async function send<T>(path: string, options: RequestOptions): Promise<T> {
   const { data, headers, keepCache: _keepCache, ...init } = options;
   const body = (data == null) ? undefined : JSON.stringify(data);
@@ -118,36 +119,33 @@ async function send<T>(path: string, options: RequestOptions): Promise<T> {
   return json as T;
 }
 
-/**
- * A read, through the cache: a page you come back to is shown at once and
- * refetched behind it (apiCache.ts). `fresh` waits for this request's answer
- * instead, for a poll that would otherwise always be one round behind.
- */
+/** GET through the cache; `fresh` waits for this request's own answer, for polls. */
 export function get<T>(path: string, { fresh = false }: { fresh?: boolean } = {}) {
   return cachedGet<T>(path, sessionStorage.getItem("access_token"),
     () => request<T>(path, { method: "GET" }), fresh);
 }
 
+/** POST a JSON body; `keepCache` spares the GET cache. */
 export function post<T>(path: string, data: unknown, { keepCache = false }: { keepCache?: boolean } = {}) {
   return request<T>(path, { method: "POST", data, keepCache });
 }
 
+/** PATCH a JSON body; empties the GET cache. */
 export function patch<T>(path: string, data: unknown) {
   return request<T>(path, { method: "PATCH", data });
 }
 
+/** PUT a JSON body; empties the GET cache. */
 export function put<T>(path: string, data: unknown) {
   return request<T>(path, { method: "PUT", data });
 }
 
+/** DELETE a resource; empties the GET cache. */
 export function del<T>(path: string) {
   return request<T>(path, { method: "DELETE" });
 }
 
-/**
- * A file the API serves, as a Blob. The API's file routes need the same
- * bearer token as everything else, so a plain link cannot fetch them.
- */
+/** Fetch a file as a Blob with the bearer token, which a plain link cannot send. */
 export async function getBlob(path: string): Promise<Blob> {
   const response = await fetch(buildUrl(path), { method: "GET", headers: getAuthHeaders() });
   if (response.status === 401) {

@@ -1,21 +1,24 @@
 import { DayFlow } from "../types";
 import { formatMoney } from "../money";
 
+/** Props: one zero-filled entry per day of the month, and the month's name. */
 interface AccountFlowChartProps {
   readonly days: readonly DayFlow[];
   readonly monthLabel: string;
 }
 
-// Drawn by hand, like the grade trend, rather than pulling in a charting
-// library for two charts on one page. Wider than that one because a month can
-// carry 31 slots; the viewBox scales down and the wrapper scrolls rather than
-// letting the bars squash together.
+/** Chart width in viewBox units; hand-drawn SVG, and the wrapper scrolls on narrow screens. */
 const WIDTH = 560;
+/** Chart height, in viewBox units. */
 const HEIGHT = 220;
+/** Space around the plot for the axes. */
 const PAD = { top: 16, right: 12, bottom: 32, left: 46 };
+/** Plot width inside the padding. */
 const INNER_W = WIDTH - PAD.left - PAD.right;
+/** Plot height inside the padding. */
 const INNER_H = HEIGHT - PAD.top - PAD.bottom;
 
+/** Daily money in and out across a month, two bars per day from a zero baseline. */
 export default function AccountFlowChart({ days, monthLabel }: AccountFlowChartProps) {
   const peak = days.reduce((most, day) => Math.max(most, day.money_in, day.money_out), 0);
 
@@ -128,18 +131,14 @@ export default function AccountFlowChart({ days, monthLabel }: AccountFlowChartP
   );
 }
 
-/**
- * Every fifth day plus the last one. Labelling all 31 at this width would just
- * print a grey smear, and the last day is dropped when it would collide with
- * the multiple of five just before it.
- */
+/** Label every fifth day and the last; a fifth-day label too close to the last is dropped. */
 function showLabel(dayOfMonth: number, total: number) {
   if (dayOfMonth === total) return true;
   if (dayOfMonth % 5 !== 0) return false;
   return total - dayOfMonth >= 2;
 }
 
-/** Round an axis top up to 1, 2 or 5 times a power of ten so the ticks read cleanly. */
+/** Round an axis top up to 1, 2, 2.5, 5 or 10 times a power of ten. */
 function niceCeiling(value: number) {
   const magnitude = 10 ** Math.floor(Math.log10(value));
   const steps = [1, 2, 2.5, 5, 10];

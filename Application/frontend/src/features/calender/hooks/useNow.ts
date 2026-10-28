@@ -1,13 +1,7 @@
 import { useEffect, useState } from "react";
 import { nowIn, ZonedNow } from "../../../shared/utils/zonedNow";
 
-/**
- * The current day and minute in `zone`, kept current.
- *
- * Ticks on the minute boundary rather than every 60 seconds from mount: a timer
- * started at 10:14:50 would move the line at :50 past each minute, up to most of
- * a minute after the clock in the corner of the screen already had.
- */
+/** The current day and minute in `zone`, updated on each minute boundary. */
 export function useNow(zone: string | null | undefined): ZonedNow {
   const [now, setNow] = useState(() => nowIn(zone));
 

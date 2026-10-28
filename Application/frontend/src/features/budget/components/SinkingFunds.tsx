@@ -12,23 +12,19 @@ import { formatMoney } from "../money";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { dueLabel } from "../../../shared/utils/dateUtils";
 
+/** Props for the sinking funds panel. */
 interface SinkingFundsProps {
+  /** Bumped by the page when something changes, to refetch. */
   readonly nonce: number;
+  /** Open the new-fund dialog. */
   readonly onAdd: () => void;
+  /** Called after any change, so the page reloads. */
   readonly onChanged: () => void;
 }
 
 /**
- * Money reserved for something that lands all at once.
- *
- * The monthly figure is not a schedule anyone typed — it is
- * (target − saved) ÷ months left, recomputed every read, so a missed month
- * raises the rest instead of quietly moving the deadline.
- *
- * Setting aside writes a real transfer. Until it does, the month's figure is
- * subtracted from safe-to-spend as a promise you made yourself; afterwards the
- * money is in savings, which safe-to-spend already leaves out. That is why the
- * two never double-count.
+ * Sinking funds with progress, this month's contribution, undo and removal.
+ * Setting aside writes a real transfer; removing a fund deletes its transfers, after a confirm.
  */
 export default function SinkingFunds({ nonce, onAdd, onChanged }: SinkingFundsProps) {
   const { user } = useAuth();
@@ -184,11 +180,12 @@ export default function SinkingFunds({ nonce, onAdd, onChanged }: SinkingFundsPr
   );
 }
 
+/** Part of whole as a percent, capped at 100; 0 with no target. */
 function percent(part: number, whole: number): number {
   return whole <= 0 ? 0 : Math.min(100, (part / whole) * 100);
 }
 
-/** The most recent contribution, which is the one "Undo" takes back. */
+/** The most recent contribution, which Undo takes back. */
 function latest(fund: SinkingFund) {
   return fund.contributions[fund.contributions.length - 1];
 }

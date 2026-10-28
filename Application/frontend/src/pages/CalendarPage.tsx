@@ -30,6 +30,10 @@ import { useSwipe } from "../shared/hooks/useSwipe";
 import { stepNoun, viewName } from "../features/calender/views";
 import "../styles/calendar.css";
 
+/**
+ * The calendar: month, week, three-day or day view with arrows, swipes and shortcuts, the week's
+ * insights, the term timeline, and dialogs for events, tasks, shared items and blackouts.
+ */
 export default function CalendarPage() {
   const { user } = useAuth();
   const {

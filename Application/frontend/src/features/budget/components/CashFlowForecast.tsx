@@ -4,20 +4,15 @@ import { CashFlowForecast as Forecast, ForecastPoint } from "../types";
 import { formatMoney } from "../money";
 import { useAuth } from "../../../app/auth/AuthContext";
 
+/** Props for the forecast panel. */
 interface CashFlowForecastProps {
   /** Bumped by the page when something changes, to refetch. */
   readonly nonce: number;
 }
 
 /**
- * Where the spending accounts are heading -- Phase 1 item 9, the money room's
- * edge (account-vision.md §13.3).
- *
- * The headline is a date, because a date is something you can act on: "below
- * $0 on 3 March" rather than a balance curve to interpret. Under it, runway and
- * the one-off places money goes fastest. The assumptions are one click away and
- * never hidden: every figure here is a projection, and a forecast that does not
- * say what it assumed misleads real decisions.
+ * Forecast panel: the day spending hits $0, or the lowest point, with runway and run rates.
+ * All projections, assumptions one click away; renders nothing when empty or failed.
  */
 export default function CashFlowForecast({ nonce }: CashFlowForecastProps) {
   const { user } = useAuth();
@@ -111,17 +106,19 @@ export default function CashFlowForecast({ nonce }: CashFlowForecastProps) {
   );
 }
 
-/** No money, no history and nothing scheduled: a flat $0 line says nothing. */
+/** No money, no history and nothing scheduled: nothing worth forecasting. */
 function isEmpty(forecast: Forecast): boolean {
   return forecast.starting_balance === 0
     && forecast.spending_history_days === 0
     && forecast.events.length === 0;
 }
 
+/** "Mar 3" from a YYYY-MM-DD string, in the browser's locale. */
 function shortDate(value: string): string {
   return new Date(`${value}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+/** How far off a date is, in words: tomorrow, in N days, or in N weeks. */
 function weeksFrom(start: string, end: string): string {
   const days = Math.round(
     (new Date(`${end}T00:00:00`).getTime() - new Date(`${start}T00:00:00`).getTime()) / 86_400_000,
@@ -131,10 +128,12 @@ function weeksFrom(start: string, end: string): string {
   return `in ${weeks} ${weeks === 1 ? "week" : "weeks"}`;
 }
 
+/** Sparkline width, in viewBox units. */
 const WIDTH = 300;
+/** Sparkline height, in viewBox units. */
 const HEIGHT = 56;
 
-/** The balance curve, with $0 drawn whenever the curve reaches it. */
+/** The projected balance curve, with $0 drawn whenever the curve reaches it. */
 function Sparkline({
   points,
   negativeOn,

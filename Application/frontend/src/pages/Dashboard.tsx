@@ -12,6 +12,7 @@ import DisappointmentQuestion from "../features/survey/DisappointmentQuestion";
 import { PHONE_QUERY, useMediaQuery } from "../shared/hooks/useMediaQuery";
 import { FreeBlock } from "../features/calender/types";
 
+/** The browser's IANA time zone, or undefined when it cannot say. */
 function browserZone(): string | undefined {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -20,6 +21,10 @@ function browserZone(): string | undefined {
   }
 }
 
+/**
+ * Home: grades, money and the week at a glance, plus the first-run checklist and the survey.
+ * A phone gets three whole-dollar cards; the checklist waits until every source has loaded.
+ */
 export default function Dashboard() {
   const { user } = useAuth();
 
@@ -254,6 +259,7 @@ export default function Dashboard() {
   );
 }
 
+/** One figure with its label on a phone card. */
 function Stat({ value, label }: { value: string | number; label: string }) {
   return (
     <div className="statBlock">
@@ -263,7 +269,7 @@ function Stat({ value, label }: { value: string | number; label: string }) {
   );
 }
 
-/** "13h Sat, 7h Fri": the two longest gaps, as the desktop's line picks them. */
+/** The two longest free gaps this week, as "13h Sat, 7h Fri". */
 function longestFree(blocks: FreeBlock[]): string {
   return blocks.slice(0, 2).map((block) => {
     const day = new Date(`${block.on_date}T00:00:00`).toLocaleDateString(undefined, { weekday: "short" });

@@ -3,11 +3,12 @@ import { fetchShiftConflicts } from "../api";
 import { ShiftConflict, ShiftConflicts } from "../types";
 import { shortDate } from "../../../shared/utils/dateUtils";
 
-/** "08:30" from "08:30:00"; null is "time not set". */
+/** "08:30" from "08:30:00"; null when the time is not set. */
 export function clock(value: string | null) {
   return value ? value.slice(0, 5) : null;
 }
 
+/** One conflict in words: the job and shift, and whether it runs into or crowds the exam. */
 export function conflictWords(conflict: ShiftConflict) {
   const exam = `${conflict.course_code ? `${conflict.course_code} ` : ""}${conflict.exam_title}`;
   const examWhen = `${shortDate(conflict.exam_on)}${clock(conflict.exam_start) ? ` at ${clock(conflict.exam_start)}` : ", time not set"}`;
@@ -18,16 +19,13 @@ export function conflictWords(conflict: ShiftConflict) {
     : `${job}, ${shiftWhen}, ends ${conflict.hours_between}h before ${exam} (${examWhen}).`;
 }
 
+/** Props for the shift-exam conflicts panel. */
 interface Props {
   readonly userId: string;
   readonly nonce: number;
 }
 
-/**
- * Shifts that run into, or crowd, an exam in the next two months (Phase 2
- * item 14). Says nothing when there are none, or when the read fails: an
- * empty "no conflicts" box would be a line on the page with nothing to say.
- */
+/** Shifts that run into, or crowd, an upcoming exam; nothing when there are none or it fails. */
 export default function ShiftConflictsPanel({ userId, nonce }: Props) {
   const [data, setData] = useState<ShiftConflicts | null>(null);
 

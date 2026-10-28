@@ -4,8 +4,10 @@ import { Task } from "../../tasks/types";
 import { EventChip, TaskChip } from "./EventCard";
 import { fromIso, isSameMonth, today } from "../../../shared/utils/dateUtils";
 
+/** Column headings, Monday first. */
 const WEEKDAY_HEADINGS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
+/** The month, its 42 days, the loading state, and select and add handlers. */
 interface CalenderViewProps {
   /** Any date inside the month being drawn. */
   readonly month: string;
@@ -16,14 +18,7 @@ interface CalenderViewProps {
   readonly onAddOnDay: (date: string) => void;
 }
 
-/**
- * The month grid.
- *
- * Always six rows: a month needing five would otherwise make the page jump in
- * height as you page through a term. Days outside the month stay visible but
- * muted, because a deadline on the 1st matters while you are still looking at
- * the previous month.
- */
+/** The month grid: six Monday-first weeks, outside days muted; a date number adds an event. */
 export default function CalenderView({
   month,
   days,

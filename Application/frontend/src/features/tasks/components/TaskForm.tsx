@@ -2,19 +2,21 @@ import { useState } from "react";
 import { DEFAULT_PRIORITY, MAX_PRIORITY, MIN_PRIORITY, PRIORITY_LABELS, TaskCreate } from "../types";
 import { numberOrNull, parseTags, withDueDate } from "../taskFields";
 
-/** 1..5, for the select. */
+/** Every priority step, lowest first, for the select. */
 const PRIORITY_STEPS = Array.from(
   { length: MAX_PRIORITY - MIN_PRIORITY + 1 },
   (_, index) => MIN_PRIORITY + index
 );
 import { Course } from "../../grades/types";
 
+/** The courses to pick from, the save handler, and a busy flag. */
 interface TaskFormProps {
   readonly courses: Course[];
   readonly onSubmit: (task: TaskCreate) => Promise<void>;
   readonly busy: boolean;
 }
 
+/** An empty task at the default priority. */
 function blankTask(): TaskCreate {
   return {
     title: "",
@@ -30,13 +32,7 @@ function blankTask(): TaskCreate {
   };
 }
 
-/**
- * Adding a task.
- *
- * A real `<form>`, so `required` actually runs and Enter submits -- four forms
- * in this app were `<div>`s with a type="button" submit, where neither did
- * (audit #15).
- */
+/** The add-task row on the Tasks page: title, course, date and time, priority, estimate, tags. */
 export default function TaskForm({ courses, onSubmit, busy }: TaskFormProps) {
   const [form, setForm] = useState<TaskCreate>(blankTask());
   const [tagText, setTagText] = useState("");

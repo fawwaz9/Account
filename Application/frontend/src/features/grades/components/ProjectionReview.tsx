@@ -1,10 +1,7 @@
 import type { Course } from "../types";
 import { shortDate } from "../../../shared/utils/dateUtils";
 
-/**
- * The app grading its own homework (Phase 1 D34): the last projection before
- * the final, against the result. Renders nothing until both exist.
- */
+/** The last projection before the final, set against the result; nothing until both exist. */
 export default function ProjectionReview({ course }: { course: Course }) {
   const projected = course.projected_before_final;
   if (projected == null || !(course.final_grade > 0)) return null;

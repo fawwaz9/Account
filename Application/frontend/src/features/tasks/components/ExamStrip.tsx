@@ -8,13 +8,12 @@ import { ZonedNow } from "../../../shared/utils/zonedNow";
 import { useNow } from "../../calender/hooks/useNow";
 import { useApiRefreshCount } from "../../../shared/hooks/useApiRefresh";
 
-/** How far ahead an exam is worth knowing about while looking at this week's work. */
+/** How many days ahead the strip looks for exams. */
 const HORIZON_DAYS = 30;
 
 /**
- * Not over yet. Today's exam goes once it ends -- at its end time, or at its
- * start when it has none, since sitting it is no time to be told it's coming.
- * One with no time at all stays the whole day: there's nothing to say it's done.
+ * True until an exam is over: today's leaves at its end time, or its start if it has no end;
+ * one with no time at all stays the whole day.
  */
 export function stillAhead(exam: EventOccurrence, now: ZonedNow): boolean {
   if (exam.on_date !== now.date) return exam.on_date > now.date;
@@ -23,20 +22,8 @@ export function stillAhead(exam: EventOccurrence, now: ZonedNow): boolean {
 }
 
 /**
- * Midterms and finals coming up, above the work you can actually tick off.
- *
- * Read-only on purpose. An exam is not a task: there is nothing to check off,
- * and forcing one through a task row made it read as a chore that never quite
- * closes -- which is why dated grades already choose between raising a task and
- * drawing a calendar block. So this is a band that tells you what is coming and
- * links to the calendar, rather than rows in the list below.
- *
- * Thirty days rather than the list's fortnight because an exam is worth seeing
- * further out: there is nothing to do about it on the day, and the revision it
- * needs is the work that fills the fortnight.
- *
- * No endpoint of its own -- the agenda already expands repeats over any window,
- * so this is that call with a filter on it.
+ * Read-only band of midterms and finals in the next 30 days, above the task list.
+ * Built from the agenda call with a filter; renders nothing when no exam is ahead.
  */
 export default function ExamStrip() {
   const { user } = useAuth();

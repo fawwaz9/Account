@@ -13,6 +13,7 @@ import {
 import { Course } from "../../grades/types";
 import { useAuth } from "../../../app/auth/AuthContext";
 
+/** Whether it is open, the event to edit, the date to pre-fill, the courses, and callbacks. */
 interface EventModalProps {
   readonly open: boolean;
   /** The event being edited, or null to add a new one. */
@@ -24,6 +25,7 @@ interface EventModalProps {
   readonly onSaved: () => void;
 }
 
+/** A new all-day personal event on `date`, not repeating. */
 function blankEvent(date: string): EventCreate {
   return {
     title: "",
@@ -39,6 +41,7 @@ function blankEvent(date: string): EventCreate {
   };
 }
 
+/** Form state for an event, or a blank one on `date`; times are cut to "HH:MM". */
 function formFor(event: CalendarEvent | null, date: string): EventCreate {
   if (!event) return blankEvent(date);
 
@@ -58,6 +61,7 @@ function formFor(event: CalendarEvent | null, date: string): EventCreate {
   };
 }
 
+/** Add or edit an event with its repeat and skipped dates; an existing one also shows Share. */
 export default function EventModal({
   open,
   event,

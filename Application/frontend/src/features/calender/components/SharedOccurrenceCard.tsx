@@ -4,18 +4,18 @@ import { EventOccurrence } from "../types";
 import { leaveSharedEvent } from "../sharing";
 import { clockTime } from "../../../shared/utils/dateUtils";
 
+/** The viewer, the shared occurrence, and close and left callbacks. */
 interface Props {
   readonly userId: string;
   readonly occurrence: EventOccurrence;
   readonly onClose: () => void;
-  /** After leaving, so the calendar drops it. */
+  /** Called after leaving, so the calendar drops it. */
   readonly onLeft: () => void;
 }
 
 /**
- * Someone else's event or task on your calendar (Phase 2 item 9b, D24).
- * Theirs to change: this says whose it is and who else is on it, and offers
- * leaving an event. A shared task is ticked and edited on the Tasks page.
+ * Details of someone else's shared event or task: whose it is and who else is on it.
+ * Offers leaving an event, confirmed in place; a shared task is handled on the Tasks page.
  */
 export default function SharedOccurrenceCard({ userId, occurrence, onClose, onLeft }: Props) {
   const shared = occurrence.shared!;

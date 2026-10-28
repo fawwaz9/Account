@@ -4,34 +4,38 @@ import { shortDate } from "../utils/dateUtils";
 // The Calendar opens the editors too, without the Tasks page's styles.
 import "../../styles/tasks.css";
 
-/** The owner's view of who is on something of theirs (Phase 2 items 9a, 9b). */
+/** The owner's view of who shares an item: its members, any open link, the member cap. */
 export interface Sharing {
   members: { id: string; name: string; joined_at: string }[];
+  /** The open invite link's expiry (a datetime), or null when no link is open. */
   link: { expires_at: string } | null;
+  /** False when the item can't be shared; `notShareable` is shown instead. */
   shareable: boolean;
+  /** Most people a link can admit. */
   max_members: number;
 }
 
+/** The item's noun, its sharing API calls, and the help and fallback text. */
 interface Props {
-  /** "task" or "event", for the link's label. */
+  /** "task" or "event", used in labels. */
   readonly noun: string;
   readonly load: () => Promise<Sharing>;
   readonly makeLink: () => Promise<{ token: string }>;
   readonly cancelLink: () => Promise<unknown>;
   readonly removeMember: (memberId: string) => Promise<unknown>;
-  /** The full link to send, built from a token. */
+  /** Build the full invite URL from a link token. */
   readonly linkFor: (token: string) => string;
-  /** What joining lets someone do, behind the question mark. */
+  /** What joining lets someone do, shown behind the help mark. */
   readonly help: ReactNode;
-  /** Said instead of the controls when this can't be shared. */
+  /** Shown instead of the controls when the item can't be shared. */
   readonly notShareable: string;
-  /** Called after someone is taken off, so a "with ..." label elsewhere updates. */
+  /** Called after a member is removed, so a "with ..." label elsewhere can update. */
   readonly onChanged?: () => void;
 }
 
 /**
- * Sharing something of yours with a link (Phase 2 D23, D24), inside its
- * editor. Saves as you go, apart from the editor's own Save.
+ * Share panel inside an item's editor: list and remove members, make or cancel an invite link.
+ * Each action saves at once, apart from the editor's own Save.
  */
 export default function SharingSection({
   noun, load, makeLink, cancelLink, removeMember, linkFor, help, notShareable, onChanged,

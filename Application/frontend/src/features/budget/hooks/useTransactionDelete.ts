@@ -4,11 +4,8 @@ import { Transaction } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
 
 /**
- * Deleting a movement, including the question a split deposit has to ask.
- *
- * A transfer always goes whole -- half a transfer is not a thing -- and an
- * ungrouped row has nothing to ask about, so both delete immediately. Only a
- * deposit with siblings offers the choice between one allocation and all of it.
+ * Transaction delete flow: a split deposit asks which part; anything else goes at once.
+ * Returns the pending row and the scope dialog's handlers; reloads after each delete.
  */
 export function useTransactionDelete(reload: () => Promise<void>) {
   const { user } = useAuth();

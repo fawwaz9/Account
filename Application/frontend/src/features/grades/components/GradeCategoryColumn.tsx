@@ -2,6 +2,7 @@ import {GradeCategory, Grade} from "../types"
 import { isOverMax, marksOver } from "../bonus"
 
 
+/** A category's heading, its grades, and the edit, add and delete handlers. */
 interface GradeCategoryColumnProps {
   readonly title: string;
   readonly category: GradeCategory;
@@ -11,6 +12,7 @@ interface GradeCategoryColumnProps {
   readonly onDeleteItem: (item: Grade) => void;
 }
 
+/** One category's grades as rows, marking bonus and dropped ones, with add and delete buttons. */
 export default function GradeCategoryColumn({ title, category, items, onEditItem, onAddGrade, onDeleteItem }: GradeCategoryColumnProps) {
   return (
     <div className="categoryColumn">

@@ -4,33 +4,25 @@ import { addDays, today } from "../../../shared/utils/dateUtils";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { useApiRefreshCount } from "../../../shared/hooks/useApiRefresh";
 
+/** Work due in the next seven days against the free time to do it. */
 export interface WorkloadForecast {
   /** Minutes estimated against open tasks due in the window. */
   estimatedMinutes: number;
   /** Open tasks due in the window. */
   taskCount: number;
-  /** Of those, how many carry no estimate -- so the figure reads honestly. */
+  /** Of those, how many carry no estimate. */
   unestimatedTasks: number;
   /** Usable free time inside the study window, time already gone excluded. */
   freeMinutes: number;
-  /**
-   * When the estimate is scaled by how long tasks really take (Phase 1 D36):
-   * the ratio, and the estimates as typed. Null: not scaled.
-   */
+  /** Actual-over-estimate ratio scaling `estimatedMinutes`; null when not scaled. */
   estimateRatio?: number | null;
+  /** The estimates as typed, before any scaling. */
   typedMinutes?: number;
 }
 
 /**
- * The next seven days, today included: what is due against the room to do it.
- *
- * A rolling window rather than the dashboard's Monday-to-Sunday glance, on
- * purpose. On a Saturday "this week" has a day and a half left in it, which is
- * the wrong question for "do I have time for what is coming". The glance keeps
- * its calendar week, so it still agrees with the calendar.
- *
- * `forecast` stays null until both reads succeed; a failure is never shown as
- * "nothing due".
+ * Estimated work due over the next seven days, today included, against free study time.
+ * Null until both reads succeed, so a failure never reads as nothing due.
  */
 export function useWorkloadForecast() {
   const { user } = useAuth();

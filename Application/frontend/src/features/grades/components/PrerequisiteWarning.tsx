@@ -3,6 +3,7 @@ import { previewPrerequisites } from "../api";
 import { PrerequisitePreview } from "../types";
 import { STATUS_WORDS } from "./PrerequisitesPanel";
 
+/** The course being added: its code, school year and term. */
 interface Props {
   readonly userId: string;
   readonly code: string;
@@ -10,15 +11,14 @@ interface Props {
   readonly semester: string;
 }
 
+/** Plural wording for each requisite kind. */
 const KIND_WORDS = { prerequisite: "prerequisites", corequisite: "co-requisites" } as const;
+/** Typing pause, in ms, before the catalogue is asked. */
 const WAIT_MS = 400;
 
 /**
- * The prerequisite warning while adding a course (Phase 2 item 7).
- *
- * Only when the shared catalogue has the course and a rule you don't yet meet.
- * Words only: the Add button beside it is never disabled, because exceptions
- * are made (D3). Silent when the read fails or there is nothing to say.
+ * While adding a course, the catalogue requisites not yet met; words only, never blocking the add.
+ * Asks after a typing pause once the code has 6+ characters; silent on failure.
  */
 export default function PrerequisiteWarning({ userId, code, year, semester }: Props) {
   const [preview, setPreview] = useState<PrerequisitePreview | null>(null);

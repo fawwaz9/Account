@@ -5,6 +5,7 @@ import { getErrorMessage } from "./AddCourseModal";
 import { useAuth } from "../../../app/auth/AuthContext";
 import Modal from "../../../shared/components/Modal";
 
+/** Whether the dialog is open, the course, and its close and grades-added callbacks. */
 interface BulkGradesModalProps {
   readonly open: boolean;
   readonly courseId: string;
@@ -12,13 +13,9 @@ interface BulkGradesModalProps {
   readonly onGradesAdded: () => void;
 }
 
+/** One editable row, its fields held as typed text until submit. */
 interface Row {
-  /**
-   * Identity that survives its position. Keying these by array index meant that
-   * removing row 1 while editing row 3 handed row 3's focused input to row 4's
-   * data -- React reuses the DOM node for the key, and the keystroke in flight
-   * landed on the wrong row.
-   */
+  /** Stable key, so removing a row never hands its focused input to another row's data. */
   id: string;
   name: string;
   category: GradeCategory;
@@ -26,8 +23,10 @@ interface Row {
   max_score: string;
 }
 
+/** Counter behind each row's id. */
 let nextRowId = 0;
 
+/** A blank row with a fresh id, in the Assignment category. */
 const emptyRow = (): Row => ({
   id: `row-${nextRowId++}`,
   name: "",
@@ -36,6 +35,10 @@ const emptyRow = (): Row => ({
   max_score: "",
 });
 
+/**
+ * Add several grades at once, in one transaction; a blank score is saved unmarked.
+ * Rows missing a name or an "out of" value are skipped.
+ */
 export default function BulkGradesModal({
   open,
   courseId,
@@ -149,6 +152,7 @@ export default function BulkGradesModal({
   );
 }
 
+/** One row, its position for the labels, and its change and remove callbacks. */
 interface BulkRowProps {
   readonly row: Row;
   readonly index: number;
@@ -157,6 +161,7 @@ interface BulkRowProps {
   readonly removable: boolean;
 }
 
+/** One row's inputs and remove button, labelled by row number. */
 function BulkRow({ row, index, onChange, onRemove, removable }: BulkRowProps) {
   return (
     <>

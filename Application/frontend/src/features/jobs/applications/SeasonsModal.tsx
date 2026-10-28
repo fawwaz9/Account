@@ -6,19 +6,21 @@ import { Season, SeasonInput } from "./types";
 import { seasonSpan } from "./seasons";
 import { useAuth } from "../../../app/auth/AuthContext";
 
+/** Props for the seasons dialog. */
 interface Props {
   readonly open: boolean;
   readonly seasons: Season[];
   readonly onClose: () => void;
+  /** Called after a change, with the season saved if there was one. */
   readonly onSaved: (season?: Season) => void;
 }
 
+/** An empty season form. */
 const BLANK: SeasonInput = { name: "", starts: "", ends: "" };
 
 /**
- * Your recruiting seasons (D7): a name and its months. A season is a filter by
- * the day you applied, so deleting one deletes no application, and two may
- * overlap.
+ * List, add, rename and delete recruiting seasons, each a named range of months.
+ * A season only groups applications by applied date, so deleting one deletes no application.
  */
 export default function SeasonsModal({ open, seasons, onClose, onSaved }: Props) {
   const { user } = useAuth();

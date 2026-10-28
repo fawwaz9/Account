@@ -3,21 +3,12 @@ import { dismissReminder, fetchDueReminders } from "../api";
 import { Reminder } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
 
-/** How often to ask what is due. A minute is finer than any reminder needs. */
+/** How often to ask what is due, in ms. */
 const POLL_MS = 60_000;
 
 /**
- * What should be on screen now.
- *
- * The delivery mechanism in full: the app asks, on an interval, while it is
- * open. There is no scheduler and no push, so a reminder cannot reach you with
- * the tab closed — the banner says so, because a notification you half-trust is
- * worse than one you know the limits of.
- *
- * A browser notification is fired as well when permission has been granted, and
- * only once per reminder: `fired_at` is stamped server-side the first time one
- * is returned, and the set of ids already notified is kept here so a re-render
- * cannot repeat it.
+ * Poll every minute for due reminders, notifying once for each one not already pushed.
+ * Dismissing drops the banner at once and re-polls if the request fails.
  */
 export function useReminders() {
   const { user } = useAuth();
@@ -69,13 +60,7 @@ export function useReminders() {
   return { due, dismiss, refresh: poll };
 }
 
-/**
- * Fire an OS notification for anything not already announced.
- *
- * Best-effort by design. Permission may be denied, the API may be absent, and
- * the in-app banner is the reliable path either way — this only adds reach for
- * the case where the tab is open but not looked at.
- */
+/** Best-effort browser notification for each reminder not yet announced here or pushed. */
 function announce(rows: Reminder[], seen: Set<string>) {
   if (typeof Notification === "undefined" || Notification.permission !== "granted") {
     return;
@@ -99,12 +84,7 @@ function announce(rows: Reminder[], seen: Set<string>) {
   }
 }
 
-/**
- * Ask for permission, at the moment a first reminder is created.
- *
- * Never on page load: a permission prompt with no context attached is the one
- * people dismiss forever, and there is no second chance to ask.
- */
+/** Ask for notification permission (when a first reminder is made); true when granted. */
 export async function requestNotificationPermission(): Promise<boolean> {
   if (typeof Notification === "undefined") return false;
   if (Notification.permission === "granted") return true;

@@ -2,18 +2,14 @@ import { SafeToSpend as Safe } from "../types";
 import { formatMoney } from "../money";
 import { dueLabel } from "../../../shared/utils/dateUtils";
 
+/** Props: the server's safe-to-spend, or null while loading. */
 interface SafeToSpendProps {
   readonly safe: Safe | null;
 }
 
 /**
- * The one number the budget exists to produce.
- *
- * Everything else on this page records what happened. This says what you can
- * do, and it is deliberately a single headline: `safe_now` is cash in a
- * spending account less what is already committed. `safe_soon` sits underneath
- * as context — two figures of equal weight would mean neither was the answer,
- * and a cheque can be late or short, which this app already tracks.
+ * Safe-to-spend headline until the next payday, with its workings beneath.
+ * `safe_soon`, counting unpaid work, is context and never the headline.
  */
 export default function SafeToSpend({ safe }: SafeToSpendProps) {
   if (!safe) return null;

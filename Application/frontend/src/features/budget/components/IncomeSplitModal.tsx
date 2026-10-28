@@ -6,6 +6,7 @@ import { useAuth } from "../../../app/auth/AuthContext";
 import Modal from "../../../shared/components/Modal";
 import HelpTip from "../../../shared/components/HelpTip";
 
+/** Props for the income split dialog. */
 interface IncomeSplitModalProps {
   readonly open: boolean;
   readonly accounts: readonly Account[];
@@ -14,12 +15,8 @@ interface IncomeSplitModalProps {
 }
 
 /**
- * Every account's share of incoming money, on one screen.
- *
- * The per-account field in Edit account still works and edits the same column.
- * What it cannot show you is what the share is relative *to* — and these are
- * ratios, so a number is meaningless on its own. Rebalancing means seeing them
- * together.
+ * Every account's income share on one screen, as ratios with each one's percent.
+ * Saves one PATCH per changed account; a zero total cannot be saved.
  */
 export default function IncomeSplitModal({
   open,

@@ -19,11 +19,16 @@ import { Course } from "../../features/grades/types";
 import { useAuth } from "../../app/auth/AuthContext";
 import { useShortcut } from "../../shared/hooks/useShortcut";
 
+/** One term's courses within a selected school year. */
 interface TermGroup {
   semester: string;
   courses: Course[];
 }
 
+/**
+ * The grades page: current-term courses (or a chosen year's, by term), search and add, beside
+ * the dashboard column of averages, credits, trend, term reviews, Attention and blind spots.
+ */
 export default function GradesPage() {
   const { courses, loading, error, reload } = useCourses();
   const { summary, reload: reloadSummary } = useDashboard();

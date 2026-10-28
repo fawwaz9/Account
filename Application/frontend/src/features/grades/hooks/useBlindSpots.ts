@@ -4,7 +4,7 @@ import { CategoryBlindSpot } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { useApiRefresh } from "../../../shared/hooks/useApiRefresh";
 
-/** A category worse than the student's own average, in more than one course. */
+/** Categories trailing the student's own average across courses; a failed load reads as none. */
 export function useBlindSpots() {
   const { user } = useAuth();
   const [spots, setSpots] = useState<CategoryBlindSpot[]>([]);

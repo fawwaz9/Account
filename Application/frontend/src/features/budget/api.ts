@@ -39,23 +39,22 @@ import {
   UpcomingCharge,
 } from "./types";
 
-/**
- * What counts, less what is owed. Computed on the server because two screens
- * show it -- this page and the dashboard -- and a rule about which accounts
- * count is exactly the kind that drifts when it is written twice.
- */
+/** Fetch net worth, computed on the server so the budget page and dashboard agree. */
 export async function fetchNetWorth(userId: string): Promise<NetWorth> {
   return get<NetWorth>(endpoints.finances.netWorth(userId));
 }
 
+/** Fetch every account with its balance. */
 export async function fetchAccounts(userId: string): Promise<Account[]> {
   return get<Account[]>(endpoints.finances.accounts(userId));
 }
 
+/** Create an account. */
 export async function createAccount(userId: string, payload: AccountCreate) {
   return post<Account>(endpoints.finances.accounts(userId), payload);
 }
 
+/** Edit an account's fields. */
 export async function updateAccount(
   userId: string,
   accountId: string,
@@ -64,19 +63,14 @@ export async function updateAccount(
   return patch<Account>(endpoints.finances.account(userId, accountId), payload);
 }
 
+/** Delete an account. */
 export async function deleteAccount(userId: string, accountId: string) {
   return del<Account>(endpoints.finances.account(userId, accountId));
 }
 
 /**
- * Record what an investment account's holding is worth, for one month.
- *
- * Sends the market value -- the figure off a statement -- and the server stores
- * how far that sits above the month's ledger balance. An upsert, so saving the
- * same month twice corrects it instead of failing.
- *
- * Returns the whole account, so the card's figure comes back in this response
- * rather than needing a second fetch.
+ * Record an investment's market value for a month; an upsert.
+ * Returns the whole account, so the card updates without a second fetch.
  */
 export async function setAccountMonthValue(
   userId: string,
@@ -90,7 +84,7 @@ export async function setAccountMonthValue(
   });
 }
 
-/** Forget one month's reading. The month is required, never defaulted. */
+/** Forget one month's investment reading; the month is always given. */
 export async function clearAccountMonthValue(
   userId: string,
   accountId: string,
@@ -102,11 +96,8 @@ export async function clearAccountMonthValue(
 }
 
 /**
- * `start`/`end` bound occurred_on inclusively.
- *
- * Windowing on the server rather than filtering a fetched page matters: the
- * endpoint caps at 500 rows *after* ordering newest-first, so a client-side
- * filter would silently lose the oldest rows in the range.
+ * Fetch transactions, optionally one account's and within inclusive dates.
+ * The server returns at most 100, newest first: window it there, never trim them here.
  */
 export async function fetchTransactions(
   userId: string,
@@ -122,7 +113,7 @@ export async function fetchTransactions(
   return get<Transaction[]>(query.length ? `${base}?${query.join("&")}` : base);
 }
 
-/** One account's month: daily flow, totals, categories and its target. */
+/** One account's month: daily flow, totals, categories and target. */
 export async function fetchAccountActivity(
   userId: string,
   accountId: string,
@@ -132,15 +123,17 @@ export async function fetchAccountActivity(
   return get<AccountActivity>(`${base}?month=${month}`);
 }
 
+/** Record income or an expense. */
 export async function createTransaction(userId: string, payload: TransactionCreate) {
   return post<Transaction>(endpoints.finances.transactions(userId), payload);
 }
 
-/** Returns both halves of the transfer. */
+/** Record a transfer; returns both halves. */
 export async function createTransfer(userId: string, payload: TransferCreate) {
   return post<Transaction[]>(endpoints.finances.transfers(userId), payload);
 }
 
+/** Edit a transaction's amount, description, date or category. */
 export async function updateTransaction(
   userId: string,
   transactionId: string,
@@ -158,9 +151,8 @@ export async function updateTransaction(
 }
 
 /**
- * `scope` decides how much of a grouped movement goes: "row" removes this one,
- * "group" removes every row sharing its group. Ignored for a transfer, which the
- * server always removes whole.
+ * Delete a transaction: `scope` row takes this one, group every row sharing its group.
+ * A transfer always goes whole.
  */
 export async function deleteTransaction(
   userId: string,
@@ -171,10 +163,12 @@ export async function deleteTransaction(
   return del<Transaction>(`${base}?scope=${scope}`);
 }
 
+/** Fetch the spending categories. */
 export async function fetchCategories(userId: string) {
   return get<SpendCategory[]>(endpoints.finances.categories(userId));
 }
 
+/** Create a category. */
 export async function createCategory(userId: string, name: string) {
   return post<SpendCategory>(endpoints.finances.categories(userId), {
     name,
@@ -183,11 +177,7 @@ export async function createCategory(userId: string, name: string) {
   });
 }
 
-/**
- * Rename or archive a category. The PATCH route has existed since categories
- * were built; this function is what was missing, which is why nothing could
- * edit one.
- */
+/** Rename, archive or reorder a category. */
 export async function updateCategory(
   userId: string,
   categoryId: string,
@@ -196,12 +186,12 @@ export async function updateCategory(
   return patch<SpendCategory>(endpoints.finances.category(userId, categoryId), payload);
 }
 
-/** Removes the label only; the expenses it was on become uncategorised. */
+/** Delete a category; its expenses become uncategorised. */
 export async function deleteCategory(userId: string, categoryId: string) {
   return del<SpendCategory>(endpoints.finances.category(userId, categoryId));
 }
 
-/** Sets what one account may spend in one month; replaces any existing target. */
+/** Set an account's planned spend for a month, replacing any earlier figure. */
 export async function setBudgetTarget(
   userId: string,
   accountId: string,
@@ -216,18 +206,15 @@ export async function setBudgetTarget(
 }
 
 /**
- * Set what one account may spend on one category, or clear it with `null`.
- *
- * `null` removes the limit rather than setting one of zero -- and if it was the
- * account's last, the account goes back to the target typed into Planned spend.
- * Sending `0` instead would close the category *and* keep the account derived.
+ * Set an account's limit for one category, or null to clear it.
+ * Null removes the limit; 0 is a real limit that closes the category.
  */
 export async function setAccountCategoryLimit(
   userId: string,
   accountId: string,
   categoryId: string,
   limitAmount: number | null,
-  /** Null sets the standing limit; a month sets that month's override only. */
+  /** Null sets the standing limit; a month sets only that month's override. */
   month: string | null = null
 ) {
   return put<unknown>(endpoints.finances.accountCategoryLimits(userId), {
@@ -238,37 +225,37 @@ export async function setAccountCategoryLimit(
   });
 }
 
+/** Fetch a month's budget summary across accounts. */
 export async function fetchBudgetSummary(userId: string, month: string) {
   return get<BudgetSummary>(`${endpoints.finances.budgetSummary(userId)}?month=${month}`);
 }
 
-/**
- * How a deposit would divide by the current income shares.
- *
- * Asked of the server rather than worked out here, so the cent-rounding rule
- * lives in one place and the preview always matches what recording writes.
- */
+/** How a deposit would split by income share, using the server's rounding rule. */
 export async function previewDeposit(userId: string, amount: number) {
   return get<DepositPreview>(
     `${endpoints.finances.depositPreview(userId)}?amount=${amount}`
   );
 }
 
+/** Record a deposit; returns one income row per account. */
 export async function recordDeposit(userId: string, payload: DepositCreate) {
   return post<Transaction[]>(endpoints.finances.deposits(userId), payload);
 }
 
 /* ===== Standing instructions ===== */
 
+/** Fetch standing instructions, inactive ones included by default. */
 export async function fetchRecurring(userId: string, includeInactive = true) {
   const base = endpoints.finances.recurring(userId);
   return get<RecurringTransaction[]>(`${base}?include_inactive=${includeInactive}`);
 }
 
+/** Create a standing instruction. */
 export async function createRecurring(userId: string, payload: RecurringCreate) {
   return post<RecurringTransaction>(endpoints.finances.recurring(userId), payload);
 }
 
+/** Edit a standing instruction. */
 export async function updateRecurring(
   userId: string,
   ruleId: string,
@@ -277,17 +264,14 @@ export async function updateRecurring(
   return patch<RecurringTransaction>(endpoints.finances.recurringRule(userId, ruleId), payload);
 }
 
-/** Stops the instruction. Payments it already made stay — they are real. */
+/** Delete a standing instruction; payments it already made stay. */
 export async function deleteRecurring(userId: string, ruleId: string) {
   return del<RecurringTransaction>(endpoints.finances.recurringRule(userId, ruleId));
 }
 
 /**
- * Write every payment that is owed and has not been written yet.
- *
- * Idempotent — a payment is keyed by (rule, date) — so calling it on every
- * budget load is safe, and is what makes last month's rent already be there
- * when you open the app, with no scheduler anywhere.
+ * Write every payment now owed; idempotent, so it runs on every load.
+ * Keeps the GET cache unless it wrote something.
  */
 export async function runRecurring(userId: string) {
   // Run on every load and usually writes nothing, so it clears the GET cache
@@ -297,13 +281,13 @@ export async function runRecurring(userId: string) {
   return run;
 }
 
-/** What is committed but has not happened. Projections, never ledger rows. */
+/** Standing-instruction payments due in a window: projections, never rows. */
 export async function fetchUpcoming(userId: string, start: string, end: string) {
   const base = endpoints.finances.recurringUpcoming(userId);
   return get<UpcomingCharge[]>(`${base}?start=${start}&end=${end}`);
 }
 
-/** Skip one payment — a month a subscription was paused — without ending it. */
+/** Skip one payment of a standing instruction without ending it. */
 export async function skipRecurring(userId: string, ruleId: string, onDate: string) {
   return post<RecurringTransaction>(
     `${endpoints.finances.recurringSkip(userId, ruleId)}?on_date=${onDate}`,
@@ -311,7 +295,7 @@ export async function skipRecurring(userId: string, ruleId: string, onDate: stri
   );
 }
 
-/** Which course a line of text names, decided server-side. See CoursePicker. */
+/** Ask the server which course a line of text names. */
 export async function resolveCourse(userId: string, text: string) {
   return get<{ course_id: string | null; code: string | null; name: string | null }>(
     `${endpoints.grades.resolveCourse(userId)}?text=${encodeURIComponent(text)}`
@@ -333,6 +317,7 @@ export async function fetchTuitionPreview(
   return get<TuitionPreview>(`${endpoints.finances.tuitionPreview(userId)}?${query}`);
 }
 
+/** Record a tuition payment and its one ledger row. */
 export async function recordTuition(userId: string, data: TuitionCreate) {
   return post(endpoints.finances.tuition(userId), data);
 }
@@ -342,11 +327,12 @@ export async function fetchCourseCost(userId: string, courseId: string) {
   return get<CourseCost>(endpoints.finances.courseCost(userId, courseId));
 }
 
+/** Fetch one tuition payment. */
 export async function fetchTuitionPayment(userId: string, paymentId: string) {
   return get<TuitionPayment>(endpoints.finances.tuitionPayment(userId, paymentId));
 }
 
-/** Correct a payment. Its ledger row moves with it. */
+/** Correct a tuition payment; its ledger row moves with it. */
 export async function updateTuition(
   userId: string,
   paymentId: string,
@@ -358,7 +344,7 @@ export async function updateTuition(
   );
 }
 
-/** Remove a payment and the ledger row it owns. */
+/** Delete a tuition payment and the ledger row it owns. */
 export async function deleteTuition(userId: string, paymentId: string) {
   return del(endpoints.finances.tuitionPayment(userId, paymentId));
 }
@@ -368,23 +354,17 @@ export async function fetchTermBudget(userId: string) {
   return get<TermBudget>(endpoints.finances.termBudget(userId));
 }
 
-/**
- * What can be spent between now and the next time money arrives.
- *
- * Two figures come back. `safe_now` is the answer -- cash in a spending account
- * less what is committed. `safe_soon` adds confirmed work not yet paid for, and
- * is context rather than a second answer.
- */
+/** Safe-to-spend until the next payday: `safe_now` is the answer, `safe_soon` context. */
 export async function fetchSafeToSpend(userId: string) {
   return get<SafeToSpend>(endpoints.finances.safeToSpend(userId));
 }
 
-/** Where the spending accounts are heading, to the end of the term. */
+/** Forecast the spending accounts to the end of the term. */
 export async function fetchForecast(userId: string) {
   return get<CashFlowForecast>(endpoints.finances.forecast(userId));
 }
 
-/** The year as one running balance; with a target, the weekly hours it takes. */
+/** Year plan; with a target, the weekly hours it takes. */
 export async function fetchPlan(userId: string, target?: number, until?: string) {
   const params = new URLSearchParams();
   if (target !== undefined) params.set("target", String(target));
@@ -393,7 +373,7 @@ export async function fetchPlan(userId: string, target?: number, until?: string)
   return get<AnnualPlan>(`${endpoints.finances.plan(userId)}${query ? `?${query}` : ""}`);
 }
 
-/** Keep the plan as it stands, to compare the coming months with. Never replaces one. */
+/** Save the plan as it stands, as a new copy, to compare months against. */
 export async function savePlan(userId: string) {
   return post<SavedPlan>(endpoints.finances.planSaved(userId), {});
 }
@@ -405,7 +385,7 @@ export async function fetchPlanReview(userId: string) {
 
 /* ===== CSV import ===== */
 
-/** What a CSV would add, duplicates flagged. Writes nothing. */
+/** Preview a CSV import, duplicates flagged; writes nothing. */
 export async function previewImport(
   userId: string, accountId: string, csvText: string, mapping: ImportMapping | null = null,
 ) {
@@ -424,25 +404,28 @@ export async function commitImport(
   });
 }
 
+/** Fetch past imports. */
 export async function fetchImports(userId: string) {
   return get<ImportSummary[]>(endpoints.finances.imports(userId));
 }
 
-/** Undo an import: removes every row it wrote. Permanent, so it is confirmed first. */
+/** Undo an import, removing every row it wrote that remains. */
 export async function deleteImport(userId: string, importId: string) {
   return del<{ removed: number }>(endpoints.finances.importOne(userId, importId));
 }
 
 /* ===== Subscription audit ===== */
 
+/** Fetch repeating charges spotted in the ledger. */
 export async function fetchSubscriptions(userId: string) {
   return get<SubscriptionCandidate[]>(endpoints.finances.subscriptions(userId));
 }
 
+/** Confirm a spotted subscription as a standing instruction, passing its past charges. */
 export async function confirmSubscription(
   userId: string,
   candidate: SubscriptionCandidate,
-  /** The last date it runs, or null for ongoing (vision §13.9's "until when?"). */
+  /** Last date it runs, or null for ongoing. */
   until: string | null = null,
 ): Promise<RecurringTransaction> {
   return post<RecurringTransaction>(endpoints.finances.confirmSubscription(userId), {
@@ -456,15 +439,18 @@ export async function confirmSubscription(
 
 /* ===== Sinking funds ===== */
 
+/** Fetch sinking funds; archived ones only on request. */
 export async function fetchSinkingFunds(userId: string, includeArchived = false) {
   const base = endpoints.finances.sinkingFunds(userId);
   return get<SinkingFund[]>(includeArchived ? `${base}?include_archived=true` : base);
 }
 
+/** Create a sinking fund. */
 export async function createSinkingFund(userId: string, payload: SinkingFundCreate) {
   return post<SinkingFund>(endpoints.finances.sinkingFunds(userId), payload);
 }
 
+/** Edit a sinking fund. */
 export async function updateSinkingFund(
   userId: string,
   fundId: string,
@@ -473,7 +459,7 @@ export async function updateSinkingFund(
   return patch<SinkingFund>(endpoints.finances.sinkingFund(userId, fundId), payload);
 }
 
-/** Set this month's money aside for real. Writes the transfer. */
+/** Transfer this month's contribution into a fund. */
 export async function contributeToFund(
   userId: string,
   fundId: string,
@@ -482,7 +468,7 @@ export async function contributeToFund(
   return post<SinkingFund>(endpoints.finances.contribute(userId, fundId), payload);
 }
 
-/** Take a month's set-aside back, moving the money with it. */
+/** Undo a month's contribution, deleting its transfer. */
 export async function undoContribution(
   userId: string,
   fundId: string,
@@ -493,7 +479,7 @@ export async function undoContribution(
   );
 }
 
-/** Removes the fund and every transfer its contributions wrote. */
+/** Delete a fund and every transfer its contributions wrote. */
 export async function deleteSinkingFund(userId: string, fundId: string) {
   return del<SinkingFund>(endpoints.finances.sinkingFund(userId, fundId));
 }

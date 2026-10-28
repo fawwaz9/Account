@@ -1,6 +1,6 @@
 /**
- * One place that decides how money reads, so a balance and a ledger row can
- * never disagree about sign or decimals.
+ * Format dollars as text with a real minus sign, U+2212.
+ * `signed` adds + to gains, `compact` abbreviates thousands for axes, `whole` rounds first.
  */
 export function formatMoney(
   amount: number,
@@ -27,6 +27,7 @@ export function formatMoney(
   return `${amount < 0 ? "−" : ""}$${formatted}`;
 }
 
+/** Whole-dollar magnitude, with thousands as k to one decimal under 10k. */
 function compactAmount(amount: number) {
   if (amount >= 1000) {
     const thousands = amount / 1000;
@@ -36,20 +37,7 @@ function compactAmount(amount: number) {
   return amount.toLocaleString(undefined, { maximumFractionDigits: 0 });
 }
 
-/**
- * A percentage, with the sign carried in the text rather than in a colour.
- *
- * Separate from `formatMoney` but deliberately beside it, because the two appear
- * next to each other -- `−8.1%` beside `−$812.40` -- and the minus has to be the
- * same character in both. It is U+2212, the real minus sign, not a hyphen.
- *
- * `signed` prints a `+` on a gain. That is not decoration: the account card shows
- * this next to a balance, and a reader has to be able to tell a gain from a loss
- * without relying on the colour it happens to be drawn in.
- *
- * Rounded to one decimal to match what the server already rounded to, rather than
- * rounding again to something different.
- */
+/** Format a percent to one decimal with the same minus sign; `signed` adds + to gains. */
 export function formatPercent(value: number, options: { signed?: boolean } = {}) {
   const magnitude = Math.abs(value).toFixed(1);
   if (options.signed) {

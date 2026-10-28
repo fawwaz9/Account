@@ -7,14 +7,20 @@ import { getErrorMessage } from "../../grades/components/AddCourseModal";
 import { useAuth } from "../../../app/auth/AuthContext";
 import Modal from "../../../shared/components/Modal";
 
+/** Props for the transaction editor. */
 interface EditTransactionModalProps {
   readonly transaction: Transaction | null;
   readonly categories: readonly SpendCategory[];
+  /** Courses an expense can be tagged to. */
   readonly courses: readonly Course[];
   readonly onClose: () => void;
   readonly onSaved: () => void;
 }
 
+/**
+ * Edit a transaction's amount, description and date; an expense's category and course too.
+ * A transfer's two sides change together.
+ */
 export default function EditTransactionModal({
   transaction,
   categories,

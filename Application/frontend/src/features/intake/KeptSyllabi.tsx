@@ -1,18 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { fetchCourseSyllabi, fetchSyllabusFile, KeptSyllabus } from "./api";
 
+/** The course whose kept syllabus files to list. */
 interface KeptSyllabiProps {
   readonly userId: string;
   readonly courseId: string;
 }
 
 /**
- * The syllabus a course was built from, kept as the original file (Phase 1
- * D24). Silent when none was kept -- a course typed in by hand has nothing to
- * show, and saying so is not information.
- *
- * Fetched with the session's token and saved from a blob: the file route is
- * authenticated like every other, so a plain link could not reach it.
+ * Download buttons for the syllabus files a course was built from; nothing when none was kept.
+ * Fetched with the session token and saved from a blob, since the file route needs sign-in.
  */
 export default function KeptSyllabi({ userId, courseId }: KeptSyllabiProps) {
   const [kept, setKept] = useState<KeptSyllabus[]>([]);

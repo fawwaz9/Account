@@ -1,54 +1,52 @@
 import { Recurrence, Weekday } from "../calender/types";
 
-/** Mirrors app/Jobs/schemas/job.py. */
+/** Jobs, shifts, paycheques, earnings and the tax packet; mirrors app/Jobs/schemas/job.py. */
 
-/**
- * How a job pays.
- *
- * Three genuinely different arrangements rather than styling on one: each
- * answers "what should this have paid?" with a different question, and treating
- * them alike is what would make a salaried job look underpaid every time you
- * worked a long week.
- */
+/** How a job pays; each kind answers "what should this have paid?" its own way. */
 export enum JobKind {
-  /** Hours times a rate. The hours are the pay. */
+  /** Hours times a rate. */
   HOURLY = "hourly",
-  /** A fixed amount per pay period, however many hours it took. */
+  /** A set amount per pay period, however many hours. */
   SALARIED = "salaried",
-  /** You invoice; the amount is whatever you billed. */
+  /** Invoiced; pays whatever was billed. */
   CONTRACT = "contract",
 }
 
+/** Display label per job kind. */
 export const JOB_KIND_LABELS: Record<JobKind, string> = {
   [JobKind.HOURLY]: "Hourly",
   [JobKind.SALARIED]: "Salaried",
   [JobKind.CONTRACT]: "Contract",
 };
 
+/** A job with its pay rule. */
 export interface Job {
   id: string;
   name: string;
   employer: string | null;
   kind: JobKind;
-  /** Hourly jobs only. A shift may override it for one date. */
+  /** Hourly jobs only; a shift may override it for one date. */
   hourly_rate: number | null;
-  /** Salaried jobs only: what one pay period pays, regardless of hours. */
+  /** Salaried jobs only: one pay period's pay, regardless of hours. */
   period_amount: number | null;
   started_on: string | null;
   /** Null while the job is current. */
   ended_on: string | null;
+  /** First pay date; required with either kind of pay rule. */
   pay_starts_on: string | null;
+  /** Repeat rule for pay dates; never with `pay_days`. */
   pay_schedule: Recurrence | null;
-  /** Pay on set days of the month instead of by `pay_schedule`. Never both. */
+  /** Pay on set days of the month instead of `pay_schedule`; never both. */
   pay_days: PayDays | null;
   archived: boolean;
   position: number;
   created_at: string | null;
-  /** Read from the pay rule per request, never stored. */
+  /** Next pay date, read from the pay rule per request, never stored. */
   next_pay_on: string | null;
   is_current: boolean;
 }
 
+/** Body to create a job. */
 export interface JobCreate {
   name: string;
   employer: string | null;
@@ -63,39 +61,41 @@ export interface JobCreate {
   archived: boolean;
 }
 
-/** Where a pay date that lands on a weekend goes. Employers differ. */
+/** Where a pay date landing on a weekend moves. */
 export type WeekendRule = "previous" | "next" | "keep";
 
-/** "The last Friday" is n = -1; "the 2nd Thursday" is n = 2. */
+/** An Nth weekday of the month: n = 2 is the 2nd, n = -1 the last. */
 export interface NthWeekday {
   n: 1 | 2 | 3 | 4 | -1;
   day: Weekday;
 }
 
-/**
- * Pay on set days of the month (decided 2026-10-03): dates, the last day, or
- * an Nth weekday. Dates may go with the last day; an Nth weekday stands alone.
- * A date the month lacks pays on its last day.
- */
+/** Pay on set days of the month: dates, the last day, or Nth weekdays. */
 export interface PayDays {
+  /** Days of the month; one the month lacks pays on its last day. */
   dates: number[];
+  /** Also pay on the month's last day; may go with `dates`. */
   last_day: boolean;
+  /** Nth weekdays, at most four; never with `dates` or `last_day`. */
   nth_weekdays: NthWeekday[];
   weekend: WeekendRule;
+  /** Last scheduled pay date, inclusive; null for no end. */
   until: string | null;
 }
 
+/** Partial job edit, plus its list position. */
 export type JobUpdate = Partial<JobCreate> & { position?: number };
 
-/** One recurring block of a job's schedule. Same shape as a course's meeting. */
+/** One weekly slot of a job's schedule, shaped like a course meeting. */
 export interface ShiftMeeting {
+  /** Weekday codes, "MO" to "SU". */
   days: string[];
   start_time: string;
   end_time: string;
   location: string | null;
 }
 
-/** One shift on one date — the ordinary way part-time hours arrive. */
+/** Body for one shift on one date. */
 export interface ShiftCreate {
   on_date: string;
   start_time: string;
@@ -103,6 +103,7 @@ export interface ShiftCreate {
   location: string | null;
 }
 
+/** Body to set a job's repeating schedule. */
 export interface ShiftScheduleCreate {
   meetings: ShiftMeeting[];
   starts_on: string | null;
@@ -110,10 +111,8 @@ export interface ShiftScheduleCreate {
 }
 
 /**
- * One date a job's schedule falls on, with what is known about it.
- *
- * Materialised per request like every other occurrence, so it has no id of its
- * own: `(event_id, on_date)` is what identifies it.
+ * One date a job's schedule falls on, with what was recorded.
+ * Expanded per request with no row of its own: the event id and date identify it.
  */
 export interface ShiftOccurrence {
   event_id: string;
@@ -125,33 +124,26 @@ export interface ShiftOccurrence {
   scheduled_end: string | null;
   location: string | null;
   scheduled_minutes: number;
-  /** What was actually recorded, when it differs from the schedule. */
+  /** Recorded start, when it differs from the schedule. */
   worked_start: string | null;
   worked_end: string | null;
-  /** Equal to the scheduled minutes until confirmed with different times. */
+  /** The scheduled minutes until confirmed with different times. */
   counted_minutes: number;
   confirmed: boolean;
-  /** False for a shift entered on its own; true for one a pattern produced.
-   *  Only a one-off can be removed outright. */
+  /** True when a pattern produced it; only a one-off can be removed outright. */
   repeats: boolean;
-  /**
-   * A past shift nobody confirmed. Its hours are being assumed from the
-   * schedule rather than known, and stay visible so a total can say how much of
-   * itself is a guess.
-   */
+  /** A past shift nobody confirmed, counted at its scheduled hours. */
   assumed: boolean;
   tip_amount: number;
   tip_is_cash: boolean;
-  /**
-   * Whether a cash tip has actually reached the budget. False while it is held
-   * for want of an account to go to (Settings -> Financial), and always false
-   * for a tip paid on the cheque, which arrives inside the paycheque instead.
-   */
+  /** A cash tip already filed to the budget; false while held, and for cheque tips. */
   tip_in_ledger: boolean;
+  /** Rate for this date only; null uses the job's. */
   rate_override: number | null;
   notes: string | null;
 }
 
+/** Body to record one shift date's actuals. */
 export interface ShiftRecordUpsert {
   worked_start: string | null;
   worked_end: string | null;
@@ -166,16 +158,19 @@ export interface ShiftRecordUpsert {
 
 /** Mirrors app/Jobs/schemas/paycheque.py. */
 
+/** One deduction line on a paycheque. */
 export interface DeductionEntry {
   description: string;
-  /** Positive. The sign is in the name. */
+  /** Positive; the sign is in the name. */
   amount: number;
 }
 
+/** A stored deduction line. */
 export interface Deduction extends DeductionEntry {
   id: string;
 }
 
+/** A recorded paycheque; only its net reaches the ledger. */
 export interface Paycheque {
   id: string;
   job_id: string;
@@ -183,17 +178,18 @@ export interface Paycheque {
   occurred_on: string;
   gross_amount: number;
   deductions: Deduction[];
-  /** Gross less every deduction, computed by the API rather than stored. */
+  /** Gross less every deduction, computed by the API. */
   net_amount: number;
   period_start: string | null;
   period_end: string | null;
-  /** What the hours said it should be, frozen when the cheque was recorded. */
+  /** What the hours said it should be, frozen when recorded. */
   expected_gross: number | null;
-  /** Positive means the cheque was larger than expected. Null when nothing was expected. */
+  /** Gross less expected; positive is a larger cheque, null when nothing was expected. */
   variance: number | null;
   notes: string | null;
 }
 
+/** Body to record a paycheque. */
 export interface PaychequeCreate {
   job_id: string;
   occurred_on: string;
@@ -201,22 +197,24 @@ export interface PaychequeCreate {
   period_start: string | null;
   period_end: string | null;
   deductions: DeductionEntry[];
-  /** Empty splits the net by each account's income share. */
+  /** Explicit split of the net; empty splits by income share. */
   allocations: { account_id: string; amount: number }[];
   notes: string | null;
 }
 
+/** Partial paycheque edit; the job cannot change. */
 export type PaychequeUpdate = Partial<Omit<PaychequeCreate, "job_id">>;
 
+/** What a pay period's shifts predict, before the cheque is recorded. */
 export interface PaychequePreview {
   job_id: string;
   period_start: string;
   period_end: string;
-  /** Null for a contract job: there is nothing to predict from hours. */
+  /** Null for a contract job: hours predict nothing. */
   expected_gross: number | null;
   shift_count: number;
   counted_minutes: number;
-  /** How many of those shifts are assumed rather than confirmed. */
+  /** How many of those shifts are assumed, not confirmed. */
   assumed_count: number;
   /** Tips paid through payroll, already inside the gross. */
   on_cheque_tips: number;
@@ -226,59 +224,64 @@ export interface PaychequePreview {
 
 /** Mirrors app/Jobs/schemas/earnings.py. */
 
+/** One job's earned and paid figures in a window. */
 export interface JobEarnings {
   job_id: string;
   job_name: string;
+  /** "hourly", "salaried" or "contract". */
   kind: string;
   shift_count: number;
   counted_minutes: number;
-  /** How many of those shifts are assumed rather than confirmed. */
+  /** Shifts counted at their schedule because nobody confirmed them. */
   assumed_count: number;
+  /** Predicted from the shifts; for a salaried job, the periods in the window. */
   gross_earned: number;
   cash_tips: number;
-  /**
-   * From this job's cheques dated inside the window. Kept apart from
-   * gross_earned for the same reason the window-level pair is: one is what the
-   * hours say, the other what the bank saw, and a cheque arriving now usually
-   * pays for work done before the window opened.
-   */
+  /** Gross of this job's cheques dated in the window; never added to earned. */
   gross_paid: number;
   deducted: number;
   net_paid: number;
 }
 
+/** Earned against paid over one window: past week, this month or this term. */
 export interface EarningsWindow {
   label: string;
   starts_on: string;
+  /** Inclusive, and never after today. */
   ends_on: string;
   counted_minutes: number;
-  /** What the hours say. A prediction. */
+  /** Predicted from the shifts worked. */
   gross_earned: number;
   cash_tips: number;
-  /** What cheques actually paid. Kept apart from earned on purpose. */
+  /** What cheques dated in the window paid; kept apart from earned. */
   gross_paid: number;
   deducted: number;
   net_paid: number;
   per_job: JobEarnings[];
 }
 
+/** Pay per hour actually worked, over the paid periods. */
 export interface EffectiveRate {
-  /** Null before anything has been paid, rather than a zero that reads as unpaid work. */
+  /** Null before anything is paid, rather than a zero. */
   net_per_hour: number | null;
   gross_per_hour: number | null;
+  /** Deductions as a percent of gross. */
   deduction_percent: number | null;
   paid_minutes: number;
 }
 
+/** Work since the latest cheque, and what it should pay. */
 export interface UpcomingPay {
   job_id: string;
   job_name: string;
+  /** Shift minutes since the last cheque's period ended. */
   unpaid_minutes: number;
   /** Null for a contract job, which predicts nothing from hours. */
   unpaid_estimate: number | null;
   next_pay_on: string | null;
 }
 
+/** This week's minutes of work against classes and tasks. */
 export interface HoursAgainstClasses {
   starts_on: string;
   ends_on: string;
@@ -287,6 +290,7 @@ export interface HoursAgainstClasses {
   task_minutes: number;
 }
 
+/** The Jobs page's earnings: three windows, the effective rate and pay to come. */
 export interface EarningsSummary {
   week: EarningsWindow;
   month: EarningsWindow;
@@ -305,7 +309,7 @@ export interface PayLine {
   rule: string | null;
 }
 
-/** A cheque checked against its shifts, BC's pay rules applied (Phase 1 item 11). */
+/** A cheque checked against its shifts under BC pay rules. */
 export interface PayCheck {
   paycheque_id: string;
   status: "as_expected" | "as_expected_with_vacation" | "short" | "over" | "unclear" | "cannot_check";
@@ -319,13 +323,16 @@ export interface PayCheck {
   notes: string[];
 }
 
-/** Phase 2 item 14: a shift against an exam. overlap: it runs into the exam;
- *  crowds: it ends less than your buffer before the exam starts. */
+/**
+ * A shift against an exam.
+ * `overlap` shares time with it; `crowds` ends less than the buffer before it starts.
+ */
 export interface ShiftConflict {
   kind: "overlap" | "crowds";
   shift_event_id: string;
   shift_on: string;
   shift_start: string | null;
+  /** Local end; earlier than the start for an overnight shift. */
   shift_end: string | null;
   job_id: string | null;
   job_name: string | null;
@@ -333,22 +340,28 @@ export interface ShiftConflict {
   exam_title: string;
   exam_kind: string;
   exam_on: string;
+  /** Null while unknown, taken as 08:00. */
   exam_start: string | null;
   course_code: string | null;
+  /** Hours from the shift's end to the exam's start, 1 dp. */
   hours_between: number;
 }
 
+/** Every shift-exam conflict, with the buffer used. */
 export interface ShiftConflicts {
+  /** The exam buffer from Settings; 0 flags only overlaps. */
   buffer_hours: number;
   conflicts: ShiftConflict[];
 }
 
+/** One deduction total by kind, for the tax packet. */
 export interface DeductionLine {
   kind: "income_tax" | "cpp" | "ei" | "other";
   label: string;
   amount: number;
 }
 
+/** One job's year: cheques, gross, deductions by kind, net and tips. */
 export interface EmployerYear {
   job_name: string;
   employer: string | null;
@@ -357,11 +370,13 @@ export interface EmployerYear {
   deductions: DeductionLine[];
   net: number;
   cash_tips: number;
+  /** Tips paid through payroll, which may already sit inside `gross`. */
   other_tips: number;
 }
 
-/** A year's employment income from what you recorded -- never from a T4 (D20). */
+/** A year's employment income from recorded cheques, never a T4, beside tuition paid. */
 export interface TaxPacket {
+  /** Calendar year; a cheque counts in the year it arrived. */
   year: number;
   employers: EmployerYear[];
   gross: number;

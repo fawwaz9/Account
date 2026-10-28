@@ -6,20 +6,17 @@ import {
   skipTermReview,
 } from "../termReviews";
 
+/** The signed-in user's id. */
 interface Props {
   readonly userId: string;
 }
 
+/** The 1-5 rating steps. */
 const SCALE = [1, 2, 3, 4, 5];
 
 /**
- * "Rate your term" (Phase 2 item 13, D25): four questions about each course
- * that finished recently, and an opt-in to add your grade to the course's
- * distribution. Silent when no course is in its asking window.
- *
- * Nothing here ever shows a count. Grades opted in are counted daily into a
- * table no request can read, and only for a course with enough contributors;
- * the distributions are a later phase's.
+ * "Rate your term": questions on each recently finished course, and an opt-in to add the grade
+ * to its anonymous distribution. Renders nothing when no course is in its asking window.
  */
 export default function TermReviewPanel({ userId }: Props) {
   const [data, setData] = useState<TermReviews | null>(null);
@@ -72,6 +69,7 @@ export default function TermReviewPanel({ userId }: Props) {
   );
 }
 
+/** A course's starting answers: its saved review, or all unanswered. */
 function blank(course: ReviewCourse): TermReviewAnswers {
   const review = course.review;
   return {
@@ -83,12 +81,17 @@ function blank(course: ReviewCourse): TermReviewAnswers {
   };
 }
 
+/** The course to review, and a callback that reloads the panel. */
 interface FormProps {
   readonly userId: string;
   readonly course: ReviewCourse;
   readonly onChanged: () => Promise<void>;
 }
 
+/**
+ * One course's review: hours, difficulty, clarity, would-take-again and the grade opt-in,
+ * with save, skip, and a delete confirmed in place; answers lock after a while.
+ */
 function ReviewForm({ userId, course, onChanged }: FormProps) {
   const [answers, setAnswers] = useState<TermReviewAnswers>(() => blank(course));
   const [busy, setBusy] = useState(false);

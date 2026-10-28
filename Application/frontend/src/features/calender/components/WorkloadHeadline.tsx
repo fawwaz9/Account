@@ -2,12 +2,8 @@ import { duration } from "../../../shared/utils/dateUtils";
 import { WorkloadForecast } from "../hooks/useWorkloadForecast";
 
 /**
- * "14h of estimated work in the next 7 days, 9h free" -- Phase 1 item 3.
- *
- * Says nothing when nothing is due: a line reporting an empty week is a line
- * that only states an absence. When some tasks carry no estimate it says how
- * many, because then the figure is a floor, and that changes what you do with
- * it.
+ * "14h of estimated work in the next 7 days, 9h free", noting scaled or missing estimates.
+ * Renders nothing when no task is due.
  */
 export default function WorkloadHeadline({ forecast }: { readonly forecast: WorkloadForecast }) {
   const { estimatedMinutes, taskCount, unestimatedTasks, freeMinutes } = forecast;

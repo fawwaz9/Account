@@ -4,14 +4,18 @@ import { RecurringTask, Task } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { useApiRefresh } from "../../../shared/hooks/useApiRefresh";
 
+/** Which tasks `useTasks` loads. */
 interface UseTasksOptions {
-  /** Checked-off tasks are archived, so history needs both flags. */
+  /** Ticked tasks are archived too, so history needs `includeArchived` as well. */
   includeDone?: boolean;
   includeArchived?: boolean;
   courseId?: string;
 }
 
-/** The task list, with whatever filter the page is showing. */
+/**
+ * The task list and repeating tasks for a filter, writing due repeat occurrences first.
+ * `stale` is true while the rows on screen were fetched under a different filter.
+ */
 export function useTasks({ includeDone, includeArchived, courseId }: UseTasksOptions = {}) {
   const { user } = useAuth();
   // The id, not the object. `refreshUser()` builds a fresh `user` every time,

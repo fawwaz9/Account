@@ -5,16 +5,10 @@ import { CourseLink } from "../types";
 import { getErrorMessage } from "./AddCourseModal";
 import { useAuth } from "../../../app/auth/AuthContext";
 
-/**
- * The three every course here turns out to have, offered with their names
- * already filled in.
- *
- * A suggested row saves nothing while its box is empty, so a course that uses
- * none of them costs nothing for them being listed -- and a course that uses
- * all three is three paste operations rather than six fields.
- */
+/** Link names offered on every course, pre-filled; a suggestion left empty saves nothing. */
 const SUGGESTED = ["Canvas", "Piazza", "PrairieLearn"] as const;
 
+/** One editor row. */
 interface Row {
   title: string;
   url: string;
@@ -22,6 +16,7 @@ interface Row {
   fixed: boolean;
 }
 
+/** Whether the dialog is open, the course and its links, and close and saved callbacks. */
 interface CourseLinksModalProps {
   readonly open: boolean;
   readonly courseId: string;
@@ -31,12 +26,8 @@ interface CourseLinksModalProps {
 }
 
 /**
- * Builds the editor's rows: the three suggestions first, carrying whatever is
- * already stored under those names, then everything else as a custom row.
- *
- * Matching on a lowercased name so a link saved as "canvas" fills the Canvas
- * row rather than appearing twice -- once as a suggestion with an empty box and
- * once as a custom row underneath it.
+ * Editor rows: the suggestions first, filled from stored links of the same name in any case,
+ * then every other stored link as a custom row.
  */
 function rowsFor(links: readonly CourseLink[]): Row[] {
   const used = new Set<number>();
@@ -56,6 +47,10 @@ function rowsFor(links: readonly CourseLink[]): Row[] {
   return [...suggested, ...custom];
 }
 
+/**
+ * Editor for a course's links, saved whole through `updateCourse`.
+ * Rows missing a name or an address are left out of the save.
+ */
 export default function CourseLinksModal({
   open,
   courseId,

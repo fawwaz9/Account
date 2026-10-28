@@ -5,6 +5,7 @@ import { getErrorMessage } from "./AddCourseModal";
 import { useAuth } from "../../../app/auth/AuthContext";
 import Modal from "../../../shared/components/Modal";
 
+/** Whether the dialog is open, the course, and the close handler. */
 interface RequiredFinalModalProps {
   readonly open: boolean;
   readonly courseId: string;
@@ -12,6 +13,7 @@ interface RequiredFinalModalProps {
   readonly onClose: () => void;
 }
 
+/** Calculator for the final-exam score a course needs to reach a target the student types. */
 export default function RequiredFinalModal({
   open,
   courseId,
@@ -113,6 +115,7 @@ export default function RequiredFinalModal({
   );
 }
 
+/** The answer in words: already secured, out of reach, or the score needed. */
 function RequiredFinalAnswer({
   result,
   target,

@@ -9,17 +9,19 @@ import fitnessIcon from "../../assets/icons/fitness_m.png";
 import budgetIcon from "../../assets/icons/budget_m.png";
 import settingsIcon from "../../assets/icons/settings_m.png";
 
+/** One main-navigation entry. */
 export interface NavItem {
   readonly to: string;
   readonly label: string;
-  /** end so "/" only matches the dashboard, not every route beneath it */
+  /** Match the path exactly, so / is only the dashboard. */
   readonly end?: boolean;
-  /** The letter after G that goes here (KeyboardShortcuts reads this list). */
+  /** Letter pressed after G to jump here. */
   readonly key: string;
-  /** Drawn in gold beside the label here, and alone in the phone's bottom bar. */
+  /** Icon image, beside the label here and alone in the phone bar. */
   readonly icon: string;
 }
 
+/** Main pages in order; the phone bar and the G shortcuts read it too. */
 export const NAV: NavItem[] = [
   { to: "/", label: "Dashboard", end: true, key: "d", icon: homeIcon },
   { to: "/grades", label: "Grades", key: "g", icon: gradesIcon },
@@ -31,6 +33,7 @@ export const NAV: NavItem[] = [
   { to: "/settings", label: "Settings", key: "s", icon: settingsIcon },
 ];
 
+/** Desktop sidebar: the brand and a link per main page. */
 export default function Sidebar() {
   return (
     <nav className="sidebar" aria-label="Main">

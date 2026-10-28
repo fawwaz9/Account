@@ -6,20 +6,14 @@ import { useShortcut } from "../../../shared/hooks/useShortcut";
 import useDebounce from "../../../shared/hooks/useDebounce";
 import { dueLabel, duration } from "../../../shared/utils/dateUtils";
 
+/** Called after a line becomes a task. */
 interface QuickCaptureProps {
   readonly onCaptured: () => void;
 }
 
 /**
- * One box that turns "cosc121 lab due fri" into a real task.
- *
- * The reading is shown as you type rather than after you submit, because the
- * failure mode of a capture box is not refusing a line — it is accepting one
- * and filing it somewhere you did not mean. Seeing "COSC 121 · Friday" before
- * pressing enter is what makes the guess correctable while it is still cheap.
- *
- * The preview comes from the server, not from a second parser here. One reading
- * of the text, so what you see is exactly what gets written.
+ * One box that turns "cosc121 lab due fri" into a task, showing the server's reading as you type.
+ * The N shortcut focuses it, and only the newest preview is shown.
  */
 export default function QuickCapture({ onCaptured }: QuickCaptureProps) {
   const { user } = useAuth();

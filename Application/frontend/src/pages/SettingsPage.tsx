@@ -22,39 +22,21 @@ import "../styles/login.css";
 import "../styles/budget.css";
 import { PHONE_QUERY, useMediaQuery } from "../shared/hooks/useMediaQuery";
 
-/**
- * "08:00:00" from the API, "08:00" for an <input type="time">.
- *
- * The server stores a time and serialises seconds; the input binds by exact
- * string, so an unsliced value can render as blank in some browsers.
- */
+/** "08:00" from the API's "08:00:00", for a time input; the fallback when unset. */
 function clockValue(value: unknown, fallback: string): string {
   return typeof value === "string" ? value.slice(0, 5) : fallback;
 }
 
-/**
- * The server's own default, repeated here so the two cannot drift.
- *
- * If this said anything else, a user whose preference has never been written
- * would see one zone and have another applied to their reminders.
- */
+/** The server's default zone, repeated so an unset preference shows the zone actually applied. */
 const DEFAULT_ZONE = "America/Regina";
 
-/** Enough to choose from if the browser cannot list them. Canada, plus UTC. */
+/** Zones offered when the browser cannot list its own: Canada's, plus UTC. */
 const FALLBACK_ZONES = [
   "America/St_Johns", "America/Halifax", "America/Toronto", "America/Winnipeg",
   "America/Regina", "America/Edmonton", "America/Vancouver", "UTC",
 ] as const;
 
-/**
- * Every zone the browser knows, or a short list if it does not know how to say.
- *
- * Cast rather than raising tsconfig's `lib` from ES2020: `supportedValuesOf` is
- * declared in `lib.es2022.intl`, and bumping the lib would change what the whole
- * project type-checks against for the sake of one call. The runtime guard is
- * needed either way -- which makes the cast and the fallback the same code rather
- * than an extra thing to carry.
- */
+/** Every zone the browser knows, or the fallback list. */
 function supportedTimeZones(): readonly string[] {
   const intl = Intl as typeof Intl & { supportedValuesOf?: (key: string) => string[] };
   try {
@@ -65,7 +47,7 @@ function supportedTimeZones(): readonly string[] {
   }
 }
 
-/** What the browser thinks the clock is, offered but never applied. */
+/** The browser's zone, offered as a suggestion but never applied. */
 function guessedZone(): string | null {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
@@ -74,20 +56,20 @@ function guessedZone(): string | null {
   }
 }
 
-/**
- * The three groups, in the order they are read.
- *
- * Academic leads because it is the one most often wrong at the start of a term,
- * and it is the default for the same reason.
- */
+/** Settings tabs in reading order; Academic comes first and is the default. */
 const TABS = [
   { id: "academic", label: "Academic" },
   { id: "calendar", label: "Calendar" },
   { id: "financial", label: "Financial" },
 ] as const;
 
+/** One of the tab ids. */
 type TabId = (typeof TABS)[number]["id"];
 
+/**
+ * Settings: account, password and notifications, then the Academic, Calendar and Financial tabs.
+ * Each tab saves only its own preferences; on a phone, Sign out lives here.
+ */
 export default function SettingsPage() {
   const { user, login, refreshUser, logout } = useAuth();
   // On a phone the header has no Sign out; the profile icon brings you here,

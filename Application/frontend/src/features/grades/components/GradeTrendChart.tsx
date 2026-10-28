@@ -1,18 +1,25 @@
 import { TermPoint } from "../types";
 
+/** The terms to plot, in order. */
 interface GradeTrendChartProps {
   readonly points: readonly TermPoint[];
 }
 
-// Drawn by hand rather than pulling in a charting library for one chart on one
-// page. The viewBox scales to its container; a long degree scrolls sideways
-// instead of squashing.
+/**
+ * Chart width in viewBox units. Drawn by hand rather than with a chart library;
+ * it scales to fit, and a long degree scrolls sideways.
+ */
 const WIDTH = 460;
+/** Chart height in viewBox units. */
 const HEIGHT = 210;
+/** Space around the plot for the axis labels. */
 const PAD = { top: 14, right: 12, bottom: 34, left: 34 };
+/** Plot width inside the padding. */
 const INNER_W = WIDTH - PAD.left - PAD.right;
+/** Plot height inside the padding. */
 const INNER_H = HEIGHT - PAD.top - PAD.bottom;
 
+/** Each term's average and the cumulative line, on an axis padded by 2 and widened to fives. */
 export default function GradeTrendChart({ points }: GradeTrendChartProps) {
   if (points.length === 0) {
     return (

@@ -3,6 +3,7 @@ import { fetchCourseCost } from "../../budget/api";
 import { CourseCost as Cost } from "../../budget/types";
 import { formatMoney } from "../../budget/money";
 
+/** The course to cost, and a counter the page bumps to refetch. */
 interface CourseCostProps {
   readonly userId: string;
   readonly courseId: string;
@@ -11,14 +12,8 @@ interface CourseCostProps {
 }
 
 /**
- * What this course cost.
- *
- * The tuition share is gross — its credits times the term's per-credit rate —
- * because a scholarship reduces what you paid, not what the course is worth. It
- * therefore will not tie out against the ledger, which records the net of one
- * payment for a whole term. That is the design, not a rounding problem.
- *
- * Hidden entirely when there is no cost at all, since an empty panel is noise.
+ * What a course cost: its gross tuition share (credits times the term's rate) plus materials.
+ * Gross on purpose, so it won't tie to the ledger's net payment; renders nothing at a 0 total.
  */
 export default function CourseCost({ userId, courseId, nonce }: CourseCostProps) {
   const [cost, setCost] = useState<Cost | null>(null);

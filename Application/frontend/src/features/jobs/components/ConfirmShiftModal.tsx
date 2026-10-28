@@ -4,17 +4,20 @@ import { recordShift } from "../api";
 import { ShiftOccurrence, ShiftRecordUpsert } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
 
+/** Props for the shift confirmation dialog. */
 interface ConfirmShiftModalProps {
+  /** The shift date being confirmed; null keeps the dialog closed. */
   readonly shift: ShiftOccurrence | null;
   readonly onClose: () => void;
   readonly onSaved: () => void;
 }
 
-/** HH:MM, since <input type="time"> shows nothing for HH:MM:SS. */
+/** HH:MM for a time input, which shows nothing for HH:MM:SS. */
 function clockValue(value: string | null): string {
   return value ? value.slice(0, 5) : "";
 }
 
+/** Form values, pre-filled from the schedule so an ordinary shift confirms in one click. */
 function formFor(shift: ShiftOccurrence | null): ShiftRecordUpsert {
   return {
     // Pre-filled from the schedule, so confirming an ordinary shift is one
@@ -29,6 +32,10 @@ function formFor(shift: ShiftOccurrence | null): ShiftRecordUpsert {
   };
 }
 
+/**
+ * Confirm what was worked on one shift date: times, tips and how they were paid, rate, notes.
+ * Saving always marks the date confirmed.
+ */
 export default function ConfirmShiftModal({ shift, onClose, onSaved }: ConfirmShiftModalProps) {
   const { user } = useAuth();
   const [form, setForm] = useState<ShiftRecordUpsert>(formFor(shift));

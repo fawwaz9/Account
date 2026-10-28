@@ -4,21 +4,15 @@ import { TermBudget as Term } from "../types";
 import { formatMoney } from "../money";
 import { useAuth } from "../../../app/auth/AuthContext";
 
+/** Props for the term cost panel. */
 interface TermBudgetProps {
   /** Bumped by the page when something changes, to refetch. */
   readonly nonce: number;
 }
 
 /**
- * What this term has cost, over the term's own dates.
- *
- * A calendar month is the wrong unit for a student. Tuition lands once and
- * textbooks land in the first fortnight; neither is a monthly rhythm, so a
- * month-by-month view shows one enormous September and four quiet months.
- *
- * The span comes from Grades, which is the only part of the app that knows when
- * a term runs — and knows it per course, so a year-long course stretches the
- * span. That is correct: it is genuinely how long you are buying books for.
+ * What the current term has cost, over its own dates rather than calendar months.
+ * Hidden when there are no courses; says why when the term has no dates.
  */
 export default function TermBudget({ nonce }: TermBudgetProps) {
   const { user } = useAuth();

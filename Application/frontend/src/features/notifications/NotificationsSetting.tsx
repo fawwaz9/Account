@@ -12,16 +12,12 @@ import {
   turnOn,
 } from "./push";
 
+/** Which action is in progress, if any. */
 type Busy = "on" | "off" | "test" | null;
 
 /**
- * "Notifications on this device", in Settings → Account.
- *
- * Every press says what happened: the button is disabled with its own wording
- * while it works, and the result -- on, off, sent, or why not -- appears next
- * to it. The cases that must be read *before* pressing (an iPhone tab, a
- * browser without push, a server not set up yet) replace the button rather
- * than letting it fail.
+ * Settings control for push on this device: on, off and a test, each saying what happened.
+ * Cases to read first (an iPhone tab, no push support, no server keys) replace the button.
  */
 export default function NotificationsSetting({ userId }: { readonly userId: string }) {
   const [status, setStatus] = useState<PushStatus | null>(null);

@@ -1,24 +1,19 @@
 import { Account, Transaction } from "../types";
 import { formatMoney } from "../money";
 
+/** Props for the ledger list. */
 interface TransactionsProps {
   readonly transactions: readonly Transaction[];
-  /** Only the id and name are read, so a single-account page can pass one entry. */
+  /** Only id and name are read, so a one-account page passes one entry. */
   readonly accounts: readonly Pick<Account, "id" | "name">[];
   readonly onDelete: (transaction: Transaction) => void;
   readonly onEdit: (transaction: Transaction) => void;
   readonly deletingId: string | null;
-  /** Shown instead of the list when there is nothing in range. */
+  /** Shown instead of the list when nothing is in range. */
   readonly emptyMessage?: string;
 }
 
-/**
- * Newest day first, then alphabetically within a day.
- *
- * Rows with no description sort to the bottom of their day rather than to the
- * top: an empty string would otherwise win every comparison and push the
- * unlabelled rows above everything you can actually read.
- */
+/** Newest day first, then by description, with unlabelled rows last within a day. */
 function byDayThenName(a: Transaction, b: Transaction) {
   if (a.occurred_on !== b.occurred_on) {
     return a.occurred_on < b.occurred_on ? 1 : -1;
@@ -33,14 +28,14 @@ function byDayThenName(a: Transaction, b: Transaction) {
   return aName.localeCompare(bName);
 }
 
-/** What the delete button will actually do, which depends on what kind of
-    group the row belongs to -- not merely on whether it has one. */
+/** Tooltip for the ×, saying what deleting this row removes. */
 function deleteHint(transaction: Transaction) {
   if (transaction.kind === "transfer") return "Deleting a transfer removes both sides";
   if (transaction.group_size > 1) return "Part of a split deposit -- you will be asked how much to remove";
   return "Delete this transaction";
 }
 
+/** Ledger rows, newest day first; a row opens its editor and its × hands it to `onDelete`. */
 export default function Transactions({
   transactions,
   accounts,

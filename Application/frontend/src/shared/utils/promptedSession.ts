@@ -1,16 +1,11 @@
-/**
- * Whether this tab is being used because a notification asked.
- *
- * The service worker opens a notification's page with `?from=push`. For half an
- * hour after that, this tab's visits are counted as prompted, so the usage
- * report can apply the vision's strict universe test: two rooms in a week with
- * at least one visit unprompted (account-vision.md §13.2). Half an hour, not the
- * whole tab's life: a tab left open for a week is not a week of prompted use.
- */
+/** Marks this tab's visits as push-prompted for 30 minutes after a `?from=push` open. */
+
+/** Session-storage key holding the epoch ms when the prompted window ends. */
 const KEY = "account.prompted.until";
+/** How long visits count as prompted after a notification opened the tab, in ms. */
 const WINDOW_MS = 30 * 60 * 1000;
 
-/** Read and remove the marker from the address bar, starting the window. */
+/** Start the prompted window if the URL carries `from=push`, then strip it from the address. */
 export function takePromptedMarker(now = Date.now()): void {
   const url = new URL(window.location.href);
   if (url.searchParams.get("from") !== "push") return;
@@ -24,6 +19,7 @@ export function takePromptedMarker(now = Date.now()): void {
   window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
 }
 
+/** True while this tab is inside a prompted window; false if storage is unreadable. */
 export function isPrompted(now = Date.now()): boolean {
   try {
     const until = Number(window.sessionStorage.getItem(KEY));

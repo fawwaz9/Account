@@ -1,8 +1,10 @@
 import { GradeCategory } from "../types";
 import { isAdditive, scoringWeight } from "../bonus";
 
+/** Category weights in percent; a missing key is unset. */
 type Weights = Partial<Record<GradeCategory, number>>;
 
+/** The weights, their change handler, an id prefix, and the class names each form uses. */
 interface CategoryWeightsProps {
   readonly weights: Weights;
   readonly onChange: (next: Weights) => void;
@@ -14,17 +16,8 @@ interface CategoryWeightsProps {
 }
 
 /**
- * The category weight inputs, with the additive ones held apart.
- *
- * Bonus arrives through Object.values(GradeCategory) like every other category,
- * which would drop it into the same grid as a ninth identical box -- implying it
- * is one of the parts the course is divided into, when the whole point is that
- * it sits outside them. Separating it is the only honest way to draw a grid
- * whose boxes are meant to total 100.
- *
- * Shared by the add and edit forms, which were structurally identical here and
- * differed only in class names. One copy, so the two cannot disagree about what
- * bonus means.
+ * A weight input per category, bonus held apart below a total of the scoring weights.
+ * Shared by the add and edit course forms, so both treat bonus the same way.
  */
 export default function CategoryWeights({
   weights,

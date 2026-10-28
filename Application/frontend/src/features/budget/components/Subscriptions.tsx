@@ -5,11 +5,15 @@ import { formatMoney } from "../money";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { dueLabel } from "../../../shared/utils/dateUtils";
 
+/** Props for the subscription audit. */
 interface SubscriptionsProps {
+  /** Bumped by the page when something changes, to refetch. */
   readonly nonce: number;
+  /** Called after a confirm, so the page reloads its standing instructions. */
   readonly onConfirmed: () => void;
 }
 
+/** Display label per cadence. */
 const CADENCE_LABEL: Record<SubscriptionCandidate["cadence"], string> = {
   weekly: "Every week",
   fortnightly: "Every two weeks",
@@ -17,12 +21,8 @@ const CADENCE_LABEL: Record<SubscriptionCandidate["cadence"], string> = {
 };
 
 /**
- * Recurring charges nobody told the app about.
- *
- * Nothing here is stored -- every fetch re-derives the pattern from the
- * ledger, which is also why there is no way to dismiss a card without acting
- * on it. Confirming tags the charges that made the pattern with the new
- * instruction's id, so the same history stops qualifying as a finding.
+ * Repeating charges with no standing instruction behind them, each confirmable as one.
+ * Re-derived from the ledger on every fetch, so a card cannot be dismissed, only confirmed.
  */
 export default function Subscriptions({ nonce, onConfirmed }: SubscriptionsProps) {
   const { user } = useAuth();
@@ -124,6 +124,7 @@ export default function Subscriptions({ nonce, onConfirmed }: SubscriptionsProps
   );
 }
 
+/** Stable key for a candidate: its first charge's id. */
 function keyOf(candidate: SubscriptionCandidate): string {
   return candidate.occurrences[0]?.transaction_id ?? candidate.description;
 }

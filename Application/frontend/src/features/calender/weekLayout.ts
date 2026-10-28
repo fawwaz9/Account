@@ -3,32 +3,27 @@ import { Task } from "../tasks/types";
 import { hasSpecificTime } from "../tasks/dueTime";
 import { minutesOfDay } from "../../shared/utils/dateUtils";
 
-/** Pixels per hour. Tall enough that a 50-minute class can show its title. */
+/** Pixels per hour on the week grid; tall enough for a 50-minute class's title. */
 export const HOUR_HEIGHT = 46;
 
-/**
- * The whole day, always.
- *
- * This used to draw 8am–9pm and widen only to fit outlying events, which keeps
- * the grid short but means the hours on screen change as the week's contents
- * change — so the same 9am sat in a different place from one week to the next.
- * A fixed 24 hours in a scrolling body is steadier, and nothing can be clipped.
- */
+/** First hour the grid draws; always the whole day, so an hour sits in one place every week. */
 export const DAY_START = 0;
+/** Hour the grid ends at, exclusive. */
 export const DAY_END = 24;
 
-/** Where the body is scrolled to on open: early enough to catch a 8am lecture. */
+/** Hour the grid body scrolls to on open. */
 export const OPENING_HOUR = 7;
 
-/** How long a block with no end time is drawn as. */
+/** Length, in minutes, a block with no end time is drawn as. */
 export const ASSUMED_MINUTES = 60;
 
-/** Shortest block that still has room for a title. */
+/** Shortest block drawn, in minutes, so it has room for a title. */
 const MINIMUM_MINUTES = 20;
 
-/** Deadlines closer together than this are drawn side by side, not stacked. */
+/** Deadlines closer than this many minutes split the width instead of stacking. */
 const NEARBY_MINUTES = 30;
 
+/** An event block on the grid: its minutes, and its sub-column within an overlap cluster. */
 export interface Placed {
   occurrence: EventOccurrence;
   startMinutes: number;
@@ -39,17 +34,7 @@ export interface Placed {
   columns: number;
 }
 
-/**
- * Lay a day's timed events out, putting anything that overlaps side by side.
- *
- * Without this, two classes at the same hour draw on top of each other and one
- * is simply invisible — which is the single thing a week view exists to
- * prevent. Events are grouped into clusters of mutual overlap, and each cluster
- * is divided into as many columns as its busiest moment needs.
- *
- * Kept out of the component so it can be exercised on its own: it is the part
- * of a week view that goes wrong silently.
- */
+/** Lay a day's timed events out by start time, putting overlapping ones side by side. */
 export function place(occurrences: EventOccurrence[]): Placed[] {
   const timed = occurrences
     .map((occurrence) => {
@@ -102,6 +87,7 @@ export function place(occurrences: EventOccurrence[]): Placed[] {
   return placed;
 }
 
+/** A timed task marker on the grid, with its sub-column among nearby deadlines. */
 export interface PlacedTask {
   task: Task;
   minutes: number;
@@ -112,21 +98,8 @@ export interface PlacedTask {
 }
 
 /**
- * Put a day's timed tasks on the clock.
- *
- * Deliberately not `place`. An event occupies a span and is drawn as a box with
- * a height; a task is due *at* a moment and has no duration at all, so giving it
- * one would draw an hour of work that was never claimed. These are markers on
- * the time axis, and they are laid out separately so they can sit above the
- * blocks rather than fight them for a column.
- *
- * Deadlines within `NEARBY_MINUTES` of each other share a cluster and split the
- * width, so two things due at the same hour stay legible instead of stacking
- * exactly on top of one another.
- *
- * Takes only the tasks `hasSpecificTime` is true of, which is exactly what the
- * all-day band leaves out. The two must stay complementary or a task shows
- * twice or not at all.
+ * Place a day's timed tasks as markers at their due minute; ones within `NEARBY_MINUTES` share.
+ * Takes only `hasSpecificTime` tasks, the ones the all-day band leaves out.
  */
 export function placeTasks(tasks: Task[]): PlacedTask[] {
   const timed = tasks
@@ -160,7 +133,7 @@ export function placeTasks(tasks: Task[]): PlacedTask[] {
   return placed;
 }
 
-/** The hours the grid draws, as a list. */
+/** Every hour the grid draws, from `DAY_START` up to `DAY_END`. */
 export const HOURS = Array.from(
   { length: DAY_END - DAY_START },
   (_, index) => DAY_START + index

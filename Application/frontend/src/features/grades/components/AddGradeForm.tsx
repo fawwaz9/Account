@@ -2,6 +2,7 @@ import { GradeCreate } from "../types";
 import ScheduleChoice from "./ScheduleChoice";
 import BonusNote, { scoreInputClass } from "./BonusNote";
 
+/** The new grade's form state and setter, its actions, and status text. */
 interface AddGradeFormProps {
   readonly form: GradeCreate;
   readonly updateField: <K extends keyof GradeCreate>(key: K, value: GradeCreate[K]) => void;
@@ -11,6 +12,7 @@ interface AddGradeFormProps {
   readonly error?: string | null;
 }
 
+/** The add-grade form: name, a score (blank is unmarked) out of a maximum, and the date choice. */
 export default function AddGradeForm({
   form,
   updateField,

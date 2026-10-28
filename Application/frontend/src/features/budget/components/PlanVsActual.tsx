@@ -3,20 +3,14 @@ import { fetchPlanReview, savePlan } from "../api";
 import { MonthReview, PlanReview } from "../types";
 import { formatMoney } from "../money";
 
+/** Props for the plan review. */
 interface PlanVsActualProps {
   readonly userId: string;
   /** Bumped by the page when something changes, to refetch. */
   readonly nonce: number;
 }
 
-/**
- * The plan against what happened (Phase 1 D37).
- *
- * The plan above is recomputed on every read, so on its own it can never be
- * wrong. Saving it keeps it as it stands; each finished month is then set
- * against the newest plan saved before that month began. A plan saved mid-month
- * starts with the next one, since its first row only covers the days after it.
- */
+/** Save the year plan, then compare each finished month with the newest plan saved before it. */
 export default function PlanVsActual({ userId, nonce }: PlanVsActualProps) {
   const [review, setReview] = useState<PlanReview | null>(null);
   const [saving, setSaving] = useState(false);
@@ -82,7 +76,7 @@ export default function PlanVsActual({ userId, nonce }: PlanVsActualProps) {
   );
 }
 
-/** What happened, large; what the plan said, small beneath it. */
+/** One month: what happened, large; what the plan said, small beneath it. */
 function ReviewRow({ row }: { readonly row: MonthReview }) {
   const overspent = row.actual_out > row.planned_out;
   const behind = row.actual_end < row.planned_end;
@@ -103,6 +97,7 @@ function ReviewRow({ row }: { readonly row: MonthReview }) {
   );
 }
 
+/** One figure: actual over planned, flagged when worse than plan. */
 function Cell({ actual, planned, worse = false }: { readonly actual: number; readonly planned: number; readonly worse?: boolean }) {
   return (
     <td>
@@ -112,17 +107,18 @@ function Cell({ actual, planned, worse = false }: { readonly actual: number; rea
   );
 }
 
-/** The first of the following month, from the date string itself: going via
- * toISOString would convert to UTC and, east of Greenwich, land a day early. */
+/** First of the month after a YYYY-MM-DD date, worked from the string itself. */
 function nextMonth(value: string): string {
   const [year, month] = value.split("-").map(Number);
   return month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, "0")}-01`;
 }
 
+/** "Sep 2026" from a YYYY-MM-DD string, in the browser's locale. */
 function monthName(value: string): string {
   return new Date(`${value}T00:00:00`).toLocaleDateString(undefined, { month: "short", year: "numeric" });
 }
 
+/** "Sep 3, 2026" from a YYYY-MM-DD string, in the browser's locale. */
 function longDate(value: string): string {
   return new Date(`${value}T00:00:00`).toLocaleDateString(undefined, {
     month: "short", day: "numeric", year: "numeric",

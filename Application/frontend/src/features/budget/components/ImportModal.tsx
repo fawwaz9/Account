@@ -4,23 +4,19 @@ import { commitImport, fetchCategories, previewImport } from "../api";
 import { ImportMapping, ImportPreview, ImportSummary, SpendCategory } from "../types";
 import { formatMoney } from "../money";
 
+/** Props for the CSV import dialog. */
 interface ImportModalProps {
   readonly userId: string;
   readonly accountId: string;
   readonly accountName: string;
   readonly onClose: () => void;
-  /** Called after rows are written, so the page can reload. */
+  /** Called after rows are written, so the page reloads. */
   readonly onImported: (summary: ImportSummary) => void;
 }
 
 /**
- * Bring a bank's CSV into one account -- Phase 1 item 7.
- *
- * Three steps, and nothing is written until the last: pick a file, check what
- * it would add (columns guessed, duplicates unticked, unreadable lines shown
- * and left out), then import the ticked lines. The columns are always shown
- * and always editable, because a guess about which column is the amount is the
- * one mistake that would put wrong money in the ledger.
+ * Import a bank CSV into one account: pick a file, check the preview, import the ticked lines.
+ * Nothing is written until the last step; the column mapping is always shown and editable.
  */
 export default function ImportModal({ userId, accountId, accountName, onClose, onImported }: ImportModalProps) {
   const [filename, setFilename] = useState<string | null>(null);
@@ -231,7 +227,7 @@ export default function ImportModal({ userId, accountId, accountName, onClose, o
   );
 }
 
-/** Which column is which. Always shown, always editable: the guess decides the money. */
+/** Column mapping controls: date, description, amount or debit and credit, date order, sign. */
 function Columns({
   preview,
   onChange,
@@ -316,6 +312,7 @@ function Columns({
   );
 }
 
+/** Read a file as text. */
 function readFile(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

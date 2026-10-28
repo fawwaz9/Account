@@ -1,25 +1,15 @@
 import { Task } from "./types";
 import { daysBetween, today } from "../../shared/utils/dateUtils";
 
-/**
- * Which horizon a task falls into, and what a just-ticked row does.
- *
- * Lifted out of `TasksPage` once the rule stopped being a one-liner: a completed
- * task used to leave its group in the same frame the save landed, so the tick was
- * never visible. The linger below is what makes it visible, and it is the kind of
- * rule that is worth a test rather than a careful read.
- */
+/** Groups tasks by how soon they fall due, with a short linger for a just-ticked row. */
 
-/** The fortnight the assignment list covers. */
+/** Days ahead the "soon" group covers. */
 export const ASSIGNMENT_HORIZON = 14;
 
-/**
- * How long a just-ticked task stays on screen, crossed out, before it leaves the
- * group it was in. 300ms: long enough to read as "that registered", short enough
- * that nobody waits for it.
- */
+/** How long a just-ticked task stays in its group, crossed out, before moving to done (ms). */
 export const DONE_LINGER_MS = 300;
 
+/** Tasks sorted into overdue, soon, later, undated and done. */
 export interface TaskGroups {
   overdue: Task[];
   soon: Task[];
@@ -28,13 +18,7 @@ export interface TaskGroups {
   done: Task[];
 }
 
-/**
- * Sort tasks into how-soon buckets.
- *
- * Anything past its date leads, because that is the only group where the answer
- * changes what you do in the next hour. Completed tasks leave every other group
- * so a finished assignment does not sit in "overdue" forever.
- */
+/** Sort tasks into horizon groups against today; ids in `justChecked` show done but stay put. */
 export function groupByHorizon(tasks: Task[], justChecked: ReadonlySet<string>): TaskGroups {
   const now = today();
   const groups: TaskGroups = { overdue: [], soon: [], later: [], undated: [], done: [] };
@@ -66,8 +50,7 @@ export function groupByHorizon(tasks: Task[], justChecked: ReadonlySet<string>):
   return groups;
 }
 
-/** A set without one id, returning the original when there is nothing to remove
- *  so an unrelated toggle does not re-render every group. */
+/** `ids` without `id`; the same set back when it wasn't there, so nothing re-renders. */
 export function withoutId(ids: ReadonlySet<string>, id: string): ReadonlySet<string> {
   if (!ids.has(id)) return ids;
   const next = new Set(ids);

@@ -52,18 +52,9 @@ import "../styles/calendar.css";
 import "../styles/tasks.css";
 
 /**
- * Work due inside this many days gets its own section.
- *
- * Two weeks because that is the window an assignment is actually actionable in.
- * There is deliberately no section past it: a task three weeks out is not work
- * you can start, and a standing list of it was noise above the part that is.
- * The count of what lies beyond is still shown, so nothing is silently hidden.
- * Exams are still not tasks -- there is nothing to tick off, so they are not
- * rows in these groups. They are a read-only band above the list instead
- * (ExamStrip), on a thirty-day horizon: revision is what fills the fortnight,
- * so knowing what it is for has to reach further out than the work itself.
+ * The tasks page: reminders, exams ahead, completion figures, quick capture, the overdue, undated,
+ * done and fortnight lists, repeats, shared tasks, and the task dialogs.
  */
-
 export default function TasksPage() {
   const { user } = useAuth();
   const [showDone, setShowDone] = useState(false);

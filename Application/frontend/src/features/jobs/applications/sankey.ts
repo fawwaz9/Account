@@ -1,25 +1,26 @@
 import { Flow } from "./types";
 
-/**
- * The stage chain, left to right. A stage counts every application that got at
- * least that far (D8): one that went straight from applied to interview is
- * drawn passing through Screening.
- */
+/** The stage chain, left to right; a stage counts everyone who got at least that far. */
 export const STAGES = ["applied", "screening", "interview", "offer", "accepted"] as const;
 
-/** How an application ended at a stage, top to bottom under it: the good news first. */
+/** How an application ended at a stage, top to bottom under it. */
 export const OUTCOMES = ["waiting", "rejected", "no_reply", "withdrawn"] as const;
 
+/** One stage of the chain. */
 type Stage = (typeof STAGES)[number];
+/** One way an application ended. */
 type Outcome = (typeof OUTCOMES)[number];
 
+/** True for a stage id. */
 const isStage = (id: string): id is Stage => (STAGES as readonly string[]).includes(id);
+/** True for an outcome id. */
 const isOutcome = (id: string): id is Outcome => (OUTCOMES as readonly string[]).includes(id);
 
+/** A drawn node: a stage, or an outcome at a stage. */
 export interface SankeyNode {
-  /** A stage ("interview"), or an outcome at a stage ("rejected@interview"). */
+  /** A stage, or an outcome at its stage such as "rejected@interview". */
   id: string;
-  /** What to call it and colour it by: the stage, or the outcome. */
+  /** Stage or outcome name, for its label and colour. */
   kind: string;
   column: number;
   x: number;
@@ -28,16 +29,19 @@ export interface SankeyNode {
   count: number;
 }
 
+/** A drawn band between two nodes. */
 export interface SankeyLink {
   source: string;
   target: string;
   count: number;
-  /** The band's top edge where it leaves its source and where it reaches its target. */
+  /** Top edge where the band leaves its source. */
   sourceY: number;
+  /** Top edge where the band reaches its target. */
   targetY: number;
   thickness: number;
 }
 
+/** Positioned nodes and bands for the chart. */
 export interface SankeyLayout {
   nodes: SankeyNode[];
   links: SankeyLink[];
@@ -45,18 +49,17 @@ export interface SankeyLayout {
   height: number;
 }
 
+/** Node bar width, px. */
 export const NODE_WIDTH = 12;
+/** Vertical gap between siblings in a column, px. */
 const GAP = 14;
 
-/** The kind of a node id: "rejected@interview" -> "rejected". */
+/** Kind part of a node id: "rejected@interview" gives "rejected". */
 export const kindOf = (id: string) => id.split("@")[0];
 
 /**
- * The flows as one-column steps (D8). An edge that skips stages -- applied
- * straight to interview -- becomes applied→screening and screening→interview,
- * each carrying its count, so every node's in and out still balance. An
- * outcome edge stays where it is, and is named for its stage:
- * interview→rejected becomes interview→"rejected@interview".
+ * Flows as one-column steps: a skipped stage is drawn passed through.
+ * Outcome edges are renamed for their stage, as in "rejected@interview".
  */
 export function throughStages(flows: Flow[]): Flow[] {
   const counts = new Map<string, number>();
@@ -80,7 +83,7 @@ export function throughStages(flows: Flow[]): Flow[] {
   });
 }
 
-/** Each outcome summed across stages, and accepted: the legend under the chart. */
+/** Legend counts: accepted and each outcome, summed across stages, zeros dropped. */
 export function totals(flows: Flow[]): { kind: string; count: number }[] {
   const steps = throughStages(flows);
   const sum = (kind: string) =>
@@ -91,15 +94,8 @@ export function totals(flows: Flow[]): { kind: string; count: number }[] {
 }
 
 /**
- * Lay the flows out as a tree: each stage splits straight into the next stage
- * and the ways applications ended there (D8).
- *
- * Every column holds the children of exactly one parent, the stage before it:
- * the next stage first, at the top, so the stage chain is a straight line
- * along the top; then that stage's outcomes in a fixed order. A parent's bands
- * leave it in the same order as its children sit, and every band goes exactly
- * one column -- so no two bands can cross. One scale for every column, so a
- * band's thickness means the same number of applications anywhere.
+ * Lay the flows out as a tree: each stage splits into the next stage, then its outcomes.
+ * One scale everywhere, and every band spans one column, so none can cross.
  */
 export function layoutSankey(flows: Flow[], width: number, height: number): SankeyLayout {
   const steps = throughStages(flows);
@@ -154,7 +150,7 @@ export function layoutSankey(flows: Flow[], width: number, height: number): Sank
   return { nodes: [...nodes.values()], links, width, height };
 }
 
-/** The SVG path of one band: a ribbon from its source's right edge to its target's left. */
+/** SVG path for one band: a ribbon from its source's right edge to its target's left. */
 export function bandPath(link: SankeyLink, layout: SankeyLayout): string {
   const source = layout.nodes.find((node) => node.id === link.source)!;
   const target = layout.nodes.find((node) => node.id === link.target)!;

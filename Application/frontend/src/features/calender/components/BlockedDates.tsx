@@ -1,22 +1,15 @@
 import { useState } from "react";
 import { fromIso } from "../../../shared/utils/dateUtils";
 
+/** The series' skipped dates, their setter, and whether the event repeats. */
 interface BlockedDatesProps {
   readonly value: string[];
   readonly onChange: (dates: string[]) => void;
-  /** Only worth offering on something that repeats. */
+  /** Only a repeating event offers this; otherwise nothing renders. */
   readonly repeats: boolean;
 }
 
-/**
- * Dates this one series does not run.
- *
- * Distinct from a term blackout, which is entered once and applies to every
- * class. This is the other case: a single lecture you already know is cancelled,
- * or a week you personally are away. Set here rather than only by skipping
- * occurrences after the fact, because a class you know does not run on the 14th
- * should never have appeared on the 14th.
- */
+/** Edit the dates one repeating series skips; a break for every class belongs in blackouts. */
 export default function BlockedDates({ value, onChange, repeats }: BlockedDatesProps) {
   const [pending, setPending] = useState("");
 

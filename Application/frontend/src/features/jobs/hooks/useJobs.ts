@@ -8,10 +8,8 @@ import { useApiRefresh } from "../../../shared/hooks/useApiRefresh";
 
 
 /**
- * The jobs, and the shifts around today.
- *
- * Both in one hook because the page never wants one without the other: a job
- * with no shifts and a shift with no job are each half an answer.
+ * Jobs page data: jobs, shifts from 90 days back to 21 ahead, paycheques and earnings.
+ * Loaded together; only the newest load may write state.
  */
 export function useJobs(includeArchived = false) {
   const { user } = useAuth();

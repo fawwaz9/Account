@@ -1,25 +1,20 @@
 import { MAX_PRIORITY, MIN_PRIORITY, PRIORITY_LABELS, RiskBand, Task } from "../types";
 import { dueLabel, duration, daysBetween, today } from "../../../shared/utils/dateUtils";
 
-/**
- * What each band says when you hover it.
- *
- * The badge itself is a single character: a task row already carries a course
- * code, a date, an estimate and sometimes a tag, and a fourth word competing
- * with those buries the thing it is meant to surface.
- */
+/** Hover and accessible text for each risk band's one-character badge. */
 const RISK_TITLES: Record<RiskBand, string> = {
   mild: "This course is slightly below its target",
   moderate: "This course is well below its target",
   severe: "This course is far below its target",
 };
 
-/** 1..5, for the select. */
+/** Every priority step, lowest first, for the select. */
 const PRIORITY_STEPS = Array.from(
   { length: MAX_PRIORITY - MIN_PRIORITY + 1 },
   (_, index) => MIN_PRIORITY + index
 );
 
+/** The task, its row action handlers, and a busy flag. */
 interface TaskItemProps {
   readonly task: Task;
   readonly onToggle: (task: Task) => void;
@@ -32,7 +27,7 @@ interface TaskItemProps {
   readonly busy: boolean;
 }
 
-/** "since 14:05", in the viewer's own clock; the server keeps the start in UTC. */
+/** A running timer's start as a browser-local clock time; the server sends naive UTC. */
 function timerSince(startedAt: string): string {
   // Stored naive in UTC, so it usually arrives with no offset; without the Z,
   // the browser would read it as local time and be hours out.
@@ -40,13 +35,7 @@ function timerSince(startedAt: string): string {
   return new Date(stamp).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 }
 
-/**
- * One row of the task list.
- *
- * The checkbox and the delete control are separate elements rather than one row
- * that does both, so a single click can never mean two things (SonarQube S6848,
- * and the same rule the ledger rows follow).
- */
+/** One task row: tick, priority select, details and badges, then edit, timer, snooze, delete. */
 export default function TaskItem({
   task,
   onToggle,

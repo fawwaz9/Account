@@ -1,76 +1,63 @@
-// One repeat rule serves class times, standing payments and repeating chores
-// alike, so it is defined once in the calendar feature.
+/** Task, reminder, timing and repeating-task types; they mirror app/Tasks/schemas. */
+// One repeat rule serves class times, payments and chores, so it lives in the calendar feature.
 import { Recurrence } from "../calender/types";
 
-/** Mirrors app/Tasks/schemas/task.py. */
-
+/** A task as the API returns it, with server-computed risk and sharing. */
 export interface Task {
   id: string;
   title: string;
   notes: string | null;
-  /** Null for a task with no deadline; one with a date also draws on the calendar. */
+  /** YYYY-MM-DD, or null for no deadline; a dated task also shows on the calendar. */
   due_date: string | null;
   due_time: string | null;
-  /** What you think it will take, so a week's load reads as hours. */
+  /** The student's estimate in minutes, so a week's load reads as hours. */
   estimated_minutes: number | null;
   course_id: string | null;
-  /** Denormalised by the API. Coursework is categorised by this, not by a tag. */
+  /** Denormalised by the API; coursework is grouped by this, not by a tag. */
   course_code: string | null;
   tags: string[];
-  /** 1 to 5, 5 most important. Coursework is seeded from its grade category. */
+  /** 1 (lowest) to 5 (highest); coursework is seeded from its grade category. */
   priority: number;
   done: boolean;
+  /** When it was ticked off, naive UTC; null while open. */
   completed_at: string | null;
   archived: boolean;
   created_at: string | null;
-  /**
-   * Set when the task was raised from a dated grade. It closes itself when the
-   * score lands, and never reopens -- ticking it off is the student's own
-   * record that the work happened. The client does not offer to delete it
-   * separately.
-   */
+  /** Set when a dated grade raised it; it closes itself when the score lands, never reopening. */
   grade_id: string | null;
-  /**
-   * Set when a repeating task produced this occurrence. Only the editor uses
-   * it, to say that a change lands on this one day and that editing the repeat
-   * itself will write over it -- an occurrence is an ordinary task row in every
-   * other respect, so nothing else would show the difference.
-   */
+  /** Set when a repeating task wrote this occurrence; the editor warns an edit is for this day. */
   recurring_id: string | null;
-  /**
-   * How far behind the course this task belongs to is, or null when there is
-   * nothing to flag. Computed by the API: the client would otherwise need every
-   * course, every target and the current-term rule just to colour one row.
-   */
+  /** How far behind target its course is, from the API; null when there is nothing to flag. */
   risk: RiskBand | null;
-  /** Hidden from the list until this date. The due date is unaffected. */
+  /** Hidden from the list until this date; the due date is unchanged. */
   snoozed_until: string | null;
-  /** How many times it has been pushed back. */
   snooze_count: number;
-  /** Why it was last pushed back, so a blocked task says so on its own row. */
+  /** Why it was last pushed back, shown on its row. */
   last_snooze_reason: string | null;
-  /** How long it actually took: the answer on completion, or the timer's total. */
+  /** Minutes it really took: the answer given on completion, or the timer's total. */
   actual_minutes?: number | null;
-  /** When the running timer started (UTC); null when none runs. Kept by the server. */
+  /** When the running timer started, UTC, kept by the server; null when none runs. */
   timer_started_at?: string | null;
-  /** Who you have shared it with (Phase 2 item 9a). Empty when it is yours alone. */
+  /** Names of the people it is shared with; empty when it is yours alone. */
   shared_with?: string[];
 }
 
-/** Mirrors TimerStop in app/Tasks/schemas/task.py. */
+/** Result of stopping a task's timer. */
 export interface TimerStop {
   task: Task;
   /** Minutes the stop added; 0 when it recorded nothing. */
   added_minutes: number;
-  /** The timer ran past twelve hours, so nothing was recorded. */
+  /** True when the timer ran past twelve hours, so nothing was recorded. */
   discarded: boolean;
 }
 
-/** How long tasks really take against their estimates (Phase 1 D36). */
+/** How long tasks really take against their estimates. */
 export interface EstimateRatio {
   /** Total actual over total estimated; null until `needed` tasks have both. */
   ratio: number | null;
+  /** Finished tasks in the window with both an estimate and an actual. */
   tasks: number;
+  /** How many such tasks a ratio requires. */
   needed: number;
   estimated_minutes: number;
   actual_minutes: number;
@@ -78,33 +65,32 @@ export interface EstimateRatio {
   applied: boolean;
 }
 
+/** Request body for snoozing a task until a date, with an optional reason. */
 export interface SnoozeRequest {
   until: string;
   reason: string | null;
 }
 
-/** Mirrors app/Tasks/schemas/reminder.py. */
+/** A standalone reminder at a local wall-clock time. */
 export interface Reminder {
   id: string;
   title: string;
   notes: string | null;
-  /**
-   * Local wall time, sent and received without an offset. "Remind me at 09:00"
-   * means nine o'clock where you are, and should still mean that after the
-   * clocks change — which is why this is not UTC like every other timestamp.
-   */
+  /** Naive local wall time with no offset, unlike every other timestamp, which is UTC. */
   remind_at: string;
   course_id: string | null;
   course_code: string | null;
+  /** When the app first showed it, naive UTC; null until then. */
   fired_at: string | null;
-  /** Pushed to a device already; the app does not announce it a second time. */
+  /** When it was pushed to a device; the app then doesn't announce it again. */
   pushed_at?: string | null;
   dismissed_at: string | null;
   created_at: string | null;
-  /** Its moment has passed and nobody has dismissed it. Computed by the API. */
+  /** Its time has passed and nobody has dismissed it; from the API. */
   due: boolean;
 }
 
+/** Request body for a reminder. */
 export interface ReminderCreate {
   title: string;
   notes: string | null;
@@ -112,27 +98,31 @@ export interface ReminderCreate {
   course_id: string | null;
 }
 
+/** Patch body for a reminder. */
 export type ReminderUpdate = Partial<ReminderCreate>;
 
+/** One past snooze of a task. */
 export interface TaskSnooze {
   id: string;
+  /** When it was snoozed, naive UTC. */
   snoozed_at: string;
   until: string;
   reason: string | null;
 }
 
-/** How far below its target a course has fallen, in percentage points. */
+/** How far below target a course is: mild 0-5, moderate 5-10, severe over 10 points. */
 export type RiskBand = "mild" | "moderate" | "severe";
 
-/** Mirrors app/Tasks/schemas/timing.py. */
+/** How early or late the tasks finished in one window were. */
 export interface TimingWindow {
   label: string;
   starts_on: string;
   ends_on: string;
-  /** Completed tasks that carried a due date; undated work is excluded. */
+  /** Completed tasks that had a due date; undated work is left out. */
   counted: number;
-  /** Signed days from the due date: positive late, negative early. */
+  /** Mean signed days from the due date, positive late and negative early; null if none. */
   mean_days: number | null;
+  /** Percentage finished on or before the due date; null when nothing was counted. */
   on_time_percent: number | null;
   early_count: number;
   /** Days early, positive, across the early ones only. */
@@ -142,13 +132,15 @@ export interface TimingWindow {
   late_mean_days: number | null;
 }
 
+/** Completion timing for the past week and this month. */
 export interface CompletionTiming {
   past_week: TimingWindow;
   this_month: TimingWindow;
-  /** Completed but undated, so counted by no figure above. */
+  /** Completed tasks with no due date, counted by no figure above. */
   undated_completed: number;
 }
 
+/** Request body for creating a task. */
 export interface TaskCreate {
   title: string;
   notes: string | null;
@@ -160,12 +152,14 @@ export interface TaskCreate {
   priority: number;
 }
 
-/** The lowest, default and highest a priority may be. Mirrors Grades/utils/enums.py. */
+/** Lowest priority; the three bounds mirror the backend's Grades/utils/enums.py. */
 export const MIN_PRIORITY = 1;
+/** Priority a new task starts with. */
 export const DEFAULT_PRIORITY = 3;
+/** Highest priority. */
 export const MAX_PRIORITY = 5;
 
-/** What each step means, so the number is not the only thing on offer. */
+/** Word for each priority step, shown beside the number. */
 export const PRIORITY_LABELS: Record<number, string> = {
   1: "Lowest",
   2: "Low",
@@ -174,6 +168,7 @@ export const PRIORITY_LABELS: Record<number, string> = {
   5: "Highest",
 };
 
+/** Patch body for a task: any create field, plus done, archived and actual minutes. */
 export type TaskUpdate = Partial<TaskCreate> & {
   done?: boolean;
   archived?: boolean;
@@ -184,13 +179,8 @@ export type TaskUpdate = Partial<TaskCreate> & {
 /* ===== Repeating tasks ===== */
 
 /**
- * A chore that comes back: readings every Monday, laundry every fortnight.
- *
- * Stores the rule and a template. Unlike a class time, its occurrences are real
- * task rows, because each is ticked off separately — this week's reading being
- * done says nothing about next week's. Unlike a standing payment, occurrences a
- * little way ahead are written too: a future task costs nothing to have sitting
- * there, and seeing Monday's reading on Sunday is the point.
+ * A repeating task: a rule plus a template whose occurrences are real task rows,
+ * ticked off one by one and written a little way ahead.
  */
 export interface RecurringTask {
   id: string;
@@ -205,6 +195,7 @@ export interface RecurringTask {
   priority: number;
   starts_on: string;
   recurrence: Recurrence;
+  /** False pauses the series, so no new occurrences are written. */
   active: boolean;
   skipped_dates: string[];
   created_at: string | null;
@@ -212,6 +203,7 @@ export interface RecurringTask {
   next_due_on: string | null;
 }
 
+/** Request body for a repeating task. */
 export interface RecurringTaskCreate {
   title: string;
   notes: string | null;
@@ -225,9 +217,10 @@ export interface RecurringTaskCreate {
   active: boolean;
 }
 
+/** Patch body for a repeating task. */
 export type RecurringTaskUpdate = Partial<RecurringTaskCreate>;
 
-/** What materialising the window actually created. */
+/** What writing a repeating task's occurrences created. */
 export interface RecurringTaskRun {
   created: number;
   tasks: Task[];
@@ -235,13 +228,7 @@ export interface RecurringTaskRun {
 
 /* ===== Quick capture ===== */
 
-/**
- * What one typed line was understood to mean, before anything is written.
- *
- * Read as the student types, so the guess is visible while it is still cheap to
- * reword. A capture box that files things silently is worse than a form,
- * because nothing on screen says what it did.
- */
+/** How one typed capture line was parsed, shown as the student types and before any save. */
 export interface QuickCapturePreview {
   text: string;
   title: string;
@@ -249,10 +236,7 @@ export interface QuickCapturePreview {
   estimated_minutes: number | null;
   course_id: string | null;
   course_code: string | null;
-  /**
-   * A code was typed but matches no course of yours, or matches several. It
-   * stays in the title rather than being swallowed.
-   */
+  /** A typed code matching none or several of your courses; it stays in the title. */
   unmatched_course: string | null;
   /** Which kinds parsed: course, date, duration, amount, score. */
   matched: string[];
@@ -260,6 +244,7 @@ export interface QuickCapturePreview {
   can_create: boolean;
 }
 
+/** The task a capture line created, and how the line was parsed. */
 export interface QuickCaptureResult {
   task: Task;
   preview: QuickCapturePreview;

@@ -19,20 +19,19 @@ import {
   updateRequirement,
 } from "../../features/degree/api";
 
+/** Wording for each counted course's status. */
 const STATUS_WORD: Record<Counted["status"], string> = {
   completed: "done",
   in_progress: "in progress",
   planned: "planned",
 };
 
+/** The requirement or mapping awaiting removal confirmation. */
 type Removing = { kind: "requirement"; row: Requirement } | { kind: "equivalence"; row: Equivalence };
 
 /**
- * The degree audit -- Phase 1 item 5 (D31).
- *
- * Your requirements, entered once from your programme page, against your
- * courses. Each requirement says what met it and with which course, so a
- * wrong answer can be traced to the course or the mapping behind it.
+ * The degree audit: each requirement with the courses that meet it, the course mappings, and
+ * courses counted nowhere, with editors for requirements and mappings; removals ask first.
  */
 export default function DegreePage() {
   const { user } = useAuth();
@@ -204,6 +203,7 @@ export default function DegreePage() {
   );
 }
 
+/** One requirement's progress: each listed item and what meets it, or the credits counted. */
 function RequirementCard({ result, onEdit, onRemove }: {
   readonly result: RequirementResult;
   readonly onEdit: () => void;
@@ -255,10 +255,12 @@ function RequirementCard({ result, onEdit, onRemove }: {
   );
 }
 
+/** The non-empty trimmed lines of a text box. */
 function lines(text: string): string[] {
   return text.split("\n").map((line) => line.trim()).filter(Boolean);
 }
 
+/** Add or edit a requirement: name, kind, one course or pattern per line, credits, sharing. */
 function RequirementEditor({ userId, editing, onClose, onSaved }: {
   readonly userId: string;
   readonly editing: Requirement | null;
@@ -344,10 +346,12 @@ function RequirementEditor({ userId, editing, onClose, onSaved }: {
   );
 }
 
+/** Course codes split on commas, plus signs or new lines. */
 function codes(text: string): string[] {
   return text.split(/[,+\n]/).map((code) => code.trim()).filter(Boolean);
 }
 
+/** Add or edit a mapping: the courses taken, what they count as, optional credits and a note. */
 function EquivalenceEditor({ userId, editing, onClose, onSaved }: {
   readonly userId: string;
   readonly editing: Equivalence | null;

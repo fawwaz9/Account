@@ -1,37 +1,18 @@
 import type { Plugin } from "vite";
 import { DEFAULT_API_BASE_URL } from "./src/services/apiBase";
 
-/**
- * Emits the `_headers` file Cloudflare Pages reads when it serves the bundle.
- *
- * **Why generated rather than checked in.** Every directive here is fixed
- * except one: `connect-src` has to name the API's origin, and that origin is
- * different for local development, for a preview deploy and for production. A
- * static file could only be right for one of them, and the failure mode for the
- * other two is the worst kind -- the browser refuses the request before it
- * leaves, so the API's logs show nothing at all and the app simply looks down.
- * Deriving it from the same variable the bundle is built with means the two can
- * never drift apart.
- *
- * **Why a `_headers` file at all.** Response headers cannot be set from inside a
- * static bundle. The nginx container that used to serve this is not part of the
- * deployed architecture any more, so the host has to apply them, and `_headers`
- * is how Pages is told. It follows that this file does nothing in the local
- * docker stack, which still serves through nginx -- these headers are verified
- * on the deployed site, not in compose.
- */
+/** Vite plugin writing the `_headers` file Cloudflare Pages serves the bundle with. */
 
+/** Google Identity Services prefix, for its connections and iframes. */
 const GOOGLE_SIGN_IN = "https://accounts.google.com/gsi/";
+/** The one third-party script the policy allows. */
 const GOOGLE_SIGN_IN_SCRIPT = "https://accounts.google.com/gsi/client";
+/** Google Sign-In's stylesheet. */
 const GOOGLE_SIGN_IN_STYLE = "https://accounts.google.com/gsi/style";
 
 /**
- * What `connect-src` has to name for this API base to be reachable.
- *
- * An absolute URL contributes its origin. A root-relative base (`/api`) is
- * already same-origin and needs nothing beyond `'self'`, which is a real
- * configuration -- it is what putting the API behind the same hostname looks
- * like. Anything else is a mistake, and returns null so the caller can say so.
+ * Origin connect-src must name for an API base: "" for a root path, null when unusable.
+ * Only http and https count: a scheme-less value would serialise its origin as "null".
  */
 export function originOf(apiBaseUrl: string): string | null {
   if (apiBaseUrl.startsWith("/")) return "";
@@ -53,7 +34,10 @@ export function originOf(apiBaseUrl: string): string | null {
   }
 }
 
-/** `apiOrigin` is an origin to allow, or "" for an API that is already same-origin. */
+/**
+ * Content-Security-Policy allowing `apiOrigin`, or only 'self' when it is "".
+ * Adds upgrade-insecure-requests only for an https API.
+ */
 export function buildCsp(apiOrigin: string): string {
   const directives = [
     // Everything not named below is same-origin only.
@@ -98,6 +82,7 @@ export function buildCsp(apiOrigin: string): string {
   return directives.join("; ");
 }
 
+/** The `_headers` file text: six security headers applied to every path. */
 export function buildHeaders(apiBaseUrl: string): string {
   const apiOrigin = originOf(apiBaseUrl);
   const lines = [
@@ -129,6 +114,7 @@ ${lines.map((line) => `  ${line}`).join("\n")}
 `;
 }
 
+/** Build-only plugin emitting `_headers`; warns when the API base is neither URL nor path. */
 export default function securityHeaders(apiBaseUrl?: string): Plugin {
   const base = (apiBaseUrl ?? DEFAULT_API_BASE_URL).trim();
 

@@ -5,6 +5,10 @@ import Icon from "../../shared/components/Icon";
 import profileIcon from "../../assets/icons/profile_m.png";
 import { PHONE_QUERY, useMediaQuery } from "../../shared/hooks/useMediaQuery";
 
+/**
+ * Header: on desktop the omnibox, the user's name and Sign out.
+ * On a phone the brand and a profile link to Settings, with the omnibox on home only.
+ */
 export default function Topbar() {
   const { user, logout } = useAuth();
   const phone = useMediaQuery(PHONE_QUERY);

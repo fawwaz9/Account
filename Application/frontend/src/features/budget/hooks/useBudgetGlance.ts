@@ -6,8 +6,8 @@ import { useAuth } from "../../../app/auth/AuthContext";
 import { useApiRefreshCount } from "../../../shared/hooks/useApiRefresh";
 
 /**
- * Just what the dashboard shows: balances and this month's plan against spend.
- * Deliberately lighter than useBudget, which also pulls the whole ledger.
+ * Dashboard's budget glance: accounts, this month's summary and server net worth.
+ * Lighter than `useBudget`: no ledger, and no standing-payment catch-up.
  */
 export function useBudgetGlance() {
   const { user } = useAuth();

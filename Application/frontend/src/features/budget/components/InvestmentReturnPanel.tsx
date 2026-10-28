@@ -7,35 +7,21 @@ import { monthLabel } from "../../../shared/utils/dateUtils";
 import { InvestmentReturn } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
 
+/** Props for the investment reading panel. */
 interface InvestmentReturnPanelProps {
   readonly accountId: string;
-  /** The month on screen, `YYYY-MM-01`. The reading is recorded against this. */
+  /** Month on screen, YYYY-MM-01; the reading is recorded against it. */
   readonly month: string;
-  /** The reading that applies to that month, carried forward or not. */
+  /** Reading that applies to that month, carried forward or not. */
   readonly figure: InvestmentReturn | null;
-  /**
-   * What the ledger held at the end of that month. The typed value is measured
-   * against this, not against the all-time balance -- which would be wrong for
-   * every past month by the size of every deposit made since.
-   */
+  /** Ledger balance at that month's end; the typed value is measured against it. */
   readonly ledgerAtMonth: number;
   readonly onSaved: () => void | Promise<void>;
 }
 
 /**
- * Recording what an investment account's holding is actually worth.
- *
- * A titled section rather than something behind a pencil, and that is a decision
- * rather than a layout. `account_category_month_limits` -- the one this feature
- * copied its shape from -- has held zero rows since it shipped, because the only
- * way to reach it is to notice that a figure on a row is clickable. This feature
- * is *empty* until somebody records a reading, so the input is the thing the
- * section is for and it is visible from the first visit.
- *
- * **You type what it is worth, not what the gain is.** The market value is the
- * number on a brokerage statement; the gain is arithmetic, and arithmetic is the
- * app's job. What gets stored is still the difference, because that is the only
- * form of the figure that survives a later deposit.
+ * Record what an investment is worth for the month shown; the app works out the gain.
+ * A carried-forward reading never pre-fills the field, so saving cannot re-record an old figure.
  */
 export default function InvestmentReturnPanel({
   accountId,

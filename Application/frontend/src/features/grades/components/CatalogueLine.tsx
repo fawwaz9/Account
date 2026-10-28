@@ -3,17 +3,21 @@ import { fetchCatalogueLink, searchCatalogue, setCatalogueLink } from "../api";
 import { CatalogueChoice, CatalogueCourse, CatalogueLink } from "../types";
 import HelpTip from "../../../shared/components/HelpTip";
 
+/** Campus names by catalogue campus code. */
 const CAMPUS: Record<string, string> = { UBCV: "UBC Vancouver", UBCO: "UBC Okanagan" };
 
+/** A catalogue course's code, e.g. "CPSC 221". */
 export function catalogueCode(course: CatalogueCourse) {
   return `${course.subject} ${course.number}`;
 }
 
+/** One-line label for a catalogue course: code, title when known, and campus. */
 function describe(course: CatalogueCourse) {
   const campus = CAMPUS[course.campus] ?? course.campus;
   return course.title ? `${catalogueCode(course)} · ${course.title} · ${campus}` : `${catalogueCode(course)} · ${campus}`;
 }
 
+/** How a link came about, shown beside it; empty when nothing is linked. */
 const HOW: Record<CatalogueLink["how"], string> = {
   chosen: "your choice",
   matched: "matched by code",
@@ -21,17 +25,15 @@ const HOW: Record<CatalogueLink["how"], string> = {
   not_found: "",
 };
 
+/** The course whose catalogue link to show. */
 interface CatalogueLineProps {
   readonly userId: string;
   readonly courseId: string;
 }
 
 /**
- * Which shared catalogue course this one is (Phase 2 item 3, D11).
- *
- * Automatic by campus and code until you choose; a choice of a course, or of
- * none, then wins. The link moves no grade -- it is what prerequisites hang
- * on. Says nothing when the read fails, like the other panels on this page.
+ * A course's catalogue link, matched by campus and code until the student picks a course or none.
+ * Renders nothing if the link can't be read.
  */
 export default function CatalogueLine({ userId, courseId }: CatalogueLineProps) {
   const [link, setLink] = useState<CatalogueLink | null>(null);

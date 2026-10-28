@@ -1,7 +1,7 @@
 import { ShiftOccurrence } from "./types";
 import { addDays } from "../../shared/utils/dateUtils";
 
-/** How far back the list looks for a past shift nobody has confirmed. */
+/** How far back the list looks for a past shift nobody confirmed; `useJobs` fetches this far. */
 export const UNCONFIRMED_DAYS = 90;
 
 /** How long a confirmed shift stays in the list after its date. */
@@ -11,17 +11,8 @@ export const CONFIRMED_DAYS = 20;
 export const AHEAD_DAYS = 21;
 
 /**
- * The shift list's order (the owner's ask, 2026-10-12).
- *
- * 1. Past shifts nobody has confirmed, nearest to today first: the ones that
- *    need doing, and the closest are the ones still remembered.
- * 2. Upcoming shifts, soonest first.
- * 3. Confirmed shifts from the last 20 days, most recent first. Older ones
- *    leave the list but stay in the calendar and every figure.
- *
- * A past unconfirmed shift stays until it is confirmed, back to 90 days (the
- * window `useJobs` fetches), so it cannot fall off the list unnoticed the way
- * it did when the list was a plain fourteen days.
+ * Shift list order: unconfirmed past shifts nearest first, then upcoming soonest first,
+ * then confirmed shifts from the last 20 days, most recent first.
  */
 export function arrangeShifts(shifts: ShiftOccurrence[], today: string): ShiftOccurrence[] {
   const confirmedFrom = addDays(today, -CONFIRMED_DAYS);
@@ -37,7 +28,7 @@ export function arrangeShifts(shifts: ShiftOccurrence[], today: string): ShiftOc
   return [...needing, ...upcoming, ...confirmed];
 }
 
-/** Minutes per job from today to three weeks out: what a job card's line says. */
+/** Counted minutes per job from today to three weeks out, for each job card. */
 export function upcomingMinutesByJob(shifts: ShiftOccurrence[], today: string): Map<string, number> {
   const until = addDays(today, AHEAD_DAYS);
   const totals = new Map<string, number>();

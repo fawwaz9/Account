@@ -3,26 +3,17 @@ import { NavLink, useLocation } from "react-router-dom";
 import Icon from "../../shared/components/Icon";
 import { NAV, NavItem } from "./Sidebar";
 
-/**
- * The phone's order, as the owner sketched it. Picked out of NAV by route
- * rather than written again, so a label or an icon cannot differ between the
- * sidebar and this bar. Settings is not here: the profile icon in the header
- * reaches it.
- */
+/** Routes in the phone bar's order; Settings is reached from the header instead. */
 export const PHONE_NAV_ORDER = ["/", "/grades", "/tasks", "/budget", "/calendar", "/fitness", "/jobs"];
 
+/** The phone bar's items, picked from NAV so labels and icons match the sidebar. */
 export const PHONE_NAV: NavItem[] = PHONE_NAV_ORDER.map((to) => {
   const item = NAV.find((candidate) => candidate.to === to);
   if (!item) throw new Error(`PHONE_NAV_ORDER names ${to}, which NAV does not have`);
   return item;
 });
 
-/**
- * The bottom icon bar on a phone: fixed, and scrolling sideways, with five
- * icons and a sliver of the sixth showing so it is plain there is more. Icons
- * only, so each link is named for a screen reader; the current page is marked
- * with aria-current, which is also what draws its ring.
- */
+/** Phone bottom bar: icon-only links scrolling sideways, the current one kept in view. */
 export default function BottomNav() {
   const listRef = useRef<HTMLUListElement>(null);
   const { pathname } = useLocation();

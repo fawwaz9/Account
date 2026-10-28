@@ -24,7 +24,10 @@ import { addDays, firstOfMonth, today } from "../../../shared/utils/dateUtils";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { useApiRefresh } from "../../../shared/hooks/useApiRefresh";
 
-/** Accounts with their balances, and the recent ledger, loaded together. */
+/**
+ * Budget page data: accounts, recent ledger, standing instructions, safe-to-spend, net worth.
+ * Runs the standing-payment catch-up first; a month step refetches only the summary.
+ */
 export function useBudget() {
   const { user } = useAuth();
   // The id, not the object. `refreshUser()` builds a fresh `user` every time,

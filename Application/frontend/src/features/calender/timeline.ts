@@ -1,21 +1,16 @@
 import { Course } from "../grades/types";
 import { daysBetween } from "../../shared/utils/dateUtils";
 
-/**
- * Laying a term's courses out on one horizontal axis.
- *
- * Kept out of the component so it can be exercised on its own. Position
- * arithmetic is the kind that goes wrong silently -- a bar an inch off looks
- * like a design choice rather than a bug -- which is the same reason the week
- * view's overlap maths lives in `weekLayout.ts`.
- */
+/** Term timeline layout, kept pure for testing: each course as a bar across its term's span. */
 
+/** First and last dates a term's courses cover, and the inclusive day count. */
 export interface TermSpan {
   starts_on: string;
   ends_on: string;
   days: number;
 }
 
+/** A course's bar, placed as percentages of the span. */
 export interface PlacedCourse {
   course: Course;
   /** Percentage from the left edge of the span. */
@@ -24,6 +19,7 @@ export interface PlacedCourse {
   width: number;
 }
 
+/** A term laid out: its span, the placed bars, the undated courses and today's position. */
 export interface Timeline {
   span: TermSpan | null;
   placed: PlacedCourse[];
@@ -33,14 +29,7 @@ export interface Timeline {
   todayAt: number | null;
 }
 
-/**
- * The dates a term actually runs, from the courses in it.
- *
- * Earliest start to latest end. A year-long course stretches it, which is
- * correct: that genuinely is how long the term runs for you. Courses with no
- * dates contribute nothing rather than defaulting to today, which would shrink
- * the span to a point.
- */
+/** Earliest start to latest end across the courses' dates; null when either side has none. */
 export function termSpan(courses: Course[]): TermSpan | null {
   const starts = courses.map((c) => c.start_date).filter((d): d is string => !!d);
   const ends = courses.map((c) => c.end_date).filter((d): d is string => !!d);
@@ -59,12 +48,8 @@ export function termSpan(courses: Course[]): TermSpan | null {
 }
 
 /**
- * Place each course as a bar across the span.
- *
- * A course missing either date cannot be placed and is reported separately
- * rather than dropped: half the courses in this app carry no dates, and a chart
- * that quietly showed three of six would under-report the term while looking
- * complete.
+ * Lay courses out as bars across their term's span, earliest first, then longest.
+ * A course missing a date is listed as undated rather than dropped.
  */
 export function buildTimeline(courses: Course[], today: string): Timeline {
   const span = termSpan(courses);

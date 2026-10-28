@@ -3,15 +3,21 @@ import ProgressBar from "./ProgressBar";
 import { BudgetSummary } from "../types";
 import { formatMoney } from "../money";
 
+/** Props for the planned-spend panel. */
 interface PlannedSpendProps {
   readonly summary: BudgetSummary | null;
   readonly month: string;
   readonly onMonthChange: (month: string) => void;
+  /** Save one account's planned amount for the month. */
   readonly onSetTarget: (accountId: string, planned: number) => Promise<void>;
-  /** True while a newly-picked month's figures are still in flight. */
+  /** True while a newly picked month's figures are still loading. */
   readonly pending?: boolean;
 }
 
+/**
+ * Each account's spending against its planned amount for a month, with a month picker.
+ * A plain target is edited in place; one derived from category limits is read-only here.
+ */
 export default function PlannedSpend({
   summary,
   month,

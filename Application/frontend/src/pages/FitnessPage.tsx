@@ -12,13 +12,8 @@ import { useApiRefresh } from "../shared/hooks/useApiRefresh";
 import "../styles/teams.css";
 
 /**
- * Fitness (Phase 2 item 11, D26). Today: your teams, their games, and the
- * record. The exertion features of a later phase join it here.
- *
- * Anyone on a team records a game; it counts once someone else confirms it,
- * the captain included. A disputed score shows both and counts for nothing
- * until whoever recorded it corrects it. Only the captain changes who is on
- * the team.
+ * The Fitness page: your teams, each with its games and record, and making a new team.
+ * A game counts once someone else confirms it; a disputed one counts for nothing until corrected.
  */
 export default function FitnessPage() {
   const { user } = useAuth();
@@ -115,13 +110,20 @@ export default function FitnessPage() {
   );
 }
 
+/** Props for one team's view. */
 interface ViewProps {
   readonly userId: string;
   readonly teamId: string;
+  /** Called after leaving or deleting the team. */
   readonly onGone: () => void;
+  /** Reload the team list after a change. */
   readonly onChanged: () => Promise<void>;
 }
 
+/**
+ * One team: its record, games with confirm or dispute, the post-game form, sharing and leaving.
+ * Only the captain renames, takes members off or deletes, each after a confirm.
+ */
 function TeamView({ userId, teamId, onGone, onChanged }: ViewProps) {
   const [team, setTeam] = useState<TeamDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -246,15 +248,17 @@ function TeamView({ userId, teamId, onGone, onChanged }: ViewProps) {
   );
 }
 
+/** Props for the game form. */
 interface FormProps {
   readonly submitLabel: string;
   readonly busy: boolean;
+  /** Values to correct; absent for a new game, and then the form clears after submit. */
   readonly initial?: GameInput;
   readonly onSubmit: (game: GameInput) => Promise<void>;
   readonly onCancel?: () => void;
 }
 
-/** The post-game form: today's date already in, four fields, one button. */
+/** The post-game form: date already today, opponent and both scores, one button. */
 function GameForm({ submitLabel, busy, initial, onSubmit, onCancel }: FormProps) {
   const [playedOn, setPlayedOn] = useState(initial?.played_on ?? today());
   const [opponent, setOpponent] = useState(initial?.opponent ?? "");
@@ -288,6 +292,7 @@ function GameForm({ submitLabel, busy, initial, onSubmit, onCancel }: FormProps)
   );
 }
 
+/** Props for one game row. */
 interface RowProps {
   readonly game: Game;
   readonly isCaptain: boolean;
@@ -298,6 +303,10 @@ interface RowProps {
   readonly onRemove: () => Promise<void>;
 }
 
+/**
+ * One game: score, who recorded and confirmed it, and the actions open to you.
+ * Deleting asks in the row first.
+ */
 function GameRow({ game, isCaptain, busy, onConfirm, onDispute, onCorrect, onRemove }: RowProps) {
   const [mode, setMode] = useState<"idle" | "dispute" | "correct" | "remove">("idle");
   const [ours, setOurs] = useState(String(game.our_score));

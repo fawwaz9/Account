@@ -2,6 +2,7 @@ import { Task } from "../types";
 import TaskItem from "./TaskItem";
 import { duration } from "../../../shared/utils/dateUtils";
 
+/** A group's title and tasks, the row handlers, and the empty and loading states. */
 interface TaskListProps {
   readonly title: string;
   readonly tasks: Task[];
@@ -15,19 +16,11 @@ interface TaskListProps {
   readonly onTimer?: (task: Task) => void;
   readonly busy: boolean;
   readonly emptyMessage?: string;
-  /**
-   * The rows have not arrived yet, so neither the count nor the empty message
-   * is anything this group can honestly claim.
-   */
+  /** Rows still loading: with none to show, the count and empty text give way to Loading. */
   readonly loading?: boolean;
 }
 
-/**
- * A titled group of tasks, with what the group costs.
- *
- * The heading carries hours rather than only a count, because "7 tasks" says
- * nothing about whether the week fits and "23 hours" says it immediately.
- */
+/** A titled group of task rows; the heading gives the count and the total estimated time. */
 export default function TaskList({
   title,
   tasks,

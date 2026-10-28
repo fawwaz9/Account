@@ -6,6 +6,7 @@ import { useAuth } from "../../../app/auth/AuthContext";
 import { getErrorMessage } from "./AddCourseModal";
 import Modal from "../../../shared/components/Modal";
 
+/** Whether the dialog is open, the course to edit, and close and updated callbacks. */
 interface EditCourseModalProps {
   readonly open: boolean;
   readonly course: CourseDetail | null;
@@ -13,6 +14,7 @@ interface EditCourseModalProps {
   readonly onCourseUpdated: () => void;
 }
 
+/** Form state for a course (defaults when null); links are carried so the PATCH keeps them. */
 function buildFormFromCourse(course: CourseDetail | null): CourseCreate {
   return {
     code: course?.code ?? "",
@@ -38,6 +40,7 @@ function buildFormFromCourse(course: CourseDetail | null): CourseCreate {
   };
 }
 
+/** Edit-course dialog: the whole form is the PATCH; the form resets whenever `course` changes. */
 export default function EditCourseModal({
   open,
   course,

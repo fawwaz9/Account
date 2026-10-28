@@ -2,22 +2,13 @@ import { Reminder } from "../types";
 import HelpTip from "../../../shared/components/HelpTip";
 import { clockTime, dueLabel } from "../../../shared/utils/dateUtils";
 
+/** The reminders now due, and the dismiss handler. */
 interface ReminderBannerProps {
   readonly due: Reminder[];
   readonly onDismiss: (reminder: Reminder) => void;
 }
 
-/**
- * What is due, at the top of the page until it is acknowledged.
- *
- * The reliable half of the delivery: a browser notification needs permission
- * and a tab that is open, this needs neither. It stays until dismissed rather
- * than fading, because a reminder you missed is the failure mode that matters.
- *
- * The line about the app being open is not an apology — it is the honest limit
- * of a design with no scheduler behind it, and saying it is what stops anything
- * important being trusted here.
- */
+/** Due reminders at the top of the page, each staying until it is dismissed. */
 export default function ReminderBanner({ due, onDismiss }: ReminderBannerProps) {
   if (due.length === 0) return null;
 

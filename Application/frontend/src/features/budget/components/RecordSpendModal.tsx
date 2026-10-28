@@ -8,9 +8,10 @@ import { useAuth } from "../../../app/auth/AuthContext";
 import { today } from "../../../shared/utils/dateUtils";
 import Modal from "../../../shared/components/Modal";
 
+/** Props for recording spending from one account. */
 interface RecordSpendModalProps {
   readonly open: boolean;
-  /** The account being viewed. Fixed -- this dialog never offers a choice. */
+  /** The account on screen; the dialog never offers another. */
   readonly accountId: string;
   readonly accountName: string;
   readonly categories: readonly SpendCategory[];
@@ -20,23 +21,8 @@ interface RecordSpendModalProps {
 }
 
 /**
- * Money out of the account you are already looking at.
- *
- * Its own dialog rather than a fifth mode on `AddMoneyModal`, which carries four
- * modes, a debounced deposit preview and two account pickers. Locking that down
- * to one mode and one account would mean threading conditionals through all of
- * it to switch most of it off, and every one of those conditionals would be a
- * place the two dialogs could drift apart.
- *
- * **There is no account picker, and that is the feature.** On an account's own
- * page the account is not a question, and a picker there is a field that is
- * always already answered and can only be answered wrongly. The account id sent
- * is the one in the URL, which a test pins.
- *
- * Expense only. "Recording from" an account is money leaving it: income and
- * transfers belong to the budget page, where both accounts are in view, and a
- * deposit splits across every account by income share, which is the opposite of
- * what this dialog means.
+ * Record an expense from the account on screen, with no account picker by design.
+ * Stays open, holding the entry, when saving fails.
  */
 export default function RecordSpendModal({
   open,

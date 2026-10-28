@@ -31,6 +31,10 @@ import { useApiRefreshCount } from "../../shared/hooks/useApiRefresh";
 import "../../styles/calendar.css";
 
 
+/**
+ * One course's page: category strip and average, links, prerequisites, insight panels, schemes,
+ * the grade columns, and the dialogs for its grades, details, timetable, syllabus and deletion.
+ */
 export default function CourseDetailPage() {
   const { courseId } = useParams<{ courseId: string }>();
   const navigate = useNavigate();

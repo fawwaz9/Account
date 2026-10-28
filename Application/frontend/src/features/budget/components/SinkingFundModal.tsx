@@ -6,6 +6,7 @@ import { useAuth } from "../../../app/auth/AuthContext";
 import { addDays, today } from "../../../shared/utils/dateUtils";
 import { formatMoney } from "../money";
 
+/** Props for the new-fund dialog. */
 interface SinkingFundModalProps {
   readonly open: boolean;
   readonly accounts: Account[];
@@ -13,6 +14,7 @@ interface SinkingFundModalProps {
   readonly onSaved: () => void;
 }
 
+/** A new fund's defaults: from a spending account into another, due in 90 days. */
 function blank(accounts: Account[]): SinkingFundCreate {
   // Defaults that are usually right: out of a spending account, into the first
   // account that is not one.
@@ -30,12 +32,8 @@ function blank(accounts: Account[]): SinkingFundCreate {
 }
 
 /**
- * Creating a fund.
- *
- * Only four things are asked, because only four are needed: what it costs, when
- * it is due, and the two accounts the money moves between. The monthly figure is
- * not asked for — it is the division of the first two, and asking would invite
- * a schedule that disagrees with the target.
+ * Create a sinking fund: name, target, due date and the two accounts it moves between.
+ * The monthly figure is shown, never asked: it follows from the target and the date.
  */
 export default function SinkingFundModal({
   open,
@@ -178,7 +176,7 @@ export default function SinkingFundModal({
   );
 }
 
-/** Whole calendar months from today to the due date, counting this one. */
+/** Calendar months from the student's today to the due date, counting this one; 1 when past. */
 function monthsUntil(due: string): number {
   // The student's today, not the browser's: on the last evening of a month the
   // two can sit in different months, and this counts months.

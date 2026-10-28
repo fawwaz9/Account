@@ -4,22 +4,18 @@ import { clockTime, dueLabel, today } from "../../../shared/utils/dateUtils";
 import { arrangeShifts } from "../shiftOrder";
 import HelpTip from "../../../shared/components/HelpTip";
 
+/** Props for the shift list. */
 interface ShiftListProps {
   readonly shifts: ShiftOccurrence[];
   readonly onConfirm: (shift: ShiftOccurrence) => void;
+  /** Ask to remove a one-off shift; the page confirms first. */
   readonly onRemove: (shift: ShiftOccurrence) => void;
   readonly busy: boolean;
 }
 
 /**
- * The shifts around today, with the ones still needing confirming first
- * (`arrangeShifts`: unconfirmed past shifts, then upcoming, then confirmed
- * ones from the last 20 days).
- *
- * An unconfirmed past shift is shown with its scheduled hours and marked, not
- * hidden: forgetting the admin is not the same as not having worked, and a
- * fortnight of assumed hours should look like a fortnight of work with a
- * question over it.
+ * Shifts around today, unconfirmed past ones first, each confirmable; one-offs removable.
+ * An unconfirmed past shift shows its scheduled hours, marked as assumed rather than hidden.
  */
 export default function ShiftList({ shifts, onConfirm, onRemove, busy }: ShiftListProps) {
   const shown = arrangeShifts(shifts, today());
@@ -115,11 +111,12 @@ export default function ShiftList({ shifts, onConfirm, onRemove, busy }: ShiftLi
   );
 }
 
+/** Minutes as hours to one decimal, e.g. "7.5h". */
 function hours(minutes: number): string {
   return `${Math.round((minutes / 60) * 10) / 10}h`;
 }
 
-/** A confirmed cash tip that has not reached the budget. */
+/** A confirmed cash tip that has not reached the budget yet. */
 export function heldTip(shift: ShiftOccurrence): boolean {
   return shift.confirmed && shift.tip_is_cash && shift.tip_amount > 0 && !shift.tip_in_ledger;
 }

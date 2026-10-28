@@ -1,25 +1,16 @@
 import { useEffect, useState } from "react";
 
-/**
- * Where the app becomes its phone layout: the bottom icon bar, the header with
- * the profile icon, the phone dashboard and the calendar's day and three-day
- * views. The stylesheets switch at the same 720px.
- */
+/** Media query for the phone layout; the stylesheets switch at the same 720px. */
 export const PHONE_QUERY = "(max-width: 720px)";
 
+/** Whether `query` matches now; false where `matchMedia` is missing. */
 function matches(query: string): boolean {
   return typeof window !== "undefined" && typeof window.matchMedia === "function"
     ? window.matchMedia(query).matches
     : false;
 }
 
-/**
- * Whether a CSS media query matches, kept current as the window changes --
- * a phone rotated, a desktop window narrowed.
- *
- * False where `matchMedia` does not exist (jsdom, very old browsers), so
- * anything gated on it falls back to the desktop behaviour it had before.
- */
+/** Live match state of a CSS media query; false without `matchMedia` (jsdom), the desktop path. */
 export function useMediaQuery(query: string): boolean {
   const [value, setValue] = useState(() => matches(query));
 

@@ -3,40 +3,35 @@ import ProgressBar from "./ProgressBar";
 import { CategorySpend } from "../types";
 import { formatMoney } from "../money";
 
+/** Props for the spending-by-category section. */
 interface WhereItWentProps {
   readonly entries: readonly CategorySpend[];
-  /**
-   * Optional, and absent on purpose for one caller. The account detail page
-   * reuses this section to break down a single account, where page-level
-   * budget controls would be out of place -- so with no handlers, no actions.
-   */
+  /** Opens the income split; absent on the account page, which shows no page actions. */
   readonly onEditSplit?: () => void;
+  /** Opens the categories dialog; absent on the account page. */
   readonly onEditCategories?: () => void;
-  /**
-   * Set this account's limit for one category, or clear it with `null`.
-   *
-   * Absent on the budget page, and that absence is deliberate rather than an
-   * oversight: a limit belongs to one account, and the budget page spans all of
-   * them. Rows there carry no limit either, so nothing renders even if a
-   * handler were passed.
-   */
+  /** Set this account's limit for a category, or clear it with null; account page only. */
   readonly onSetLimit?: (
     categoryId: string,
     limit: number | null,
     /** False sets the standing limit; true sets only the month on screen. */
     thisMonthOnly: boolean,
   ) => Promise<void>;
-  /** True while a newly-picked month's figures are still in flight. */
+  /** True while a newly picked month's figures are still loading. */
   readonly pending?: boolean;
 }
 
-/** What the row says under its bar, or null when there is no limit to report. */
+/** What a row says under its bar, left or over; null without a limit. */
 function limitNote(entry: CategorySpend): string | null {
   if (entry.limit === null) return null;
   if (entry.remaining < 0) return `${formatMoney(-entry.remaining)} over`;
   return `${formatMoney(entry.remaining)} left`;
 }
 
+/**
+ * Spending by category for the month; on an account's page each limit is editable.
+ * An empty limit box clears the limit rather than setting zero.
+ */
 export default function WhereItWent({
   entries,
   onEditSplit,
@@ -194,13 +189,7 @@ export default function WhereItWent({
   );
 }
 
-/**
- * The amount, and the limit it is judged against when there is one.
- *
- * A plain span when nothing is editable, so the budget page and Uncategorised
- * rows render exactly as they did before limits existed rather than growing a
- * button that does nothing.
- */
+/** A row's amount and its limit; a labelled button when editable, plain text otherwise. */
 function FigureCell({
   entry,
   editable,

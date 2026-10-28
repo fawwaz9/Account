@@ -8,13 +8,16 @@ import {
 import { useAuth } from "../../../app/auth/AuthContext";
 import { shortDate, today } from "../../../shared/utils/dateUtils";
 
+/** Props for the application dialog. */
 interface Props {
   readonly open: boolean;
+  /** The application to edit, or null for a new one. */
   readonly application: Application | null;
   readonly onClose: () => void;
   readonly onSaved: () => void;
 }
 
+/** Form values from an application, or blanks applied today. */
 function formFor(application: Application | null): ApplicationInput {
   return {
     company: application?.company ?? "",
@@ -32,11 +35,8 @@ function formFor(application: Application | null): ApplicationInput {
 }
 
 /**
- * One application: its details, its history, and what happened next (D2).
- *
- * The history is a list of dated steps, never an overwritten status, so a
- * step entered by mistake is taken back rather than edited -- the first,
- * "applied", goes only with the application.
+ * Create or edit an application, record its next step, or take a step back.
+ * Steps are dated history, never overwritten; deleting asks first.
  */
 export default function ApplicationModal({ open, application, onClose, onSaved }: Props) {
   const { user } = useAuth();

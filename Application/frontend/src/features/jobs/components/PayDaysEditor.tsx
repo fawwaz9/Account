@@ -1,31 +1,36 @@
 import { NthWeekday, PayDays, WeekendRule } from "../types";
 import { Weekday } from "../../calender/types";
 
+/** Most dates, or weekday rows, the editor offers. */
 const MAX_ROWS = 4;
 
+/** Which-weekday choices: 1st to 4th, and last. */
 const POSITIONS: { n: NthWeekday["n"]; label: string }[] = [
   { n: 1, label: "1st" }, { n: 2, label: "2nd" }, { n: 3, label: "3rd" }, { n: 4, label: "4th" },
   { n: -1, label: "Last" },
 ];
 
+/** Weekday choices, Monday first. */
 const DAYS: { day: Weekday; label: string }[] = [
   { day: "MO", label: "Monday" }, { day: "TU", label: "Tuesday" }, { day: "WE", label: "Wednesday" },
   { day: "TH", label: "Thursday" }, { day: "FR", label: "Friday" }, { day: "SA", label: "Saturday" },
   { day: "SU", label: "Sunday" },
 ];
 
+/** What happens to a pay date that lands on a weekend. */
 const WEEKEND: { rule: WeekendRule; label: string }[] = [
   { rule: "previous", label: "Paid the Friday before" },
   { rule: "next", label: "Paid the Monday after" },
   { rule: "keep", label: "Paid that day" },
 ];
 
+/** Props for the pay-days editor. */
 interface PayDaysEditorProps {
   readonly value: PayDays;
   readonly onChange: (value: PayDays) => void;
 }
 
-/** The days a new pattern starts with: the first pay date's day of the month. */
+/** A new set-days rule: the first pay date's day of the month, paid the Friday before a weekend. */
 export function startingPayDays(firstPayDate: string): PayDays {
   return {
     dates: [Number(firstPayDate.slice(8, 10))],
@@ -37,11 +42,8 @@ export function startingPayDays(firstPayDate: string): PayDays {
 }
 
 /**
- * Pay on set days of the month: the shapes the repeat editor cannot say
- * (decided 2026-10-03). Either dates -- "the 15th and the last day" -- with
- * what happens when one lands on a weekend, or a weekday of the month -- "the
- * last Friday" -- which stands alone, since mixing the two is a schedule no
- * payroll runs.
+ * Pay on set days of the month: dates, with the last day and a weekend rule, or Nth weekdays.
+ * Switching between the two replaces the rule, since no payroll mixes them.
  */
 export default function PayDaysEditor({ value, onChange }: PayDaysEditorProps) {
   const byWeekday = value.nth_weekdays.length > 0;

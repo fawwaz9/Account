@@ -1,21 +1,18 @@
 import { EventKind, EVENT_KIND_LABELS, EXAM_KINDS } from "../types";
 import { DEFAULT_KIND_COLORS, KindColors, kindColor, kindStyle } from "../kindColors";
 
+/** The colour overrides and their setter. */
 interface EventColorsProps {
   readonly colors: KindColors;
   readonly onChange: (next: KindColors) => void;
 }
 
+/** Every event kind, in label order. */
 const KINDS = Object.keys(EVENT_KIND_LABELS) as EventKind[];
 
 /**
- * A colour per event kind, each beside a chip drawn exactly as the calendar
- * will draw it -- the same classes, so an exam still shows its heavier bar.
- *
- * Only changed kinds are kept. "Default" removes the kind rather than storing
- * the default's value, so if a default is ever retuned, kinds nobody touched
- * follow it instead of keeping a stale copy. It needs no confirmation: it loses
- * one colour and is one click to redo.
+ * A colour picker per event kind, beside a sample chip drawn as the calendar draws it.
+ * "Default" removes the override rather than storing the default's value.
  */
 export default function EventColors({ colors, onChange }: EventColorsProps) {
   function set(kind: EventKind, color: string) {

@@ -4,19 +4,21 @@ import { PrerequisiteKind, PrerequisiteKindName, PrerequisiteSide, Prerequisites
 import { getErrorMessage } from "./AddCourseModal";
 import HelpTip from "../../../shared/components/HelpTip";
 
-/** In words, not only colour. "Not met" always says exceptions are made:
- *  a prerequisite here is a warning, never a block (Phase 2 D3). */
+/** Each rule status in words, never colour alone; "not met" says exceptions are made. */
 export const STATUS_WORDS: Record<RuleStatus, string> = {
   met: "Met",
   on_track: "On track, if what's under way goes to plan",
   not_met: "Not met, and exceptions are sometimes made",
 };
+/** The symbol drawn for each rule status. */
 const MARK: Record<RuleStatus, string> = { met: "✓", on_track: "…", not_met: "✗" };
+/** The heading for each requisite kind. */
 const KIND_TITLE: Record<PrerequisiteKindName, string> = {
   prerequisite: "Prerequisites",
   corequisite: "Co-requisites",
 };
 
+/** Where a version of a rule came from, in words. */
 function sourceWords(side: PrerequisiteSide) {
   switch (side.source) {
     case "typed": return "Your version";
@@ -26,12 +28,14 @@ function sourceWords(side: PrerequisiteSide) {
   }
 }
 
+/** What each review state of your shared submission means. */
 const REVIEW_WORDS: Record<string, string> = {
   pending: "waiting for review before anyone else sees it",
   accepted: "accepted into the shared catalogue",
   rejected: "kept as yours only",
 };
 
+/** One node of an evaluated rule: a single requirement, or an all-of or one-of group. */
 function Leaf({ result }: { readonly result: RuleResult }) {
   if (result.parts.length === 0) {
     return (
@@ -54,6 +58,7 @@ function Leaf({ result }: { readonly result: RuleResult }) {
   );
 }
 
+/** One version of a rule: its status, its tree, and where it came from. */
 function Side({ side }: { readonly side: PrerequisiteSide }) {
   return (
     <div className="prereqSide">
@@ -74,6 +79,7 @@ function Side({ side }: { readonly side: PrerequisiteSide }) {
   );
 }
 
+/** The kind being edited, your current version, and save and cancel callbacks. */
 interface EditorProps {
   readonly userId: string;
   readonly courseId: string;
@@ -83,6 +89,7 @@ interface EditorProps {
   readonly onCancel: () => void;
 }
 
+/** Form for your own rule of one kind; the typed text is read back when the field loses focus. */
 function Editor({ userId, courseId, kind, current, onSaved, onCancel }: EditorProps) {
   const [text, setText] = useState(current?.text ?? "");
   const [note, setNote] = useState(current?.note ?? "");
@@ -135,17 +142,15 @@ function Editor({ userId, courseId, kind, current, onSaved, onCancel }: EditorPr
   );
 }
 
+/** The course whose requisites to show. */
 interface PanelProps {
   readonly userId: string;
   readonly courseId: string;
 }
 
 /**
- * Prerequisites and co-requisites, met or not (Phase 2 items 4 and 7).
- *
- * Yours wins for you when you have one, and the shared version sits below it,
- * each labelled by where it came from. Advisory: nothing on this page or any
- * other is disabled by an unmet rule. Renders nothing if the read fails.
+ * A course's requisites, met or not: your version applies when you have one, the shared one below.
+ * Advisory only; renders nothing if the read fails.
  */
 export default function PrerequisitesPanel({ userId, courseId }: PanelProps) {
   const [data, setData] = useState<Prerequisites | null>(null);

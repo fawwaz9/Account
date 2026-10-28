@@ -6,36 +6,34 @@ import { Weekday } from "../../calender/types";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { today } from "../../../shared/utils/dateUtils";
 
+/** Props for the shifts dialog. */
 interface ShiftScheduleModalProps {
+  /** The job whose shifts are being added; null keeps the dialog closed. */
   readonly job: Job | null;
   readonly onClose: () => void;
   readonly onSaved: () => void;
 }
 
+/** One-letter label per weekday, for the day buttons. */
 const DAY_INITIALS: Record<Weekday, string> = {
   MO: "M", TU: "T", WE: "W", TH: "T", FR: "F", SA: "S", SU: "S",
 };
+/** Full weekday names, for the day buttons' accessible labels. */
 const DAY_NAMES: Record<Weekday, string> = {
   MO: "Monday", TU: "Tuesday", WE: "Wednesday", TH: "Thursday",
   FR: "Friday", SA: "Saturday", SU: "Sunday",
 };
+/** Weekdays in picker order, Monday first. */
 const DAY_ORDER: Weekday[] = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
 
+/** A new pattern row: no days, 09:00 to 17:00. */
 function blankMeeting(): ShiftMeeting {
   return { days: [], start_time: "09:00", end_time: "17:00", location: null };
 }
 
 /**
- * Adding shifts to a job.
- *
- * One shift at a time is the default, because that is how part-time work
- * actually arrives: a rota posted a week ahead, different hours every week,
- * sometimes two shifts in a day. A form that only offered a weekly pattern
- * would be asking for a regularity most student jobs do not have.
- *
- * The pattern is still here for the jobs that do repeat, behind a disclosure.
- * Saving one replaces only the previous pattern — hand-entered shifts survive,
- * which they did not before this was split in two.
+ * Add a job's shifts one date at a time, or set a weekly pattern behind a disclosure.
+ * Saving a pattern replaces the previous one from the job's start date; hand-entered shifts stay.
  */
 export default function ShiftScheduleModal({ job, onClose, onSaved }: ShiftScheduleModalProps) {
   const { user } = useAuth();

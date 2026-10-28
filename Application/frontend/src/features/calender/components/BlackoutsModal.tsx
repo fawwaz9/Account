@@ -7,6 +7,7 @@ import { fromIso, today } from "../../../shared/utils/dateUtils";
 import Modal from "../../../shared/components/Modal";
 import DeleteConfirmModal from "../../grades/components/DeleteConfirmModal";
 
+/** Whether the dialog is open, and its close and saved callbacks. */
 interface BlackoutsModalProps {
   readonly open: boolean;
   readonly onClose: () => void;
@@ -14,14 +15,8 @@ interface BlackoutsModalProps {
 }
 
 /**
- * Weeks of term when classes do not run.
- *
- * Entered once and subtracted from every class, because one reading break
- * applies to all six courses and entering it on each of them is how one ends up
- * wrong.
- *
- * A range rather than a list of dates: a reading break is a week and a stat
- * holiday is a range of one, so one row covers both.
+ * Manage term blackouts: ranges when classes don't run, cancelling every course-linked event.
+ * Removing one asks first; each change tells the calendar behind it to reload.
  */
 export default function BlackoutsModal({ open, onClose, onSaved }: BlackoutsModalProps) {
   const { user } = useAuth();

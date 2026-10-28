@@ -11,6 +11,7 @@ import {
   SchemeResult,
 } from "../types";
 
+/** The course, a refetch counter, and a callback for when the counting scheme changes. */
 interface GradingSchemesProps {
   readonly userId: string;
   readonly course: CourseDetail;
@@ -20,15 +21,12 @@ interface GradingSchemesProps {
   readonly onCountingChanged?: () => void;
 }
 
+/** Every grade category, in enum order. */
 const CATEGORIES = Object.values(GradeCategory);
 
 /**
- * Other ways this course can be graded, side by side -- Phase 1 item 4.
- *
- * The course's own weights stay its grade; each scheme here is another reading
- * of the same marks. "87.2% under Scheme B" means nothing without the working
- * (account-vision.md §7), so every figure opens into its categories: the
- * average after the scheme's rules, what was dropped, what replaced what.
+ * Alternative grading schemes beside the course's own weights, each opening to its working.
+ * One can be picked to count as the course's grade; removing one asks first.
  */
 export default function GradingSchemes({ userId, course, nonce, onCountingChanged }: GradingSchemesProps) {
   const [comparison, setComparison] = useState<SchemeComparison | null>(null);
@@ -154,6 +152,7 @@ export default function GradingSchemes({ userId, course, nonce, onCountingChange
   );
 }
 
+/** One scheme's average and per-category working, with its count, edit and remove actions. */
 function SchemeRow({
   result, best = false, counts = false, busy = false, disabled = false, onCount, onEdit, onRemove,
 }: {
@@ -208,6 +207,7 @@ function SchemeRow({
   );
 }
 
+/** Dialog to add or edit a scheme; a new one starts from the course's weighted categories. */
 function SchemeEditor({
   userId, course, editing, onClose, onSaved,
 }: {

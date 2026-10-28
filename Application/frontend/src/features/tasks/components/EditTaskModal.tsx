@@ -13,12 +13,13 @@ import { numberOrNull, parseTags, tagText, withDueDate } from "../taskFields";
 import { Course } from "../../grades/types";
 import { useAuth } from "../../../app/auth/AuthContext";
 
-/** 1..5, for the select. */
+/** Every priority step, lowest first, for the select. */
 const PRIORITY_STEPS = Array.from(
   { length: MAX_PRIORITY - MIN_PRIORITY + 1 },
   (_, index) => MIN_PRIORITY + index
 );
 
+/** The task to edit (null when closed), the courses, and the close and saved callbacks. */
 interface EditTaskModalProps {
   readonly task: Task | null;
   readonly courses: Course[];
@@ -26,6 +27,7 @@ interface EditTaskModalProps {
   readonly onSaved: () => void;
 }
 
+/** The editable fields of a task. */
 interface FormState {
   title: string;
   notes: string | null;
@@ -36,6 +38,7 @@ interface FormState {
   priority: number;
 }
 
+/** Form state for a task, its time cut to "HH:MM". */
 function formFor(task: Task): FormState {
   return {
     title: task.title,
@@ -51,17 +54,8 @@ function formFor(task: Task): FormState {
 }
 
 /**
- * Editing one task.
- *
- * The only way to change a task after it is created -- before this, a title
- * typed wrongly or a deadline that moved could be deleted and retyped, and
- * nothing else. Opened from a row on the task page and from a task on the
- * calendar, deliberately the same dialog: two editors for one record is how
- * the two end up offering different fields.
- *
- * Completing lives here too, and is a button rather than a checkbox in the
- * field list because it is the one control that changes something without
- * being a save. It sits apart from Cancel and Save for the same reason.
+ * The one task editor, opened from a task row or a calendar chip; complete or reopen sits apart
+ * from Save. A grade's task keeps its name, course and deadline locked to the gradebook.
  */
 export default function EditTaskModal({
   task,

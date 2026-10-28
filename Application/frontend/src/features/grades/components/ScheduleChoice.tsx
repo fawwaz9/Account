@@ -2,14 +2,14 @@ import { useState } from "react";
 import { GradeCategory, GradeSchedule } from "../types";
 import { duration, today } from "../../../shared/utils/dateUtils";
 
-/** What a date on a grade is for, including having no date at all. */
+/** What a grade's date is for: nothing (no date), a task, or a calendar event. */
 type Mode = "none" | GradeSchedule;
 
-/** Shared by the three fields below, so they cannot drift apart visually. */
+/** Class names shared by the date, time and length inputs. */
 const FIELD =
   "--input rounded-lg border border-slate-700 bg-transparent px-3 py-2 text-white";
 
-/** Everything this control owns, changed as one. */
+/** The date fields this control owns, always changed together. */
 export interface Scheduling {
   due_date: string | null;
   due_time: string | null;
@@ -17,6 +17,7 @@ export interface Scheduling {
   schedule_as: GradeSchedule;
 }
 
+/** The grade's current date fields, the change handler, its category, and an id prefix. */
 interface ScheduleChoiceProps {
   readonly dueDate: string | null;
   readonly dueTime: string | null;
@@ -29,6 +30,7 @@ interface ScheduleChoiceProps {
   readonly idPrefix: string;
 }
 
+/** The three choices with their hints; the event hint says exam for a midterm or final. */
 function optionsFor(category: GradeCategory | null) {
   const exam = category === GradeCategory.MIDTERM || category === GradeCategory.FINAL;
 
@@ -54,15 +56,8 @@ function optionsFor(category: GradeCategory | null) {
 }
 
 /**
- * What a grade's date means: nothing, work to do, or something to attend.
- *
- * Owns the date and the choice together, and is always visible. Hiding the
- * choice until a date existed meant the only thing on screen was a field
- * labelled "due date" — so a calendar event looked like something the app
- * could not do, when it was one click away behind a control nobody could see.
- *
- * The hints carry the actual difference. "Calendar event" alone does not tell
- * you that you lose the tick-off, which is the whole trade being offered.
+ * Always-visible choice of what a grade's date means: no date, a task, or a calendar event.
+ * Clearing a field clears what depends on it, as the API does; only timed events take a length.
  */
 export default function ScheduleChoice({
   dueDate,

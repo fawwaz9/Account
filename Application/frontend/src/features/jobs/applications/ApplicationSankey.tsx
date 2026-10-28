@@ -2,20 +2,20 @@ import { Flow, STATUS_LABELS } from "./types";
 import { bandPath, kindOf, layoutSankey, NODE_WIDTH, totals } from "./sankey";
 import HelpTip from "../../../shared/components/HelpTip";
 
+/** Chart width, in viewBox units; the layout leaves 120 for labels. */
 const WIDTH = 640;
+/** Chart height, in viewBox units. */
 const HEIGHT = 260;
 
+/** Display name for a node id: its status label, or "Waiting". */
 function label(id: string): string {
   const kind = kindOf(id);
   return kind === "waiting" ? "Waiting" : STATUS_LABELS[kind as keyof typeof STATUS_LABELS] ?? kind;
 }
 
 /**
- * Where applications went, as a tree (D8): each stage splits straight into the
- * next stage and the ways applications ended there, so no band crosses
- * another. A stage counts everyone who got at least that far. Hand-drawn SVG
- * from a pure layout (`sankey.ts`); the numbers are in the labels, the legend
- * and the accessible name, not only in the widths.
+ * Where applications went, as a tree of bands that never cross.
+ * Counts appear in the labels, the legend and the accessible name, not only in widths.
  */
 export default function ApplicationSankey({ flows }: { flows: Flow[] }) {
   const layout = layoutSankey(flows, WIDTH - 120, HEIGHT);

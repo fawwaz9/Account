@@ -1,25 +1,12 @@
 import { NetWorth as Figure } from "../types";
 import { formatMoney } from "../money";
 
+/** Props: the server's net worth, or null while loading. */
 interface NetWorthProps {
   readonly figure: Figure | null;
 }
 
-/**
- * What you have, less what you owe.
- *
- * This replaces a plain `Total:` that summed every balance, which counted a
- * credit card as though it were savings and money someone else was holding as
- * though it were in your pocket.
- *
- * The debt line is shown only when there is debt, and accounts toggled out of
- * the total appear on neither line -- money owed *to* you is not money you owe,
- * and merging the two would add opposites.
- *
- * The headline now includes recorded investment gain, so it says so. Without that
- * line the figure would move because somebody remembered to record a reading,
- * with nothing on screen connecting the two.
- */
+/** Net worth headline, with a debt line when there is debt and any investment gain disclosed. */
 export default function NetWorth({ figure }: NetWorthProps) {
   if (!figure) return null;
 

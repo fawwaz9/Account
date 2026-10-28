@@ -7,15 +7,17 @@ import Modal from "../../../shared/components/Modal";
 import HelpTip from "../../../shared/components/HelpTip";
 import { COUNTED_HELP, COUNTED_LABEL } from "../counting";
 
+/** Props for the account dialog. */
 interface EditAccountModalProps {
   readonly account: Account | null;
-  /** Open in create mode. `account` is ignored while this is set. */
+  /** Open in create mode; `account` is ignored while set. */
   readonly creating?: boolean;
   readonly accounts: readonly Account[];
   readonly onClose: () => void;
   readonly onSaved: () => void;
 }
 
+/** Account kinds in picker order. */
 const KINDS: AccountKind[] = [
   "spending",
   "savings",
@@ -25,17 +27,15 @@ const KINDS: AccountKind[] = [
   "debt",
 ];
 
+/** One-line hint under the kind picker, for the kinds that need one. */
 const KIND_HINTS: Partial<Record<AccountKind, string>> = {
   spending: "Safe to spend reads from these.",
   debt: "Money you owe. Its balance runs negative, and it lowers your total.",
 };
 
 /**
- * One modal for adding and editing, because the two forms are the same form.
- *
- * Splitting them would mean a second copy of the name-clash handling and the
- * income-share hint, and those are exactly the parts worth having in one place.
- * Only the title, the submit call, and whether Delete and Archive appear differ.
+ * Add or edit an account: name, kind, income share, counted switch, archive, delete.
+ * Delete asks in the dialog first; a role-locked account cannot be deleted, archived or re-kinded.
  */
 export default function EditAccountModal({
   account,

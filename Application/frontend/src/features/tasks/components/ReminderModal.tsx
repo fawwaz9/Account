@@ -9,6 +9,7 @@ import { Course } from "../../grades/types";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { addDays, clockTime, dueLabel, today } from "../../../shared/utils/dateUtils";
 
+/** Whether the dialog is open, the courses, and the close and saved callbacks. */
 interface ReminderModalProps {
   readonly open: boolean;
   readonly courses: Course[];
@@ -16,6 +17,7 @@ interface ReminderModalProps {
   readonly onSaved: () => void;
 }
 
+/** A new reminder for tomorrow at 09:00, local wall time. */
 function blank(): ReminderCreate {
   return {
     title: "",
@@ -28,12 +30,8 @@ function blank(): ReminderCreate {
 }
 
 /**
- * Making a reminder, and the one moment it makes sense to ask for permission.
- *
- * The browser is asked on the first save, never on page load: a prompt with no
- * context is the one people dismiss forever, and there is no second chance to
- * ask. Declining costs nothing here — the in-app banner is the reliable path
- * either way.
+ * Add a reminder, or remove an upcoming one after a confirmation; notification permission
+ * is asked after a save, never on page load.
  */
 export default function ReminderModal({ open, courses, onClose, onSaved }: ReminderModalProps) {
   const { user } = useAuth();

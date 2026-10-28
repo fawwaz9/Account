@@ -14,14 +14,17 @@ import { formatMoney } from "../../budget/money";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { today } from "../../../shared/utils/dateUtils";
 
+/** Props for the paycheque dialog. */
 interface PaychequeModalProps {
   readonly open: boolean;
   readonly jobs: Job[];
+  /** The cheque to edit, or null to record a new one. */
   readonly paycheque: Paycheque | null;
   readonly onClose: () => void;
   readonly onSaved: () => void;
 }
 
+/** A new cheque for the first job, dated today, with nothing filled in. */
 function blank(jobs: Job[]): PaychequeCreate {
   return {
     job_id: jobs[0]?.id ?? "",
@@ -35,6 +38,7 @@ function blank(jobs: Job[]): PaychequeCreate {
   };
 }
 
+/** Form values from a cheque, or a blank one; allocations always start empty. */
 function formFor(paycheque: Paycheque | null, jobs: Job[]): PaychequeCreate {
   if (!paycheque) return blank(jobs);
   return {
@@ -53,13 +57,8 @@ function formFor(paycheque: Paycheque | null, jobs: Job[]): PaychequeCreate {
 }
 
 /**
- * Recording a cheque.
- *
- * Gross and deductions are entered here and stay here; only the net is sent to
- * the ledger, split across accounts by their income share. A deduction is money
- * that was earned and never entered the account, so recording it as income
- * would invent a deposit that never happened -- but dropping it would make the
- * gross unexplainable, which is why it lives on the cheque.
+ * Record or edit a paycheque: gross, deductions and pay period, previewed against the shifts.
+ * Only the net reaches the ledger, split by income share; deleting confirms first.
  */
 export default function PaychequeModal({
   open,
@@ -317,7 +316,7 @@ export default function PaychequeModal({
   );
 }
 
-/** What the hours said, beside what was typed. */
+/** What the period's shifts predict beside the gross typed: short, over or matching. */
 function PreviewLine({ preview, gross }: { readonly preview: PaychequePreview; readonly gross: number }) {
   if (preview.expected_gross === null) {
     return (
@@ -355,6 +354,7 @@ function PreviewLine({ preview, gross }: { readonly preview: PaychequePreview; r
   );
 }
 
+/** Minutes as hours to one decimal, e.g. "7.5h". */
 function hours(minutes: number): string {
   return `${Math.round((minutes / 60) * 10) / 10}h`;
 }

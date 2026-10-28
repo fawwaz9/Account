@@ -6,13 +6,14 @@ import { Task, TaskSnooze } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { addDays, dueLabel, today } from "../../../shared/utils/dateUtils";
 
+/** The task to snooze (null when closed), and the close and saved callbacks. */
 interface SnoozeModalProps {
   readonly task: Task | null;
   readonly onClose: () => void;
   readonly onSaved: () => void;
 }
 
-/** The three answers to "until when" that cover almost every case. */
+/** Quick choices for how long to snooze, in days. */
 const PRESETS = [
   { label: "Tomorrow", days: 1 },
   { label: "In three days", days: 3 },
@@ -20,16 +21,8 @@ const PRESETS = [
 ];
 
 /**
- * Pushing a task back, and saying why.
- *
- * The reason is the feature rather than a nicety. A task snoozed three times
- * citing the same thing is blocked on that thing, and nothing else in the app
- * would ever say so — which is why every snooze is kept rather than the latest
- * overwriting the one before.
- *
- * The due date is not offered as something to change here. It does not move,
- * and the past snoozes are shown so the deferral is visible rather than
- * disguised as a later deadline.
+ * Snooze a task until a date, with a reason; the due date never moves.
+ * Earlier snoozes and their reasons are listed, so a task blocked on one thing says so.
  */
 export default function SnoozeModal({ task, onClose, onSaved }: SnoozeModalProps) {
   const { user } = useAuth();

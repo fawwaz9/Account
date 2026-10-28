@@ -5,19 +5,15 @@ import { formatMoney } from "../money";
 import { useAuth } from "../../../app/auth/AuthContext";
 import PlanVsActual from "./PlanVsActual";
 
+/** Props for the year plan. */
 interface YearPlanProps {
   /** Bumped by the page when something changes, to refetch. */
   readonly nonce: number;
 }
 
 /**
- * The year as one running balance, and the hours a target would take.
- *
- * Phase 1 item 10 (account-vision.md §13.4): the September-to-April
- * spreadsheet, generated from what the app already holds, then solved
- * backwards. The answer to "reach $X" is hours a week at your own job, shown
- * as scenarios -- students think in "what if I picked up a shift", not in a
- * single required figure.
+ * The year as one running liquid balance by month, and the extra weekly hours a target takes.
+ * A reload drops any target answer and shows the plan alone.
  */
 export default function YearPlan({ nonce }: YearPlanProps) {
   const { user } = useAuth();
@@ -153,6 +149,7 @@ export default function YearPlan({ nonce }: YearPlanProps) {
   );
 }
 
+/** The hours-to-goal answer: hours a week with scenarios, already on track, or no hourly job. */
 function GoalAnswer({ goal, endsOn }: { readonly goal: PlanGoal | null; readonly endsOn: string }) {
   if (!goal) {
     return (
@@ -192,16 +189,18 @@ function GoalAnswer({ goal, endsOn }: { readonly goal: PlanGoal | null; readonly
   );
 }
 
-/** Nothing held and nothing moving: twelve rows of $0.00 say nothing. */
+/** Nothing held and nothing moving: rows of $0.00 say nothing. */
 function isEmpty(planned: AnnualPlan): boolean {
   return planned.starting_balance === 0
     && planned.months.every((row) => row.money_in === 0 && row.money_out === 0);
 }
 
+/** "Sep 2026" from a YYYY-MM-DD string, in the browser's locale. */
 function monthName(value: string): string {
   return new Date(`${value}T00:00:00`).toLocaleDateString(undefined, { month: "short", year: "numeric" });
 }
 
+/** "Apr 30, 2027" from a YYYY-MM-DD string, in the browser's locale. */
 function longDate(value: string): string {
   return new Date(`${value}T00:00:00`).toLocaleDateString(undefined, {
     month: "short", day: "numeric", year: "numeric",

@@ -11,8 +11,10 @@ import { useNow } from "../hooks/useNow";
 import { useKindColors } from "../hooks/useKindColors";
 import { kindStyle } from "../kindColors";
 
+/** Column headings, Monday first. */
 const WEEKDAY_HEADINGS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
+/** The days to draw, the loading state, and the select and add handlers. */
 interface WeekViewProps {
   readonly days: CalendarDay[];
   readonly loading: boolean;
@@ -22,23 +24,8 @@ interface WeekViewProps {
 }
 
 /**
- * One week against the clock, all twenty-four hours of it -- or, on a phone,
- * one day or three, which is the same grid with fewer columns.
- *
- * The month grid answers "what is coming"; this answers "what does Tuesday
- * actually look like" — which needs the time axis, because the useful thing on
- * a timetable is as often the gaps as the blocks.
- *
- * Two grids rather than one, sharing a column template: the dates and the
- * all-day strip stay put while the hours scroll under them. CSS grid cannot
- * scroll a subset of its own rows, and a header that scrolls away takes with it
- * the only thing saying which column is which day.
- *
- * All-day items sit in that header rather than in the grid. They have no
- * position on a time axis, and pinning them to midnight would say something
- * false about when they happen. A task due at a particular minute is not one of
- * them: it belongs on the clock, which is what the header cannot show. A task
- * due by the end of the day is, since that is what a bare due date means.
+ * One, three or seven days against a 24-hour clock, with a line at the current minute.
+ * Timed events and due times sit on the grid; all-day items stay in the header above it.
  */
 export default function WeekView({
   days,

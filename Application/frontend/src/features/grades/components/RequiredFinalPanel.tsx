@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { fetchRequiredFinal } from "../api";
 import { CourseDetail, GradeCategory, RequiredFinal } from "../types";
 
+/** The course, the Settings default target, a refetch counter, and the calculator opener. */
 interface RequiredFinalPanelProps {
   readonly userId: string;
   readonly course: CourseDetail;
@@ -14,16 +15,8 @@ interface RequiredFinalPanelProps {
 }
 
 /**
- * What the final must score to reach this course's target, without asking.
- *
- * The figure was always there, but behind a button and a form: you had to know
- * to look. Phase 1 item 2 puts it on the page, measured against the target the
- * course already has (or the account default, the same rule the Attention panel
- * uses), and keeps the calculator for "what if I aimed higher".
- *
- * Says nothing when it has nothing true to say: a course with no final, a
- * transfer credit, a past or future term, a final already marked, or an answer
- * that has not arrived. Never a placeholder while loading.
+ * The final-exam score this course needs for its own target, shown without asking.
+ * Renders nothing unless the final is still ahead and the answer has arrived.
  */
 export default function RequiredFinalPanel({
   userId,
@@ -82,13 +75,14 @@ export default function RequiredFinalPanel({
   );
 }
 
+/** The panel's one-line answer: already secured, out of reach, or the score needed. */
 function answerFor(result: RequiredFinal, target: number): string {
   if (result.needed <= 0) return `${target}% is already secured. Any final keeps it.`;
   if (!result.possible) return `Out of reach: it would take ${result.needed}%.`;
   return `You need ${result.needed}%.`;
 }
 
-/** A current course that has a weighted final and no mark on it yet. */
+/** True for a current course with a weighted final that has no mark yet. */
 export function finalStillAhead(course: CourseDetail): boolean {
   if (course.term_bucket !== "current") return false;
   if (course.no_final || course.transfer_credit) return false;

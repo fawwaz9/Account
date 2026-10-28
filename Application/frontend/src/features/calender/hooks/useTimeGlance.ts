@@ -5,12 +5,13 @@ import { addDays, startOfWeek, today } from "../../../shared/utils/dateUtils";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { useApiRefreshCount } from "../../../shared/hooks/useApiRefresh";
 
-/** This week's exams (midterms and finals) and shifts, counted off the calendar. */
+/** This week's exam and shift counts. */
 export interface WeekCounts {
   exams: number;
   shifts: number;
 }
 
+/** Count the exams (midterms and finals) and the shifts among occurrences. */
 export function countWeek(occurrences: EventOccurrence[]): WeekCounts {
   return {
     exams: occurrences.filter((item) => EXAM_KINDS.includes(item.kind)).length,
@@ -19,10 +20,8 @@ export function countWeek(occurrences: EventOccurrence[]): WeekCounts {
 }
 
 /**
- * Just what the dashboard shows: this week's room and what it costs.
- *
- * Deliberately lighter than the Calendar page's own fetch, which also pulls the
- * crunch strip — the same split as useBudgetGlance against useBudget.
+ * The dashboard's Monday-to-Sunday week: free blocks, load, and exam and shift counts.
+ * `loaded` stays false after a failed read, so a failure never reads as an empty week.
  */
 export function useTimeGlance() {
   const { user } = useAuth();

@@ -6,13 +6,14 @@ import { endpoints } from "../../services/endpoints";
 import { today } from "../utils/dateUtils";
 import { isPrompted, takePromptedMarker } from "../utils/promptedSession";
 
-/** The room a path belongs to, as the sidebar names them; null for anything else. */
+/** The usage-analytics room for a path, or null for paths outside the counted rooms. */
 export function moduleFor(pathname: string): string | null {
   if (pathname === "/") return "dashboard";
   const first = pathname.split("/")[1];
   return ["grades", "calendar", "tasks", "jobs", "budget", "settings"].includes(first) ? first : null;
 }
 
+/** True if this tab already sent `key`; otherwise marks it sent. Unusable storage counts again. */
 function alreadyCounted(key: string): boolean {
   try {
     if (window.sessionStorage.getItem(key)) return true;
@@ -24,14 +25,7 @@ function alreadyCounted(key: string): boolean {
   }
 }
 
-/**
- * Tell the server which room is open, once per room per day per tab.
- *
- * Phase 0's analytics (Ideas/overhaul/phase0.md item 4). Only the client knows
- * which page is open -- the dashboard alone reads three modules' data -- so the
- * visit comes from here. Fire and forget: a failed count is never shown to
- * anyone and never retried, because nothing about using the app depends on it.
- */
+/** Report the open room to the usage endpoint once per room, day and tab; fire and forget. */
 export function useVisitCounter() {
   const { pathname } = useLocation();
   const userId = useAuth().user?.id;

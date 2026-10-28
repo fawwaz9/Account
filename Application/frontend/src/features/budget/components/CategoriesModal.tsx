@@ -5,18 +5,18 @@ import { getErrorMessage } from "../../grades/components/AddCourseModal";
 import { useAuth } from "../../../app/auth/AuthContext";
 import Modal from "../../../shared/components/Modal";
 
+/** Props for the categories dialog. */
 interface CategoriesModalProps {
   readonly open: boolean;
   readonly categories: readonly SpendCategory[];
   readonly onClose: () => void;
+  /** Called after each change, so the page reloads its categories. */
   readonly onSaved: () => void;
 }
 
 /**
- * Add, rename, archive and delete the labels expenses are filed under.
- *
- * All four endpoints have existed since categories were built; nothing in the
- * app had ever called three of them.
+ * Add, rename, archive and delete spending categories; a rename saves on blur.
+ * Delete asks in the row first and removes only the label: its expenses become uncategorised.
  */
 export default function CategoriesModal({
   open,
