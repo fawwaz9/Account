@@ -184,3 +184,83 @@ news in the last 30 days. And search needs you to remember a name, while
 **Rejected:** search plus the quiet ones only (offers and interviews vanish);
 server-side search (the season's list is already on the page); searching notes
 (private text turning up in a search result shown on screen).
+
+## D10. Part B is built in one push, by me, item by item; nothing deploys until you say (yours, 2026-10-28)
+
+**Your ask:** carry on with Phase 3 and complete it tonight.
+
+**What "complete" can mean tonight:** every buildable item written, tested and
+committed on `phase3`. Not the exit criteria, which need contributors (a parse
+serving a second student, distributions above the floor). Not the deploy:
+every item adds tables, so each has a schema step, which is yours, and backend
+deploys wait for your go-ahead.
+
+**Your answers:**
+- **Scope:** all buildable items. Strava and Fitbit wait until you register the
+  apps; the exertion score is manual until then.
+- **Method:** by myself, one item at a time, each with its tests and decision,
+  not a team of agents.
+
+**Rejected:** shared figures only (items 3 and 5); a draft with nothing built.
+
+## D11. The shared-aggregate kind: sealed, rebuilt daily, read through a function, floor of 5 (3 for merchants) (yours and mine, 2026-10-28)
+
+Decided once, for items 3, 4, 5, 8, 11 and 12. The plan's version in
+`phase3.md` (Part B) is the rule; this is why.
+
+- **Sealed tables, not shared-read ones.** A shared-read table would rely on
+  every route remembering the floor. A sealed table can't be read by the API's
+  role at all, so the only way to a figure is a definer function that checks
+  the floor itself. It is the Phase 2 D25 rule ("no route returns an aggregate
+  is enforced by the database"), extended with exactly one door per figure.
+- **Floors (yours):** 5 people for anything about people; 3 for a merchant's
+  category. A merchant's category describes the merchant, not the people, and
+  the map only ever answers with a category name, never a count.
+- **Nothing moves in step with one person (closes the question D25 left).**
+  Between two days' counts, a friend who knows you just answered could read
+  your band from the one that grew. So:
+  - **grades and course answers** count only once their term's asking window
+    has closed (180 days after the term ends);
+  - **pay** is published only in whole batches of 5;
+  - **office hours** are a trailing 120 days of check-ins, where a slot's "busy"
+    reading reveals nothing worth protecting.
+
+  **What it costs:** the first distributions appear in mid-2027, from terms
+  ending in December 2026. If that's too slow, the alternative is to publish a
+  term once and freeze it. That's faster, but a late answer is never counted.
+- **The merchant switch is on by default, which is mine to flag.** Grades are
+  opt-in because a grade is sensitive. A merchant's category isn't, and an
+  opt-in map would never reach 3 people in an invite-only app. Settings has the
+  switch, and turning it off removes your votes at the next recount.
+
+**Rejected:** a shared-read aggregate table; per-request recomputation
+(D25: a figure must never change because of one request).
+
+## D12. "Verified" means your review, and no document is ever read (yours, 2026-10-28)
+
+- **A shared outline (item 2)** is verified when its student offers it and you
+  approve it with `scripts/outline_review.py`. The script runs as the tables'
+  owner, lists pending offers by course and term as counts of accounts (never
+  who), and copies an approved outline into the shared table. It is the
+  catalogue review's shape (Phase 2 D9).
+- **A shared salary (item 12)** is verified when it matches the student's own
+  recorded job at that employer within 5%, or when 5 or more shares for the
+  employer agree within 10%. Unverified shares never count.
+- **No pay stub, T4 or other document is read** for either (Phase 2 D20).
+
+**Rejected:** agreement alone for outlines (two students would have to parse
+the same syllabus before either is helped).
+
+## D13. Directory and campus board introduce teams, never people (mine, 2026-10-28)
+
+The vision rules out stranger discovery of any kind (§13.19), and puts a league
+directory and campus leaderboards in Phase 3. Both are kept on the right side
+of that line:
+- **They list teams, by their captains' choice.** No member's name appears in
+  the directory or on the campus board.
+- **The one introduction is asked for.** "Ask to join" shows the captain the
+  requester's name, because the requester chose to send it.
+- **Individuals appear only on the team board,** to teammates, and only for
+  those who opted in.
+
+**Rejected:** individual campus rankings (strangers' names on a list).

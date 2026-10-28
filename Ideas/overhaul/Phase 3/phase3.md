@@ -130,85 +130,142 @@ on the Jobs page opens it; the Jobs page itself is unchanged.
 
 ---
 
-## Part B: the density features (listed, not yet drafted)
+## Part B: the density features (drafted 2026-10-28, D10–D13)
 
-Each of these waits on contributors. The shared ones also move the isolation
-boundary in a new way: Phase 2 has tables everyone reads (the catalogue) and a
-table nobody reads (grade counts). Phase 3 needs **aggregates everyone reads,
-but only above a floor**. That is a new kind, to be settled once for items 2–5,
-8 and 11–12:
+You asked for every buildable item in one push (D10). Each is built on
+`phase3` with its tests and a decision entry, and **nothing is deployed** until
+you say so: every item has a schema step, which is yours. What no build can do:
+the exit criteria need real contributors, and Strava and Fitbit need app
+registrations only you can make.
 
-- **A shared aggregate is written by a job, read through a definer function, and
-  answers nothing below its floor.** The sealed `grade_distributions` table and
-  its daily recount are the start. Its read path, a function returning a
-  course-term's buckets only at 5 or more contributors, is item 3's first step.
-- **Each floor is a decision, per feature,** with the re-identification risk
-  named. Five contributors is the grade floor today (`COHORT_FLOOR`).
+### The shared-aggregate kind (D11), decided once for items 3, 4, 5, 8, 11 and 12
 
-### 2. Shared syllabi switched on
-The second student in a course inherits a verified parse. **Exists:** the
-syllabus pipeline (Phase 1 D16, D27), the catalogue (Phase 2 Part A).
-**To settle:** what "verified" means, and who verifies.
+Phase 2 has tables everyone reads (the catalogue) and a table nobody reads
+(grade counts). Phase 3 needs **figures everyone reads, but only above a
+floor**. The rule:
+
+- **Written by the daily recount, never by a request.** Each aggregate is a
+  sealed table (the existing kind), rebuilt whole by a definer function that
+  the one scheduler route runs. Nothing below its floor is written at all.
+- **Read only through a definer function** that takes a key (a course, an
+  employer) and re-checks the floor. No route can read the table itself.
+- **No user id, and nothing per contribution,** in any aggregate. A test
+  checks every aggregate table's columns.
+- **Floors (yours):** 5 people for anything about people (grades, course
+  answers, office hours, pay, campus standings); 3 people for a merchant's
+  category, which says nothing about anyone.
+- **A figure never moves in step with one person's answer.** Grades and course
+  answers count only once their term's asking window has closed (180 days after
+  the term ends), and pay is published only in whole batches of 5. Phase 2 D25
+  left this question open.
+- **Below the floor, the page says what it's waiting for** ("Shown once 5
+  students have shared"), never a partial figure.
+
+### 2. Shared syllabi
+**What:** the second student in a course inherits a reviewed outline: its
+categories, weights and assessments, with due dates, and no scores, notes or
+syllabus wording.
+**Verified (D12, yours):** the student offers their course's outline from the
+course page, and you approve it with `scripts/outline_review.py`, the way
+catalogue proposals are approved. An approved outline is world knowledge in a
+shared-read table, keyed by course and term. The next student adding that
+course is offered "Use the reviewed outline", and can change anything after.
+**Done when:** an offered outline you approve fills a second student's empty
+course; an unapproved one reaches nobody; the walks cover the new tables.
 
 ### 3. Grade distributions, shown
-"You are at 74%, the class median is 81%", above the floor only. **Exists:**
-collection (Phase 2 item 13, D25), the sealed table, and the daily recount (live
-2026-10-12). **To settle:** the read function, and how the floor is shown when
-it isn't met.
+**What:** on the course page, "How past classes did": each closed term's
+5-point bands, its median band, and where your own grade sits.
+**Exists:** collection and the sealed counts (Phase 2 D25).
+**New:** a read function, `account_grade_distribution(course key)`, answering
+only terms at or above the floor whose asking window has closed.
+**Done when:** a course-term above the floor renders; below it, nothing but
+the waiting line; no route returns another course's counts.
 
 ### 4. Shared merchant map
-The world-knowledge half of categorization: a new user's first import from 25%
-to 80% categorized. **Exists:** the personal three-layer categorizer (Phase 1
-D17). **To settle:** a confirmation floor, and that a merchant name never
-carries a person with it.
+**What:** a new user's first import comes back categorised: "STARBUCKS →
+Coffee", because enough others filed it there.
+**How:** each person's most-used category name for a merchant is one vote. A
+merchant enters the map when 3 or more people agree, and that name holds at
+least 75% of the votes, so contested merchants (Costco) stay out. Transfers,
+e-transfers and payments are never merchants. It sits after your own history
+and before the curated list: **your own version always wins.** It only
+suggests a category you have, by name.
+**Your switch:** Settings → Finances, "Help categorise others' imports", on by
+default (D11 explains why; yours to flip).
 
 ### 5. Crowdsourced course intel
-"Students say 20 hours a week." **Exists:** the term reviews collect hours,
-difficulty, clarity and would-take-again. **To settle:** the floor, and which
-figures to show.
+**What:** "Students say about 9 hours a week · difficulty 3.6/5 · clarity
+4.1/5 · 70% would take it again," on the course page, from term reviews.
+**How:** pooled across a course's closed terms. Each figure shows only when 5
+or more people answered that question, so a rating 2 people gave is never
+shown.
 
-### 6–7. Exertion score, fitness integrations, adaptive goals
-Points = duration × MET × corroboration weight, the formula versioned and never
-rewritten. Strava or Fitbit, else manual. **To settle:** the OAuth providers,
-token storage, and that this is the most maintenance-heavy item in the vision.
+### 6–7. Exertion score and adaptive goals
+**What:** log an activity (kind, minutes) and it earns points = hours × MET ×
+corroboration weight, with the formula version stored on each row and never
+rewritten. A manual entry weighs 1.0 today; device sources get their weights
+when Strava or Fitbit are connected (left for your app registrations).
+**Goal:** a suggested weekly target from your last 4 weeks plus 10%, with a
+dip to 70% in a week holding exams, always shown as advice beside the goal
+you set, never imposed.
 
-### 8. Campus and city leaderboards
-Team → league → campus → city. Opt-in, precomputed. **Waits on** item 6.
+### 8. Leaderboards
+**Team board:** this week's points for teammates who opted in, seen only by
+teammates who opted in too. **Campus board:** teams ranked by their opted-in
+members' points, for teams whose captain listed them, shown only once 5 teams
+are on it. Individuals never appear on the campus board, only team names, so
+it introduces nobody to anybody. A city board waits for a second campus.
 
-### 9–10. Open league directory, club management
-**Never launch empty.** **Waits on** enough teams (Phase 2's criterion).
+### 9. Open league directory
+**What:** captains can list their team (sport, level, area, "looking for
+players", a line about it). Listed teams are browsable and filterable, and
+greyed after 30 days without a game. "Ask to join" sends the captain your name
+and a short message; they accept or decline.
+**Never launch empty:** the directory shows nothing until 5 teams are listed.
+**Anti-spam:** one pending request per team, five pending at most, 200
+characters.
+
+### 10. Club management
+**What:** a club with members (joined by link, like teams), polls with one vote
+each, announcements, and club events that appear on every member's calendar.
+Only the club's owner posts, runs polls and adds events. Members see names,
+never other members' ids.
 
 ### 11. Office-hours radar
-Self-reported check-ins, aggregates only.
+**What:** "At office hours now? How's the line?" on the course page: three
+taps (no line, short, long). Each course shows its busy slots: "Tue 2pm:
+usually a long line". The value exchange is stated beside the buttons.
+**How:** a slot (weekday and hour) shows once 5 people have checked in there in
+the last 120 days.
 
 ### 12. Co-op salary transparency
-Anonymous offers with explicit consent, verified by matching a payroll record or
-converging submissions. Unverified offers never aggregate. **Item 1 is its way
-in:** an offer recorded in the tracker is the one a student can choose to
-submit.
+**What:** on an offer in the tracker, "Share this offer's pay anonymously",
+off unless you turn it on. Jobs → Applications shows each employer's typical
+hourly pay (median and middle half) once 5 verified people have shared.
+**Verified (D12):** the offer matches a job you have recorded at that employer,
+within 5%; or 5 or more shares for the employer agree within 10%. Unverified
+shares never count. **No pay stub or T4 is read.** Published only in whole
+batches of 5, so one new share can't be picked out of the change.
 
 ### 13. Gym buddy
-Only within existing connections. No stranger discovery.
+**What:** "I'm looking for someone to train with", with times and a note.
+You see which of your partners and teammates are also looking, and only while
+you're visible yourself. No stranger is ever shown.
 
----
+## Suggested order (as built, D10)
 
-## Suggested order
-
-1. **The tracker (item 1).** No density needed, so it can ship now. Its offers
-   feed item 12 later.
-2. **The shared-aggregate kind**, decided once, with item 3's read function as
-   its first use. It's the smallest step that proves the new boundary, on data
-   already being collected.
-3. **Items 3 and 5**, rendering as soon as any course-term clears the floor.
-4. **Items 2 and 4**, once cohorts exist. Each lifts a new user's first week.
-5. **Items 6–13**, once Phase 2's teams exist. They need people to compete
-   with.
+Safety first, then the figures, then the people features:
+1. **D11's kind**, proven with item 3 on the counts already being collected.
+2. **Items 5, 11, 12 and 4**, the other aggregates.
+3. **Item 2**, the shared outlines and your review script.
+4. **Item 13, then 6–8,** on connections that already exist.
+5. **Items 9–10**, the directory and clubs.
 
 ## Open questions
 
-- The tracker's four facts above.
-- Whether Part B is drafted in full now, or item by item as each one's
-  contributors appear. I'd go item by item.
+- Strava and Fitbit: which first, once you register the apps.
+- The merchant switch's default (on, D11).
 
 ## What the vision says that has since moved
 
