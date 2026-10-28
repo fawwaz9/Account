@@ -13,9 +13,9 @@ users, the job application tracker, and leave Phase 2 open for its usage
 criteria.
 
 - **Part A, the job application tracker,** is planned in full below (item 1).
-- **Part B, the density features** (items 2–13), is listed and checked against
-  the code, but not drafted in detail. Each needs contributors before it can
-  show anything, and gets the full draft before its work starts.
+- **Part B, the density features** (items 2–13), was drafted and built on
+  2026-10-28 (D10–D13), **not yet deployed**: Batch 3 in the runbook. Most of
+  it shows nothing until enough people contribute, by design.
 
 ## What Phase 3 is for
 
@@ -49,23 +49,26 @@ From §11, unchanged:
 tracker is not on the list: it is a single-user feature riding in this phase
 because the vision put it here, and it has its own "Done when".
 
-## Status at a glance (2026-10-12)
+## Status at a glance (2026-10-28)
+
+Every item is built. Items 2–13 wait on Batch 3's schema step and deploy, and
+then on contributors (D11's floors).
 
 | # | Item | Status |
 |---|---|---|
 | 1 | Job application tracker | **Deployed 2026-10-13** (`72bb9f2`), with D2–D6; seasons (D7) 2026-10-14 (`e5d5eb6`) |
-| 2 | Shared syllabi | Pipeline built (Phase 1 D16); catalogue built (Phase 2 Part A). Waits on cohorts |
-| 3 | Grade distributions shown | Collection live (Phase 2 item 13), recount job live since 2026-10-12. Waits on 5+ contributors per course-term |
-| 4 | Shared merchant map | Personal categorizer built (Phase 1 D17). Shared layer not started |
-| 5 | Crowdsourced course intel | Collection live (term reviews' hours, difficulty, clarity). Display not started |
-| 6 | Exertion score and fitness integrations | Not started. Teams live under Fitness |
-| 7 | Adaptive exertion goals | Not started; needs item 6 |
-| 8 | Campus and city leaderboards | Not started |
-| 9 | Open league directory | Not started; never launch empty |
-| 10 | Club management | Not started |
-| 11 | Office-hours radar | Not started |
-| 12 | Co-op salary transparency | Not started; item 1's offers are its natural way in |
-| 13 | Gym buddy, scoped | Not started |
+| 2 | Shared syllabi | **Built** (`e24b42b`): offered outlines, your review script, "Use it" on an empty course |
+| 3 | Grade distributions shown | **Built** (`c501b90`): closed terms above the floor on the course page |
+| 4 | Shared merchant map | **Built** (`b100c82`): a layer after your own history, 3 people agreeing |
+| 5 | Crowdsourced course intel | **Built** (`79d0c91`): hours, difficulty, clarity and "take again" per figure above the floor |
+| 6 | Exertion score | **Built** (`1584637`), manual entries. Strava and Fitbit wait on your app registrations |
+| 7 | Adaptive exertion goals | **Built** (`1584637`): last 4 weeks plus 10%, eased in exam weeks |
+| 8 | Campus leaderboards | **Built** (`294301a`): team board (opt-in), campus board of listed teams. A city board waits for a second campus |
+| 9 | Open league directory | **Built** (`294301a`): opens at 5 listed teams; ask to join |
+| 10 | Club management | **Built** (`06c6726`): members by link, posts, polls, calendar events |
+| 11 | Office-hours radar | **Built** (`4acc31e`): three taps, slots above the floor |
+| 12 | Co-op salary transparency | **Built** (`a479d50`): verified, published in batches of 5 |
+| 13 | Gym buddy, scoped | **Built** (`c16c14a`): partners and teammates only |
 
 ---
 

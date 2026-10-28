@@ -181,3 +181,106 @@ the `72bb9f2` deployment. The table stays; the older API never reads it.
 - Health ok. The 6 season requests answer 401 against two 404 controls.
 - No errors in the logs. Settings carried over.
 - The live site matches the build (38 files).
+
+## Batch 3: Part B, items 2-13 (D10-D13). NOT DEPLOYED: waiting on your go-ahead
+
+Built 2026-10-28 on `phase3` (`c501b90` to `06c6726`), every item in one schema
+run. Nothing existing is altered or dropped except five new columns on `teams`.
+The redocumentation commits (`4a65dcc`, `b0d143f`) ride in this batch, because
+`phase3` was based on `redoc`.
+
+| What | Schema change |
+|---|---|
+| Item 3: grade distributions shown | None: a read function on the sealed counts |
+| Item 5: course intel | **New sealed table `course_intel`** |
+| Item 11: office-hours radar | **New `office_hour_checkins`** (per-user), **sealed `office_hour_slots`** |
+| Item 12: co-op salaries | **New `salary_shares`** (per-user), **sealed `salary_figures`** |
+| Item 4: shared merchant map | **Sealed `merchant_categories`**; a preference, no column |
+| Item 2: shared outlines | **New `outline_offers`** (per-user), **shared-read `shared_outlines`** |
+| Item 13: gym buddy | **New `gym_buddies`** (per-user) |
+| Items 6-7: exertion and goals | **New `activities`** (per-user); the goal is a preference |
+| Items 8-9: boards and directory | **Five columns on `teams`** (`listed`, `level`, `area`, `looking_for_players`, `blurb`); **new `team_join_requests`** (per-user, no direct write); **sealed `campus_board`** |
+| Item 10: clubs | **New `clubs`** (per-user), `club_members` (child, no direct write), `club_invites`, `club_posts`, `club_polls`, `club_events` (children), `club_votes` (per-user, no direct write) |
+
+19 new tables in all, 53 → 72. 22 new definer functions (59 in `rls.FUNCTIONS`),
+plus four plain helpers only they call (`account_term_counted`,
+`account_employer_key`, `account_merchant_key`, `account_listed_team_ids`).
+
+**The scheduler needs nothing new.** `account-grade-recount` already calls
+`POST /api/internal/distributions/recount` daily at 09:30 UTC; that route now
+runs every rebuild (`_database/recounts.py`) and answers with a count per
+aggregate: `rows`, `course_intel`, `office_hours`, `salaries`,
+`merchant_categories`, `campus_board`.
+
+### 1. Apply the schema (19 new tables, five columns on `teams`; nothing dropped)
+
+```sh
+cd ~/VS_Code/Account/Application/backend
+git checkout phase3 && git pull
+set -a; source ../.env; set +a
+DATABASE_URL="$SUPABASE_DATABASE_URL" .venv/bin/python -m app._database.schema
+```
+
+**Verify, in the SQL editor:**
+
+A. **Every new table has row security; the sealed ones have no policy.** 19 rows.
+`shared_outlines` shows `SELECT`; the five sealed tables show no policy (NULL);
+every other row is `{account_app}` and `ALL`:
+
+```sql
+SELECT c.relname, c.relrowsecurity, p.cmd, p.roles
+FROM pg_class c LEFT JOIN pg_policies p ON p.tablename = c.relname
+WHERE c.relname IN ('course_intel','office_hour_checkins','office_hour_slots','salary_shares',
+  'salary_figures','merchant_categories','outline_offers','shared_outlines','gym_buddies','activities',
+  'team_join_requests','campus_board','clubs','club_members','club_invites','club_posts','club_polls',
+  'club_votes','club_events')
+ORDER BY 1;
+```
+
+B. **Grants follow each kind.** No row at all for the five sealed tables;
+`shared_outlines` `SELECT` only; `team_join_requests`, `club_members` and
+`club_votes` `DELETE,SELECT`; every other new table `DELETE,INSERT,SELECT,UPDATE`;
+and only `account_app` anywhere:
+
+```sql
+SELECT table_name, grantee, string_agg(privilege_type, ',' ORDER BY privilege_type)
+FROM information_schema.role_table_grants
+WHERE table_name IN ('course_intel','office_hour_checkins','office_hour_slots','salary_shares',
+  'salary_figures','merchant_categories','outline_offers','shared_outlines','gym_buddies','activities',
+  'team_join_requests','campus_board','clubs','club_members','club_invites','club_posts','club_polls',
+  'club_votes','club_events')
+  AND grantee <> (SELECT tableowner FROM pg_tables WHERE tablename = table_name)
+GROUP BY 1, 2 ORDER BY 1, 2;
+```
+
+C. **The team columns are there.** Five rows; `listed` and `looking_for_players`
+are `NO` with default `false`:
+
+```sql
+SELECT column_name, is_nullable, column_default FROM information_schema.columns
+WHERE table_name = 'teams'
+  AND column_name IN ('listed', 'level', 'area', 'looking_for_players', 'blurb')
+ORDER BY 1;
+```
+
+D. **Every function exists.** The schema gate in the deploy checks the 59 names,
+so a missing one stops the deploy before traffic moves.
+
+**Undo:** not needed. The tables are new and the current API never reads them;
+the team columns default to off.
+
+### 2. Deploy (mine, after the read-backs and your go-ahead)
+
+```sh
+./Application/deploy.run.sh all --yes
+```
+
+**Verify:**
+- The gate reports row-level security on for 72 of 72 tables.
+- A sample of the new routes answers 401 against a 404 control: `/api/grades/<id>/courses/<course>/class-figures`, `/api/fitness/<id>/exertion`, `/api/clubs/<id>`, `/api/jobs/<id>/applications/salaries`.
+- A manual run of the recount door answers the six keys above.
+- No errors in the new revision's logs; the live site matches the build.
+
+**Rollback:** both halves together, Cloud Run and Pages to the revisions
+`ROLLBACK.md` records as current when you deploy. The schema stays: the older
+API never reads the new tables, and ignores the new team columns.

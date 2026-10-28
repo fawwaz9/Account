@@ -58,11 +58,12 @@ cannot be forgotten. `policy_statements` raises on a table that fits none.
 | Root | `users`: a row is yours if it is you | 1 |
 | Per-user | carries your `user_id` | most |
 | Child | exactly one foreign key to an owned table; yours if its parent is | e.g. `grades`, `task_members`, `games` |
-| Shared-read | every identified caller reads it; the app role writes none of it | `catalogue_courses`, `catalogue_prerequisites` |
-| Sealed | row security with no policy and no grant, the app role's included | `grade_distributions` |
+| Shared-read | every identified caller reads it; the app role writes none of it | `catalogue_courses`, `catalogue_prerequisites`, `shared_outlines` |
+| Sealed | row security with no policy and no grant, the app role's included | `grade_distributions` and Phase 3's aggregates (below) |
 
 **No-direct-write** is a refinement of the first three, not a sixth kind.
-`task_members`, `event_members`, `team_members` and `games` are readable and
+`task_members`, `event_members`, `team_members`, `games`, and Phase 3's
+`team_join_requests`, `club_members` and `club_votes` are readable and
 deletable by the app role, never insertable or updatable. Their rows come only
 from a definer function. That is what makes "nobody is put on anything without
 accepting" a property of the database rather than of the routes.
@@ -188,6 +189,29 @@ bucket. The review itself holds no copy of the grade. A recount is triggered
 through `/api/internal/distributions/recount`, which answers 403 without its
 secret. Its daily schedule is the owner's optional step, and nothing displays
 the distributions until Phase 3.
+
+## Shared figures above a floor (Phase 3, D11)
+
+A figure everyone reads but nobody can trace to a person: grade distributions,
+course intel, office-hour slots, co-op pay, the merchant map and the campus board.
+One rule for all of them:
+- **A sealed table**, rebuilt whole by its own definer recount, run from the one
+  scheduler route (`_database/recounts.py`). Nothing below its floor is written.
+- **One definer read per table**, taking a key and checking the floor again, so no
+  route can read an aggregate any other way (`_database/aggregates.py` holds the
+  SQLite twins).
+- **No user id**, and nothing per contribution, in any aggregate table (a test
+  checks every sealed table's columns).
+- **Floors:** 5 people (`COHORT_FLOOR`), or 3 for a merchant's category
+  (`MERCHANT_FLOOR`). The directory and campus board wait for 5 listed teams.
+- **Nothing moves in step with one person.** Grades and course answers count only
+  after their term's asking window has closed (`COUNTED_AFTER_DAYS`), and pay is
+  published only in whole batches of 5.
+
+Adding one means: a sealed model, its recount and read in `rls.FUNCTION_SQL` with
+their SQLite twins, an entry in `recounts.RECOUNTS`, a row in
+`isolation_world.seed_catalogue`, and the outsider and no-identity proofs in
+`test_rls.py`.
 
 ## Who gets in
 

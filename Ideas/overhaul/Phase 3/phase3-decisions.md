@@ -264,3 +264,89 @@ of that line:
   those who opted in.
 
 **Rejected:** individual campus rankings (strangers' names on a list).
+
+## D14. What I decided while building Part B, item by item (mine, 2026-10-28; yours to overturn)
+
+Each is small enough to change in one commit. Listed so nothing is decided
+silently.
+
+**Item 3, distributions.** A term shows only after its asking window has closed
+(D11), so the first ones appear in mid-2027. The read function checks the floor
+again, whatever the sealed table holds. Your own band is your final grade, or
+your running average without one.
+
+**Item 5, course intel.** One answer per person per course: their latest
+counted term's review. Hours are a median, ratings a mean, both to one decimal;
+"would take it again" is a whole percentage.
+
+**Item 11, office hours.**
+- Offered only on a course in your current term.
+- A second tap within 30 minutes changes the first, so one visit is one answer,
+  and Undo removes it.
+- A slot is the local weekday and hour of the check-in, counted over the last 120
+  days, and reads as the most common answer, the busier one on a tie.
+
+**Item 12, salaries.**
+- Pay is compared per hour: monthly × 12 ÷ 2080, yearly ÷ 2080.
+- Employer names are normalised ("Shopify Inc." = "shopify") and shown as most
+  people wrote them.
+- A share holds no amount. If the offer's pay is removed, it stops counting.
+
+**Item 4, merchants.**
+- A person's vote is the category holding 80% of their own expenses at that
+  merchant, the same bar their personal map uses.
+- A merchant needs 75% of the votes as well as 3 people.
+- Words like transfer, e-transfer, payment, deposit and ATM mark a description
+  that is never a merchant.
+
+**Item 2, outlines.**
+- An outline is the categories above 0% and every assessment's name, category and
+  due date.
+- "Use it" only fills a course with no grades. Exams become calendar blocks and
+  the rest tasks, as the syllabus reader does.
+- Offering again resets the review. An outline you approved stays shared even if
+  its student takes the offer back.
+
+**Item 13, gym buddy.** Names shown are people's current display names, as
+invite previews already show. In the isolation tests' paired world, B isn't
+looking, so the walks can tell a leak from a share.
+
+**Items 6–7, exertion.**
+- Points are hours × MET × weight × 10, rounded.
+- The METs are formula version 1, from the Compendium of Physical Activities'
+  moderate values. A manual entry weighs 1.0.
+- The suggested goal rounds to the nearest 5, never below 5, and needs two weeks
+  with any activity.
+
+**Items 8–9, boards and directory.**
+- One "list this team on campus" switch covers both the directory and the campus
+  board.
+- Asking to join is closed until the directory opens (5 listed teams), and a
+  declined request can't be sent again.
+- The campus board counts the UTC week and is rebuilt daily. A team's board covers
+  your own Monday-to-Sunday week.
+- `teams.level` is checked by the request schema, not the database: the column
+  goes onto a live table, and a check added there would exist only on fresh
+  databases.
+
+**Item 10, clubs.**
+- The section sits on the Fitness page under teams for now. Say if clubs should
+  have a page of their own.
+- A club holds up to 200 members. A poll closes at the end of its last day (UTC),
+  and members see counts, never who voted for what.
+- Club events show on members' calendars read-only, pointing back to the club.
+
+**The branch.** `phase3` was fast-forwarded to `redoc` before Part B began, so
+the redocumentation and the new audit ship with Batch 3. That answers "merge
+redoc?" from earlier; say if you'd rather keep them apart.
+
+**Evidence, across Part B:**
+- Every item has its own test file, and each runs on SQLite and Postgres. That
+  adds 377 backend tests (2,606 → 2,983 on SQLite) and 55 frontend ones
+  (792 → 847), all passing.
+- Every new table is in the isolation, non-interference and RLS walks, and every
+  definer function in the outsider and no-identity proofs.
+- **Mutation check: 162 of 162 caught.** It removed or loosened rules item by
+  item. Twelve survived the first run. Eleven were missing tests, now added. One
+  was my local database keeping a grant from an earlier install; a clean
+  database, as in CI, catches it.
