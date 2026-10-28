@@ -1,4 +1,8 @@
-# Application audit
+# Application audit (archived)
+
+> **Archived 2026-10-28.** This is the first audit (68 findings, 2026-09-10 to
+> 2026-10-19), kept as a record. Its numbers (#1-#68) are the ones older notes and
+> commit messages cite. The current audit is [audit.md](audit.md).
 
 Written 2026-09-10 against the working tree at `ca2884f` plus the uncommitted
 account-activity work, and kept current as findings close -- most recently by the

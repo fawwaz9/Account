@@ -188,7 +188,7 @@ are the size of each job rather than an impression of it.
 
 ## From the front-end review, 2026-09-28
 - An outside model walked the live site and filed 23 claims. Nine held; they are
-  audit.md #57-#65. Fourteen did not, and are written up there so they are not
+  audit-archive.md #57-#65. Fourteen did not, and are written up there so they are not
   raised again -- including both of its "criticals", which were one observation
   and not a defect.
 - Do #58 first. UserPreferences declares seven fields Settings never sends, and

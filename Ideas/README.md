@@ -53,10 +53,14 @@ went wrong, are what you need when you change any of it.
 alternatives and **what would change my mind**. That last part is the point.
 Several have since been tested by reality and say what happened.
 
-**[audit.md](audit.md)** — 56 findings, tiered, each with how it was verified.
-A record, not a to-do list: one item is still open. The status passes at the top
-say what closed when, and three entries record fixes that were made *differently*
-from what the audit recommended, with the reasons.
+**[audit.md](audit.md)** — the current audit, opened 2026-10-28 for the
+invite-only release: a checklist by priority, every issue explained with the files
+it touches and what its fix could break, a timeline, and In progress and Completed
+sections that issues move through as they are fixed.
+
+**[audit-archive.md](audit-archive.md)** — the first audit, 68 findings from
+2026-09-10 to 2026-10-19, kept as a record. Older notes and commits cite its
+numbers (#1-#68).
 
 **[jobs-plan.md](jobs-plan.md)** — the worked example. One module planned, built
 and logged across three stages, including where the plan was wrong. Finished.
@@ -69,7 +73,7 @@ words. Six lines written before any of this existed. Kept exactly as it was.
 ## What was removed, and why
 
 `to_do.txt`, `fix.txt` and `features.txt` are gone. Each was superseded rather
-than abandoned: `fix.txt`'s findings were re-verified into `audit.md` (including
+than abandoned: `fix.txt`'s findings were re-verified into what is now `audit-archive.md` (including
 seven that did not survive checking, recorded so they are not raised again),
 `to_do.txt` became `whats_next.txt` and then split into `next.md` and
 `shipped.md` on 2026-10-02, once the shipped half had grown past the open half

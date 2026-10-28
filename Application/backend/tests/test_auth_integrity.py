@@ -1,4 +1,4 @@
-"""Regression tests for the account-takeover path in Ideas/audit.md."""
+"""Regression tests for the account-takeover path in Ideas/audit-archive.md."""
 import uuid
 
 from app.Users.schemas.user import UserUpdate

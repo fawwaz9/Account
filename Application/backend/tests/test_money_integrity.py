@@ -1,4 +1,4 @@
-"""Regression tests for the ledger bugs found in Ideas/audit.md.
+"""Regression tests for the ledger bugs found in Ideas/audit-archive.md.
 
 Each one fails against the code as it was when the audit was written. They exist
 because these are the defects most likely to be reintroduced by a later refactor:
