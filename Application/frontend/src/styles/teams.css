@@ -186,3 +186,66 @@
   padding: 6px 0;
   border-bottom: 1px solid var(--border);
 }
+
+/* Activity (Phase 3 items 6-7): the week against the goal, the goal row, the
+   log form and the recent list. */
+.activityWeek {
+  margin: 0 0 6px;
+}
+
+.activityBar {
+  height: 8px;
+  margin: 0 0 12px;
+  border-radius: 4px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.activityBar span {
+  display: block;
+  height: 100%;
+  background: var(--gold);
+}
+
+.activityGoal {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.activityGoal .calField {
+  max-width: 140px;
+}
+
+.activitySuggestion {
+  margin: 6px 0 12px;
+}
+
+.activityForm {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+}
+
+.activityList {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+
+.activityList li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.88rem;
+}
+
+.activityConfirm {
+  display: flex;
+  gap: 6px;
+}

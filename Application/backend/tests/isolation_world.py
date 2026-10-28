@@ -63,6 +63,7 @@ from app._database.models import (
     EventMemberModel,
     GradeDistributionModel,
     CourseIntelModel,
+    ActivityModel,
     GymBuddyModel,
     OutlineOfferModel,
     SharedOutlineModel,
@@ -362,6 +363,9 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
     # Phase 3 item 13: looking for someone to train with, marker in the note.
     add(GymBuddyModel(id=new_id(), user_id=user_id, looking=True, times=f"{marker} mornings",
                       note=f"{marker} gym note"))
+    # Phase 3 item 6: a run, with the marker in its note.
+    add(ActivityModel(id=new_id(), user_id=user_id, on_date=WORLD_DAY, kind="run", minutes=30, met=9.8, weight=1.0,
+                      points=49, formula_version=1, source="manual", note=f"{marker} run note"))
     _ = (event, transaction, recurring_task)
 
     db.commit()

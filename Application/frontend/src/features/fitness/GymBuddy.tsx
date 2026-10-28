@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import HelpTip from "../../shared/components/HelpTip";
-import { fetchGymBuddies, GymBuddies, saveGymBuddy } from "./fitnessApi";
+import { fetchGymBuddies, GymBuddies, saveGymBuddy } from "./api";
 
 /**
  * "Gym buddy" (Phase 3 item 13): say you're looking for someone to train with, and see which

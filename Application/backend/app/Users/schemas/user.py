@@ -133,6 +133,10 @@ class UserPreferences(BaseModel):
             flagged, 0-48.
         share_merchant_categories: Whether the user's confident category per merchant
             is counted, with no name, toward the shared merchant map (Phase 3 item 4).
+        exertion_goal: The weekly exertion points the user aims for; None for no goal
+            (Phase 3 item 7). Set only through the goal route, so it can be cleared.
+        leaderboard_opt_in: Whether the user's weekly points appear on their teams'
+            boards and count toward listed teams' standing (Phase 3 item 8).
     """
     timezone: str = Field(default="America/Regina", description="IANA timezone")
     currency: str = Field(default="CAD", min_length=3, max_length=3)
@@ -175,6 +179,11 @@ class UserPreferences(BaseModel):
     #: Phase 3 item 4 (D11): on unless switched off. Off takes the user's votes
     #: out at the next recount; reading the map is never gated by it.
     share_merchant_categories: bool = True
+    #: Phase 3 item 7: advised, never imposed. Not on UserPreferencesPatch,
+    #: where a null means "no opinion" and so could never clear it.
+    exertion_goal: int | None = Field(default=None, ge=1, le=10000)
+    #: Phase 3 item 8 (D13): off until chosen.
+    leaderboard_opt_in: bool = False
 
     @field_validator("event_colors")
     @classmethod
@@ -258,6 +267,7 @@ class UserPreferencesPatch(BaseModel):
         exam_buffer_hours: Hours before an exam a shift may not end within, 0-48.
         share_merchant_categories: Count the user's merchant categories toward the
             shared map.
+        leaderboard_opt_in: Show the user's weekly points on their teams' boards.
     """
 
     timezone: str | None = None
@@ -278,6 +288,7 @@ class UserPreferencesPatch(BaseModel):
     use_estimate_ratio: bool | None = None
     exam_buffer_hours: int | None = Field(default=None, ge=0, le=48)
     share_merchant_categories: bool | None = None
+    leaderboard_opt_in: bool | None = None
 
     # Both validators pass `None` straight through. An explicit null means "no
     # opinion" here, and running the check on it would reject the one value that

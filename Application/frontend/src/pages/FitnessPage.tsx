@@ -9,7 +9,8 @@ import {
   removeTeamMember, teamInviteLink,
 } from "../features/teams/api";
 import { useApiRefresh } from "../shared/hooks/useApiRefresh";
-import GymBuddy from "../features/teams/GymBuddy";
+import ActivityCard from "../features/fitness/ActivityCard";
+import GymBuddy from "../features/fitness/GymBuddy";
 import "../styles/teams.css";
 
 /**
@@ -110,6 +111,7 @@ export default function FitnessPage() {
 
       {/* Phase 3: beyond the teams themselves. */}
       <div className="fitnessMore">
+        <ActivityCard userId={user.id} />
         <GymBuddy userId={user.id} />
       </div>
     </div>

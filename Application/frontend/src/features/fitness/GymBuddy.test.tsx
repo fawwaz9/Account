@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 const api = { fetchGymBuddies: vi.fn(), saveGymBuddy: vi.fn() };
-vi.mock("./fitnessApi", () => ({
+vi.mock("./api", () => ({
   fetchGymBuddies: (...a: unknown[]) => api.fetchGymBuddies(...a),
   saveGymBuddy: (...a: unknown[]) => api.saveGymBuddy(...a),
 }));

@@ -181,6 +181,7 @@ class UserModel(Base):
     job_applications = relationship("JobApplicationModel", cascade=cascade)
     salary_shares = relationship("SalaryShareModel", cascade=cascade, overlaps="application,salary_share")
     gym_buddy = relationship("GymBuddyModel", cascade=cascade, uselist=False)
+    activities = relationship("ActivityModel", cascade=cascade)
     application_seasons = relationship("ApplicationSeasonModel", cascade=cascade)
     partnerships = relationship(
         "PartnershipModel", cascade=cascade, foreign_keys="PartnershipModel.user_id"
@@ -2634,6 +2635,54 @@ class GymBuddyModel(Base):
     times = Column(String, nullable=True)
     note = Column(String, nullable=True)
     updated_at = Column(DateTime, nullable=False, default=utc_now)
+
+
+#: Phase 3 item 6. What an activity can be; each has a MET in
+#: exertion_service.MET_BY_VERSION.
+ACTIVITY_KINDS = ("walk", "run", "cycle", "swim", "gym", "sport", "yoga", "hike", "other")
+
+
+class ActivityModel(Base):
+    """Per-user row: one logged activity and the exertion points it earned.
+
+    Points are worked out when it is logged, by the formula version stored with it:
+    hours x MET x corroboration weight x 10, rounded. A later formula never rewrites
+    an earlier row; the MET and weight it used are kept beside it.
+
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        on_date: The day it happened, in the user's own calendar.
+        kind: What it was: one of `ACTIVITY_KINDS`.
+        minutes: How long, 1-600.
+        met: The MET the formula used for its kind.
+        weight: The corroboration weight: 1.0 for a manual entry today.
+        points: The points it earned.
+        formula_version: Which formula worked them out.
+        source: Where it came from: "manual" today.
+        note: Anything about it, up to 120 characters; optional.
+        created_at: When it was logged.
+    """
+
+    __tablename__ = "activities"
+    __table_args__ = (
+        CheckConstraint(_one_of("kind", ACTIVITY_KINDS), name="ck_activity_kind"),
+        CheckConstraint("minutes BETWEEN 1 AND 600", name="ck_activity_minutes"),
+        CheckConstraint("points >= 0", name="ck_activity_points"),
+    )
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    on_date = Column(Date, nullable=False)
+    kind = Column(String, nullable=False)
+    minutes = Column(Integer, nullable=False)
+    met = Column(Float, nullable=False)
+    weight = Column(Float, nullable=False)
+    points = Column(Integer, nullable=False)
+    formula_version = Column(Integer, nullable=False)
+    source = Column(String, nullable=False, default="manual")
+    note = Column(String, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
 
 
 #: How many people besides the captain a team can hold (Phase 2 D26). Written
