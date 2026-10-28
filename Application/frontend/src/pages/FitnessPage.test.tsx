@@ -18,6 +18,11 @@ vi.mock("../features/teams/api", async () => {
   return { ...real, ...mocked };
 });
 vi.mock("../app/auth/AuthContext", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
+// The cards beyond teams (Phase 3) have tests of their own; here they stay quiet.
+vi.mock("../features/teams/fitnessApi", () => ({
+  fetchGymBuddies: () => Promise.reject(new Error("not under test")),
+  saveGymBuddy: vi.fn(),
+}));
 
 import FitnessPage from "./FitnessPage";
 import InvitePage from "./InvitePage";

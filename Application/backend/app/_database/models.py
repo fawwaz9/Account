@@ -180,6 +180,7 @@ class UserModel(Base):
     teams = relationship("TeamModel", cascade=cascade)
     job_applications = relationship("JobApplicationModel", cascade=cascade)
     salary_shares = relationship("SalaryShareModel", cascade=cascade, overlaps="application,salary_share")
+    gym_buddy = relationship("GymBuddyModel", cascade=cascade, uselist=False)
     application_seasons = relationship("ApplicationSeasonModel", cascade=cascade)
     partnerships = relationship(
         "PartnershipModel", cascade=cascade, foreign_keys="PartnershipModel.user_id"
@@ -2607,6 +2608,32 @@ class SharedOutlineModel(Base):
     outline = Column(JSON, nullable=False)
     source = Column(String, nullable=False, default="reviewed-offer")
     approved_at = Column(DateTime, nullable=False, default=utc_now)
+
+
+class GymBuddyModel(Base):
+    """Per-user row: whether the student is looking for someone to train with (Phase 3 item 13).
+
+    Shown only to their own connections (mutual partners and teammates) who are
+    looking too, through `account_gym_buddies`; never to a stranger. One per user.
+
+    Attributes:
+        id: Primary key.
+        user_id: Owner; unique.
+        looking: Whether they are looking now.
+        times: When they could go, such as "weekday mornings"; optional, 80 characters.
+        note: Anything else, such as "beginner, lifting"; optional, 120 characters.
+        updated_at: When it last changed.
+    """
+
+    __tablename__ = "gym_buddies"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    #: A unique index rather than a constraint, so it also serves the foreign key.
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, unique=True, index=True)
+    looking = Column(Boolean, nullable=False, default=False)
+    times = Column(String, nullable=True)
+    note = Column(String, nullable=True)
+    updated_at = Column(DateTime, nullable=False, default=utc_now)
 
 
 #: How many people besides the captain a team can hold (Phase 2 D26). Written

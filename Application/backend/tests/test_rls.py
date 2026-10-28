@@ -503,6 +503,7 @@ DEFINER_SIGNATURES = (
     "account_correct_team_game(uuid, date, text, integer, integer)",
     "account_delete_team_game(uuid)",
     "account_leave_team(uuid)",
+    "account_gym_buddies()",
 )
 
 
@@ -569,6 +570,7 @@ def test_only_the_app_role_can_call_the_cross_user_functions(owner_engine):
             "SELECT account_correct_team_game(gen_random_uuid(), current_date, 'x', 1, 1)",
             "SELECT account_delete_team_game(gen_random_uuid())",
             "SELECT account_leave_team(gen_random_uuid())",
+            "SELECT * FROM account_gym_buddies()",
         ):
             with outsider.connect() as conn:
                 with pytest.raises(ProgrammingError, match="permission denied"):
@@ -1344,3 +1346,25 @@ def test_with_no_identity_the_team_functions_do_nothing(worlds, app_session):
     app_session.rollback()
     assert owner.execute(text("SELECT count(*) FROM games")).scalar() == 2
     assert owner.execute(text("SELECT count(*) FROM team_members")).scalar() == 2
+
+
+# --------------------------------------------------------------------------
+# Gym buddies (Phase 3 item 13): connections only, through the function.
+# --------------------------------------------------------------------------
+
+def test_a_gym_buddy_is_seen_only_by_a_connection_through_the_function(worlds, app_session):
+    from app._database.models import GymBuddyModel
+    owner, a, b, _, _ = worlds
+    stranger = make_user(owner, "rls-stranger@example.com")
+    owner.add(GymBuddyModel(user_id=stranger.id, looking=True, times="anytime"))
+    owner.query(GymBuddyModel).filter_by(user_id=b.id).update({"looking": True})
+    owner.commit()
+    act_as(app_session, a.id)
+    assert app_session.execute(text("SELECT count(*) FROM gym_buddies")).scalar() == 1, "only A's own row"
+    rows = app_session.execute(text("SELECT name, via FROM account_gym_buddies()")).all()
+    assert [r.name for r in rows] == [b.name], "B, a partner and teammate; never the stranger"
+    assert "partner" in rows[0].via
+    app_session.rollback()
+    app_session.info.clear()
+    assert app_session.execute(text("SELECT * FROM account_gym_buddies()")).all() == []
+

@@ -91,6 +91,8 @@ FUNCTIONS = (
     # Phase 3 item 4 (D11): a merchant's category, once 3 people agree.
     "account_recount_merchant_categories",
     "account_merchant_categories",
+    # Phase 3 item 13: connections also looking for someone to train with.
+    "account_gym_buddies",
     # Phase 2 item 11 (D26): teams and games.
     "account_on_team",
     "account_team_invite_preview",
@@ -879,6 +881,35 @@ CREATE OR REPLACE FUNCTION account_leave_team(p_team uuid) RETURNS boolean
               RETURNING 1)
           SELECT count(*) > 0 FROM gone $$;
 
+-- Phase 3 item 13: who among the caller's connections is also looking for
+-- someone to train with. Connections are mutual partners (both rows present)
+-- and everyone on a team the caller is on. Only while the caller is looking
+-- too, never the caller, never an account being deleted; names and the way
+-- they're connected, never an id.
+CREATE OR REPLACE FUNCTION account_gym_buddies()
+    RETURNS TABLE(name text, times text, note text, via text[])
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ WITH connected AS (
+              SELECT p.partner_id AS other, 'partner'::text AS via
+              FROM partnerships p
+              WHERE p.user_id = account_current_user()
+                AND EXISTS (SELECT 1 FROM partnerships q
+                            WHERE q.user_id = p.partner_id AND q.partner_id = account_current_user())
+              UNION
+              SELECT x.person, t.name::text
+              FROM teams t
+              CROSS JOIN LATERAL (SELECT t.user_id AS person
+                                  UNION SELECT m.member_id FROM team_members m WHERE m.team_id = t.id) x
+              WHERE account_on_team(t.id) AND x.person <> account_current_user())
+          SELECT u.name::text, g.times::text, g.note::text, array_agg(DISTINCT c.via)
+          FROM connected c
+          JOIN gym_buddies g ON g.user_id = c.other AND g.looking
+          JOIN users u ON u.id = c.other AND u.deleted_at IS NULL
+          WHERE EXISTS (SELECT 1 FROM gym_buddies mine
+                        WHERE mine.user_id = account_current_user() AND mine.looking)
+          GROUP BY u.id, u.name, g.times, g.note
+          ORDER BY u.name $$;
+
 -- Definer functions run with their owner's rights, so nobody but the API
 -- needs to be able to call them.
 REVOKE ALL ON FUNCTION account_user_id_by_email(text) FROM PUBLIC;
@@ -925,6 +956,7 @@ REVOKE ALL ON FUNCTION account_dispute_team_game(uuid, integer, integer) FROM PU
 REVOKE ALL ON FUNCTION account_correct_team_game(uuid, date, text, integer, integer) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_delete_team_game(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_leave_team(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_gym_buddies() FROM PUBLIC;
 
 -- PUBLIC is not the only way in. Supabase's default privileges grant every new
 -- function to anon and authenticated by name, and its Data API lets anon call
@@ -1223,6 +1255,7 @@ def grant_statements() -> list[str]:
         "GRANT EXECUTE ON FUNCTION account_correct_team_game(uuid, date, text, integer, integer) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_delete_team_game(uuid) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_leave_team(uuid) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_gym_buddies() TO " + APP_ROLE,
     ]
 
 

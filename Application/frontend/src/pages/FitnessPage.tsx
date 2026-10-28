@@ -9,6 +9,7 @@ import {
   removeTeamMember, teamInviteLink,
 } from "../features/teams/api";
 import { useApiRefresh } from "../shared/hooks/useApiRefresh";
+import GymBuddy from "../features/teams/GymBuddy";
 import "../styles/teams.css";
 
 /**
@@ -105,6 +106,11 @@ export default function FitnessPage() {
           <TeamView key={selected} userId={user.id} teamId={selected}
                     onGone={() => { setSelected(null); void load(); }} onChanged={load} />
         )}
+      </div>
+
+      {/* Phase 3: beyond the teams themselves. */}
+      <div className="fitnessMore">
+        <GymBuddy userId={user.id} />
       </div>
     </div>
   );

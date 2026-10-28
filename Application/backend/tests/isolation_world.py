@@ -63,6 +63,7 @@ from app._database.models import (
     EventMemberModel,
     GradeDistributionModel,
     CourseIntelModel,
+    GymBuddyModel,
     OutlineOfferModel,
     SharedOutlineModel,
     MerchantCategoryModel,
@@ -358,6 +359,9 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
     add(OutlineOfferModel(id=new_id(), user_id=user_id, course_id=course.id, course_key=f"{marker} key",
                           term_code="2026W1", outline={"weights": {"Assignment": 100.0}, "assessments": [
                               {"name": f"{marker} assignment", "category": "Assignment", "due_date": None}]}))
+    # Phase 3 item 13: looking for someone to train with, marker in the note.
+    add(GymBuddyModel(id=new_id(), user_id=user_id, looking=True, times=f"{marker} mornings",
+                      note=f"{marker} gym note"))
     _ = (event, transaction, recurring_task)
 
     db.commit()
@@ -421,6 +425,10 @@ def seed_pair(db, a_id, b_id, mark_a: str, mark_b: str) -> tuple[dict, dict]:
     b_player = TeamMemberModel(id=uuid.uuid4(), team_id=b_team.id, member_id=third.id,
                                member_name=f"{mark_b} player", owner_name=f"{mark_b} owner")
     db.add_all([a_player, b_player])
+    # Phase 3 item 13: B isn't looking for a gym buddy, so nothing of B's is
+    # shared with A here and the walk can tell a leak from a share. Showing a
+    # looking connection is tested in tests/test_gym_buddy.py.
+    db.query(GymBuddyModel).filter_by(user_id=b_id).update({"looking": False})
     db.flush()
     ids = ({"partnerships": a_row.id, "task_members": a_member.id, "event_members": a_attendee.id,
             "team_members": a_player.id},
