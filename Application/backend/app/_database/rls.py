@@ -1,49 +1,12 @@
-"""Row-level security: the database-side half of per-user isolation.
+"""Row-level security for Postgres: the row policies, grants and definer functions.
 
-Phase 0, item 2 (``Ideas/overhaul/phase0.md``). Until now isolation lived
-entirely in application code -- every query filtering on ``user_id`` -- and a
-query that forgot its filter returned every user's rows. The policies here make
-Postgres refuse to return them, whatever the query says.
-
-**How the pieces fit**
-
-* The API connects as a dedicated role (``APP_ROLE``): no superuser, no
-  BYPASSRLS, not the owner of any table. Only that role is named in the
-  policies, so they constrain it and nothing else.
-* Each transaction carries the caller's id in ``app.user_id``
-  (``identity.act_as``). ``account_current_user()`` reads it, and returns NULL
-  when it is unset -- so an un-identified query matches **no** rows rather than
-  erroring or matching all of them. That is the fail-closed property.
-* Every table is one of three shapes, decided from the metadata so a new table
-  cannot be forgotten: the ``users`` root (a row is yours if it *is* you), a
-  table with a ``user_id`` column (yours if it carries your id), or a child
-  reached through exactly one parent that has one (yours if its parent is).
-  A table that is none of these makes ``policy_statements`` raise.
-* The one exception is by name: ``SHARED_READ_TABLES``, world knowledge such as
-  the course catalogue (Phase 2 item 1). Every identified caller may read them,
-  and the app role can write none of them -- refused twice, by a SELECT-only
-  grant and by a policy that covers SELECT alone. Only the tables' owner writes
-  them, through an owner-run script.
-* The few questions that cross users are ``SECURITY DEFINER`` functions that
-  answer with an id or a boolean, never with rows -- apart from the narrow
-  views sharing needs (a partner's figure, a shared task's few fields).
-* ``SEALED_TABLES`` (Phase 2 D25) are read by nobody through the API: row
-  security with no policy, and no grant, the app role's included. Only a
-  definer function writes them.
-* ``NO_DIRECT_WRITE_TABLES`` (Phase 2 D23, D24, D26) are per-user tables the app role
-  may read and delete from but never write: their rows are created only by a
-  definer function, for the person who accepted a link.
-
-**Why the owner is never forced through the policies.** Tables are owned by the
-role that created them, which is the role today's API connects as. ``ENABLE
-ROW LEVEL SECURITY`` without ``FORCE`` leaves the owner unaffected, so applying
-all of this to production changes nothing until the API is pointed at
-``APP_ROLE`` -- and pointing it back is the rollback. ``FORCE`` would make the
-current API see zero rows the moment it ran.
-
-**Postgres only.** SQLite has no row-level security; local development and the
-default test run use application-level isolation alone, as they always have.
-The policies are proven by ``tests/test_rls.py`` against a real Postgres.
+`install` gives every model table a policy for the app role (`APP_ROLE`) chosen by
+its kind: the `users` root, per-user, child of one owned table, shared-read or
+sealed. Policies identify the caller through `account_current_user()`, which is NULL
+while `app.user_id` is unset, so an unidentified query sees no rows; every step that
+crosses users is a `SECURITY DEFINER` function in `FUNCTION_SQL`. SQLite has no row
+security, so there the services' filters stand alone and `identity.py`,
+`sharing.py`, `teams.py` and `distributions.py` hold plain-query twins.
 """
 import logging
 
@@ -60,6 +23,7 @@ logger = logging.getLogger("app.rls")
 #: only GRANTs to it, and only if it exists.
 APP_ROLE = "account_app"
 POLICY = "account_isolation"
+"""Name of each table's one row policy; dropped and recreated on every install."""
 
 #: Tables that belong to nobody: every signed-in user reads them, no request
 #: writes them (Phase 2 D9). By name, so an ownerless table still raises
@@ -683,14 +647,23 @@ BEGIN
     END LOOP;
 END $$;
 """
+"""Script creating or replacing every function in `FUNCTIONS`, then locking them down.
+
+Each definer function loses `EXECUTE` for `PUBLIC`, then for every other grantee but
+its owner and `account_app`, which strips Supabase's default grants to anon and
+authenticated. `grant_statements` grants `EXECUTE` back to the app role alone.
+"""
 
 
 def _owner_parent(table: Table) -> tuple[str, str, Table] | None:
-    """For a child table: (its column, the parent's column, the parent).
+    """Return the single foreign key that makes a table a child of an owned table.
 
-    A child is a table with no user_id whose path to an owner is exactly one
-    non-null foreign key into a table that has one. Exactly one, because a
-    child with two possible owners has no single answer to "whose is this".
+    A candidate is a non-null column with a foreign key into a table that has a
+    `user_id` column.
+
+    Returns:
+        (child column, parent column, parent table) when there is exactly one
+        candidate; None when there are none or several.
     """
     candidates = []
     for column in table.columns:
@@ -704,11 +677,17 @@ def _owner_parent(table: Table) -> tuple[str, str, Table] | None:
 
 
 def is_shared(table: Table) -> bool:
-    """Whether ``table`` is on the shared list -- and if it is, that it is shaped
-    like one.
+    """Return whether a table is in `SHARED_READ_TABLES`, checking it has no owner.
 
-    A table with an owner on the list would hand every user's rows in it to
-    everyone, so naming one raises rather than quietly sharing it.
+    Args:
+        table: A model table.
+
+    Returns:
+        True if the table is listed as shared-read.
+
+    Raises:
+        ValueError: If a listed table is `users`, has a `user_id` column or is a child
+            of an owned table, since sharing it would show every user's rows to all.
     """
     if table.name not in SHARED_READ_TABLES:
         return False
@@ -721,8 +700,7 @@ def is_shared(table: Table) -> bool:
 
 
 def _check_no_direct_write_list() -> None:
-    """Every name is a real table, and none is shared: a shared table is
-    already read-only, and a typo would leave the real table writable."""
+    """Raise ValueError if `NO_DIRECT_WRITE_TABLES` names an unknown or shared table."""
     unknown = NO_DIRECT_WRITE_TABLES - set(Base.metadata.tables)
     if unknown:
         raise ValueError(f"NO_DIRECT_WRITE_TABLES names tables no model builds: {sorted(unknown)}")
@@ -732,8 +710,18 @@ def _check_no_direct_write_list() -> None:
 
 
 def is_sealed(table: Table) -> bool:
-    """Whether ``table`` is sealed -- and if it is, that it has no owner. A
-    sealed table with an owner would hide that owner's own rows from them."""
+    """Return whether a table is in `SEALED_TABLES`, checking it has no owner.
+
+    Args:
+        table: A model table.
+
+    Returns:
+        True if the table is listed as sealed.
+
+    Raises:
+        ValueError: If a listed table is `users`, has a `user_id` column or is a child
+            of an owned table, since sealing it would hide the owner's own rows.
+    """
     if table.name not in SEALED_TABLES:
         return False
     if table.name == "users" or "user_id" in table.columns or _owner_parent(table) is not None:
@@ -742,6 +730,7 @@ def is_sealed(table: Table) -> bool:
 
 
 def _check_sealed_list() -> None:
+    """Raise ValueError if `SEALED_TABLES` names an unknown or doubly listed table."""
     unknown = SEALED_TABLES - set(Base.metadata.tables)
     if unknown:
         raise ValueError(f"SEALED_TABLES names tables no model builds: {sorted(unknown)}")
@@ -751,16 +740,26 @@ def _check_sealed_list() -> None:
 
 
 def _check_shared_list() -> None:
-    """Every shared name is a real table. A typo would leave the real table
-    raising -- loud, but for the wrong reason -- and the list claiming a share
-    that does not exist."""
+    """Raise ValueError if `SHARED_READ_TABLES` names a table no model builds."""
     unknown = SHARED_READ_TABLES - set(Base.metadata.tables)
     if unknown:
         raise ValueError(f"SHARED_READ_TABLES names tables no model builds: {sorted(unknown)}")
 
 
 def owner_predicate(table: Table) -> str:
-    """The SQL condition under which a row of ``table`` belongs to the caller."""
+    """Return the SQL condition under which a row of a table belongs to the acting user.
+
+    Args:
+        table: A model table that is neither shared-read nor sealed.
+
+    Returns:
+        `id = account_current_user()` for `users`, `user_id = account_current_user()`
+        for a per-user table, or an `EXISTS` subquery requiring the parent row's
+        `user_id` to be the acting user for a child table.
+
+    Raises:
+        ValueError: If the table has no `user_id` and no single owning parent.
+    """
     if table.name == "users":
         return "id = account_current_user()"
     if "user_id" in table.columns:
@@ -780,7 +779,26 @@ def owner_predicate(table: Table) -> str:
 
 
 def policy_statements() -> list[str]:
-    """Every statement that puts the policies in place. Idempotent."""
+    """Return the SQL that enables row security and creates every table's policy.
+
+    Each model table gets `ENABLE ROW LEVEL SECURITY` and loses any existing `POLICY`.
+    A sealed table then gets no policy at all, so no role but the owner sees a row. A
+    shared-read table gets a `FOR SELECT` policy for `APP_ROLE` admitting any
+    identified caller (`SHARED_PREDICATE`). Every other table, no-direct-write ones
+    included, gets a `FOR ALL` policy for `APP_ROLE` with `owner_predicate` as both
+    `USING` and `WITH CHECK`; other roles get none, so they see nothing.
+
+    Returns:
+        The statements in table dependency order; running them again is harmless.
+
+    Raises:
+        ValueError: If a table list names an unknown or doubly listed table, a listed
+            table has an owner, or a table fits no kind.
+
+    Note:
+        Row security is enabled but never forced, so the tables' owner, and every
+        definer function it owns, is not bound by these policies.
+    """
     _check_shared_list()
     _check_no_direct_write_list()
     _check_sealed_list()
@@ -819,11 +837,22 @@ def policy_statements() -> list[str]:
 
 
 def grant_statements() -> list[str]:
-    """What the app role may do: data, never schema.
+    """Return the SQL that sets exactly what `APP_ROLE` may do: data, never schema.
 
-    Table by table from the metadata, never ``ALL TABLES``: a table the models
-    don't build (production still holds one left by a rollback) gets no policy,
-    so a grant on it would hand the app role every user's rows in it.
+    In order: `USAGE` on schema `public`. For each root, per-user and child table,
+    every privilege revoked from all roles but the owner and the app role, then
+    `SELECT, INSERT, UPDATE, DELETE` granted to the app role, except that
+    `NO_DIRECT_WRITE_TABLES` instead lose `INSERT, UPDATE, TRUNCATE` and get only
+    `SELECT, DELETE`. Sealed tables lose every privilege for every role, the app role's
+    included; shared-read tables keep `SELECT` alone. Last come `USAGE, SELECT` on all
+    sequences and `EXECUTE` on each function in `FUNCTIONS`.
+
+    Returns:
+        Statements naming model tables one at a time, so a table no model builds is
+        never granted.
+
+    Raises:
+        ValueError: If a shared-read or sealed table has an owner.
     """
     tables = Base.metadata.sorted_tables
     private = [table for table in tables if not is_shared(table) and not is_sealed(table)]
@@ -888,13 +917,10 @@ def grant_statements() -> list[str]:
 
 
 def _shared_grants(table: Table) -> list[str]:
-    """SELECT to the app role, and nothing to anyone else.
+    """Return SQL leaving a shared-read table readable by the app role alone.
 
-    Everyone else, not only PUBLIC: Supabase's default privileges grant every
-    new table to anon and authenticated by name (Phase 0 D11), with TRUNCATE
-    among them, which row-level security does not cover. So every grantee but
-    the owner and the app role loses everything, the way the definer functions
-    are locked down above.
+    It revokes everything from all roles but the owner and the app role, revokes
+    `WRITE_PRIVILEGES` from the app role, then grants it `SELECT`.
     """
     name = table.name
     return [
@@ -905,14 +931,11 @@ def _shared_grants(table: Table) -> list[str]:
 
 
 def _revoke_from_others(name: str) -> list[str]:
-    """Take every privilege on a table from everyone but its owner and the app role.
+    """Return SQL that strips every role but the owner and the app role from a table.
 
-    Supabase's default privileges grant every new table to anon, authenticated
-    and service_role by name, TRUNCATE included, which row-level security does
-    not cover. That held for every per-user table until Phase 3 batch 1's
-    read-back showed it (D6): only shared tables had been locked down. Reached
-    only through the Data API, which is off -- but one setting is not a
-    boundary, so no role but the API's keeps a grant.
+    It revokes from `PUBLIC`, then walks the table's ACL and revokes from each named
+    grantee, which removes Supabase's default grants (TRUNCATE included, which row
+    security does not cover).
     """
     return [
         f"REVOKE ALL ON {name} FROM PUBLIC",
@@ -935,7 +958,10 @@ END $$""",
 
 
 def _sealed_grants(table: Table) -> list[str]:
-    """Nothing to anyone but the owner -- the app role included."""
+    """Return SQL revoking every privilege on a sealed table except its owner's.
+
+    `PUBLIC`, each named grantee and `APP_ROLE` all lose everything.
+    """
     name = table.name
     return [
         f"REVOKE ALL ON {name} FROM PUBLIC",
@@ -958,11 +984,25 @@ END $$""",
 
 
 def install(engine: Engine) -> bool:
-    """Create the functions and policies, and grant to the app role if it exists.
+    """Install the definer functions, plus policies and grants once the app role exists.
 
-    Returns False and does nothing on SQLite. The policies name ``APP_ROLE``, so
-    they cannot be created before it exists; until then only the functions are
-    installed, which is all the application needs to run.
+    Runs `FUNCTION_SQL`, then `policy_statements()` and `grant_statements()`, in one
+    transaction, so a failure leaves the database as it was. Until `APP_ROLE` exists
+    only the functions are installed, which is all the API needs to run as the owner.
+
+    Args:
+        engine: Engine connected as the tables' owner.
+
+    Returns:
+        True on Postgres, whether or not the role existed; False on any other database,
+        where nothing is done.
+
+    Raises:
+        ValueError: If a table fits no row-security kind or a table list is wrong;
+            nothing is committed.
+
+    Note:
+        Idempotent: functions are replaced, and every policy is dropped and recreated.
     """
     if engine.dialect.name != "postgresql":
         return False
@@ -982,7 +1022,15 @@ def install(engine: Engine) -> bool:
 
 
 def render_sql() -> str:
-    """The whole installation as one script, for review or for the SQL editor."""
+    """Return the whole installation as one SQL script, for review or the SQL editor.
+
+    Returns:
+        `FUNCTION_SQL` followed by every policy and grant statement, each ending in a
+        semicolon, whether or not the app role exists yet.
+
+    Raises:
+        ValueError: As `policy_statements` does.
+    """
     parts = [FUNCTION_SQL.strip()]
     parts += [s + ";" for s in policy_statements()]
     parts += [s + ";" for s in grant_statements()]

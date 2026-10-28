@@ -1,3 +1,10 @@
+"""Response bodies for safe-to-spend: what can be spent before money next arrives.
+
+`safe_service` computes it from the counted spending accounts' balances, the
+standing instructions due in the window, and sinking-fund contributions not yet
+made.
+"""
+
 from datetime import date
 from uuid import UUID
 
@@ -5,7 +12,13 @@ from pydantic import BaseModel, Field
 
 
 class SpendableAccount(BaseModel):
-    """One account counted toward what can be spent."""
+    """One account counted toward what can be spent.
+
+    Attributes:
+        account_id: The account's id.
+        name: The account's name.
+        balance: Its ledger balance in dollars, signed.
+    """
 
     account_id: UUID
     name: str
@@ -13,7 +26,13 @@ class SpendableAccount(BaseModel):
 
 
 class Commitment(BaseModel):
-    """A charge the rules say is coming inside the window."""
+    """A standing charge due inside the window, taken off what is safe.
+
+    Attributes:
+        on_date: When it is due.
+        description: The standing instruction's description.
+        amount: What it takes, as a positive figure.
+    """
 
     on_date: date
     description: str | None = None
@@ -23,14 +42,30 @@ class Commitment(BaseModel):
 
 
 class SafeToSpend(BaseModel):
-    """What can be spent between now and the next time money arrives.
+    """What can be spent between today and the day before money next arrives.
 
-    Two figures, deliberately not one and deliberately not equals. `safe_now` is
-    the answer: money that is actually in a spending account, less what is
-    already committed. `safe_soon` adds work that has been done and confirmed
-    but not yet paid for -- useful for planning across a pay gap, and never the
-    headline, because a cheque can be late or short and this app already knows
-    that happens.
+    `safe_now` is the headline: cash in the spending accounts less what is already
+    committed. `safe_soon` adds hourly work done but not yet paid for and is never
+    the headline, because a cheque can be late or short.
+
+    Attributes:
+        starts_on: Today, on the user's clock.
+        ends_on: The day before the soonest pay date of any current job, or the
+            month's end when no job has one.
+        days: Days in the window, today included; at least 1.
+        until_payday: True when the window ends at a real pay date.
+        spendable: The counted, unarchived spending accounts' balances, summed.
+        committed: Outgoing standing instructions (expenses and transfers) due in
+            the window from any counted account, summed.
+        earmarked: This month's sinking-fund contributions not yet transferred,
+            from funds paid by counted accounts.
+        safe_now: `spendable` less `committed` and `earmarked`; may be negative.
+        owed_to_you: Estimated pay for hourly shifts no cheque has covered yet.
+        safe_soon: `safe_now` plus `owed_to_you`.
+        per_day: `safe_now` divided by `days`; None when `safe_now` is zero or
+            negative.
+        accounts: The spending accounts counted.
+        commitments: The charges behind `committed`, by date.
     """
 
     #: Today, inclusive.

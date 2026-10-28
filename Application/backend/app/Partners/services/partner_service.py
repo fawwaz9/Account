@@ -1,14 +1,9 @@
-"""Accountability partners: your figure, your invites, your partners (Phase 2 item 10, D22).
+"""Accountability partners: the caller's weekly figure, their invites and partners.
 
-Completion, not outcomes (vision §4, §13.7): what a partner sees is the share
-of this week's tasks you have done, and your streak of good weeks. Never a
-grade, never money, never a task's name.
-
-Your figure is worked out from your own tasks and written into your own rows,
-as you -- whenever you open the partners panel. Your partner reads it through
-``sharing.partner_figures``, which answers only while both of you have a row
-pointing at the other. So there is no job reading across users, and nothing
-here ever reads anyone's rows but the caller's.
+A partner sees completion only: the share of this week's tasks done and the run of
+good weeks, never a grade, money or a task's name. The caller's figure is worked out
+from their own tasks and written into their own partnership rows whenever they open
+the panel; partners read it through `sharing.partner_figures`.
 """
 import hashlib
 import secrets
@@ -33,18 +28,32 @@ MAX_OPEN_INVITES = 5
 
 
 class InviteLimit(ValueError):
+    """Raised when the caller already has `MAX_OPEN_INVITES` live invites."""
     pass
 
 
 def token_hash(token: str) -> str:
+    """Return the SHA-256 hex digest of an invite token, which is all that is stored.
+
+    Args:
+        token: The raw token from the invite link.
+
+    Returns:
+        The 64-character hex digest.
+    """
     return hashlib.sha256(token.encode()).hexdigest()
 
 
 def _monday(day: date) -> date:
+    """Return the Monday of the week a date falls in."""
     return day - timedelta(days=day.weekday())
 
 
 def _week_percent(tasks, start: date) -> float | None:
+    """Return the share of tasks due in the week from `start` that are done, or None.
+
+    None when nothing is due that week; otherwise a percentage to one decimal place.
+    """
     end = start + timedelta(days=6)
     due = [t for t in tasks if t.due_date is not None and start <= t.due_date <= end]
     if not due:
@@ -53,10 +62,19 @@ def _week_percent(tasks, start: date) -> float | None:
 
 
 def figure_for(db: Session, user_id: uuid.UUID, today: date | None = None) -> Figure:
-    """This week's share of due tasks done, and the run of good weeks before it.
+    """Return the user's figure: this week's completion and the streak of good weeks.
 
-    A week with no tasks due neither breaks nor extends the streak: nobody
-    should lose a streak for a quiet week, or build one out of empty ones.
+    A week counts as good at `GOOD_WEEK_PERCENT` or more; a week with nothing due
+    neither breaks nor extends the streak, which looks back at most `STREAK_WEEKS_MAX`
+    weeks.
+
+    Args:
+        db: Open database session.
+        user_id: Whose tasks to count.
+        today: The day to measure from; defaults to the user's local today.
+
+    Returns:
+        The week's percentage (None when nothing is due), the streak, and the date.
     """
     today = today or user_today(db, user_id)
     this_week = _monday(today)
@@ -79,7 +97,15 @@ def figure_for(db: Session, user_id: uuid.UUID, today: date | None = None) -> Fi
 
 
 def refresh_my_figure(db: Session, user_id: uuid.UUID) -> Figure:
-    """Work out your figure and write it into your own partnership rows."""
+    """Work out the caller's figure and write it into their own partnership rows.
+
+    Args:
+        db: Open session acting as the caller.
+        user_id: The caller.
+
+    Returns:
+        The figure; commits only when the caller has partnership rows.
+    """
     figure = figure_for(db, user_id)
     rows = db.query(PartnershipModel).filter(PartnershipModel.user_id == user_id).all()
     for row in rows:
@@ -90,6 +116,18 @@ def refresh_my_figure(db: Session, user_id: uuid.UUID) -> Figure:
 
 
 def overview(db: Session, user_id: uuid.UUID) -> Partners | None:
+    """Return the partners panel: figures, partners and open invites.
+
+    Refreshes and stores the caller's own figure first.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+
+    Returns:
+        The panel, or None when the user does not exist. A partner's figure is None
+        until they have opened the app since the partnership began.
+    """
     if user_for(db, user_id) is None:
         return None
     mine = refresh_my_figure(db, user_id)
@@ -114,6 +152,21 @@ def overview(db: Session, user_id: uuid.UUID) -> Partners | None:
 
 
 def create_invite(db: Session, user_id: uuid.UUID) -> NewInvite | None:
+    """Create a partner invite link, valid for `INVITE_DAYS` days.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+
+    Returns:
+        The invite with its token, shown this once; None when the user does not exist.
+
+    Raises:
+        InviteLimit: If the caller already has `MAX_OPEN_INVITES` live invites.
+
+    Note:
+        Commits; only the token's hash is stored.
+    """
     if user_for(db, user_id) is None:
         return None
     now = utc_now()
@@ -132,6 +185,20 @@ def create_invite(db: Session, user_id: uuid.UUID) -> NewInvite | None:
 
 
 def revoke_invite(db: Session, user_id: uuid.UUID, invite_id: uuid.UUID) -> bool:
+    """Cancel one of the caller's unused invites.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        invite_id: The invite.
+
+    Returns:
+        True if it is now revoked (repeating is harmless); False when it is missing,
+        another user's, or already used.
+
+    Note:
+        Commits.
+    """
     invite = db.query(InviteModel).filter(InviteModel.id == invite_id, InviteModel.user_id == user_id).first()
     if invite is None or invite.used_at is not None:
         return False
@@ -141,12 +208,43 @@ def revoke_invite(db: Session, user_id: uuid.UUID, invite_id: uuid.UUID) -> bool
 
 
 def preview(db: Session, user_id: uuid.UUID, token: str):
+    """Return what a partner invite link shows, or None when it is not live.
+
+    Args:
+        db: Open session acting as the caller.
+        user_id: The caller.
+        token: The raw token from the link.
+
+    Returns:
+        The invite's preview, or None when the link is unknown, used or expired.
+    """
     return sharing.invite_preview(db, user_id, token_hash(token))
 
 
 def accept(db: Session, user_id: uuid.UUID, token: str) -> str:
+    """Accept a partner invite; returns "accepted", "invalid", "own" or "already".
+
+    Args:
+        db: Open session acting as the caller.
+        user_id: The caller.
+        token: The raw token from the link.
+
+    Returns:
+        "accepted", "invalid", "own" (the caller's own invite) or "already" (already
+        partners).
+    """
     return sharing.accept_partner_invite(db, user_id, token_hash(token))
 
 
 def end(db: Session, user_id: uuid.UUID, partner_id: uuid.UUID) -> bool:
+    """End a partnership from either side; returns whether one existed.
+
+    Args:
+        db: Open session acting as the caller.
+        user_id: The caller.
+        partner_id: The other person's user id.
+
+    Returns:
+        True when a partnership between the two existed and was removed.
+    """
     return sharing.end_partnership(db, user_id, partner_id)

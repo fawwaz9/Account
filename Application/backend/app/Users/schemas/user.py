@@ -1,3 +1,10 @@
+"""Schemas for users: the account, its stored preferences and edits to either.
+
+`UserPreferences` reads stored preferences with every default filled in;
+`UserPreferencesPatch` carries only the preferences a save names, so a Settings save
+never resets the others.
+"""
+
 import re
 from datetime import date, datetime, time, timedelta
 from enum import Enum
@@ -17,12 +24,16 @@ EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s.]+(?:\.[^@\s.]+)+$")
 
 
 def normalize_email(value: str) -> str:
-    """Trim, lower-case, and sanity-check an email address.
+    """Return an email address trimmed and lower-cased, after a basic shape check.
 
-    Email is the login identifier for the local auth provider, so it is
-    normalized on the way in. Lookups also use ILIKE, but storing a single
-    canonical form keeps 'A@b.com' and 'a@b.com' from reading as two
-    different accounts anywhere else in the app.
+    Args:
+        value: The address as entered.
+
+    Returns:
+        The normalised address.
+
+    Raises:
+        ValueError: If it does not look like `local@domain.tld`.
     """
     email = value.strip().lower()
     if not EMAIL_PATTERN.match(email):
@@ -31,28 +42,33 @@ def normalize_email(value: str) -> str:
 
 
 class WeekStart(str, Enum):
+    """The day a week starts on in the calendar."""
     SUNDAY = "sunday"
     MONDAY = "monday"
 
 
 class ThemePreference(str, Enum):
+    """The colour theme: light, dark, or follow the system."""
     LIGHT = "light"
     DARK = "dark"
     SYSTEM = "system"
 
 
 class DateFormat(str, Enum):
+    """How dates are displayed."""
     MDY = "MM/DD/YYYY"
     DMY = "DD/MM/YYYY"
     ISO = "YYYY-MM-DD"
 
 
 class TimeFormat(str, Enum):
+    """Whether times are displayed on a 12- or 24-hour clock."""
     TWELVE_HOUR = "12h"
     TWENTY_FOUR_HOUR = "24h"
 
 
 class AuthProvider(str, Enum):
+    """How an account was first created: with Google, or locally with a password."""
     GOOGLE = "google"
     LOCAL = "local"
 
@@ -65,11 +81,19 @@ HEX_COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
 def validate_event_colors(colors: dict[EventKind, str] | None) -> dict[EventKind, str] | None:
-    """Every value a #rrggbb colour, lowercased; keys are already EventKinds.
+    """Return event colours lower-cased, after checking each is a `#rrggbb` colour.
 
-    Shared by `UserPreferences` and `UserPreferencesPatch` so the two cannot
-    drift. Both must run it: a bad colour written through the patch would be
-    re-read through `UserPreferences` on every page, and fail there instead.
+    Shared by `UserPreferences` and `UserPreferencesPatch` so a colour accepted on write
+    is always readable again.
+
+    Args:
+        colors: Event kind to colour; None passes through.
+
+    Returns:
+        The map with lower-cased colours, or None.
+
+    Raises:
+        ValueError: If any colour is not `#rrggbb`.
     """
     if colors is None:
         return None
@@ -80,6 +104,34 @@ def validate_event_colors(colors: dict[EventKind, str] | None) -> dict[EventKind
 
 
 class UserPreferences(BaseModel):
+    """A user's preferences as stored, with a default for every field.
+
+    Also the reader: `get_preferences` re-validates the stored JSON through it, so a bad
+    stored value would fail every page that reads a preference.
+
+    Attributes:
+        timezone: IANA time zone name, such as "America/Regina"; decides the user's
+            "today" and when reminders fire.
+        currency: Three-letter ISO 4217 code, upper-cased; "CAD" by default.
+        week_start: First day of the week.
+        theme: Colour theme.
+        date_format: How dates are shown.
+        time_format: 12- or 24-hour clock.
+        default_reminder_minutes_before: Default reminder lead time, 0-10080 minutes.
+        credit_target: Credits the degree requires, 1-400.
+        gpa_scale_enabled: Whether grade points and the CGPA are shown.
+        default_target_grade: Target percentage for any course without its own, 0-100.
+        study_day_start: Earliest local time a free block may start.
+        study_day_end: Latest local time a free block may end.
+        min_free_block_minutes: Shortest gap counted as a free block, 5-240 minutes.
+        event_colors: The user's own colour per event kind, only for kinds they changed.
+        cash_tip_account_id: Account cash tips are filed into; None holds them out of
+            the budget. Set only through the cash-tip-account route, never a settings
+            save.
+        use_estimate_ratio: Scale the workload forecast by how long tasks really take.
+        exam_buffer_hours: A shift ending less than this many hours before an exam is
+            flagged, 0-48.
+    """
     timezone: str = Field(default="America/Regina", description="IANA timezone")
     currency: str = Field(default="CAD", min_length=3, max_length=3)
     week_start: WeekStart = Field(default=WeekStart.SUNDAY)
@@ -122,11 +174,33 @@ class UserPreferences(BaseModel):
     @field_validator("event_colors")
     @classmethod
     def validate_event_colors(cls, v: dict[EventKind, str]) -> dict[EventKind, str]:
+        """Check and lower-case the event colours.
+
+        Args:
+            v: Colour by event kind, as "#rrggbb".
+
+        Returns:
+            The colours, lower-cased.
+
+        Raises:
+            ValueError: If a colour is not "#rrggbb" (a 422).
+        """
         return validate_event_colors(v)
 
     @field_validator("currency")
     @classmethod
     def validate_currency(cls, v: str) -> str:
+        """Require an alphabetic currency code and upper-case it.
+
+        Args:
+            v: The submitted currency code.
+
+        Returns:
+            The code upper-cased.
+
+        Raises:
+            ValueError: If the code contains anything but letters (a 422).
+        """
         if not v.isalpha():
             raise ValueError("Currency must be a 3-letter ISO 4217 code")
         return v.upper()
@@ -134,6 +208,17 @@ class UserPreferences(BaseModel):
     @field_validator("timezone")
     @classmethod
     def validate_timezone(cls, v: str) -> str:
+        """Require a time zone name the zoneinfo database knows.
+
+        Args:
+            v: An IANA zone name, such as "America/Vancouver".
+
+        Returns:
+            The name, unchanged.
+
+        Raises:
+            ValueError: If the zone is unknown (a 422).
+        """
         try:
             ZoneInfo(v)
         except ZoneInfoNotFoundError as exc:
@@ -142,28 +227,30 @@ class UserPreferences(BaseModel):
 
 
 class UserPreferencesPatch(BaseModel):
-    """The same preferences, for *changing* some of them.
+    """Request body for changing some preferences; unnamed fields are left as they are.
 
-    Deliberately a separate model rather than a subclass either way round,
-    because this one and `UserPreferences` have opposite jobs. `UserPreferences`
-    fills every default in, so a reader never meets a missing key.
-    This one leaves an unmentioned field unset, so a writer never touches a
-    preference the caller did not name.
+    A separate model from `UserPreferences` because that one fills in defaults, which
+    would overwrite stored values on every save. The bounds and validators are repeated
+    here so nothing invalid is stored; an explicit null means no change.
 
-    **One model cannot do both, and the attempt was a live bug.** `UserUpdate`
-    used to declare `preferences: UserPreferences`, so a patch naming six fields
-    was parsed into a complete fourteen-field model and `model_dump` emitted all
-    fourteen -- which the merge in `update_user` then wrote over the top of what
-    was stored. Every save in Settings reset `timezone` to `America/Regina`,
-    silently, and `timezone` decides when reminders fire and whether a task
-    counts as finished early or late. The merge was already written to avoid
-    exactly this and could not, because what reached it was never partial.
-
-    So the bounds and the validators are duplicated here on purpose. Dropping a
-    validator would be worse than the bug it replaced: an invalid value would be
-    stored, and `get_preferences` re-validates on *read* through
-    `UserPreferences`, from six call sites that do not catch anything. A bad
-    write would become a 500 on every page that reads a preference.
+    Attributes:
+        timezone: IANA time zone name, such as "America/Regina"; decides the user's
+            "today" and when reminders fire.
+        currency: Three-letter ISO 4217 code, upper-cased.
+        week_start: First day of the week.
+        theme: Colour theme.
+        date_format: How dates are shown.
+        time_format: 12- or 24-hour clock.
+        default_reminder_minutes_before: Default reminder lead time, 0-10080 minutes.
+        credit_target: Credits the degree requires, 1-400.
+        gpa_scale_enabled: Whether grade points and the CGPA are shown.
+        default_target_grade: Default target percentage, 0-100.
+        study_day_start: Earliest local time a free block may start.
+        study_day_end: Latest local time a free block may end.
+        min_free_block_minutes: Shortest free block, 5-240 minutes.
+        event_colors: The whole colour map; replaces the stored one when sent.
+        use_estimate_ratio: Scale the workload forecast by real task durations.
+        exam_buffer_hours: Hours before an exam a shift may not end within, 0-48.
     """
 
     timezone: str | None = None
@@ -190,6 +277,17 @@ class UserPreferencesPatch(BaseModel):
     @field_validator("currency")
     @classmethod
     def validate_currency(cls, v: str | None) -> str | None:
+        """Upper-case an alphabetic currency code; None passes through.
+
+        Args:
+            v: The submitted currency code, or None.
+
+        Returns:
+            The code upper-cased, or None.
+
+        Raises:
+            ValueError: If the code contains anything but letters (a 422).
+        """
         if v is None:
             return None
         if not v.isalpha():
@@ -199,11 +297,33 @@ class UserPreferencesPatch(BaseModel):
     @field_validator("event_colors")
     @classmethod
     def validate_event_colors(cls, v: dict[EventKind, str] | None) -> dict[EventKind, str] | None:
+        """Check and lower-case the event colours; None passes through.
+
+        Args:
+            v: Colour by event kind, as "#rrggbb", or None.
+
+        Returns:
+            The colours lower-cased, or None.
+
+        Raises:
+            ValueError: If a colour is not "#rrggbb" (a 422).
+        """
         return validate_event_colors(v)
 
     @field_validator("timezone")
     @classmethod
     def validate_timezone(cls, v: str | None) -> str | None:
+        """Require a known time zone name; None passes through.
+
+        Args:
+            v: An IANA zone name, or None.
+
+        Returns:
+            The name unchanged, or None.
+
+        Raises:
+            ValueError: If the zone is unknown (a 422).
+        """
         if v is None:
             return None
         try:
@@ -214,33 +334,65 @@ class UserPreferencesPatch(BaseModel):
 
 
 class UserBase(BaseModel):
+    """The name and email every user schema carries.
+
+    Attributes:
+        name: Display name, 1-100 characters, not blank.
+        email: Address, 3-255 characters; normalised by `normalize_email`.
+    """
     name: str = Field(..., min_length=1, max_length=100)
     email: str = Field(..., min_length=3, max_length=255)
 
     @field_validator("email")
     @classmethod
     def validate_email(cls, value: str) -> str:
+        """Normalise the email address.
+
+        Args:
+            value: The submitted email.
+
+        Returns:
+            The email trimmed and lower-cased.
+
+        Raises:
+            ValueError: If it is not a plausible address (a 422).
+        """
         return normalize_email(value)
 
     @model_validator(mode="after")
     def validate_user_logic(self):
+        """Reject a name that is only whitespace.
+
+        Returns:
+            The validated model.
+
+        Raises:
+            ValueError: If the name is blank (a 422).
+        """
         if self.name.strip() == "":
             raise ValueError("User name cannot be empty")
         return self
 
 
 class UserCreate(UserBase):
-    """Google OAuth signup.
+    """A new account from Google sign-in; password signup uses `RegisterRequest`.
 
-    Local email + password signup goes through
-    ``app.Auth.schemas.credentials.RegisterRequest`` instead, which carries a
-    password rather than a google_id.
+    Attributes:
+        google_id: Google's subject id for the person.
+        preferences: Starting preferences; all defaults.
     """
     google_id: str = Field(..., min_length=1)
     preferences: UserPreferences = Field(default_factory=UserPreferences)
 
 
 class UserUpdate(BaseModel):
+    """Request body for editing the signed-in user; omitted fields stay as they are.
+
+    Attributes:
+        name: New display name, 1-100 characters, not blank.
+        email: New address, normalised; changing it is handled by `user_service`.
+        preferences: The preferences to change, as a partial patch.
+    """
     name: str | None = Field(default=None, min_length=1, max_length=100)
     email: str | None = Field(default=None, min_length=3, max_length=255)
     #: A patch, not a whole object -- see `UserPreferencesPatch`. Typing this as
@@ -251,10 +403,29 @@ class UserUpdate(BaseModel):
     @field_validator("email")
     @classmethod
     def validate_email(cls, value: str | None) -> str | None:
+        """Normalise a sent email address; None passes through.
+
+        Args:
+            value: The submitted email, or None.
+
+        Returns:
+            The email trimmed and lower-cased, or None.
+
+        Raises:
+            ValueError: If it is not a plausible address (a 422).
+        """
         return None if value is None else normalize_email(value)
 
     @model_validator(mode="after")
     def validate_user_update(self):
+        """Reject a sent name that is only whitespace.
+
+        Returns:
+            The validated model.
+
+        Raises:
+            ValueError: If the name is blank (a 422).
+        """
         if self.name is not None and self.name.strip() == "":
             raise ValueError("User name cannot be empty")
         return self
@@ -272,6 +443,28 @@ DELETION_GRACE_DAYS = 30
 
 
 class User(UserBase):
+    """A user as the API returns it; never carries the password hash.
+
+    Attributes:
+        id: The user's id.
+        auth_provider: How the account was first created.
+        google_id: Google subject id; None when not linked.
+        email_verified: Whether an identity provider vouched for the address.
+        has_password: Whether the account can sign in with a password.
+        has_google: Whether the account can sign in with Google.
+        current_school_year: The student's school year now; None until set, when every
+            course reads as current.
+        current_semester: The student's term now; None until set.
+        term_label: Free-text label for the current term.
+        first_year_calendar_year: First-year anchor; None leaves terms undated.
+        suggested_first_year: Anchor inferred from dated courses, for Settings to offer;
+            derived on read.
+        preferences: The user's preferences, defaults filled in.
+        created_at: When the account was made; None for older accounts.
+        deleted_at: When deletion was requested; None for a live account.
+        deletes_on: The day the account stops being recoverable; derived from
+            `deleted_at`.
+    """
     id: UUID = Field(default_factory=uuid4)
     # How the account was originally created. Ask has_password / has_google
     # for what it can actually sign in with today.
@@ -305,7 +498,11 @@ class User(UserBase):
 
     @model_validator(mode="after")
     def derive_deletes_on(self):
-        """Always computed from `deleted_at`, never trusted from input."""
+        """Derive `deletes_on` from `deleted_at`, never trusting an input value.
+
+        Returns:
+            The validated model.
+        """
         self.deletes_on = (
             None if self.deleted_at is None
             else (self.deleted_at + timedelta(days=DELETION_GRACE_DAYS)).date()
@@ -314,16 +511,31 @@ class User(UserBase):
 
     @model_validator(mode="after")
     def validate_auth_consistency(self):
+        """Require a Google id on an account created with Google.
+
+        Returns:
+            The validated model.
+
+        Raises:
+            ValueError: If `auth_provider` is Google and `google_id` is missing.
+        """
         if self.auth_provider == AuthProvider.GOOGLE and not self.google_id:
             raise ValueError("google_id is required for Google-authenticated users")
         return self
 
     class Config:
+        """Pydantic v1-style settings: build the model from object attributes."""
         from_attributes = True
 
 
 class UserDetail(User):
+    """A user with every course in full, for the user detail routes.
+
+    Attributes:
+        courses: The user's courses with their grades.
+    """
     courses: list[CourseDetail] = Field(default_factory=list)
 
     class Config:
+        """Pydantic v1-style settings: build the model from object attributes."""
         from_attributes = True

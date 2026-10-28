@@ -1,15 +1,10 @@
-"""Recording a tuition payment, and answering what a course cost.
+"""Service functions for tuition payments, what each course cost, and the term budget.
 
-Two questions that look like one and are not:
-
-- *What left my account?* One expense: credits times the rate, plus fees, less
-  every deduction. That is the ledger, and it is a single line.
-- *What did this course cost?* Its credits times the rate, gross. A scholarship
-  reduces what you pay, not what the course is worth.
-
-The two do not reconcile and must not be made to. A term at $250/credit over 13
-credits with $310 of fees and $1,500 of deductions is one $2,060 ledger line and
-$3,250 spread across four course pages. Both are right.
+Two questions that look like one: what left the account (one expense: credits
+times the rate, plus fees, less deductions) and what a course cost (its credits
+times the rate, gross, since a scholarship lowers what was paid, not what the
+course is worth). They are not meant to reconcile. A payment and its ledger row
+are deleted together from either side.
 """
 
 import uuid
@@ -46,6 +41,15 @@ from app.Finances.services.counted import on_counted_accounts
 
 
 def current_term(db: Session, user_id: uuid.UUID) -> tuple[int | None, str | None]:
+    """Return the user's current school year and semester, or (None, None).
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+
+    Returns:
+        (school year, semester) from the user's academic status; either may be None.
+    """
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
     if user is None:
         return None, None
@@ -53,26 +57,17 @@ def current_term(db: Session, user_id: uuid.UUID) -> tuple[int | None, str | Non
 
 
 def term_name(db: Session, user_id: uuid.UUID) -> str:
-    """A term as a person would write it.
+    """Return the current term as a person would write it, such as "Fall 2026-2027".
 
-    school_year is a year of standing, not a calendar year, so pasting it in
-    front of the semester produced "3 Fall".
+    Derived from the first-year anchor rather than the free-text `term_label`, which
+    nothing keeps current; the label is the fallback when no anchor is set.
 
-    **Derived from the anchor, not from `term_label`.** The label is free text
-    that nothing keeps honest -- there is no editor for it anywhere in the app,
-    so once it is wrong it stays wrong, and it was: it read "2025-2026" while
-    the year-3 Fall it named ran September 2026. Worse, it sat directly above a
-    span that `term_dates` computes from the anchor, so the heading and the
-    dates under it disagreed by a year.
+    Args:
+        db: Open database session.
+        user_id: Whose term.
 
-    The anchor is the one fact both can come from. `calendar_year_of` gives the
-    calendar year the school year's Fall began in, which is the first half of
-    the label -- and it is deliberately the SCHOOL year's own year rather than
-    the term's, so Winter, which runs in January of the following year, still
-    reads as part of "2026-2027" rather than starting a new one.
-
-    `term_label` stays as the fallback for a user who has no anchor set, since
-    dropping it would replace a stale label with no label at all.
+    Returns:
+        The name; "your current term" when the user or their semester is unset.
     """
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
     if user is None or not user.current_semester:
@@ -88,11 +83,16 @@ def term_name(db: Session, user_id: uuid.UUID) -> str:
 
 
 def billable_courses(db: Session, user_id: uuid.UUID) -> list[CourseModel]:
-    """The current term's courses that tuition is actually charged for.
+    """Return the current term's courses tuition is charged for, by code.
 
-    Transfer credits are excluded: credit granted without taking the course
-    carries no tuition, so counting it would inflate the bill by a course that
-    was never paid for.
+    Transfer credits are left out: they carry no tuition.
+
+    Args:
+        db: Open database session.
+        user_id: Whose courses.
+
+    Returns:
+        The course rows; empty when the current term has none.
     """
     school_year, semester = current_term(db, user_id)
     courses = (
@@ -109,11 +109,18 @@ def billable_courses(db: Session, user_id: uuid.UUID) -> list[CourseModel]:
 
 
 def recorded_rate(db: Session, user_id: uuid.UUID, school_year, semester) -> float:
-    """Per-credit rate already recorded for a term.
+    """Return the per-credit rate already recorded for a term, summed across payments.
 
-    Instalments are additive: half the rate entered twice is the whole rate. This
-    is what lets the form say so, rather than leaving it as a trap that silently
-    doubles every course's cost.
+    Instalments are additive: half the rate entered twice is the whole rate.
+
+    Args:
+        db: Open database session.
+        user_id: Whose payments.
+        school_year: The term's school year.
+        semester: The term's semester.
+
+    Returns:
+        The summed rate, rounded to cents; 0 when nothing is recorded.
     """
     rows = (
         db.query(TuitionPaymentModel)
@@ -134,6 +141,19 @@ def preview_tuition(
     fees: float,
     deductions_total: float,
 ) -> TuitionPreview:
+    """Return the arithmetic of a tuition payment for the current term, writing nothing.
+
+    Args:
+        db: Open database session.
+        user_id: Whose courses.
+        cost_per_credit: The rate, in dollars.
+        fees: Fees belonging to no course.
+        deductions_total: The deductions, summed.
+
+    Returns:
+        The preview; `can_record` is False when a rate is given with no billable
+        courses, or the deductions exceed the bill.
+    """
     school_year, semester = current_term(db, user_id)
     courses = billable_courses(db, user_id)
 
@@ -181,7 +201,23 @@ def preview_tuition(
 
 
 def record_tuition(db: Session, user_id: uuid.UUID, data: TuitionCreate):
-    """One ledger row, plus the record of what it was made of."""
+    """Record a tuition payment: one expense row plus the record of what it was made of.
+
+    The row is written through `create_transaction`, which commits it, and the
+    payment and its deductions are committed after it.
+
+    Args:
+        db: Open database session.
+        user_id: Whose payment.
+        data: The account, date, rate, fees, description and deductions.
+
+    Returns:
+        The payment row.
+
+    Raises:
+        ValueError: If the account is not the user's, the preview cannot be
+            recorded, or the payment comes to nothing after deductions.
+    """
     if owned_account(db, user_id, data.account_id) is None:
         raise ValueError("That account does not exist")
 
@@ -243,7 +279,17 @@ def record_tuition(db: Session, user_id: uuid.UUID, data: TuitionCreate):
 
 
 def course_cost(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> CourseCost | None:
-    """What one course cost: its share of tuition, plus anything bought for it."""
+    """Return what a course cost: its gross tuition share plus what was bought for it.
+
+    Args:
+        db: Open database session.
+        user_id: Whose course.
+        course_id: The course.
+
+    Returns:
+        The cost, with expenses tagged to the course on counted accounts by
+        category; None when the course is not the user's.
+    """
     course = (
         db.query(CourseModel)
         .filter(CourseModel.id == course_id, CourseModel.user_id == user_id)
@@ -297,6 +343,16 @@ def course_cost(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> Course
 
 
 def get_tuition(db: Session, user_id: uuid.UUID, payment_id: uuid.UUID):
+    """Return the user's tuition payment row with this id, or None.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+        payment_id: The payment to fetch.
+
+    Returns:
+        The payment row, or None when it is missing or another user's.
+    """
     return (
         db.query(TuitionPaymentModel)
         .filter(
@@ -308,11 +364,23 @@ def get_tuition(db: Session, user_id: uuid.UUID, payment_id: uuid.UUID):
 
 
 def update_tuition(db: Session, user_id: uuid.UUID, payment_id: uuid.UUID, data: TuitionUpdate):
-    """Correct a payment, and move its ledger row to match.
+    """Correct a tuition payment and move its ledger row to match.
 
-    The two are one thing: the rate is what the course pages read and the net is
-    what the ledger shows, so a correction that changed one without the other
-    would leave them disagreeing with no way to tell which was right.
+    The credits billed stay as recorded unless `recount_credits` is set; the
+    deductions are replaced. One commit.
+
+    Args:
+        db: Open database session.
+        user_id: Whose payment.
+        payment_id: The payment.
+        data: The full corrected payment.
+
+    Returns:
+        The updated payment row; None when it is not the user's.
+
+    Raises:
+        ValueError: If the account is not the user's, the deductions exceed the
+            bill, the payment comes to nothing, or its ledger row is missing.
     """
     payment = get_tuition(db, user_id, payment_id)
     if payment is None:
@@ -385,11 +453,18 @@ def update_tuition(db: Session, user_id: uuid.UUID, payment_id: uuid.UUID, data:
 
 
 def delete_tuition(db: Session, user_id: uuid.UUID, payment_id: uuid.UUID):
-    """Remove a payment and the ledger row it owns.
+    """Delete a tuition payment and the ledger row it owns.
 
-    Deleting through the transaction works too -- that path clears the payment
-    record -- but a tuition payment is the thing the student thinks they are
-    deleting, so it can be addressed directly.
+    Two commits: the payment and its deductions first, then the row through
+    `delete_transaction`.
+
+    Args:
+        db: Open database session.
+        user_id: Whose payment.
+        payment_id: The payment.
+
+    Returns:
+        True when deleted; None when it is not the user's.
     """
     payment = get_tuition(db, user_id, payment_id)
     if payment is None:
@@ -409,22 +484,17 @@ def delete_tuition(db: Session, user_id: uuid.UUID, payment_id: uuid.UUID):
 
 
 def term_span(courses, first_year: int | None) -> tuple[date | None, date | None]:
-    """The dates the term runs, from the term itself rather than its courses.
+    """Return the dates the term runs, from the term itself rather than its courses.
 
-    This used to be the earliest start and latest end across the courses, which
-    meant a term could only be measured if the courses in it happened to carry
-    dates -- and 21 of 27 did not, so for most terms there was nothing to
-    measure and no way to say why.
+    The span is the term's fixed months (Fall is September to December), widest
+    across the courses given, which is slightly wider than the teaching weeks.
 
-    Now a term has its own dates: Fall is September to December whether or not
-    anything in it was filled in. The cost is that the span is the *term*, not
-    the teaching weeks -- a Fall that really runs Sep 9 to Dec 7 is measured
-    Sep 1 to Dec 31, so a few weeks either side of the semester are counted.
-    That was the deliberate trade: a slightly wide span beats no span.
+    Args:
+        courses: The term's courses.
+        first_year: The calendar year school year 1 began; None means no dates.
 
-    `first_year` is the anchor. Without it a school year has no calendar year
-    and there are no dates to give -- so this returns None and the caller says
-    so, rather than dating every term to whatever year 1 happens to be.
+    Returns:
+        (start, end), or (None, None) when no course's term can be dated.
     """
     terms = {
         dates
@@ -441,10 +511,20 @@ def term_span(courses, first_year: int | None) -> tuple[date | None, date | None
 
 
 def term_budget(db: Session, user_id: uuid.UUID, today: date | None = None) -> TermBudget:
-    """What the current term has cost, over the term's own dates.
+    """Return what the current term has cost, over the term's own dates.
 
-    A calendar month is the wrong unit for a student: tuition lands once,
-    textbooks land in the first fortnight, and neither is a monthly rhythm.
+    Income and expenses on counted accounts dated in the term count; transfers do
+    not.
+
+    Args:
+        db: Open database session.
+        user_id: Whose money.
+        today: The day that decides how far through the term it is; defaults to
+            the user's today.
+
+    Returns:
+        The term budget; when the term has no dates, `can_measure` is False and
+        `reason` says what to set.
     """
     today = today or user_today(db, user_id)
     courses = billable_courses(db, user_id)

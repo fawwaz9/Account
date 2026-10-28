@@ -1,3 +1,10 @@
+"""The FastAPI application: logging, startup work, health check, CORS and every router.
+
+Startup brings the schema up to date (unless `RUN_SCHEMA_ON_STARTUP` is off),
+warns when sign-up is open, and purges accounts past their deletion grace period.
+The interactive docs are served only when `ENABLE_DOCS` is set.
+"""
+
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -26,6 +33,15 @@ logging.basicConfig(
 
 
 def _truthy(name: str, default: str = "") -> bool:
+    """Return whether an environment variable reads as on ("1", "true", "yes", "on").
+
+    Args:
+        name: The variable's name.
+        default: Value used when it is unset.
+
+    Returns:
+        True for an on value, ignoring case and surrounding spaces.
+    """
     return os.getenv(name, default).strip().lower() in {"1", "true", "yes", "on"}
 
 
@@ -44,30 +60,21 @@ SCHEMA_ON_STARTUP = _truthy("RUN_SCHEMA_ON_STARTUP", "1")
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    """Prepare the process, once, when the server actually starts.
+    """Run the startup work once, when the server starts, then serve.
 
-    Deliberately not at module import. This issues DDL, and `import app.main`
-    happens in places that are emphatically not a server start: a test
-    collector, a reload worker, an IDE indexer, `--help`. Any of those would
-    write to whatever `DATABASE_URL` happened to point at.
+    Applies the schema when `SCHEMA_ON_STARTUP` is set, logs a warning if sign-up is
+    open, and purges expired accounts. Kept out of module import so test collection,
+    reload workers and tooling never write to the database.
 
-    The two halves below are gated differently on purpose.
+    Args:
+        _app: The application, unused.
 
-    **The schema work is expensive and rarely needed.** Measured, the three
-    calls issue 278 statements -- 247 of them confirming all 49 indexes still
-    exist. Against a local file that is free. Against a network database on a
-    service that scales to zero, it is roughly half a second added to every
-    cold start, paid by whoever arrives first after a quiet spell, to
-    re-establish something that was already true four minutes ago.
+    Yields:
+        Nothing; the server runs while suspended here.
 
-    **The purge is cheap and must not stop.** It is what makes the thirty-day
-    deletion promise real, and gating it off would quietly break that -- an
-    account marked for deletion would simply stay forever. It costs one query
-    when there is nothing to do, and startup remains the right trigger for the
-    same reason due payments are written on read: idempotent work, done when
-    something is already happening. A machine left off for a month catches up
-    the moment it starts, which is correct -- the deadline passed whether or
-    not the server was running.
+    Note:
+        The purge runs on every start and is idempotent; an error outside its
+        per-account guard, such as an unreachable database, stops the start.
     """
     if SCHEMA_ON_STARTUP:
         apply_schema()
@@ -101,29 +108,19 @@ app = FastAPI(
     # served, since the pages are only a renderer for this.
     openapi_url="/openapi.json" if DOCS_ENABLED else None,
 )
+"""The ASGI application uvicorn serves."""
 
 
 @app.api_route("/health", methods=["GET", "HEAD"], include_in_schema=False)
 def health(response: Response):
-    """Is this process able to do its job, rather than merely running?
+    """Report whether the process can reach its database; GET and HEAD for monitors.
 
-    **HEAD as well as GET, because that is what monitors actually send.**
-    UptimeRobot defaults to HEAD to save bandwidth, and FastAPI's `@app.get`
-    registers GET alone -- plain Starlette routes add HEAD for you, FastAPI's
-    do not. The result was a monitor reporting a perfectly healthy service as
-    down, with a 405 that looks like a configuration error at the monitor's end.
-    A health endpoint that only answers the method you happened to test with is
-    not a health endpoint.
+    Args:
+        response: The response, whose status is set to 503 when unhealthy.
 
-    Answers with the database, not just with itself. A check that only proves
-    uvicorn is listening reports healthy while every real request fails on a
-    dead connection -- which, with a database that suspends when idle and a
-    container that is torn down and recreated constantly, is the most likely
-    way this deployment breaks. A probe that cannot see the dependency it is
-    worried about is decoration.
-
-    503 rather than an exception, so a monitor reads a status code instead of a
-    stack trace, and so the body can say which half is unwell.
+    Returns:
+        `{"status": "ok", "database": "ok"}`, or with status 503
+        `{"status": "unhealthy", "database": "unreachable"}` when `SELECT 1` fails.
     """
     try:
         with SessionLocal() as session:

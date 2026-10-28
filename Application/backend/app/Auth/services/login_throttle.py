@@ -1,28 +1,8 @@
-"""Rate limiting for the two unauthenticated endpoints that cost real work.
+"""In-memory sliding-window rate limiters for login and registration.
 
-`POST /api/auth/login` ran one bcrypt verification per request with nothing
-bounding how many requests arrived. The careful timing-equalisation in
-`password_service` defends a far smaller hole than an unbounded guessing loop
-against an 8-character minimum password.
-
-Deliberately hand-rolled rather than adding a throttling library: this is a
-single-process app, `requirements.txt` is already carrying ~30 packages it does
-not use, and the whole mechanism is forty lines.
-
-**Limits of this approach, stated plainly.** State lives in this process's
-memory, so it resets on restart and is not shared between workers. Running more
-than one worker, or putting this behind several instances, needs a shared store
-(Redis) instead. For a single-process personal app it is the right size; it is
-not a substitute for an edge rate limiter in front of a public deployment.
-
-**And a second limit that matters more once this is deployed.** Every key here
-is derived from `request.client.host`, the peer address. Behind a proxy that is
-the proxy, not the caller -- so on a platform like Cloud Run these limiters
-collapse towards a single shared budget rather than one per person. That is not
-useless (an unbounded loop still stops) but it is a different thing from what
-runs locally, and the registration ceiling below is chosen with it in mind. The
-fix reads the one forwarded-for entry the trusted proxy wrote, switched by
-`TRUSTED_PROXY_HOPS`: see `Auth/services/client_address.py` (Phase 2 D18).
+State lives in this process only: it resets on restart and is not shared between
+workers or Cloud Run instances, so each instance enforces its own budget. Keys use
+the caller's address from `client_of`.
 """
 
 import threading
@@ -38,7 +18,15 @@ MAX_KEYS = 4096
 
 
 class SlidingWindowLimiter:
-    """Counts recent attempts per key, and forgets them as the window slides."""
+    """Counts attempts per key over a sliding window, and refuses a key once it is full.
+
+    Thread-safe: routes run in FastAPI's threadpool. At most `MAX_KEYS` keys are kept,
+    the stalest evicted first.
+
+    Args:
+        max_attempts: Attempts a key may make inside the window.
+        window_seconds: Length of the sliding window, in seconds.
+    """
 
     def __init__(self, max_attempts: int = MAX_ATTEMPTS, window_seconds: int = WINDOW_SECONDS):
         self._max_attempts = max_attempts
@@ -50,7 +38,15 @@ class SlidingWindowLimiter:
         self._lock = threading.Lock()
 
     def retry_after(self, key: str) -> int | None:
-        """Seconds until `key` may try again, or None if it may try now."""
+        """Return the seconds until a key may try again, or None if it may try now.
+
+        Args:
+            key: The limiter key, such as `account_key(...)` or a client address.
+
+        Returns:
+            None while the key has fewer than `max_attempts` attempts in the window;
+            otherwise the whole seconds (at least 1) until its oldest attempt expires.
+        """
         with self._lock:
             hits = self._prune(key, time.monotonic())
             if len(hits) < self._max_attempts:
@@ -59,6 +55,11 @@ class SlidingWindowLimiter:
             return max(1, int(hits[0] + self._window - time.monotonic()) + 1)
 
     def record_attempt(self, key: str) -> None:
+        """Record an attempt for a key now; evict the stalest keys past `MAX_KEYS`.
+
+        Args:
+            key: Limiter key, such as one from `account_key`.
+        """
         with self._lock:
             now = time.monotonic()
             hits = self._prune(key, now)
@@ -67,11 +68,16 @@ class SlidingWindowLimiter:
             self._evict_if_full()
 
     def reset(self, key: str) -> None:
-        """Forget a key's history, called when it authenticates successfully."""
+        """Forget a key's attempts; called when it authenticates successfully.
+
+        Args:
+            key: Limiter key to clear.
+        """
         with self._lock:
             self._hits.pop(key, None)
 
     def _prune(self, key: str, now: float) -> list[float]:
+        """Drop a key's attempts older than the window and return the rest."""
         cutoff = now - self._window
         hits = [hit for hit in self._hits.get(key, []) if hit > cutoff]
         if hits:
@@ -81,6 +87,7 @@ class SlidingWindowLimiter:
         return hits
 
     def _evict_if_full(self) -> None:
+        """Evict keys, oldest last attempt first, until `MAX_KEYS` remain."""
         if len(self._hits) <= MAX_KEYS:
             return
         # Oldest last-attempt first. Only reached under a deliberate flood.
@@ -121,4 +128,13 @@ per_client_registration = SlidingWindowLimiter(
 
 
 def account_key(email: str, client: str) -> str:
+    """Return the per-account limiter key: normalised email and client address.
+
+    Args:
+        email: Address the sign-in was attempted for.
+        client: The caller's address, from `client_of`.
+
+    Returns:
+        The key, as "email|client".
+    """
     return f"{email.strip().lower()}|{client}"

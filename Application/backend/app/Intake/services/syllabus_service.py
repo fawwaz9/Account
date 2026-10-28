@@ -1,23 +1,10 @@
-"""A syllabus in, a course out -- with a person checking everything in between.
+"""Syllabus intake: a model reads it, and only what the student confirms is written.
 
-Phase 1 item 1 (account-vision.md §13.8, §13.12). Upload a syllabus and the
-term builds itself: assessments, weights, dated exams, due dates. Three rules
-carry it:
-
-* **Nothing becomes a record without confirmation.** The parse is shown, every
-  field editable; only what the person confirms is written. A hallucinated
-  weight in a grade projection is exactly the failure this exists to avoid
-  (§9.4).
-* **Checks are deterministic and run on every parse,** so the screen can point
-  at what to look at: weights that do not sum to 100, a weighted assessment
-  with no date that is not marked TBA, a date outside the term. A UBC final is
-  TBA -- a state, not a failure.
-* **The no-change measure is recorded.** Of the fields the parse produced, how
-  many the person changed (§15): the precision proxy that says whether the
-  extraction can be trusted, and which fields to improve next.
-
-What is sent to the model is the syllabus and the term's dates, nothing else:
-no name, no email, no id.
+Nothing becomes a record without confirmation: `parse` writes only the parse row
+(for the daily cap and the no-change measure), and `apply` or `add_to_course` write
+what the student checked. Deterministic checks flag weights not summing to 100,
+undated weighted work and dates outside the term. Only the document and the term's
+dates are sent to the model.
 """
 
 import base64
@@ -69,9 +56,19 @@ SYSTEM = (
     "Report only what the document says. Never invent an assessment, a weight or a date. "
     "Answer with a single JSON object and nothing else."
 )
+"""System instruction: report only what the document says, as JSON."""
 
 
 def prompt(term_start: date | None, term_end: date | None) -> str:
+    """Return the extraction prompt, with the term's dates when known.
+
+    Args:
+        term_start: First day of the course's term, or None when unknown.
+        term_end: Last day of the course's term, or None when unknown.
+
+    Returns:
+        The instruction text sent with the document.
+    """
     categories = ", ".join(category.value for category in GradeCategory)
     term = (
         f"The term runs from {term_start.isoformat()} to {term_end.isoformat()}; "
@@ -117,11 +114,34 @@ Rules:
 
 
 class RateLimited(Exception):
+    """Raised when the user has used today's syllabus parses."""
     pass
 
 
 def parse(db: Session, user_id: uuid.UUID, upload: SyllabusUpload, *, transport=None) -> ParseResult:
-    """Read a syllabus. Writes no course and no grade -- only the parse, for the cap and the measure."""
+    """Read an uploaded syllabus into a checkable extract; builds nothing.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        upload: The file, base64-encoded, with its name and type.
+        transport: Stand-in for the provider call in tests.
+
+    Returns:
+        The stored parse's id, the extract, the warnings to check, and when it ran.
+
+    Raises:
+        ValueError: If the type is not PDF or plain text, the content is not base64,
+            empty or over 8 MB, or the model's answer fails the extract schema.
+        llm.NotConfigured: If no model is configured.
+        RateLimited: If today's `LLM_PARSES_PER_DAY` parses are used, counted by the
+            user's local day.
+        llm.ProviderError: If the provider fails or answers unusably.
+
+    Note:
+        Commits the parse row, then keeps the file in the bucket when one is set. The
+        cap counts stored parses only, so a failed parse is not counted.
+    """
     if upload.media_type not in MEDIA_TYPES:
         raise ValueError("Upload a PDF or a plain-text file")
     try:
@@ -169,7 +189,7 @@ def parse(db: Session, user_id: uuid.UUID, upload: SyllabusUpload, *, transport=
 
 
 def _clean(raw: dict) -> dict:
-    """Drop assessment entries the model left unusable rather than fail the whole parse."""
+    """Return the raw answer minus assessment entries with no name."""
     items = raw.get("assessments") if isinstance(raw.get("assessments"), list) else []
     raw = dict(raw)
     raw["assessments"] = [item for item in items if isinstance(item, dict) and item.get("name")]
@@ -177,6 +197,18 @@ def _clean(raw: dict) -> dict:
 
 
 def check(extract: SyllabusExtract, term_start: date | None, term_end: date | None) -> list[str]:
+    """Return the warnings a person should look at before confirming a parse.
+
+    Args:
+        extract: The parsed syllabus.
+        term_start: First day of the term, if known.
+        term_end: Last day of the term, if known.
+
+    Returns:
+        Sentences for weights (bonus aside) not within 0.5 of 100, a weighted item with
+        no date and not TBA, a date outside the term, several grading schemes, and rules
+        that could not be read; empty when nothing stands out.
+    """
     warnings: list[str] = []
     counted = [a for a in extract.assessments if a.category != GradeCategory.BONUS]
     total = sum(a.weight for a in counted)
@@ -197,11 +229,20 @@ def check(extract: SyllabusExtract, term_start: date | None, term_end: date | No
 
 def file_rules(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, extract: SyllabusExtract,
                prerequisites: ConfirmedRule | None, corequisites: ConfirmedRule | None) -> int:
-    """File the rules the person confirmed as their own (Phase 2 item 5).
+    """File the confirmed prerequisite and co-requisite rules as the student's own.
 
-    Only what was sent: a kind left out files nothing. Marked as from the
-    syllabus, with the syllabus's sentence kept beside it -- with them, never
-    shared. Returns how many were filed.
+    Only kinds that were sent are filed, marked as from the syllabus with its sentence.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        course_id: The course the rules are for.
+        extract: The parse, for the syllabus's wording.
+        prerequisites: The confirmed prerequisite rule, or None.
+        corequisites: The confirmed co-requisite rule, or None.
+
+    Returns:
+        How many rules were filed; each commits.
     """
     filed = 0
     for kind, confirmed, found in (("prerequisite", prerequisites, extract.prerequisites),
@@ -215,11 +256,22 @@ def file_rules(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, extract: S
 
 
 FIELDS = ("name", "category", "weight", "count", "due_date", "date_tba")
+"""The assessment fields the no-change measure compares."""
 
 
 def changes(extracted: SyllabusExtract, confirmed: ApplyRequest) -> tuple[int, int]:
-    """(fields the parse produced, fields the person changed). Row by row; a row
-    added or removed counts every one of its fields as changed."""
+    """Return (fields produced, fields the student changed) for the no-change measure.
+
+    Compared row by row, plus the course code and name; an added or removed row counts
+    all its fields as changed.
+
+    Args:
+        extracted: What the model read from the syllabus.
+        confirmed: What the student confirmed.
+
+    Returns:
+        (fields produced, fields changed), the second capped at the first.
+    """
     before = [a.model_dump() for a in extracted.assessments]
     after = [a.model_dump() for a in confirmed.assessments]
     total = len(before) * len(FIELDS) + 2  # plus the course code and name
@@ -234,7 +286,17 @@ def changes(extracted: SyllabusExtract, confirmed: ApplyRequest) -> tuple[int, i
 
 
 def grade_rows(assessment) -> list[GradeCreate]:
-    """One gradebook row per assessment, or per item of a counted group."""
+    """Return the gradebook rows one assessment becomes: one per item.
+
+    Each is out of 100; only the first of a counted group keeps the date, and exams are
+    scheduled as calendar events, everything else as tasks.
+
+    Args:
+        assessment: One confirmed assessment.
+
+    Returns:
+        One `GradeCreate` per item, numbered when `count` is above 1.
+    """
     names = (
         [assessment.name] if assessment.count == 1
         else [f"{assessment.name} {n}" for n in range(1, assessment.count + 1)]
@@ -252,7 +314,29 @@ def grade_rows(assessment) -> list[GradeCreate]:
 
 
 def apply(db: Session, user_id: uuid.UUID, parse_id: uuid.UUID, confirmed: ApplyRequest) -> ApplyResult | None:
-    """Build the course from what the person confirmed. None if the parse is not theirs."""
+    """Build a new course, its weights and its grades from a confirmed parse.
+
+    Everything is validated before anything is written: the term, weights summing to
+    100 (bonus aside, within 0.5) and the code being new.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        parse_id: The parse being applied.
+        confirmed: The course and assessments as the student confirmed them.
+
+    Returns:
+        The new course's id, grades created and the no-change measure; None when the
+        parse is missing or another user's.
+
+    Raises:
+        ValueError: If the parse was already applied, no term is set or chosen, the
+            term is unknown, the weights do not sum to 100, or the code already exists.
+
+    Note:
+        Not one transaction: the course commits first, then the grades (deleting the
+        course again if they fail), then the rules, then the parse row.
+    """
     row = (
         db.query(SyllabusParseModel)
         .filter(SyllabusParseModel.id == parse_id, SyllabusParseModel.user_id == user_id)
@@ -316,7 +400,7 @@ def apply(db: Session, user_id: uuid.UUID, parse_id: uuid.UUID, confirmed: Apply
 
 
 def _words(name: str) -> tuple[str, ...]:
-    """A name as comparable words: case, punctuation and plurals set aside."""
+    """Return a name as comparable words: no case, punctuation or plurals."""
     words = []
     for word in re.sub(r"[^a-z0-9]+", " ", name.lower()).split():
         if word.endswith("zzes"):
@@ -330,13 +414,17 @@ def _words(name: str) -> tuple[str, ...]:
 
 
 def match_rows(existing: list, proposed: list) -> list[str | None]:
-    """For each proposed (name, category), the existing grade name it matches.
+    """Return, for each proposed (name, category), the existing grade name it matches.
 
-    Same category, then the same words; failing that, one's words contained in
-    the other's ("Midterm" and "Midterm 1"), which counts as existing because a
-    duplicate is worse than a row left for you to add. Each existing grade
-    matches at most once, so "Midterm" covers "Midterm 1" and leaves
-    "Midterm 2" new.
+    Same category first by the same words, then by one's words containing the other's
+    ("Midterm" covers "Midterm 1"); each existing grade matches at most once.
+
+    Args:
+        existing: The course's grade rows.
+        proposed: (name, category value) pairs.
+
+    Returns:
+        One existing name or None per proposed row, in order.
     """
     available = [(g.name, g.category, set(_words(g.name)), _words(g.name)) for g in existing]
     used: set[int] = set()
@@ -360,6 +448,7 @@ def match_rows(existing: list, proposed: list) -> list[str | None]:
 
 
 def _parse_for(db: Session, user_id: uuid.UUID, parse_id: uuid.UUID) -> SyllabusParseModel | None:
+    """Return the caller's parse with this id, or None."""
     return (
         db.query(SyllabusParseModel)
         .filter(SyllabusParseModel.id == parse_id, SyllabusParseModel.user_id == user_id)
@@ -368,7 +457,19 @@ def _parse_for(db: Session, user_id: uuid.UUID, parse_id: uuid.UUID) -> Syllabus
 
 
 def preview_add(db: Session, user_id: uuid.UUID, parse_id: uuid.UUID, course_id: uuid.UUID) -> AddPreview | None:
-    """What the syllabus would add to this course. Writes nothing."""
+    """Return what a syllabus would add to an existing course; writes nothing.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        parse_id: The parse.
+        course_id: The course to add to.
+
+    Returns:
+        Every implied row and whether the course has it, weights that differ, unweighted
+        categories new rows would use, a section offer, and the rules; None when the
+        parse or course is missing or another user's.
+    """
     row = _parse_for(db, user_id, parse_id)
     course = get_user_course(db, user_id, course_id)
     if row is None or course is None:
@@ -408,11 +509,26 @@ def preview_add(db: Session, user_id: uuid.UUID, parse_id: uuid.UUID, course_id:
 def add_to_course(
     db: Session, user_id: uuid.UUID, parse_id: uuid.UUID, course_id: uuid.UUID, request: AddRequest,
 ) -> AddResult | None:
-    """Add the confirmed rows the course still lacks. None if either is not yours.
+    """Add the confirmed rows an existing course still lacks; never changes what it has.
 
-    Matched again here, against the course as it is now: a row the course
-    gained since the preview is skipped, never duplicated. Only new rows are
-    written, through add_grades_bulk, in one commit.
+    Rows are matched again against the course as it is now, so nothing is duplicated.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        parse_id: The parse.
+        course_id: The course to add to.
+        request: The rows, the section choice and the rules confirmed.
+
+    Returns:
+        How many rows were added and skipped, whether the section was set, and how many
+        rules were filed; None when the parse or course is missing or another user's.
+
+    Raises:
+        ValueError: If the parse was already used.
+
+    Note:
+        Several commits: the new grades with the section, each rule, then the parse row.
     """
     row = _parse_for(db, user_id, parse_id)
     course = get_user_course(db, user_id, course_id)

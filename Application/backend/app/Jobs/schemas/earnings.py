@@ -1,3 +1,10 @@
+"""Response bodies for the jobs page's earnings figures.
+
+Earned (predicted from the shifts in a window) and paid (cheques dated in it)
+are reported side by side and never added together. `earnings_service` builds
+every figure here in one pass.
+"""
+
 from datetime import date
 from uuid import UUID
 
@@ -5,7 +12,26 @@ from pydantic import BaseModel, Field
 
 
 class JobEarnings(BaseModel):
-    """What one job came to over a window, in hours and money."""
+    """One job's hours and money over a window.
+
+    Attributes:
+        job_id: The job's id.
+        job_name: The job's name.
+        kind: "hourly", "salaried" or "contract".
+        shift_count: Shift occurrences in the window.
+        counted_minutes: Minutes those shifts count for: the worked times where
+            recorded, otherwise the scheduled ones.
+        assumed_count: Past shifts never confirmed, counted at their scheduled
+            hours.
+        gross_earned: Predicted gross pay in dollars: hours times rate (a shift's
+            override first) plus on-cheque tips for an hourly job, the period
+            amount for each pay date in the window for a salaried one, 0 for a
+            contract.
+        cash_tips: Cash tips recorded on those shifts.
+        gross_paid: Gross of this job's cheques dated in the window.
+        deducted: Those cheques' deductions.
+        net_paid: `gross_paid` less `deducted`.
+    """
 
     job_id: UUID
     job_name: str
@@ -31,7 +57,21 @@ class JobEarnings(BaseModel):
 
 
 class EarningsWindow(BaseModel):
-    """One stretch of time, across every job."""
+    """One window's hours and money across every job.
+
+    Attributes:
+        label: "Past week", "This month" or "This term".
+        starts_on: First day of the window.
+        ends_on: Last day of the window, inclusive and never after today.
+        counted_minutes: The jobs' counted minutes, summed.
+        gross_earned: The jobs' predicted gross, summed.
+        cash_tips: The jobs' cash tips, summed.
+        gross_paid: Gross of every cheque dated in the window.
+        deducted: Those cheques' deductions.
+        net_paid: `gross_paid` less `deducted`.
+        per_job: Each job with a shift, a predicted amount or a cheque in the
+            window.
+    """
 
     label: str
     starts_on: date
@@ -50,10 +90,18 @@ class EarningsWindow(BaseModel):
 
 
 class EffectiveRate(BaseModel):
-    """What an hour of your time actually puts in your account.
+    """What an hour of work actually paid in the calendar year to date.
 
-    Computable only because gross and deductions are both recorded. The
-    advertised rate is what you were hired at; this is what survives tax.
+    Measured only over pay periods covered by a cheque that states its period, so
+    hours not yet paid for do not drag the rate down.
+
+    Attributes:
+        net_per_hour: Net pay per hour worked in those periods, in dollars; None
+            when nothing qualifies.
+        gross_per_hour: Gross pay per such hour; None when nothing qualifies.
+        deduction_percent: Deductions as a percentage of gross, 1 dp; None when
+            nothing qualifies.
+        paid_minutes: Minutes of shifts inside those periods.
     """
 
     #: Null when nothing has been paid yet, rather than a zero that would read
@@ -66,7 +114,18 @@ class EffectiveRate(BaseModel):
 
 
 class UpcomingPay(BaseModel):
-    """Work done that no cheque has covered yet, and when one is due."""
+    """Work no cheque has covered yet for one current job, and its next payday.
+
+    Attributes:
+        job_id: The job's id.
+        job_name: The job's name.
+        unpaid_minutes: Minutes of shifts from the day after the latest cheque's
+            period (or from the job's start) up to today.
+        unpaid_estimate: What those shifts should pay, in dollars, for an hourly
+            job; None for salaried and contract jobs.
+        next_pay_on: The first pay date from today on; None without a pay
+            schedule.
+    """
 
     job_id: UUID
     job_name: str
@@ -78,7 +137,16 @@ class UpcomingPay(BaseModel):
 
 
 class HoursAgainstClasses(BaseModel):
-    """Paid work beside timetabled hours, for the current week."""
+    """Paid work beside class time, for the current Monday-to-Sunday week.
+
+    Attributes:
+        starts_on: The week's Monday.
+        ends_on: The week's Sunday.
+        work_minutes: Booked shift minutes in the week.
+        class_minutes: Booked lecture, lab and discussion minutes.
+        task_minutes: Estimated minutes on tasks due that week, scaled by the
+            estimate ratio when the user applies it.
+    """
 
     starts_on: date
     ends_on: date
@@ -90,7 +158,18 @@ class HoursAgainstClasses(BaseModel):
 
 
 class EarningsSummary(BaseModel):
-    """Everything the jobs page reports, from one pass over one window."""
+    """Everything the jobs page reports, from one pass over the user's jobs.
+
+    Attributes:
+        week: The last seven days, today included.
+        month: The calendar month to date.
+        term: The current term to date; None when the term has no dates or has
+            not begun.
+        effective_rate: The effective hourly rate for the calendar year to date.
+        upcoming: Unpaid work and the next payday, one entry per job without an
+            end date.
+        this_week: Hours against classes for the current week.
+    """
 
     week: EarningsWindow
     month: EarningsWindow

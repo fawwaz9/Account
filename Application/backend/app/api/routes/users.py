@@ -1,3 +1,5 @@
+"""User routes under `/api/users`: profile, academic status, edits and deletion."""
+
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException
@@ -24,6 +26,15 @@ router = APIRouter()
 # SQLAlchemy row, which now includes password_hash.
 @router.get("/me", response_model=User)
 def get_me(current_user: CurrentUser, db: DBSession):
+    """Return the signed-in user's profile, with the suggested first-year anchor.
+
+    Args:
+        current_user: The signed-in user.
+        db: Request-scoped database session.
+
+    Returns:
+        The user, never including the password hash.
+    """
     # Attached here too, not only on the academic-status route. Settings takes
     # its user from /me, so the year suggestion it offers is read from this
     # payload -- without this the field is always null and the control that
@@ -33,6 +44,18 @@ def get_me(current_user: CurrentUser, db: DBSession):
 
 @router.get("/{user_id}/academic-status", response_model=User, responses=responses["user_404"])
 def get_academic_status(user_id: VerifiedUserId, db: DBSession):
+    """Return the user with their academic status and suggested first-year anchor.
+
+    Args:
+        user_id: The verified caller's id.
+        db: Request-scoped database session.
+
+    Returns:
+        The user.
+
+    Raises:
+        HTTPException: 404 when the user does not exist.
+    """
     user = get_user(db, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
@@ -42,10 +65,18 @@ def get_academic_status(user_id: VerifiedUserId, db: DBSession):
 
 @router.patch("/{user_id}/academic-status", response_model=User, responses=responses["user_both"])
 def edit_academic_status(user_id: VerifiedUserId, status: AcademicStatusUpdate, db: DBSession):
-    """Set the term the student is currently in.
+    """Set the student's current term, which decides past, current and future.
 
-    Drives past/current/future on the grades page; while it is unset every
-    course reads as current.
+    Args:
+        user_id: The verified caller's id.
+        status: The fields to change; omitted ones stay.
+        db: Request-scoped database session.
+
+    Returns:
+        The updated user.
+
+    Raises:
+        HTTPException: 404 when the user does not exist.
     """
     try:
         user = update_academic_status(db, user_id, status)
@@ -60,6 +91,18 @@ def edit_academic_status(user_id: VerifiedUserId, status: AcademicStatusUpdate, 
 
 @router.get("/{user_id}", response_model=UserDetail, responses=responses["user_404"])
 def get_single_user(user_id: VerifiedUserId, db: DBSession):
+    """Return the user with every course and its grades.
+
+    Args:
+        user_id: The verified caller's id.
+        db: Request-scoped database session.
+
+    Returns:
+        The user and their courses; the courses carry no computed summary fields.
+
+    Raises:
+        HTTPException: 404 when the user does not exist.
+    """
     user = get_user(db, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
@@ -69,6 +112,22 @@ def get_single_user(user_id: VerifiedUserId, db: DBSession):
 
 @router.patch("/{user_id}", response_model=UserDetail, responses=responses["user_both"])
 def edit_user(user_id: VerifiedUserId, user: UserUpdate, db: DBSession):
+    """Change the user's name, email or preferences; Settings saves through this.
+
+    Preferences are merged key by key; a new email is no longer verified.
+
+    Args:
+        user_id: The verified caller's id.
+        user: The fields to change.
+        db: Request-scoped database session.
+
+    Returns:
+        The updated user with every course and its grades.
+
+    Raises:
+        HTTPException: 400 when another account has the email; 404 when the user does
+            not exist.
+    """
     try:
         updated_user = update_user(db, user_id, user)
     except ValueError as exc:
@@ -82,12 +141,20 @@ def edit_user(user_id: VerifiedUserId, user: UserUpdate, db: DBSession):
 
 @router.delete("/{user_id}", response_model=UserDetail, responses=responses["user_404"])
 def remove_user(user_id: VerifiedUserId, db: DBSession):
-    """Schedule the account for deletion, and end every session at once.
+    """Schedule the account for deletion and sign out every session at once.
 
-    Nothing is removed today. The account and everything under it stay for the
-    grace period, and the response carries `deletes_on` so the caller can say
-    when it stops being recoverable. Signing in still works until then, which
-    is what makes `POST /{user_id}/restore` reachable at all.
+    Nothing is removed now; the account stays recoverable through `POST
+    /{user_id}/restore` until `deletes_on`, and signing in still works meanwhile.
+
+    Args:
+        user_id: The verified caller's id.
+        db: Request-scoped database session.
+
+    Returns:
+        The user, with `deleted_at` and `deletes_on` set.
+
+    Raises:
+        HTTPException: 404 when the user does not exist.
     """
     deleted_user = delete_user(db, user_id)
     if deleted_user is None:
@@ -101,7 +168,18 @@ def remove_user(user_id: VerifiedUserId, db: DBSession):
 
 @router.post("/{user_id}/restore", response_model=UserDetail, responses=responses["user_404"])
 def undo_remove_user(user_id: VerifiedUserId, db: DBSession):
-    """Cancel a pending deletion, while the grace period is still running."""
+    """Cancel a pending account deletion while the grace period runs.
+
+    Args:
+        user_id: The verified caller's id.
+        db: Request-scoped database session.
+
+    Returns:
+        The restored user.
+
+    Raises:
+        HTTPException: 404 when there is no pending deletion.
+    """
     restored = restore_user(db, user_id)
     if restored is None:
         raise HTTPException(

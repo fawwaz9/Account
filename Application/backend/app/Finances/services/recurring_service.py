@@ -1,20 +1,10 @@
-"""Standing instructions, and turning the due ones into real money movements.
+"""Service functions for standing instructions and the payments they write.
 
-The rule is stored; the payments are not, until they happen. Expansion goes
-through the same engine that draws class times on the calendar -- the whole
-point of writing that once.
-
-Two things make this different from a repeating calendar event, and both come
-from the same fact: a balance is the sum of its rows.
-
-* An occurrence on or before today is written as a real transaction, because
-  the money has moved and a balance that ignores it is wrong.
-* An occurrence after today is never written, because the money has not moved
-  and a balance that counts it is also wrong. Those stay projections.
-
-Writing a payment goes through the ordinary money services rather than
-inserting rows here, so signing, transfer pairing and deposit allocation each
-keep living in exactly one place.
+The rule is stored; a payment becomes a real ledger row only once its date has
+come, because a balance is the sum of its rows. Later dates stay projections
+(`upcoming`). Payments are written through the ordinary money services, so a
+recurring transfer or deposit is identical to one entered by hand; there is no
+scheduler, and the Budget page runs the catch-up on every load.
 """
 
 import uuid
@@ -67,11 +57,17 @@ MAX_PROJECTION_DAYS = 400
 
 
 def attach_rule(db: Session, instruction: RecurringTransactionModel) -> RecurringTransactionModel:
-    """Expose the rule columns as the nested object the schema declares.
+    """Set the derived fields the response expects on an instruction row.
 
-    Set on the instance rather than as a model property, for the same reason the
-    grades module does it: models.py is imported by this service, so a property
-    reaching back into it would be a circular import.
+    Attaches `recurrence`, `last_run_on` and `next_due_on` to the instance only;
+    `skipped_dates` stays as stored ISO strings.
+
+    Args:
+        db: Open database session.
+        instruction: The instruction row.
+
+    Returns:
+        The same row.
     """
     instruction.recurrence = recurrence_of(instruction)
     # Left as the ISO strings the column stores. Assigning parsed dates back onto
@@ -87,11 +83,16 @@ def attach_rule(db: Session, instruction: RecurringTransactionModel) -> Recurrin
 
 
 def written_dates(db: Session, recurring_id: uuid.UUID) -> set[date]:
-    """Dates this instruction has already been charged for.
+    """Return the dates this instruction has already written a payment for.
 
-    The dedup key is (recurring_id, occurred_on): one standing instruction
-    cannot produce two payments for the same date, however many times the
-    catch-up runs.
+    (recurring_id, occurred_on) is the dedup key the catch-up relies on.
+
+    Args:
+        db: Open database session.
+        recurring_id: The instruction.
+
+    Returns:
+        The set of dates; empty when nothing is written.
     """
     rows = (
         db.query(TransactionModel.occurred_on)
@@ -105,11 +106,15 @@ def written_dates(db: Session, recurring_id: uuid.UUID) -> set[date]:
 def next_due(
     instruction: RecurringTransactionModel, written: set[date], horizon: date
 ) -> date | None:
-    """The first date on or after `horizon` that has not been charged yet.
+    """Return the first date on or after `horizon` with no payment written yet.
 
-    Told the day rather than asking for it, because this holds no session: the
-    caller has the owner and resolves their local today. It used to call a
-    server-clock `today()`, which put the horizon a day out for part of every day.
+    Args:
+        instruction: The instruction row.
+        written: The dates already written.
+        horizon: The owner's today.
+
+    Returns:
+        The date, looking up to 400 days ahead; None when the rule has run out.
     """
     upcoming = occurrences(
         rule_of(instruction),
@@ -125,20 +130,56 @@ def next_due(
 
 
 def add_days(value: date, count: int) -> date:
+    """Return a date moved by a number of days.
+
+    Args:
+        value: Starting date.
+        count: Days to add; negative moves back.
+
+    Returns:
+        The shifted date.
+    """
     return value + timedelta(days=count)
 
 
 def skipped_of(instruction: RecurringTransactionModel) -> list[date]:
+    """Return an instruction's cancelled dates, parsed from their stored ISO strings.
+
+    Args:
+        instruction: The standing instruction.
+
+    Returns:
+        Its skipped dates as `date` objects; empty when none.
+    """
     return [parse_date(value) for value in (instruction.skipped_dates or [])]
 
 
 def user_exists(db: Session, user_id: uuid.UUID) -> bool:
+    """Return whether a user row with this id exists.
+
+    Args:
+        db: Open database session.
+        user_id: Id to look up.
+
+    Returns:
+        True when the user row exists.
+    """
     return db.query(UserModel).filter(UserModel.id == user_id).first() is not None
 
 
 # --------------------------------------------------------------------- CRUD --
 
 def list_rules(db: Session, user_id: uuid.UUID, include_inactive: bool = True):
+    """Return the user's standing instructions, by start date.
+
+    Args:
+        db: Open database session.
+        user_id: Whose instructions.
+        include_inactive: Also return paused ones.
+
+    Returns:
+        The rows with derived fields attached; None when the user does not exist.
+    """
     if not user_exists(db, user_id):
         return None
 
@@ -153,6 +194,17 @@ def list_rules(db: Session, user_id: uuid.UUID, include_inactive: bool = True):
 
 
 def get_rule(db: Session, user_id: uuid.UUID, rule_id: uuid.UUID):
+    """Return one of the user's instructions with derived fields, or None.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+        rule_id: The instruction to fetch.
+
+    Returns:
+        The instruction with its derived fields attached, or None when it is missing or
+        another user's.
+    """
     rule = (
         db.query(RecurringTransactionModel)
         .filter(
@@ -165,11 +217,15 @@ def get_rule(db: Session, user_id: uuid.UUID, rule_id: uuid.UUID):
 
 
 def validate_targets(db: Session, user_id: uuid.UUID, data) -> None:
-    """Every account and category named must belong to the caller.
+    """Refuse an account or category id that is not the caller's.
 
-    The same check every one-off write makes: an id from another account would
-    otherwise be stored happily, which is how the cross-tenant category bug
-    worked.
+    Args:
+        db: Open database session.
+        user_id: The caller.
+        data: A create body naming accounts and a category.
+
+    Raises:
+        ValueError: If either account or the category is not the user's.
     """
     for account_id in (data.account_id, data.to_account_id):
         if account_id is not None and owned_account(db, user_id, account_id) is None:
@@ -180,6 +236,21 @@ def validate_targets(db: Session, user_id: uuid.UUID, data) -> None:
 
 
 def create_rule(db: Session, user_id: uuid.UUID, data: RecurringCreate):
+    """Create a standing instruction for the user; nothing reaches the ledger yet.
+
+    Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose instruction.
+        data: The instruction; a category is kept only on an expense.
+
+    Returns:
+        The new row with derived fields; None when the user does not exist.
+
+    Raises:
+        ValueError: If an account or the category is not the user's.
+    """
     if not user_exists(db, user_id):
         return None
 
@@ -207,6 +278,27 @@ def create_rule(db: Session, user_id: uuid.UUID, data: RecurringCreate):
 
 
 def update_rule(db: Session, user_id: uuid.UUID, rule_id: uuid.UUID, data: RecurringUpdate):
+    """Change the fields sent on one of the user's instructions.
+
+    Payments already written are left alone. Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose instruction.
+        rule_id: The instruction.
+        data: The fields to change; a null `recurrence` keeps the rule.
+
+    Returns:
+        The updated row with derived fields; None when it is not the user's.
+
+    Raises:
+        ValueError: If a category is set on anything but an expense or is not the
+            user's, or the repeat would end before it starts.
+
+    Note:
+        The next catch-up writes every date the edited rule produces in the last
+        120 days that has no payment, so moving a rule's day back-fills it.
+    """
     instruction = get_rule(db, user_id, rule_id)
     if instruction is None:
         return None
@@ -235,11 +327,17 @@ def update_rule(db: Session, user_id: uuid.UUID, rule_id: uuid.UUID, data: Recur
 
 
 def delete_rule(db: Session, user_id: uuid.UUID, rule_id: uuid.UUID):
-    """Stop the instruction, keeping every payment it already made.
+    """Delete a standing instruction, keeping every payment it already made.
 
-    The generated transactions are real money that really moved, so they stay
-    and simply lose their link back. Deleting them with the rule would rewrite
-    history to say the rent was never paid.
+    The payments lose their link to the rule. Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose instruction.
+        rule_id: The instruction.
+
+    Returns:
+        A copy of the deleted instruction; None when it is not the user's.
     """
     instruction = get_rule(db, user_id, rule_id)
     if instruction is None:
@@ -260,7 +358,19 @@ def delete_rule(db: Session, user_id: uuid.UUID, rule_id: uuid.UUID):
 
 
 def skip_occurrence(db: Session, user_id: uuid.UUID, rule_id: uuid.UUID, on_date: date):
-    """Skip one payment -- a month the subscription was paused."""
+    """Cancel one payment of an instruction, such as a paused month.
+
+    Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose instruction.
+        rule_id: The instruction.
+        on_date: The date to skip.
+
+    Returns:
+        The instruction with derived fields; None when it is not the user's.
+    """
     instruction = get_rule(db, user_id, rule_id)
     if instruction is None:
         return None
@@ -279,7 +389,19 @@ def skip_occurrence(db: Session, user_id: uuid.UUID, rule_id: uuid.UUID, on_date
 # ------------------------------------------------------------ materialising --
 
 def due_dates(db: Session, instruction: RecurringTransactionModel, through: date) -> list[date]:
-    """Occurrences owed but not yet written, oldest first."""
+    """Return the dates owed but not yet written, oldest first.
+
+    Looks back at most `MAX_CATCHUP_DAYS` from `through`, never before the rule's
+    start.
+
+    Args:
+        db: Open database session.
+        instruction: The instruction row.
+        through: The last date that counts as due.
+
+    Returns:
+        The missing dates.
+    """
     earliest = add_days(through, -MAX_CATCHUP_DAYS)
     window_start = max(instruction.starts_on, earliest)
 
@@ -297,11 +419,24 @@ def due_dates(db: Session, instruction: RecurringTransactionModel, through: date
 def write_occurrence(
     db: Session, user_id: uuid.UUID, instruction: RecurringTransactionModel, on_date: date
 ):
-    """One payment, through the ordinary money path for its kind.
+    """Write one payment through the ordinary money path for its kind.
 
-    Dispatching to the existing services rather than inserting rows here is what
-    keeps a recurring transfer identical to a hand-entered one: same signing,
-    same paired legs, same deposit allocation, same validation.
+    A deposit splits by today's income shares, a transfer writes both legs, and
+    income or an expense one row; the rows are then stamped with the rule's id.
+    Commits twice: the money service commits the rows, then the stamp.
+
+    Args:
+        db: Open database session.
+        user_id: Whose ledger.
+        instruction: The instruction.
+        on_date: The payment's date.
+
+    Returns:
+        The rows written.
+
+    Raises:
+        ValueError: If the account it points at is gone, or the deposit has no
+            income shares to split by.
     """
     if instruction.kind == DEPOSIT:
         # No allocations means "split by each account's income share", and the
@@ -347,15 +482,20 @@ def write_occurrence(
 
 
 def run_due(db: Session, user_id: uuid.UUID, through: date | None = None) -> RecurringRun | None:
-    """Write every payment that is owed and has not been written yet.
+    """Write every payment that is owed and not yet written, for all active rules.
 
-    Idempotent: the dedup on (recurring_id, occurred_on) means calling this on
-    every page load is safe, which is what makes "open the app and last month's
-    rent is already there" work without a scheduler.
+    Idempotent through the (recurring_id, occurred_on) check, which is what makes
+    calling it on every load safe. A rule that fails is reported, and its later
+    dates are left, while the other rules still run.
 
-    A rule that cannot run is reported rather than raised, so one standing
-    instruction pointing at a deleted account does not stop the other five from
-    being charged.
+    Args:
+        db: Open database session.
+        user_id: Whose instructions.
+        through: The last date that counts as due; defaults to the user's today.
+
+    Returns:
+        How many rows were written, the rows, and one line per rule that could
+        not run; None when the user does not exist.
     """
     if not user_exists(db, user_id):
         return None
@@ -389,10 +529,22 @@ def run_due(db: Session, user_id: uuid.UUID, through: date | None = None) -> Rec
 def upcoming(
     db: Session, user_id: uuid.UUID, start: date, end: date
 ) -> list[UpcomingCharge] | None:
-    """Payments the rules say are coming, as projections rather than rows.
+    """Return the payments active rules say are coming in a window, as projections.
 
-    This is what a "what am I already committed to" figure reads. Nothing here
-    has moved any money, so nothing here belongs in a balance.
+    Dates already written are left out. Nothing here is a ledger row.
+
+    Args:
+        db: Open database session.
+        user_id: Whose instructions.
+        start: First date, inclusive.
+        end: Last date, inclusive.
+
+    Returns:
+        The projected charges by date; None when the user does not exist.
+
+    Raises:
+        ValueError: If the window ends before it starts or spans more than
+            `MAX_PROJECTION_DAYS` days.
     """
     if not user_exists(db, user_id):
         return None
@@ -442,6 +594,15 @@ def upcoming(
 
 
 def account_names(db: Session, user_id: uuid.UUID) -> dict[uuid.UUID, str]:
+    """Return the user's account ids mapped to their names.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+
+    Returns:
+        Account id to name, archived accounts included.
+    """
     rows = (
         db.query(AccountModel.id, AccountModel.name)
         .filter(AccountModel.user_id == user_id)

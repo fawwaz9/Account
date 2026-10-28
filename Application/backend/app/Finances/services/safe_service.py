@@ -1,22 +1,9 @@
-"""What can actually be spent between now and the next time money arrives.
+"""Service functions for safe-to-spend: what can be spent before money next arrives.
 
-The ledger says what happened. This is the one figure that says what to do, and
-it is a subtraction over things already exposed: balances, the commitments
-`/recurring/upcoming` projects, and -- since Jobs -- when the next cheque lands.
-
-Three decisions shape it, and each is the difference between a number and an
-answer:
-
-* **The window ends at the next pay date.** A rolling thirty days can span two
-  rents or none; a calendar month reports two days of runway on the 29th. The
-  period you actually have to make money last is the one before the next cheque,
-  and Jobs knows when that is.
-* **Only spending accounts count.** Savings and investments are money already
-  decided against. Counting them gives a large number that answers nothing.
-* **Two figures, and only one headline.** `safe_now` is cash in hand less
-  commitments. `safe_soon` adds confirmed work not yet paid for. Showing them as
-  equals would mean neither is the answer; showing only the second would promise
-  money a late or short cheque might not bring.
+A subtraction over figures the app already has: counted spending balances, the
+standing instructions due before the next payday, and this month's sinking-fund
+contributions not yet made. `safe_now` is the headline; `safe_soon` adds hourly
+work done but not yet paid for and is never the headline.
 """
 
 import uuid
@@ -45,11 +32,15 @@ SPENDABLE_KINDS = frozenset({"spending"})
 
 
 def next_pay_date(db: Session, user_id: uuid.UUID, anchor: date) -> date | None:
-    """The soonest pay date any current job's rule produces.
+    """Return the soonest pay date any of the user's jobs without an end date produces.
 
-    Soonest rather than a particular job's: money arriving is money arriving,
-    and the window has to end at the first of them or it covers a period you are
-    no longer short for.
+    Args:
+        db: Open database session.
+        user_id: Whose jobs.
+        anchor: The day to look from, inclusive.
+
+    Returns:
+        The earliest next pay date; None when no job has a schedule.
     """
     jobs = (
         db.query(JobModel)
@@ -61,10 +52,16 @@ def next_pay_date(db: Session, user_id: uuid.UUID, anchor: date) -> date | None:
 
 
 def window(db: Session, user_id: uuid.UUID, anchor: date) -> tuple[date, bool]:
-    """Where the figure has to stretch to, and whether that is a real payday.
+    """Return the last day safe-to-spend must cover, and whether that is a real payday.
 
-    The day *before* the next cheque: the money has to last up to the point more
-    arrives, not past it.
+    Args:
+        db: Open database session.
+        user_id: Whose jobs.
+        anchor: Today, on the user's clock.
+
+    Returns:
+        The day before the next pay date and True; or the month's end and False
+        when no pay date falls after today.
     """
     payday = next_pay_date(db, user_id, anchor)
     if payday is not None and payday > anchor:
@@ -77,6 +74,15 @@ def window(db: Session, user_id: uuid.UUID, anchor: date) -> tuple[date, bool]:
 
 
 def spendable_accounts(db: Session, user_id: uuid.UUID) -> list[SpendableAccount]:
+    """Return the user's counted, unarchived spending accounts with their balances.
+
+    Args:
+        db: Open database session.
+        user_id: Whose accounts.
+
+    Returns:
+        The accounts in display order; empty when there are none.
+    """
     accounts = (
         db.query(AccountModel)
         .filter(
@@ -101,12 +107,18 @@ def spendable_accounts(db: Session, user_id: uuid.UUID) -> list[SpendableAccount
 
 
 def owed_for_work(db: Session, user_id: uuid.UUID, anchor: date) -> float:
-    """Confirmed work no cheque has covered yet, as money.
+    """Return the estimated pay for hourly shifts no cheque has covered yet.
 
-    Only hourly work contributes a figure: a salaried job is paid for the period
-    whatever the hours, and a contract job is whatever was invoiced, so neither
-    has an amount to be owed from hours. `upcoming_pay` already applies that
-    rule, so this is a sum over what it returns.
+    Salaried and contract jobs contribute nothing, since hours do not predict their
+    pay.
+
+    Args:
+        db: Open database session.
+        user_id: Whose jobs.
+        anchor: Today, on the user's clock.
+
+    Returns:
+        The total in dollars, rounded to cents.
     """
     jobs = db.query(JobModel).filter(JobModel.user_id == user_id).all()
     rows = upcoming_pay(db, user_id, jobs, anchor)
@@ -114,6 +126,19 @@ def owed_for_work(db: Session, user_id: uuid.UUID, anchor: date) -> float:
 
 
 def safe_to_spend(db: Session, user_id: uuid.UUID, on_day: date | None = None):
+    """Return what the user can spend between today and the next payday.
+
+    Commitments are the outgoing standing instructions (expenses and transfers)
+    due in the window from any counted account; incoming ones are never counted.
+
+    Args:
+        db: Open database session.
+        user_id: Whose money.
+        on_day: The day to compute for; defaults to the user's today.
+
+    Returns:
+        The figures and their parts; None when the user does not exist.
+    """
     if not user_exists(db, user_id):
         return None
 

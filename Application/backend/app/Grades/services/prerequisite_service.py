@@ -1,12 +1,9 @@
-"""Your prerequisites, the catalogue's, and whether you meet them (Phase 2 items 4, 7).
+"""Prerequisites for a course: the student's own rule, the catalogue's, and the verdict.
 
-Your own rule lives in ``prerequisite_proposals`` and applies to you at once.
-The shared rule is the catalogue's, reached through the course's link (D11)
-and picked for the session the course was in. Yours wins for you when you
-have one; both are shown, each labelled by its source.
-
-Advisory only (D3): the answer is met, on track or not met, phrased as a
-warning, and no route anywhere refuses anything because of it.
+The student's rule lives in `prerequisite_proposals` and applies to them at once;
+the shared rule comes from the course's catalogue link, for the session the course
+was in. Both are shown, the student's winning when present. Advisory only: nothing
+is ever refused because of a verdict.
 """
 import uuid
 
@@ -37,9 +34,16 @@ from app.Grades.utils.terms import calendar_year_of, course_result_grade, term_k
 
 
 def session_of(semester: str | None, school_year: int | None, first_year: int | None) -> str | None:
-    """UBC's name for the session a term falls in: "2026W" runs September 2026
-    to April 2027, "2027S" May to August 2027. None when the first-year
-    setting is missing, rather than a guess."""
+    """Return UBC's session name for a term: "2026W" (Sep-Apr) or "2027S" (May-Aug).
+
+    Args:
+        semester: The term.
+        school_year: The term's school year.
+        first_year: The first-year anchor.
+
+    Returns:
+        The session, or None when the anchor or term is missing or unknown.
+    """
     began = calendar_year_of(school_year, first_year)
     if began is None or semester is None:
         return None
@@ -51,7 +55,7 @@ def session_of(semester: str | None, school_year: int | None, first_year: int | 
 
 
 def _session_order(session: str) -> tuple[int, int]:
-    """2026W (from September 2026) after 2026S (from May 2026), before 2027S."""
+    """Return a sortable key for a session name: (year, starting month)."""
     try:
         return int(session[:4]), (9 if session.endswith("W") else 5)
     except ValueError:
@@ -59,11 +63,20 @@ def _session_order(session: str) -> tuple[int, int]:
 
 
 def _record(db: Session, user_id: uuid.UUID, leave_out: uuid.UUID | None) -> list[Taken]:
-    """Your courses and equivalences, as rules see them. The course being
-    asked about is left out: it cannot be its own prerequisite.
+    """Return the student's record as rules read it, leaving one course out.
 
-    Archived courses are left out, as the degree audit leaves them out, so the
-    two never disagree about what is on your record.
+    Archived courses are left out, as in the degree audit; a course that did not pass
+    is kept with status "failed". Equivalences whose sources are all present add an item
+    for the courses they count as.
+
+    Args:
+        db: Open database session.
+        user_id: Whose record.
+        leave_out: The course being asked about, which cannot be its own prerequisite;
+            None leaves nothing out.
+
+    Returns:
+        One `Taken` per course and applied equivalence.
     """
     courses = [c for c in get_all_courses(db, user_id) if c.id != leave_out and not c.archived]
     record: list[Taken] = []
@@ -98,15 +111,18 @@ def _record(db: Session, user_id: uuid.UUID, leave_out: uuid.UUID | None) -> lis
 
 
 def _result(result: Result) -> RuleResult:
+    """Return a verdict tree as the `RuleResult` schema."""
     return RuleResult(status=result.status, text=result.text, detail=result.detail, group=result.group,
                       parts=[_result(part) for part in result.parts])
 
 
 def _shared_rule(db: Session, catalogue_course_id: uuid.UUID, kind: str,
                  session: str | None) -> CataloguePrerequisiteModel | None:
-    """The catalogue's rule for the session the course was in: the latest one
-    at or before it, or the latest of all when none is that old or the session
-    is unknown."""
+    """Return the catalogue's rule of one kind for a session, or None if there is none.
+
+    The latest rule at or before the session wins; with none that old, or an unknown
+    session, the latest of all.
+    """
     rows = db.query(CataloguePrerequisiteModel).filter(
         CataloguePrerequisiteModel.catalogue_course_id == catalogue_course_id,
         CataloguePrerequisiteModel.kind == kind,
@@ -122,10 +138,22 @@ def _shared_rule(db: Session, catalogue_course_id: uuid.UUID, kind: str,
 
 
 def _owned_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> CourseModel | None:
+    """Return the caller's course with this id, or None."""
     return db.query(CourseModel).filter(CourseModel.id == course_id, CourseModel.user_id == user_id).first()
 
 
 def prerequisites(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> Prerequisites | None:
+    """Return a course's prerequisite rules, both versions, with verdicts.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        course_id: The course.
+
+    Returns:
+        The rules and verdicts per kind, and the catalogue link; None when the course is
+        missing or another user's.
+    """
     course = _owned_course(db, user_id, course_id)
     if course is None:
         return None
@@ -166,10 +194,27 @@ def prerequisites(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> Prer
 
 def set_own(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, data: RuleWrite,
             source: str = "typed", source_text: str | None = None) -> Prerequisites | None:
-    """Write your rule for one kind, replacing any you had. Back to pending
-    review, since what the reviewer saw is no longer what you hold.
+    """Write the student's own rule of one kind for a course, replacing any they had.
 
-    RuleError (a ValueError) when the rule cannot be read.
+    The rule goes back to pending review, since the reviewer saw something else.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        course_id: The course.
+        data: The rule, typed or as a tree, and its kind and note.
+        source: "typed", or "syllabus" when filed from a syllabus.
+        source_text: The syllabus sentence, kept only on the student's row.
+
+    Returns:
+        The course's prerequisites after the change, or None when the course is missing
+        or another user's.
+
+    Raises:
+        RuleError: If the rule cannot be read (a ValueError).
+
+    Note:
+        Commits.
     """
     course = _owned_course(db, user_id, course_id)
     if course is None:
@@ -193,6 +238,21 @@ def set_own(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, data: RuleWri
 
 
 def delete_own(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, kind: str) -> Prerequisites | None:
+    """Delete the student's own rule of one kind for a course.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        course_id: The course.
+        kind: "prerequisite" or "corequisite".
+
+    Returns:
+        The course's prerequisites after the change, or None when the course is missing
+        or another user's.
+
+    Note:
+        Commits.
+    """
     course = _owned_course(db, user_id, course_id)
     if course is None:
         return None
@@ -206,8 +266,19 @@ def delete_own(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, kind: str)
 
 
 def preview(db: Session, user_id: uuid.UUID, code: str, school_year: int, semester: str) -> PrerequisitePreview:
-    """The warning for a course not yet added: the shared rule its code
-    matches, for the session it would be in, against your record."""
+    """Return the shared rules for a course about to be added, with verdicts.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        code: The code being added.
+        school_year: The school year it would be in.
+        semester: The term it would be in.
+
+    Returns:
+        The matching catalogue course and its shared rules with verdicts; empty for a
+        term already past or a code the catalogue does not match.
+    """
     current_year, current_semester = current_term_of(db, user_id)
     term = term_key(school_year, semester)
     if current_year is not None and term < term_key(current_year, current_semester):

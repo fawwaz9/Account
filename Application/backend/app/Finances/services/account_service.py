@@ -1,3 +1,11 @@
+"""Service functions for accounts: the pots, their balances, net worth and readings.
+
+A balance is always the sum of an account's ledger rows, never stored. The last
+unarchived spending and savings accounts are protected from deletion, archiving
+and re-kinding. An investment account can also carry monthly readings of how far
+its holding sits above or below the ledger (see `Finances/utils/returns.py`).
+"""
+
 import uuid
 from datetime import date
 
@@ -32,14 +40,16 @@ from app.shared.dates import user_today
 
 
 def seed_default_accounts(db: Session, user_id: uuid.UUID) -> list[AccountModel]:
-    """Give a new account holder the starting pots from the project notes.
+    """Write `DEFAULT_ACCOUNTS` for a user who has none, and return them.
 
-    A starting point, not a complete set: anything more particular than these
-    is theirs to create, so the list stays short rather than guessing at pots
-    they would only have to delete.
+    Done lazily on first read rather than at signup. Commits.
 
-    Done lazily on first read rather than at signup, so accounts that already
-    existed before this module get them too.
+    Args:
+        db: Open database session.
+        user_id: Whose accounts.
+
+    Returns:
+        The new account rows, in their seeded order.
     """
     created = [
         AccountModel(
@@ -69,23 +79,30 @@ PROTECTED_REASON: dict[str, str] = {
 
 
 def protected_kind_values() -> set[str]:
+    """Return the stored values of the kinds the app needs at least one account of.
+
+    Returns:
+        The `kind` strings of `PROTECTED_KINDS`.
+    """
     return {kind.value for kind in PROTECTED_KINDS}
 
 
 def would_orphan_role(
     db: Session, user_id: uuid.UUID, account: AccountModel
 ) -> bool:
-    """True when taking this account out of service would leave its role empty.
+    """Return whether taking an account out of service would leave its kind empty.
 
-    "Out of service" is deletion, archiving, or changing the kind away -- all
-    three end with the student having no account of that kind, and the last of
-    those is the one that looks harmless.
+    Out of service means deleted, archived or given another kind. Only unarchived
+    accounts count as survivors, and an account already archived never orphans a
+    role.
 
-    Reads **non-archived** accounts only. An archived spending account is not
-    offered anywhere and is not what safe-to-spend reads, so it cannot stand in
-    for the one being removed. By the same rule an account that is *already*
-    archived can be deleted freely: it left service when it was archived, and
-    removing it now changes nothing.
+    Args:
+        db: Open database session.
+        user_id: Whose accounts.
+        account: The account being removed.
+
+    Returns:
+        True when it is the last unarchived spending or savings account.
     """
     if account.archived:
         return False
@@ -106,6 +123,15 @@ def would_orphan_role(
 
 
 def role_refusal(account: AccountModel, verb: str) -> str:
+    """Return the message refusing to remove the last account of a protected kind.
+
+    Args:
+        account: The account the user tried to remove or re-kind.
+        verb: What was attempted, as a gerund ("deleting", "archiving").
+
+    Returns:
+        A sentence naming the account and how to proceed.
+    """
     reason = PROTECTED_REASON.get(account.kind, "the app depends on it")
     return (
         f"{account.name} is your only {account.kind} account and {reason}. "
@@ -114,7 +140,15 @@ def role_refusal(account: AccountModel, verb: str) -> str:
 
 
 def balances_by_account(db: Session, user_id: uuid.UUID) -> dict[uuid.UUID, float]:
-    """Every account's balance in one grouped query, not one query per account."""
+    """Return every account's balance in one grouped query.
+
+    Args:
+        db: Open database session.
+        user_id: Whose ledger.
+
+    Returns:
+        Account id to balance, rounded to cents; accounts with no rows are absent.
+    """
     rows = (
         db.query(TransactionModel.account_id, func.sum(TransactionModel.amount))
         .filter(TransactionModel.user_id == user_id)
@@ -125,12 +159,15 @@ def balances_by_account(db: Session, user_id: uuid.UUID) -> dict[uuid.UUID, floa
 
 
 def balance_of(db: Session, user_id: uuid.UUID, account_id: uuid.UUID) -> float:
-    """One account's balance, summed by the database rather than in Python.
+    """Return one account's balance, summed by the database.
 
-    `balances_by_account` groups the user's whole ledger, which is right when
-    every account's figure is wanted and wasteful when one is: answering "what
-    is in Chequing" used to read and sum every transaction in every other
-    account and then throw all of it away.
+    Args:
+        db: Open database session.
+        user_id: Whose ledger.
+        account_id: The account.
+
+    Returns:
+        The balance rounded to cents; 0 with no rows.
     """
     total = (
         db.query(func.sum(TransactionModel.amount))
@@ -144,6 +181,15 @@ def balance_of(db: Session, user_id: uuid.UUID, account_id: uuid.UUID) -> float:
 
 
 def attach_balances(accounts: list[AccountModel], balances: dict[uuid.UUID, float]):
+    """Set each account row's `balance` from a lookup; absent accounts get 0.
+
+    Args:
+        accounts: Account rows to annotate; mutated in place.
+        balances: Balance by account id, in dollars.
+
+    Returns:
+        The same list, for chaining.
+    """
     for account in accounts:
         account.balance = balances.get(account.id, 0.0)
     return accounts
@@ -159,12 +205,19 @@ StoredReading = tuple["date", float, float | None]
 def ledger_balance_as_of(
     db: Session, user_id: uuid.UUID, account_id: uuid.UUID, on_date
 ) -> float:
-    """What the ledger said on a given day. `balance_of` with one extra filter.
+    """Return an account's balance as it stood at the end of a given day.
 
-    Needed because a reading recorded against August must be measured against
-    August's balance, not today's. Using the all-time balance for a past month
-    would subtract a figure that includes every deposit made since, turning a
-    recorded gain into an invented loss.
+    A reading for a past month must be measured against that month's ledger, not
+    today's, or later deposits would turn a gain into a loss.
+
+    Args:
+        db: Open database session.
+        user_id: Whose ledger.
+        account_id: The account.
+        on_date: The day; rows dated on or before it count.
+
+    Returns:
+        The balance, rounded to cents.
     """
     total = (
         db.query(func.sum(TransactionModel.amount))
@@ -179,16 +232,14 @@ def ledger_balance_as_of(
 
 
 def measured_on(month, today: date) -> date:
-    """The day a month's reading is measured against.
+    """Return the day a month's reading is measured against.
 
-    The last day of the month, or `today` if the month has not finished -- you
-    cannot measure August against the 31st on the 14th, and reaching for the end
-    of an unfinished month would count deposits that have not happened.
+    Args:
+        month: Any day of the month.
+        today: The user's today.
 
-    Told the day rather than asking for it. It used to call `date.today()`, which
-    is the server's clock: between six in the evening and midnight in Regina that
-    is already tomorrow, so a reading recorded for the current month was measured
-    against a ledger that included one more day than the student had lived.
+    Returns:
+        The month's last day, or `today` when the month has not finished.
     """
     _, month_end = month_bounds(month)
     return min(month_end, today)
@@ -197,12 +248,14 @@ def measured_on(month, today: date) -> date:
 def readings_by_account(
     db: Session, user_id: uuid.UUID
 ) -> dict[uuid.UUID, list[StoredReading]]:
-    """Every reading the user has recorded, grouped by account in one query.
+    """Return every investment reading the user has recorded, grouped by account.
 
-    One query rather than one per account: the account list shows a figure on
-    every card, and asking per row is the N+1 the performance pass removed from
-    the dashboard. A year of monthly readings on a handful of accounts is a few
-    dozen rows, so grouping in Python costs nothing.
+    Args:
+        db: Open database session.
+        user_id: Whose readings.
+
+    Returns:
+        Account id to (month, difference, market value) tuples, in no order.
     """
     rows = (
         db.query(
@@ -224,7 +277,16 @@ def readings_by_account(
 def readings_for_account(
     db: Session, user_id: uuid.UUID, account_id: uuid.UUID
 ) -> list[StoredReading]:
-    """One account's readings, when the whole ledger of them is not wanted."""
+    """Return one account's readings as (month, difference, market value) tuples.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+        account_id: The investment account.
+
+    Returns:
+        One tuple per recorded month, in no particular order; empty when none.
+    """
     rows = (
         db.query(
             AccountMonthValueModel.month,
@@ -243,15 +305,18 @@ def readings_for_account(
 def build_investment_return(
     readings: list[StoredReading], ledger_balance: float, for_month=None
 ) -> InvestmentReturn | None:
-    """The reading that applies, as the client receives it. None if there is none.
+    """Build the investment figure a response carries from an account's readings.
 
-    `for_month` is what carries a figure forward: the month's own reading, or the
-    last one taken before it. Omitted -- which is what the account card does --
-    it means the latest reading overall, since a card is not scoped to a month.
+    Args:
+        readings: The account's stored readings.
+        ledger_balance: The balance the percentage is measured against.
+        for_month: The month on screen; its own reading or the last one before it
+            applies. None takes the latest reading overall, as the account card
+            does.
 
-    The percentage is computed here and not in the client, following the rule
-    recorded on `ProgressBar`: the server rounds and the client renders, or two
-    opinions on the same division disagree at the boundary.
+    Returns:
+        The reading that applies, its percentage and, for a month-scoped request,
+        the month's movement; None when no reading applies.
     """
     found = latest_reading(
         [(month, difference) for month, difference, _ in readings],
@@ -288,11 +353,18 @@ def attach_investment_returns(
     readings: dict[uuid.UUID, list[StoredReading]],
     balances: dict[uuid.UUID, float],
 ):
-    """Graft each investment account's figure on, the way `attach_balances` does.
+    """Set each account row's `investment_return`: the latest reading, investments only.
 
-    **Gated on kind, every time.** Rows are deliberately left behind when an
-    account stops being an investment, so the kind check is what stops a Savings
-    account that used to be an Investments account reporting a return.
+    Readings are kept when an account stops being an investment, so the kind is
+    checked every time.
+
+    Args:
+        accounts: The account rows.
+        readings: Readings by account id.
+        balances: Balances by account id.
+
+    Returns:
+        The same rows.
     """
     for account in accounts:
         account.investment_return = (
@@ -306,11 +378,14 @@ def attach_investment_returns(
 
 
 def active_counts_by_kind(db: Session, user_id: uuid.UUID) -> dict[str, int]:
-    """How many non-archived accounts the user holds of each kind, in one query.
+    """Return how many unarchived accounts the user has of each kind, in one query.
 
-    Grouped rather than counted per account: the flag below is wanted for every
-    row of the list, and asking once per row is the N+1 the performance pass
-    spent a day removing from the dashboard.
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+
+    Returns:
+        Count by kind; a kind with no unarchived account is absent.
     """
     rows = (
         db.query(AccountModel.kind, func.count(AccountModel.id))
@@ -325,14 +400,14 @@ def active_counts_by_kind(db: Session, user_id: uuid.UUID) -> dict[str, int]:
 
 
 def attach_role_locks(accounts: list[AccountModel], counts: dict[str, int]):
-    """Flag the accounts the app will refuse to let go of.
+    """Set `role_locked` on each account row that is the last of a protected kind.
 
-    Derived and attached here rather than worked out in the client, for the
-    same reason every other figure is: the rule that decides it lives in
-    `would_orphan_role`, and a second copy in React would be free to disagree.
+    Args:
+        accounts: The account rows.
+        counts: Unarchived accounts per kind.
 
-    It says "this is the last of a role", not "this can be deleted" -- history
-    and standing instructions refuse deletion too, for their own reasons.
+    Returns:
+        The same rows.
     """
     protected = protected_kind_values()
     for account in accounts:
@@ -351,15 +426,18 @@ DEBT_KINDS = frozenset({AccountKind.DEBT.value})
 
 
 def net_worth(db: Session, user_id: uuid.UUID) -> NetWorth | None:
-    """What you have less what you owe, and the debt on its own.
+    """Return the user's net worth, debt and recorded investment gain.
 
-    Computed here rather than in the client because two screens show it -- the
-    budget page and the dashboard -- and a rule about which accounts count is
-    exactly the kind that drifts when it is written twice. The dashboard's old
-    figure was a plain client-side sum, which counted a debt account as savings.
+    Sums the balances of counted, unarchived accounts (a debt's is already
+    negative) plus the latest reading on each counted investment account. Debt is
+    reported again as a positive magnitude, not subtracted twice.
 
-    Archived accounts are excluded, matching what `get_accounts` already
-    returns, so the headline moves with the list rather than disagreeing with it.
+    Args:
+        db: Open database session.
+        user_id: Whose accounts.
+
+    Returns:
+        The three figures; None when the user does not exist.
     """
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
     if user is None:
@@ -416,6 +494,20 @@ def net_worth(db: Session, user_id: uuid.UUID) -> NetWorth | None:
 
 
 def get_accounts(db: Session, user_id: uuid.UUID, include_archived: bool = False):
+    """Return the user's accounts with balances, role locks and investment returns.
+
+    A user with no accounts at all gets the default ones seeded (and committed)
+    first.
+
+    Args:
+        db: Open database session.
+        user_id: Whose accounts.
+        include_archived: Also return archived accounts.
+
+    Returns:
+        The account rows by position, then name; None when the user does not
+        exist.
+    """
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
     if user is None:
         return None
@@ -435,6 +527,16 @@ def get_accounts(db: Session, user_id: uuid.UUID, include_archived: bool = False
 
 
 def get_account(db: Session, user_id: uuid.UUID, account_id: uuid.UUID):
+    """Return one of the user's accounts with its balance, return and role lock.
+
+    Args:
+        db: Open database session.
+        user_id: Whose account.
+        account_id: The account.
+
+    Returns:
+        The account row; None when it is not the user's.
+    """
     account = (
         db.query(AccountModel)
         .filter(AccountModel.id == account_id, AccountModel.user_id == user_id)
@@ -453,6 +555,22 @@ def get_account(db: Session, user_id: uuid.UUID, account_id: uuid.UUID):
 
 
 def create_account(db: Session, user_id: uuid.UUID, data: AccountCreate):
+    """Create an account for the user.
+
+    Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose account.
+        data: The account.
+
+    Returns:
+        The new account row, balance 0; None when the user does not exist.
+
+    Raises:
+        ValueError: If the user already has an account of that name, ignoring
+            case.
+    """
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
     if user is None:
         return None
@@ -485,6 +603,24 @@ def create_account(db: Session, user_id: uuid.UUID, data: AccountCreate):
 
 
 def update_account(db: Session, user_id: uuid.UUID, account_id: uuid.UUID, data: AccountUpdate):
+    """Change the fields sent on one of the user's accounts.
+
+    Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose account.
+        account_id: The account.
+        data: The fields to change.
+
+    Returns:
+        The updated account row with balance, return and role lock; None when it
+        is not the user's.
+
+    Raises:
+        ValueError: If archiving it or changing its kind would leave no unarchived
+            spending or savings account, or another account has the new name.
+    """
     account = (
         db.query(AccountModel)
         .filter(AccountModel.id == account_id, AccountModel.user_id == user_id)
@@ -542,20 +678,23 @@ def update_account(db: Session, user_id: uuid.UUID, account_id: uuid.UUID, data:
 
 
 def delete_account(db: Session, user_id: uuid.UUID, account_id: uuid.UUID):
-    """Refuses while anything still points at the account.
+    """Delete one of the user's accounts, refusing while anything depends on it.
 
-    Deleting would cascade its transactions away, silently changing balances
-    elsewhere if any were transfer halves. Archiving is the safe route.
+    Refused when it is the last of a protected kind, holds any transactions
+    (archive it instead), or is used by a standing instruction or sinking fund.
+    Otherwise its targets, emptied import records, category limits and readings go
+    with it. Commits.
 
-    Standing instructions and sinking funds are refused rather than removed,
-    because each is a decision the student made and neither is history that
-    tidying an account should quietly revoke: a rent instruction deleted as a
-    side effect stops paying rent. They are named in the message so it is
-    obvious what to repoint or stop first.
+    Args:
+        db: Open database session.
+        user_id: Whose account.
+        account_id: The account.
 
-    Budget targets are the exception and go with the account. A target is a
-    planning number scoped to one account and one month -- it has no meaning
-    once the account is gone, and nothing reads it as history.
+    Returns:
+        The deleted account row; None when it is not the user's.
+
+    Raises:
+        ValueError: If any refusal above applies; the message names what to fix.
     """
     account = (
         db.query(AccountModel)
@@ -663,23 +802,22 @@ def set_month_value(
     account_id: uuid.UUID,
     data: AccountMonthValueUpsert,
 ):
-    """Record, or replace, one month's reading for an investment account.
+    """Record or replace one month's reading for an investment account.
 
-    The client sends `market_value` -- the number you can read straight off a
-    statement -- and the **level is what gets stored**, derived by subtracting
-    what the ledger said at the end of that month. Storing the level rather than
-    the market value is what makes the figure survive a later deposit: a deposit
-    raises plain value and market value together, so the level does not move,
-    where a stored market value would be measured against a bigger ledger and
-    report the gain as a loss.
+    A market value is turned into the stored level by subtracting the ledger as it
+    stood at the month's end (or today, for the current month). Commits.
 
-    An upsert rather than an insert, so correcting a month you fat-fingered is
-    the same gesture as recording it. The unique index would refuse a second row
-    anyway; this is what makes refusing unnecessary.
+    Args:
+        db: Open database session.
+        user_id: Whose account.
+        account_id: The account.
+        data: The month and either a market value or a difference.
 
-    Refuses a non-investment account outright. Every read path gates on kind, so
-    storing a reading against a Savings account would be a write that silently
-    does nothing -- the worst kind of accepted request.
+    Returns:
+        The account row with its updated return; None when it is not the user's.
+
+    Raises:
+        ValueError: If the account is not an investment account.
     """
     account = (
         db.query(AccountModel)
@@ -739,14 +877,18 @@ def set_month_value(
 def clear_month_value(
     db: Session, user_id: uuid.UUID, account_id: uuid.UUID, month
 ):
-    """Forget one month's reading.
+    """Delete one month's reading; clearing a month with none is not an error.
 
-    Returns the account either way: clearing a month that holds no reading is
-    already the state being asked for, so it is not an error.
+    Commits.
 
-    The filter is written out for the one model against the three literal
-    columns. Nothing here is computed, and that is deliberate -- a delete whose
-    conditions are assembled rather than written cannot be checked by reading it.
+    Args:
+        db: Open database session.
+        user_id: Whose account.
+        account_id: The account.
+        month: Any day of the month.
+
+    Returns:
+        The account row; None when it is not the user's.
     """
     db.query(AccountMonthValueModel).filter(
         AccountMonthValueModel.user_id == user_id,

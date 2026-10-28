@@ -1,8 +1,9 @@
-"""Shared events (Phase 2 item 9b, D24).
+"""Service functions for shared calendar events: the owner's side and the member's.
 
-The same split as shared tasks: the owner's half touches only the owner's own
-rows, inside the ordinary row policy; the member's half goes entirely through
-``sharing``. A member sees an event and may leave it -- nothing more.
+The owner's functions touch only the owner's own rows (the event, its members
+and its invite link) under the ordinary row policy. The member's functions go
+entirely through `app._database.sharing`, whose definer functions are the only
+way to reach someone else's event; a member can see an event and leave it.
 """
 import hashlib
 import secrets
@@ -17,18 +18,30 @@ from app.Calendar.schemas.sharing import EventInvitePreview, EventSharing, Link,
 
 
 class NotShareable(ValueError):
+    """Raised when a link is asked for on an event that cannot be shared."""
+
     pass
 
 
 def token_hash(token: str) -> str:
+    """Return the SHA-256 hex digest of an invite token, the only form ever stored.
+
+    Args:
+        token: The raw token from the link.
+
+    Returns:
+        The 64-character hex digest.
+    """
     return hashlib.sha256(token.encode()).hexdigest()
 
 
 def _own_event(db: Session, user_id: uuid.UUID, event_id: uuid.UUID) -> EventModel | None:
+    """Return the caller's own event with this id, or None."""
     return db.query(EventModel).filter(EventModel.id == event_id, EventModel.user_id == user_id).first()
 
 
 def _live_links(db: Session, event_id: uuid.UUID):
+    """Query the event's invite links that are neither revoked nor expired."""
     return db.query(EventInviteModel).filter(
         EventInviteModel.event_id == event_id, EventInviteModel.revoked_at.is_(None),
         EventInviteModel.expires_at > utc_now(),
@@ -38,6 +51,17 @@ def _live_links(db: Session, event_id: uuid.UUID):
 # ---------------------------------------------------------------- the owner --
 
 def sharing_of(db: Session, user_id: uuid.UUID, event_id: uuid.UUID) -> EventSharing | None:
+    """Return who is on one of the caller's events and whether a link is open.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        event_id: The event.
+
+    Returns:
+        Its members (earliest first), the newest live link, whether it can be
+        shared and the member limit; None when the event is not the caller's.
+    """
     event = _own_event(db, user_id, event_id)
     if event is None:
         return None
@@ -55,7 +79,22 @@ def sharing_of(db: Session, user_id: uuid.UUID, event_id: uuid.UUID) -> EventSha
 
 
 def new_link(db: Session, user_id: uuid.UUID, event_id: uuid.UUID) -> NewLink | None:
-    """A fresh link, cancelling any live one: one link per event at a time."""
+    """Make a fresh invite link for one of the caller's events, cancelling any live one.
+
+    Commits.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        event_id: The event to share.
+
+    Returns:
+        The new link with its token, which is never shown again; None when the
+        event is not the caller's.
+
+    Raises:
+        NotShareable: If the event repeats, is a shift, or was produced by a grade.
+    """
     event = _own_event(db, user_id, event_id)
     if event is None:
         return None
@@ -73,6 +112,19 @@ def new_link(db: Session, user_id: uuid.UUID, event_id: uuid.UUID) -> NewLink | 
 
 
 def cancel_link(db: Session, user_id: uuid.UUID, event_id: uuid.UUID) -> bool:
+    """Revoke every live invite link on one of the caller's events.
+
+    Commits; members who already joined stay.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        event_id: The event.
+
+    Returns:
+        True, including when no link was open; False when the event is not the
+        caller's.
+    """
     event = _own_event(db, user_id, event_id)
     if event is None:
         return False
@@ -84,6 +136,20 @@ def cancel_link(db: Session, user_id: uuid.UUID, event_id: uuid.UUID) -> bool:
 
 
 def remove_member(db: Session, user_id: uuid.UUID, event_id: uuid.UUID, member_id: uuid.UUID) -> bool:
+    """Take someone off one of the caller's events.
+
+    Commits.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        event_id: The event.
+        member_id: The membership row's id, not the member's user id.
+
+    Returns:
+        True when removed; False when the event is not the caller's or has no
+        such member.
+    """
     event = _own_event(db, user_id, event_id)
     if event is None:
         return False
@@ -101,7 +167,18 @@ def remove_member(db: Session, user_id: uuid.UUID, event_id: uuid.UUID, member_i
 
 def shared_with_me(db: Session, user_id: uuid.UUID, start: date | None = None,
                    end: date | None = None) -> list[SharedEvent]:
-    """The events you are on, optionally within a window, soonest first."""
+    """Return the events the caller has joined as a member, soonest first.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        start: Earliest event date to include; None for no lower bound.
+        end: Latest event date to include; None for no upper bound.
+
+    Returns:
+        The member's view of each event, ordered by date, start time (untimed
+        last) and title; empty when there are none.
+    """
     rows = [
         r for r in sharing.shared_events(db, user_id)
         if (start is None or r.starts_on >= start) and (end is None or r.starts_on <= end)
@@ -116,13 +193,47 @@ def shared_with_me(db: Session, user_id: uuid.UUID, start: date | None = None,
 
 
 def leave(db: Session, user_id: uuid.UUID, event_id: uuid.UUID) -> bool:
+    """Take the caller off someone else's event.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        event_id: The event.
+
+    Returns:
+        True when the caller was on it and has left; False otherwise.
+    """
     return sharing.leave_shared_event(db, user_id, event_id)
 
 
 def preview(db: Session, user_id: uuid.UUID, token: str) -> EventInvitePreview | None:
+    """Return what the holder of an event link sees before accepting it.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        token: The raw token from the link.
+
+    Returns:
+        The owner's name and the event's title and date; None when the link is
+        unknown, revoked or expired, the event cannot be shared, or its owner's
+        account is being deleted.
+    """
     found = sharing.event_invite_preview(db, user_id, token_hash(token))
     return EventInvitePreview(owner_name=found.owner_name, title=found.title, starts_on=found.starts_on) if found else None
 
 
 def accept(db: Session, user_id: uuid.UUID, token: str) -> str:
+    """Join someone else's event through its invite link.
+
+    Commits on success.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        token: The raw token from the link.
+
+    Returns:
+        "accepted", "invalid", "own", "already" or "full".
+    """
     return sharing.accept_event_invite(db, user_id, token_hash(token))

@@ -1,3 +1,10 @@
+"""Courses: create, read, edit, delete and search, with each response's figures.
+
+Responses read the stored average and attach the derived fields (letter, grade
+points, term bucket, reported average) onto the row under their own names, never
+writing to a mapped column during a read.
+"""
+
 import uuid
 from sqlalchemy.orm import Session, selectinload
 from app._database.models import (
@@ -26,14 +33,16 @@ from app.shared.dates import user_today
 
 
 def courses_with_marks(db: Session, user_id: uuid.UUID) -> set[uuid.UUID]:
-    """Which of a user's courses have at least one mark that counts.
+    """Return the ids of a user's courses that have at least one counted mark.
 
-    One grouped query for the whole list rather than reading `course.grades`
-    per course, so this can be used from the list endpoints without turning
-    them into an N+1 -- and without depending on grades being eager-loaded.
+    One grouped query for a whole list; dropped grades do not count.
 
-    A dropped grade does not count, for the same reason it stays out of every
-    average: it is on the course to be seen, not to be scored.
+    Args:
+        db: Open database session.
+        user_id: Whose courses to check.
+
+    Returns:
+        The ids of courses with a scored, non-dropped grade.
     """
     rows = (
         db.query(GradeModel.course_id)
@@ -50,7 +59,15 @@ def courses_with_marks(db: Session, user_id: uuid.UUID) -> set[uuid.UUID]:
 
 
 def course_has_marks(db: Session, course_id: uuid.UUID) -> bool:
-    """The single-course form of `courses_with_marks`, as an EXISTS."""
+    """Return whether one course has at least one counted mark.
+
+    Args:
+        db: Open database session.
+        course_id: The course to check; the caller has already checked ownership.
+
+    Returns:
+        True when a non-excluded grade has a score.
+    """
     return (
         db.query(GradeModel.id)
         .filter(
@@ -69,11 +86,20 @@ def attach_course_summary(
     current_semester: str | None = None,
     has_marks: bool = True,
 ) -> CourseModel:
-    """Attach the fields every course carries, cheaply.
+    """Attach the derived fields every course response carries, from loaded columns.
 
-    Reads only columns already loaded, so it is safe to map over a whole list
-    without lazy-loading each course's grades. `has_marks` is passed in for the
-    same reason -- working it out here would mean touching `course.grades`.
+    Sets `letter_grade`, `grade_points`, `term_bucket` and `reported_average` on the
+    row; safe to map over a list, since it never touches `course.grades`.
+
+    Args:
+        course: The course row; only attributes are set, nothing is written.
+        current_school_year: The student's school year now.
+        current_semester: The student's term now.
+        has_marks: Whether the course has a counted mark; False reports the average
+            as None.
+
+    Returns:
+        The same course.
     """
     course.letter_grade = calculate_letter_grade(course)
     course.grade_points = calculate_gpa_points(course_result_grade(course))
@@ -86,14 +112,15 @@ def attach_course_summary(
 
 
 def attach_category_averages(course: CourseModel) -> CourseModel:
-    """Compute the per-category averages CourseDetail exposes.
+    """Attach per-category averages and points for the course detail response.
 
-    Touches course.grades, so this is for single-course reads only -- mapping it
-    over a list would lazy-load grades once per course.
+    Reads `course.grades`, so use it for single-course reads only.
 
-    Set on the instance rather than defined as a CourseModel property because
-    models.py is imported *by* grade_service -- a property calling back into it
-    would be a circular import. This mirrors how `course.average` is attached.
+    Args:
+        course: The course row; only attributes are set.
+
+    Returns:
+        The same course, with `category_averages` and `category_points`.
     """
     course.category_averages = {
         category: calculate_grade_category_average(course, category)
@@ -111,6 +138,15 @@ def attach_category_averages(course: CourseModel) -> CourseModel:
 
 
 def current_term_of(db: Session, user_id: uuid.UUID) -> tuple[int | None, str | None]:
+    """Return the user's current (school year, semester), or (None, None) if unknown.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+
+    Returns:
+        (school year, semester) from the user's academic status; either may be None.
+    """
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
     if user is None:
         return None, None
@@ -118,6 +154,24 @@ def current_term_of(db: Session, user_id: uuid.UUID) -> tuple[int | None, str | 
 
 
 def create_course(db: Session, user_id: uuid.UUID, course_data: CourseCreate):
+    """Create a course with its category weights and links.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        course_data: The validated new course.
+
+    Returns:
+        The new course with every derived field attached, or None when the user does
+        not exist.
+
+    Raises:
+        ValueError: If the user already has a course with exactly this code.
+
+    Note:
+        Commits. The duplicate check is check-then-insert; the unique index on
+        (user_id, code) is what finally holds.
+    """
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
     if user is None:
         return None
@@ -163,6 +217,17 @@ def create_course(db: Session, user_id: uuid.UUID, course_data: CourseCreate):
 
 
 def get_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
+    """Return one course with its derived fields and per-category figures.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        course_id: The course.
+
+    Returns:
+        The course, or None when it is missing or another user's. The stored average
+        is returned as is, never recomputed.
+    """
     course = db.query(CourseModel).filter(
         CourseModel.id == course_id, CourseModel.user_id == user_id
     ).first()
@@ -181,6 +246,17 @@ def get_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
 
 
 def get_all_courses(db: Session, user_id: uuid.UUID):
+    """Return all of a user's courses, sorted by school year, term and code.
+
+    Grades and weights are loaded in two extra queries for the whole list.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+
+    Returns:
+        Every course with its summary fields attached; empty when there are none.
+    """
     # Grades and weights are loaded with the courses, in two extra queries for
     # the whole list rather than two per course. Every caller here reads both --
     # attach_course_summary and the dashboard rollup do -- so lazy loading was
@@ -210,6 +286,28 @@ def get_all_courses(db: Session, user_id: uuid.UUID):
 
 
 def update_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, data: CourseUpdate):
+    """Apply a partial edit to a course, with any weight change, in one transaction.
+
+    Links are replaced whole. Field changes stay pending until the weights, if sent,
+    have been checked, so a rejected weight change leaves the course untouched.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        course_id: The course.
+        data: The fields to change; omitted ones stay.
+
+    Returns:
+        The updated course with every derived field attached, or None when it is
+        missing or another user's.
+
+    Raises:
+        ValueError: If the merged weights are out of range.
+
+    Note:
+        Commits. The merged course is not re-validated against the create rules, and a
+        code already used by another of the user's courses fails at commit.
+    """
     course = get_course(db, user_id, course_id)
     if not course:
         return None
@@ -253,6 +351,22 @@ def update_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, data: C
 
 
 def delete_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
+    """Delete a course with its grades, weights, events, tasks and other children.
+
+    Expenses, reminders, repeating tasks and syllabus parses that only mention the
+    course are kept, with the mention cleared.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        course_id: The course.
+
+    Returns:
+        The deleted course row, or None when it is missing or another user's.
+
+    Note:
+        Commits.
+    """
     course = get_course(db, user_id, course_id)
     if not course:
         return None
@@ -282,6 +396,19 @@ def delete_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
 
 
 def search_courses(db: Session, user_id: uuid.UUID, query: str):
+    """Return the user's courses whose code or name contains the query, ignoring case.
+
+    `%` and `_` in the query match literally.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        query: Text to find.
+
+    Returns:
+        Matching courses from any term with their summary fields, or None when the user
+        does not exist.
+    """
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
     if user is None:
         return None

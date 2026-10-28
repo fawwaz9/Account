@@ -1,3 +1,10 @@
+"""Bodies for the omnibox, which files one typed line as a task, an expense or a grade.
+
+The client previews the line as the student types and then files the same text.
+`omnibox_service` routes it (a score out of a maximum is a grade, an amount is
+an expense, anything else a task) and files it through that module's service.
+"""
+
 from datetime import date
 from enum import Enum
 from uuid import UUID
@@ -6,7 +13,7 @@ from pydantic import BaseModel, Field
 
 
 class OmniboxKind(str, Enum):
-    """Which module one line belongs to."""
+    """Which module a line is filed into: a task, an expense or a grade."""
 
     TASK = "task"
     EXPENSE = "expense"
@@ -14,16 +21,48 @@ class OmniboxKind(str, Enum):
 
 
 class OmniboxRequest(BaseModel):
+    """Request body carrying the typed line.
+
+    Attributes:
+        text: The line, 1-300 characters.
+    """
+
     text: str = Field(..., min_length=1, max_length=300)
 
 
 class OmniboxPreview(BaseModel):
     """What one line was read as, and what filing it would do.
 
-    Flat rather than a union per kind. The client renders the fields that are
-    set as chips and ignores the rest, which is simpler than switching on a
-    discriminator to draw four nearly identical rows -- and it matches how a
-    Transaction already carries fields only some kinds use.
+    Flat rather than one shape per kind: the client shows the fields that are set
+    and ignores the rest.
+
+    Attributes:
+        text: The line exactly as typed.
+        kind: Where it would be filed.
+        summary: One sentence saying what filing will do.
+        can_create: Whether it can be filed as it stands.
+        reason: What to do about it, when it cannot.
+        title: The task title, expense description or grade name.
+        on_date: A task's due date, or an expense's date (today when the line
+            names none).
+        course_id: The user's course the typed code matched.
+        course_code: That course's code.
+        unmatched_course: A typed code that matched none, or several, of the
+            user's courses; it is kept in the title.
+        estimated_minutes: Task only: the duration the line names, 1-2400.
+        amount: Expense only: the amount, in dollars.
+        account_id: Expense only: the account named in the line, otherwise the
+            first spending account.
+        account_name: That account's name.
+        category_id: Expense only: the category named in the line, or suggested.
+        category_name: That category's name.
+        category_suggested: True when the category was suggested rather than
+            named.
+        score: Grade only: the mark.
+        max_score: Grade only: what it is out of.
+        grade_category: Grade only: taken from a word in the title such as
+            "midterm"; "other" when none matches.
+        matched: Which kinds of token the parser recognised, for debugging.
     """
 
     text: str
@@ -66,7 +105,15 @@ class OmniboxPreview(BaseModel):
 
 
 class OmniboxResult(BaseModel):
-    """What was filed, and where to find it."""
+    """Response body for filing a line: what was created and where.
+
+    Attributes:
+        kind: Where it was filed.
+        id: The created row: the task, the transaction or the grade.
+        course_id: The course a grade (or a task) landed on, for linking.
+        summary: The preview's summary.
+        preview: The reading it was filed from.
+    """
 
     kind: OmniboxKind
     #: The row that was created.

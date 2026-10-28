@@ -1,9 +1,8 @@
-"""When you actually have time, and when the term lands on you.
+"""Service functions for the week's load: free time, hours committed, and crunch.
 
-Three readings of one window, all derived from data already stored: no new
-tables, no writes. They share a single list_occurrences call because they are
-really one question -- what does this week cost and where is the room -- asked
-three ways.
+Three readings of one window, all derived from stored events and tasks with no
+writes: the gaps between commitments, the hours those commitments and the tasks
+due come to, and how exams and deadlines spread across the weeks of a term.
 """
 
 import uuid
@@ -41,11 +40,29 @@ TASK_WEIGHT = 1
 
 
 def minutes_between(start: time, end: time) -> int:
+    """Return the minutes between two clock times; negative when `end` is earlier.
+
+    Args:
+        start: Earlier clock time.
+        end: Later clock time.
+
+    Returns:
+        Whole minutes from `start` to `end`, ignoring seconds.
+    """
     return (end.hour * 60 + end.minute) - (start.hour * 60 + start.minute)
 
 
 def study_window(db: Session, user_id: uuid.UUID) -> tuple[time, time, int]:
-    """The hours worth offering as free, and the shortest gap worth offering."""
+    """Return the hours worth offering as free, and the shortest gap worth offering.
+
+    Args:
+        db: Open database session.
+        user_id: Whose preferences to read.
+
+    Returns:
+        The study day's start and end (local times) and the minimum free block in
+        minutes; 08:00, 22:00 and 30 when the user does not exist.
+    """
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
     if user is None:
         return time(8, 0), time(22, 0), 30
@@ -58,14 +75,18 @@ def study_window(db: Session, user_id: uuid.UUID) -> tuple[time, time, int]:
 
 
 def busy_spans(occurrences, on_date: date) -> list[tuple[time, time]]:
-    """The day's timed commitments, merged, earliest first.
+    """Return one day's timed commitments as merged spans, earliest first.
 
-    Merged because two classes can overlap -- the week view exists partly to show
-    that they do -- and treating them as separate spans would invent a gap
-    between the end of the first and the start of the second that never existed.
+    Overlapping events merge so no gap is invented between them; all-day items
+    block nothing, and an event with no end (or an end before its start) occupies
+    only its start.
 
-    All-day items are skipped: they occupy no position on a clock, so they block
-    no hour of it.
+    Args:
+        occurrences: Expanded occurrences, any dates.
+        on_date: The day to read.
+
+    Returns:
+        Merged (start, end) local times.
     """
     spans = []
     for item in occurrences:
@@ -93,16 +114,25 @@ def free_blocks(
     db: Session, user_id: uuid.UUID, window_start: date, window_end: date,
     now: datetime | None = None,
 ) -> list[FreeBlock] | None:
-    """The gaps between a day's commitments, longest first.
+    """Return the gaps between the user's commitments in a window, longest first.
 
-    Clipped to the study window at both ends, so a 07:00 lab does not open a
-    block at midnight and an evening with nothing in it stops at the hour you
-    said you stop.
+    Gaps are clipped to the user's study window; days before today are skipped and
+    today's gaps start no earlier than now, all on the user's clock. Only gaps of at
+    least the user's minimum length are offered.
 
-    Time already gone is not free time. Days before today are skipped entirely,
-    and today's blocks start no earlier than the current hour -- offering
-    "08:00-16:00" at two in the afternoon is offering six hours that no longer
-    exist.
+    Args:
+        db: Open database session.
+        user_id: Whose calendar.
+        window_start: First day, inclusive.
+        window_end: Last day, inclusive.
+        now: The local moment to treat as now, naive; defaults to the user's now.
+
+    Returns:
+        The free blocks, longest first, then by date and start; None when the
+        user does not exist.
+
+    Raises:
+        ValueError: If the window is inverted or longer than the calendar allows.
     """
     occurrences = list_occurrences(db, user_id, window_start, window_end)
     if occurrences is None:
@@ -162,7 +192,24 @@ def free_blocks(
 def week_load(
     db: Session, user_id: uuid.UUID, window_start: date, window_end: date
 ) -> WeekLoad | None:
-    """What the window costs in hours, booked and estimated kept apart."""
+    """Return what a window costs in hours, with booked and estimated time apart.
+
+    Booked time is every timed event occurrence, split into work and classes;
+    estimated time is the estimates on open, unsnoozed tasks due in the window,
+    scaled by the user's actual-to-estimate ratio when they apply it.
+
+    Args:
+        db: Open database session.
+        user_id: Whose calendar and tasks.
+        window_start: First day, inclusive.
+        window_end: Last day, inclusive.
+
+    Returns:
+        The window's load; None when the user does not exist.
+
+    Raises:
+        ValueError: If the window is inverted or longer than the calendar allows.
+    """
     occurrences = list_occurrences(db, user_id, window_start, window_end)
     if occurrences is None:
         return None
@@ -208,7 +255,14 @@ def week_load(
 
 
 def week_of(day: date) -> date:
-    """The Monday of a day's week, so weeks group consistently."""
+    """Return the Monday of the week a day falls in.
+
+    Args:
+        day: Any date.
+
+    Returns:
+        The Monday on or before `day`.
+    """
     return day - timedelta(days=day.weekday())
 
 
@@ -216,10 +270,25 @@ def crunch(
     db: Session, user_id: uuid.UUID, window_start: date, window_end: date,
     today: date | None = None,
 ) -> CrunchStrip | None:
-    """How the term's weight is spread across its weeks.
+    """Return how heavily exams, deadlines and due tasks land on each week of a window.
 
-    Every week in the range appears, including the empty ones -- a strip with
-    gaps in it would read as missing data rather than as a quiet fortnight.
+    Every Monday-to-Sunday week the window touches appears, empty ones included.
+    Finals weigh 5, midterms 3, deadline events and open tasks due 1; classes and
+    shifts weigh nothing.
+
+    Args:
+        db: Open database session.
+        user_id: Whose calendar and tasks.
+        window_start: First day, inclusive.
+        window_end: Last day, inclusive.
+        today: The day that marks the current week; defaults to the user's today.
+
+    Returns:
+        The weeks, earliest first, with the heaviest week's weight; None when the
+        user does not exist.
+
+    Raises:
+        ValueError: If the window is inverted or longer than the calendar allows.
     """
     occurrences = list_occurrences(db, user_id, window_start, window_end)
     if occurrences is None:

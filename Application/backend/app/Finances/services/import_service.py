@@ -1,26 +1,10 @@
-"""Bank CSV import: preview before commit, dedupe, undo as one unit.
+"""Service functions for bank CSV import: preview, commit and undo as one unit.
 
-Phase 1 item 7 (account-vision.md §13.1 Layer 2, §13.9). Every Canadian bank
-exports CSV; this turns one into ledger rows without letting a bad file corrupt
-the ledger, because the ledger is real money:
-
-* **Nothing is written until the person confirms.** The preview parses, maps
-  columns and flags duplicates; the commit re-parses the same text with the
-  same mapping and writes only the lines named, so what lands is exactly what
-  was shown -- never rows a client describes.
-* **Duplicates are flagged, not dropped.** A row matching one already in the
-  account -- same amount, within three days, and the same merchant or the same
-  day -- starts unticked. Importing the same file twice therefore adds nothing
-  unless someone ticks the duplicates on purpose. Two coffees on one day in the
-  same file are both kept: that is two coffees.
-* **Undo is one unit.** Every row carries the import's id, and undo deletes
-  exactly those rows -- one literal statement, counted before and after.
-
-Columns are detected from the header, or from the shape of the data when there
-is none (TD's export has no header), and every guess is overridable. Recurring
-detection needs no code of its own here: imported expenses are one-off rows to
-the subscription audit, which already finds repeating charges in the ledger --
-one engine, two triggers, as §13.9 asks.
+Nothing is written until the person confirms: the commit parses the same text
+with the same mapping and writes only the lines named. A row matching one already
+in the account (same amount within three days, and the same merchant or the same
+day) is flagged as a duplicate and starts unticked. Every row an import writes
+carries its id, so undo removes exactly those rows.
 """
 
 import csv
@@ -67,6 +51,16 @@ _MONTHS = {
 # --- reading the file ------------------------------------------------------
 
 def parse_table(text: str) -> list[list[str]]:
+    """Parse CSV text into rows of trimmed cells, sniffing the delimiter.
+
+    A leading byte-order mark is dropped, and rows with no content are skipped.
+
+    Args:
+        text: The uploaded CSV's contents.
+
+    Returns:
+        Non-empty rows, each a list of trimmed cell strings.
+    """
     text = text.lstrip("﻿")
     sample = text[:4096]
     try:
@@ -78,7 +72,17 @@ def parse_table(text: str) -> list[list[str]]:
 
 
 def parse_amount(value: str) -> float | None:
-    """'$1,234.56', '(12.50)', '12.50-', '12.50 CR', '12,50' -> a signed float."""
+    """Parse a bank's amount cell into a signed float.
+
+    Handles "$1,234.56", "(12.50)", "12.50-", "12.50 CR", "12,50" and currency codes.
+
+    Args:
+        value: The cell's text.
+
+    Returns:
+        The amount, negative for a debit; None when the cell is empty or not a
+        number.
+    """
     text = (value or "").strip().upper()
     if not text:
         return None
@@ -106,11 +110,24 @@ def parse_amount(value: str) -> float | None:
 
 
 def _year(value: str) -> int:
+    """Return a year, reading a two-digit one as 20xx."""
     year = int(value)
     return year + 2000 if year < 100 else year
 
 
 def parse_date(value: str, order: str = "mdy") -> date | None:
+    """Parse a bank's date cell into a date.
+
+    Reads ISO and compact dates, numeric day/month forms in the given order, and
+    forms with a month name; a timestamp keeps only its date.
+
+    Args:
+        value: The cell's text.
+        order: "mdy" or "dmy", for numeric dates like 03/04/2026.
+
+    Returns:
+        The date; None when it cannot be read or is not a real date.
+    """
     text = (value or "").strip()
     if not text:
         return None
@@ -143,11 +160,15 @@ def parse_date(value: str, order: str = "mdy") -> date | None:
 
 
 def date_order(values: list[str]) -> tuple[str, bool]:
-    """mdy or dmy, from the dates themselves; and whether that was a guess.
+    """Work out whether a file's numeric dates are month-first or day-first.
 
-    One date with a first part over 12 settles it as day-first, one with a second
-    part over 12 as month-first. A file where every date reads both ways is a
-    guess, and the preview says so, because it decides every date in the file.
+    Args:
+        values: Date cells from the file.
+
+    Returns:
+        ("mdy" or "dmy", whether it was a guess). A first part over 12 settles
+        day-first and a second part over 12 month-first; when every date reads
+        both ways the answer is "mdy" and a guess.
     """
     day_first = month_first = False
     for value in values:
@@ -174,6 +195,7 @@ _CREDIT_WORDS = ("credit", "deposit", "money in", "paid in")
 
 
 def _matching(header: list[str], words: tuple[str, ...], exclude: tuple[str, ...] = ()) -> list[int]:
+    """Return the indexes of header cells holding any of the words and none excluded."""
     found = []
     for index, cell in enumerate(header):
         name = cell.lower()
@@ -183,15 +205,22 @@ def _matching(header: list[str], words: tuple[str, ...], exclude: tuple[str, ...
 
 
 def _mostly(rows: list[list[str]], index: int, test) -> bool:
+    """Return whether at least 80% of a column's non-empty cells pass a test."""
     values = [row[index] for row in rows if index < len(row) and row[index]]
     return bool(values) and sum(1 for v in values if test(v)) >= 0.8 * len(values)
 
 
 def detect_mapping(rows: list[list[str]]) -> tuple[ImportMapping, list[str]]:
-    """The columns, from a header when there is one and from the data when not.
+    """Guess which column is which, from a header when there is one, else from the data.
 
-    Always returns a mapping: when a column can't be found, the guess is a
-    plain one and the preview's errors show it, so the person can choose.
+    Always returns a mapping; a column it cannot find is a plain guess the preview's
+    errors will expose.
+
+    Args:
+        rows: The parsed rows, header included if any.
+
+    Returns:
+        The mapping, and the column labels (the header cells, or "Column N").
     """
     first = rows[0]
     has_header = not any(parse_date(cell) for cell in first) and any(
@@ -203,9 +232,11 @@ def detect_mapping(rows: list[list[str]]) -> tuple[ImportMapping, list[str]]:
     order, _ = date_order([row[i] for row in values for i in range(len(row))])
 
     def is_date(v):
+        """Return whether a cell reads as a date in the detected order."""
         return parse_date(v, order) is not None
 
     def is_amount(v):
+        """Return whether a cell reads as an amount and not as a date."""
         return parse_amount(v) is not None and not is_date(v)
 
     columns = first if has_header else [f"Column {i + 1}" for i in range(width)]
@@ -255,10 +286,22 @@ def detect_mapping(rows: list[list[str]]) -> tuple[ImportMapping, list[str]]:
 # --- rows, duplicates, the preview -----------------------------------------
 
 def _cell(row: list[str], index: int | None) -> str:
+    """Return a row's cell at an index, or "" when the index is None or past the row."""
     return row[index] if index is not None and index < len(row) else ""
 
 
 def read_rows(rows: list[list[str]], mapping: ImportMapping) -> list[ImportRow]:
+    """Read every data row through a mapping, marking the ones that cannot be imported.
+
+    Args:
+        rows: The parsed rows, header included if `mapping.has_header`.
+        mapping: Which column means what.
+
+    Returns:
+        One row per data line with its 1-based line number, signed amount and
+        status "new", or "error" with a reason for an unreadable date or amount
+        or a zero amount.
+    """
     out: list[ImportRow] = []
     start = 1 if mapping.has_header else 0
     for offset, row in enumerate(rows[start:]):
@@ -293,6 +336,18 @@ def read_rows(rows: list[list[str]], mapping: ImportMapping) -> list[ImportRow]:
 
 
 def mark_duplicates(db: Session, user_id: uuid.UUID, account_id: uuid.UUID, rows: list[ImportRow]) -> None:
+    """Flag new rows that match a transaction already in the account, in place.
+
+    A match has the same amount (to the half cent), is within three days, and has
+    the same merchant key or the same date; each existing transaction matches at
+    most one row.
+
+    Args:
+        db: Open database session.
+        user_id: Whose ledger.
+        account_id: The account being imported into.
+        rows: The read rows; only "new" ones are checked.
+    """
     candidates = [row for row in rows if row.status == NEW]
     if not candidates:
         return
@@ -326,6 +381,16 @@ def mark_duplicates(db: Session, user_id: uuid.UUID, account_id: uuid.UUID, rows
 
 
 def owned_account(db: Session, user_id: uuid.UUID, account_id: uuid.UUID) -> AccountModel | None:
+    """Return the user's account with this id, or None.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+        account_id: The account to fetch.
+
+    Returns:
+        The account, or None when it is missing or another user's.
+    """
     return (
         db.query(AccountModel)
         .filter(AccountModel.id == account_id, AccountModel.user_id == user_id)
@@ -336,7 +401,24 @@ def owned_account(db: Session, user_id: uuid.UUID, account_id: uuid.UUID) -> Acc
 def preview(
     db: Session, user_id: uuid.UUID, account_id: uuid.UUID, csv_text: str, mapping: ImportMapping | None,
 ) -> ImportPreview | None:
-    """Everything the commit would do, without doing it. None for an account not yours."""
+    """Return everything a commit would write, without writing anything.
+
+    Detects the mapping unless one is given (a debt account's amounts are inverted
+    by default), flags duplicates and suggests categories for expenses.
+
+    Args:
+        db: Open database session.
+        user_id: Whose ledger.
+        account_id: The account to import into.
+        csv_text: The file's text.
+        mapping: The mapping to use; None to detect it.
+
+    Returns:
+        The preview; None when the account is not the user's.
+
+    Raises:
+        ValueError: If the file has no rows or more than `MAX_ROWS` data rows.
+    """
     account = owned_account(db, user_id, account_id)
     if account is None:
         return None
@@ -381,6 +463,25 @@ def preview(
 # --- commit, list, undo ----------------------------------------------------
 
 def commit(db: Session, user_id: uuid.UUID, data: CommitRequest) -> ImportSummary | None:
+    """Write the chosen lines of a CSV file into the ledger as one import.
+
+    The file is previewed again with the same mapping, and only the lines named are
+    written: negative amounts as expenses (with any confirmed category), positive as
+    income. One commit.
+
+    Args:
+        db: Open database session.
+        user_id: Whose ledger.
+        data: The text, mapping, lines, filename and confirmed categories.
+
+    Returns:
+        The import's summary, with how many subscription candidates the audit now
+        sees; None when the account is not the user's.
+
+    Raises:
+        ValueError: If a line is not in the file or could not be read, or a
+            category is not one of the user's unarchived categories.
+    """
     shown = preview(db, user_id, data.account_id, data.csv_text, data.mapping)
     if shown is None:
         return None
@@ -428,6 +529,17 @@ def commit(db: Session, user_id: uuid.UUID, data: CommitRequest) -> ImportSummar
 
 
 def summaries(db: Session, user_id: uuid.UUID, only: uuid.UUID | None = None) -> list[ImportSummary]:
+    """Return the user's imports, newest first, with what is left of each.
+
+    Args:
+        db: Open database session.
+        user_id: Whose imports.
+        only: Just this import; None for all.
+
+    Returns:
+        Each import with its remaining row count and date span; empty when there
+        are none.
+    """
     query = (
         db.query(ImportModel, AccountModel.name)
         .join(AccountModel, AccountModel.id == ImportModel.account_id)
@@ -467,11 +579,22 @@ def summaries(db: Session, user_id: uuid.UUID, only: uuid.UUID | None = None) ->
 
 
 def undo(db: Session, user_id: uuid.UUID, import_id: uuid.UUID) -> int | None:
-    """Remove every row the import wrote, and the import. None if not yours.
+    """Delete every row an import wrote, and the import itself.
 
-    One literal statement per table, never a computed filter, and the count is
-    checked before and after: a cleanup that removes more than it should is a
-    failure even when everything else looks fine.
+    The rows are counted before and after one literal delete; a mismatch rolls back.
+    Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose ledger.
+        import_id: The import.
+
+    Returns:
+        How many rows were removed; None when the import is not the user's.
+
+    Raises:
+        RuntimeError: If the delete removed a different number of rows than
+            expected; nothing is changed.
     """
     record = (
         db.query(ImportModel)

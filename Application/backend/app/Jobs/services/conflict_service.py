@@ -1,18 +1,10 @@
-"""Shifts that collide with, or crowd, an exam (Phase 2 item 14, D21).
+"""Service functions for shifts that overlap, or crowd, an exam.
 
-Read from the calendar's own occurrences, so it agrees with what the calendar
-shows -- skipped dates, blackouts and repeating shifts included. Jobs reading
-the calendar is the allowed direction (§13.11): nothing here writes anything.
-
-**Overlap:** the shift and the exam share any time. **Crowds:** the shift ends
-before the exam starts, but by less than your buffer (``exam_buffer_hours``,
-default 12) -- a closing shift the night before an 8:30 final, or a morning
-shift before an afternoon midterm.
-
-**Untimed items.** A final is often on the calendar before its time is known.
-An exam with no start time is taken to start at 08:00, the earliest a UBC exam
-sits, and run the day; a shift with no times is taken to run the whole day.
-Both choices can only flag more, never hide a real clash.
+Read from the calendar's own occurrences, so skipped dates, blackouts and
+repeating shifts agree with what the calendar shows; nothing here writes. A
+shift overlaps an exam when they share any time, and crowds it when it ends
+before the exam starts but within the user's buffer. Missing times only ever
+widen an item, so an untimed exam or shift flags more, never less.
 """
 import uuid
 from datetime import date, datetime, time, timedelta
@@ -34,7 +26,11 @@ DEFAULT_DAYS = 60
 
 
 def _span(on: date, start: time | None, end: time | None, *, untimed_start: time) -> tuple[datetime, datetime]:
-    """An occurrence as a [start, end) interval. A missing time widens it."""
+    """Return an occurrence as a [start, end) interval of naive datetimes.
+
+    A missing start uses `untimed_start`; a missing end runs to midnight; an end at
+    or before the start is taken as the next day, for an overnight shift.
+    """
     begins = datetime.combine(on, start or untimed_start)
     if end is None:
         ends = datetime.combine(on + timedelta(days=1), time(0, 0))
@@ -47,6 +43,22 @@ def _span(on: date, start: time | None, end: time | None, *, untimed_start: time
 
 
 def find_conflicts(occurrences, buffer_hours: int, job_names: dict) -> list[ShiftConflict]:
+    """Pair every shift with every midterm or final it overlaps or crowds.
+
+    An exam with no start time is taken to start at 08:00; a shift with no times
+    runs the whole day.
+
+    Args:
+        occurrences: Expanded calendar occurrences; shifts are those with a
+            `job_id`, exams the midterms and finals without one.
+        buffer_hours: How many hours before an exam a shift must end by; 0 flags
+            overlaps only.
+        job_names: Job ids mapped to names, for labelling.
+
+    Returns:
+        The conflicts, by exam date and start, then shift date and kind; empty
+        when there are none.
+    """
     shifts = [o for o in occurrences if o.job_id is not None]
     exams = [o for o in occurrences if o.kind in EXAM_KINDS and o.job_id is None]
     buffer = timedelta(hours=buffer_hours)
@@ -73,6 +85,24 @@ def find_conflicts(occurrences, buffer_hours: int, job_names: dict) -> list[Shif
 
 def shift_conflicts(db: Session, user_id: uuid.UUID, start: date | None = None,
                     end: date | None = None) -> ShiftConflicts | None:
+    """Return the user's shift-and-exam conflicts for exams in a window.
+
+    Shifts from the day before the window are included, so a closing shift the
+    night before the first exam still counts.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        start: First exam date to report; defaults to the user's today.
+        end: Last exam date to report; defaults to 60 days after `start`.
+
+    Returns:
+        The user's exam buffer and the conflicts; None when the user does not
+        exist.
+
+    Raises:
+        ValueError: If the window is inverted or longer than the calendar allows.
+    """
     user = user_for(db, user_id)
     if user is None:
         return None

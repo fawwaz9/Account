@@ -1,3 +1,10 @@
+"""Request and response bodies for the subscription audit: undeclared repeating charges.
+
+`subscription_service` derives candidates fresh from the ledger on every call;
+confirming one creates a standing instruction and tags the charges that made the
+case, so the same run is not found again.
+"""
+
 from datetime import date
 from typing import Literal
 from uuid import UUID
@@ -20,10 +27,17 @@ CADENCE_GAP_DAYS: dict[str, tuple[int, int]] = {
 #: so they can be tuned without reading the matching logic.
 MIN_OCCURRENCES = 3
 AMOUNT_TOLERANCE = 0.10
+"""Largest fraction a charge may stray from the run's median amount (0.10 is 10%)."""
 
 
 class SubscriptionOccurrence(BaseModel):
-    """One charge that went into a subscription's pattern."""
+    """One charge that is part of a subscription's pattern.
+
+    Attributes:
+        transaction_id: The ledger row.
+        on_date: When it was charged.
+        amount: What it charged, as a positive figure.
+    """
 
     transaction_id: UUID
     on_date: date
@@ -31,11 +45,23 @@ class SubscriptionOccurrence(BaseModel):
 
 
 class SubscriptionCandidate(BaseModel):
-    """A run of expenses that looks like a subscription, but is not one yet.
+    """A run of expenses that looks like a subscription but has no standing instruction.
 
-    Nothing here is stored. It is derived fresh from the ledger every time, so
-    there is nothing to keep in sync when a description changes or a charge is
-    corrected -- the pattern is just read again.
+    Never stored: it is read again from the ledger each time, so a corrected charge
+    or description simply changes the next answer.
+
+    Attributes:
+        description: The most recent charge's own text.
+        account_id: The account the most recent charge came from.
+        category_id: The most recent charge's category.
+        cadence: "weekly", "fortnightly" or "monthly", the rhythm every gap fits.
+        median_amount: The median charge, in dollars.
+        first_seen: Date of the first charge in the run.
+        last_seen: Date of the latest charge.
+        next_expected_on: Where the next charge should land, and where `suggested`
+            starts.
+        occurrences: The charges in the run, oldest first.
+        suggested: A standing instruction ready to submit as it is.
     """
 
     #: The most recent charge's own text, so what is shown matches the ledger.
@@ -56,13 +82,14 @@ class SubscriptionCandidate(BaseModel):
 
 
 class SubscriptionConfirm(BaseModel):
-    """Turn a finding into a standing instruction, and stop re-finding it.
+    """Request body turning a finding into a standing instruction.
 
-    `transaction_ids` are the charges that made up the pattern -- exactly
-    `SubscriptionCandidate.occurrences`, echoed back rather than re-derived, so
-    confirming a stale card can never tag the wrong rows. Without tagging them,
-    the same history would still have no `recurring_id` and would qualify as a
-    pattern again on the very next read.
+    Attributes:
+        transaction_ids: The finding's occurrences, echoed back from the card
+            rather than re-derived; each is tagged with the new instruction so the
+            run stops qualifying.
+        instruction: The standing instruction to create, usually `suggested` with
+            any edits.
     """
 
     transaction_ids: list[UUID]

@@ -1,8 +1,9 @@
-"""Placing a course in time, relative to the term the student is in now.
+"""Placing courses in time: term dates, term order and the past/current/future bucket.
 
-Courses carry a school year (1-10) and a semester, but nothing on them says
-whether that term has happened yet. That comparison lives here so the grades
-page, the dashboard rollup, and the course payload all agree on it.
+Courses carry a school year (1-10) and a term but no dates; with the user's
+first-year anchor, `TERM_DATES` gives each term real dates. Also the shared answers
+for a course's target and result grade, here in utils so Grades and Tasks can both
+import them without a cycle.
 """
 
 from datetime import date
@@ -10,8 +11,11 @@ from datetime import date
 from app.Grades.utils.enums import SEMESTER_ORDER
 
 PAST = "past"
+"""Term bucket of a course before the student's current term."""
 CURRENT = "current"
+"""Term bucket of a course in the student's current term."""
 FUTURE = "future"
+"""Term bucket of a course after the student's current term."""
 
 
 #: When each term runs, and which calendar year it lands in.
@@ -33,11 +37,14 @@ TERM_DATES: dict[str, tuple[tuple[int, int], tuple[int, int], int]] = {
 
 
 def calendar_year_of(school_year: int | None, first_year: int | None) -> int | None:
-    """Which calendar year a school year's Fall began in.
+    """Return the calendar year in which a school year's Fall began.
 
-    School year 1 began in `first_year`, so year N began N-1 years later. Both
-    None-tolerant because the anchor is a setting a student may not have filled
-    in, and the honest answer then is "unknown" rather than a guess.
+    Args:
+        school_year: School year, 1 for first year; None when unknown.
+        first_year: The first-year anchor; None when unset.
+
+    Returns:
+        `first_year + school_year - 1`, or None when either is missing.
     """
     if school_year is None or first_year is None:
         return None
@@ -45,20 +52,17 @@ def calendar_year_of(school_year: int | None, first_year: int | None) -> int | N
 
 
 def suggest_first_year(courses) -> int | None:
-    """What the anchor probably is, worked out from courses that carry dates.
+    """Return the most likely first-year anchor, inferred from courses with start dates.
 
-    Evidence rather than a label. The obvious source is `term_label` -- it
-    already reads "2025-2026" -- but nothing keeps it current: the real account
-    carries that string while its year-3 Fall courses run September **2026**,
-    so trusting it would set the anchor a year out and silently mis-date every
-    term in the app. A course's own start date is a fact somebody entered about
-    a real class.
+    Each dated course votes for the anchor its start date implies; the most common
+    answer wins and ties go to the earlier year, so one mistyped course cannot outvote
+    the rest. `term_label` is never trusted for this.
 
-    Inverts the arithmetic in `term_dates`: a term starting in calendar year Y
-    means school year 1 began at Y - offset - (school_year - 1).
+    Args:
+        courses: Course rows; undated ones and unknown terms are ignored.
 
-    Takes the most common answer, so one mistyped course cannot outvote the
-    rest, and returns None when nothing is dated.
+    Returns:
+        The suggested calendar year, or None when no course is dated.
     """
     votes: dict[int, int] = {}
     for course in courses:
@@ -79,13 +83,16 @@ def term_dates(
     school_year: int | None,
     first_year: int | None,
 ) -> tuple[date, date] | None:
-    """The real dates a term runs, or None when they cannot be known.
+    """Return the first and last day of a term, or None when they cannot be known.
 
-    None rather than a default, in every failing case: no anchor set, an
-    unrecognised semester, a missing school year. Anything that reads this has
-    to say it does not know, because a term silently dated to year 1 would put
-    a current course three years in the past and nothing on screen would
-    explain why.
+    Args:
+        semester: "Fall", "Winter", "Spring" or "Summer".
+        school_year: School year the term belongs to.
+        first_year: The first-year anchor.
+
+    Returns:
+        (start, end) dates, both inclusive; None for an unknown semester, a missing
+        school year or an unset anchor, never a guess.
     """
     entry = TERM_DATES.get(semester or "")
     if entry is None:
@@ -103,16 +110,31 @@ def term_dates(
 
 
 def term_key(school_year: int | None, semester: str | None) -> tuple[int, int]:
-    """Order terms as (school year, position within that year)."""
+    """Return a sortable (school year, position in the year) key for a term.
+
+    Missing values sort as 0.
+
+    Args:
+        school_year: Year of study; None sorts first.
+        semester: "Fall", "Winter", "Spring" or "Summer"; None or unknown sorts first.
+
+    Returns:
+        A tuple that sorts terms chronologically.
+    """
     return (school_year or 0, SEMESTER_ORDER.get(semester or "", 0))
 
 
 def term_bucket(course, current_school_year: int | None, current_semester: str | None) -> str:
-    """Sort one course into past, current, or future.
+    """Return whether a course is in the past, current or future term for the student.
 
-    With no academic status set everything reads as current, so a student who
-    has not filled the setting in still sees their courses rather than an empty
-    page.
+    Args:
+        course: Course row; its `year` and `semester` are compared.
+        current_school_year: The student's school year now.
+        current_semester: The student's term now.
+
+    Returns:
+        `PAST`, `CURRENT` or `FUTURE`; every course is `CURRENT` when the student's
+        academic status is unset.
     """
     if current_school_year is None or current_semester is None:
         return CURRENT
@@ -128,27 +150,29 @@ def term_bucket(course, current_school_year: int | None, current_semester: str |
 
 
 def effective_target(course, default_target: float) -> float:
-    """The course's own target, or the account default when it has none.
+    """Return a course's target grade, or the account default when it has none.
 
-    Here rather than in a service because two callers now need it and one of
-    them is Tasks: importing it from dash_services closed a loop through
-    grade_service and grade_schedule back into task_service. This module is
-    pure -- courses in, answers out, no session -- so anything may read it.
+    Args:
+        course: Course row.
+        default_target: The account-wide default target percentage.
+
+    Returns:
+        The target percentage to measure the course against.
     """
     return course.target_grade if course.target_grade is not None else default_target
 
 
 def course_result_grade(course, average: float | None = None) -> float | None:
-    """The single grade a finished course should be represented by.
+    """Return the single grade a course is represented by: the final, else the average.
 
-    Prefers the final grade the professor submitted, falls back to the running
-    average, and returns None when the course has neither. A past course that
-    was never filled in must not drag its year's average toward zero.
+    Args:
+        course: Course row.
+        average: A just-recomputed average to use instead of the stored column, so a
+            caller never has to write a fresh value onto the mapped attribute.
 
-    `average` overrides the stored column for a caller that has just recomputed
-    it. It exists so such a caller does not have to assign the fresh value onto
-    the mapped attribute to be seen -- a read that writes to a mapped column is
-    one stray commit away from a GET that changes data.
+    Returns:
+        The final grade if one above 0 is recorded, else the running average if above
+        0, else None, so an unfilled course never counts as zero.
     """
     if course.final_grade and course.final_grade > 0:
         return course.final_grade
@@ -160,7 +184,15 @@ def course_result_grade(course, average: float | None = None) -> float | None:
 
 
 def year_average(courses) -> float | None:
-    """Average across a year's courses, skipping ones with nothing recorded."""
+    """Return the plain mean of a year's course grades, skipping courses with none.
+
+    Args:
+        courses: The year's course rows.
+
+    Returns:
+        The unweighted mean of `course_result_grade`, rounded to 2 places; None when
+        no course has a grade.
+    """
     grades = [
         grade
         for grade in (course_result_grade(course) for course in courses)

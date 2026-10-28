@@ -1,30 +1,11 @@
-"""Prerequisite rules: the tree, its typed form, and whether you meet one.
+"""Prerequisite rules: the JSON tree, its typed form, and whether a record meets one.
 
-Phase 2 items 4 and 7 (fact D). A rule is a small JSON tree:
-
-* ``{"course": "CPSC 210"}``, optionally with ``"min_grade": 64``
-* ``{"credits": 6, "subject": "MATH", "level": 100}`` -- six credits of MATH
-  100-level; subject and level are each optional
-* ``{"all": [...]}`` and ``{"any": [...]}``
-
-Codes are stored without a campus suffix ("CPSC 210", not "CPSC_V 210"): a
-rule is about which course, and the catalogue row it hangs on already says
-which campus. Anything a tree cannot hold -- year standing, "or permission of
-the instructor" -- goes in the note beside it, never in here.
-
-The typed form is what a person writes and what the page shows::
-
-    CPSC 210 and one of MATH 200, MATH 217
-    (CPSC 121 or MATH 220) and 6 credits of MATH 1xx
-    CPSC 210 with 64%
-
-``and`` (or a comma at the top level) joins everything; ``or`` binds tighter,
-so "A or B and C" is "(A or B) and C". ``one of`` / ``all of`` take a
-comma-separated list that runs to the next ``and``, a closing parenthesis, or
-the end.
-
-**Advisory only** (Phase 2 D3). Evaluating a rule says met, on track or not
-met. Nothing in the app is ever disabled by the answer.
+A rule is a tree of `{"course": "CPSC 210", "min_grade": 64}` and
+`{"credits": 6, "subject": "MATH", "level": 100}` leaves under `{"all": [...]}` and
+`{"any": [...]}` groups; codes carry no campus suffix. The typed form reads like
+"(CPSC 121 or MATH 220) and 6 credits of MATH 1xx", where `or` binds tighter than
+`and`. Evaluation is advisory only: met, on track or not met, and nothing is ever
+blocked by the answer.
 """
 from __future__ import annotations
 
@@ -40,14 +21,25 @@ MAX_CHILDREN = 12
 MAX_TEXT = 300
 
 CODE = re.compile(r"^([A-Za-z]{2,5})(?:_[A-Za-z])?\s*(\d{3}[A-Za-z]?)$")
+"""A course code with an optional campus suffix: "CPSC 210", "cpsc_v210"."""
 LEVEL = re.compile(r"^(\d)xx$", re.IGNORECASE)
+"""A course level written as a digit and "xx", such as "3xx"."""
 
 
 class RuleError(ValueError):
-    """A rule, or its typed form, that cannot be used. The message says why."""
+    """Raised when a rule or its typed form cannot be used; the message says why."""
 
 
 def normal_code(text: str) -> str | None:
+    """Return a course code as "SUBJ 123" without a campus suffix, or None.
+
+    Args:
+        text: A code such as "cpsc_v210" or "CPSC 210".
+
+    Returns:
+        The upper-cased subject and number separated by one space, or None when the
+        text is not a course code.
+    """
     match = CODE.match(text.strip())
     if match is None:
         return None
@@ -55,8 +47,15 @@ def normal_code(text: str) -> str | None:
 
 
 def code_key(code: str) -> tuple[str, int] | None:
-    """(subject, number) for comparing with your courses, letter suffix aside --
-    the same reading as the degree audit's ``parse_code``."""
+    """Return a code's (subject, number) for matching against the student's courses.
+
+    Args:
+        code: A course code in any accepted spelling.
+
+    Returns:
+        The subject and the three-digit number as an int, ignoring a letter suffix;
+        None when the text is not a course code.
+    """
     normal = normal_code(code)
     if normal is None:
         return None
@@ -69,10 +68,25 @@ def code_key(code: str) -> tuple[str, int] | None:
 # --------------------------------------------------------------------------
 
 def validate(rule: Any) -> dict:
-    """The rule, normalised, or RuleError. Used on everything stored."""
+    """Return a rule tree normalised and checked against the size limits.
+
+    Codes are normalised, numbers become floats, and a group of one part collapses to
+    that part.
+
+    Args:
+        rule: The decoded JSON tree.
+
+    Returns:
+        The normalised tree.
+
+    Raises:
+        RuleError: If a part is malformed, a value is out of range, or the tree exceeds
+            `MAX_NODES` parts, `MAX_DEPTH` levels or `MAX_CHILDREN` per group.
+    """
     count = [0]
 
     def walk(node: Any, depth: int) -> dict:
+        """Check and normalise one node and its children, counting every node."""
         count[0] += 1
         if count[0] > MAX_NODES:
             raise RuleError(f"A rule can have at most {MAX_NODES} parts")
@@ -138,9 +152,15 @@ TOKEN = re.compile(
     r")",
     re.IGNORECASE,
 )
+"""One token of the typed form.
+
+Credits, a course code, a level, a percentage, a keyword, a bare subject or
+punctuation.
+"""
 
 
 def _tokens(text: str) -> list[tuple[str, str]]:
+    """Split the typed form into (kind, value) tokens; raise RuleError if unreadable."""
     out, at = [], 0
     text = text.strip()
     while at < len(text):
@@ -158,22 +178,31 @@ def _tokens(text: str) -> list[tuple[str, str]]:
 
 
 class _Parser:
+    """Recursive-descent parser from typed-form tokens to an unvalidated rule tree.
+
+    Args:
+        tokens: The (kind, value) pairs from `_tokens`.
+    """
     def __init__(self, tokens):
         self.tokens, self.at = tokens, 0
 
     def peek(self, offset=0):
+        """Return the token `offset` ahead, unconsumed; (None, None) past the end."""
         index = self.at + offset
         return self.tokens[index] if index < len(self.tokens) else (None, None)
 
     def take(self):
+        """Consume and return the next token."""
         token = self.peek()
         self.at += 1
         return token
 
     def is_word(self, word, offset=0):
+        """Return whether the token `offset` ahead is the keyword `word`."""
         return self.peek(offset) == ("word", word)
 
     def expr(self):
+        """Parse parts joined by "and" or a top-level comma into an "all" group."""
         parts = [self.or_expr()]
         while self.is_word("and") or self.peek() == ("punct", ","):
             self.take()
@@ -181,6 +210,7 @@ class _Parser:
         return parts[0] if len(parts) == 1 else {"all": parts}
 
     def or_expr(self):
+        """Parse atoms joined by "or" into an "any" group."""
         parts = [self.atom()]
         while self.is_word("or"):
             self.take()
@@ -188,6 +218,7 @@ class _Parser:
         return parts[0] if len(parts) == 1 else {"any": parts}
 
     def items(self):
+        """Parse the comma-separated list after "one of" or "all of"."""
         parts = [self.or_expr()]
         while self.peek() == ("punct", ","):
             self.take()
@@ -195,6 +226,7 @@ class _Parser:
         return parts
 
     def atom(self):
+        """Parse one part: a bracketed group, a "one of" list, credits or a course."""
         kind, value = self.take()
         if kind is None:
             raise RuleError("The rule ends too early")
@@ -224,6 +256,7 @@ class _Parser:
         raise RuleError(f"Didn't expect {value!r} there")
 
     def grade(self):
+        """Parse an optional minimum grade: "with 64%", "(64%)" or "min 64%"."""
         # "CPSC 210 with 64%", "CPSC 210 (64%)", "CPSC 210 min 64%"
         if self.is_word("with") or self.is_word("min"):
             self.take()
@@ -240,7 +273,17 @@ class _Parser:
 
 
 def parse_text(text: str) -> dict:
-    """The typed form as a tree, validated. RuleError says what is wrong."""
+    """Parse the typed form of a rule into a validated tree.
+
+    Args:
+        text: The rule as a person typed it, at most `MAX_TEXT` characters.
+
+    Returns:
+        The normalised rule tree.
+
+    Raises:
+        RuleError: If the text is empty, too long, unreadable or not a valid rule.
+    """
     if not text or not text.strip():
         raise RuleError("The rule is empty")
     if len(text) > MAX_TEXT:
@@ -253,7 +296,15 @@ def parse_text(text: str) -> dict:
 
 
 def render(rule: dict, nested: bool = False) -> str:
-    """A tree in the typed form. ``parse_text(render(r)) == r`` for a valid r."""
+    """Return a rule tree in its typed form, which `parse_text` reads back unchanged.
+
+    Args:
+        rule: A valid rule tree.
+        nested: True inside a group, so a compound part is wrapped in parentheses.
+
+    Returns:
+        Text such as "CPSC 210 with 64% and one of MATH 200, MATH 217".
+    """
     if "course" in rule:
         grade = rule.get("min_grade")
         return rule["course"] + (f" with {grade:g}%" if grade is not None else "")
@@ -284,12 +335,23 @@ def render(rule: dict, nested: bool = False) -> str:
 
 MET, ON_TRACK, NOT_MET = "met", "on_track", "not_met"
 RANK = {NOT_MET: 0, ON_TRACK: 1, MET: 2}
+"""Order of the verdicts, weakest first, for combining a group's parts."""
 
 
 @dataclass(frozen=True)
 class Taken:
-    """One thing on your record, as a rule sees it: a course, or an
-    equivalence standing in for its sources."""
+    """One thing on the student's record as a rule sees it: a course or an equivalence.
+
+    Attributes:
+        label: How the item is named in explanations, such as "CPSC 210".
+        codes: (subject, number) keys the item counts as.
+        credits: Credits it carries.
+        status: "completed", "in_progress", "planned", or "failed" for a recorded
+            result under the pass mark.
+        term: (school year, semester order) it is or was taken in.
+        grade: Final result in percent; None for transfer credit, equivalences and
+            anything unfinished.
+    """
 
     label: str
     codes: frozenset[tuple[str, int]]
@@ -306,6 +368,15 @@ class Taken:
 
 @dataclass
 class Result:
+    """The verdict on one rule, or one part of it, with the reasons.
+
+    Attributes:
+        status: `MET`, `ON_TRACK` or `NOT_MET`.
+        text: The part in its typed form.
+        detail: Why, for a leaf: "CPSC 210 done (82%)", "3 of 6 credits".
+        parts: The verdicts of a group's parts; empty for a leaf.
+        group: "all" or "any" for a group; None for a leaf.
+    """
     status: str
     text: str
     #: Why, in words, for a leaf: "CPSC 210 done (82%)", "3 of 6 credits".
@@ -316,20 +387,32 @@ class Result:
 
 
 def evaluate(rule: dict, record: list[Taken], term: tuple[int, int], kind: str = "prerequisite") -> Result:
-    """Whether ``record`` meets ``rule`` for a course taken in ``term``.
+    """Return whether a record meets a rule for a course taken in a given term.
 
-    A prerequisite counts only from a term before the course's own; a
-    co-requisite may also be the same term. Within that window: completed is
-    met; in progress or planned is on track -- it will be met if it goes as
-    planned. A minimum grade is checked when the result is known.
+    A prerequisite counts only from an earlier term; a co-requisite may also share the
+    course's term. Within that window, completed work is met and work in progress or
+    planned is on track; a minimum grade is checked once the result is known. An "all"
+    group takes its weakest part's status and an "any" group its strongest.
+
+    Args:
+        rule: A valid rule tree.
+        record: Everything on the student's record.
+        term: (school year, semester order) of the course the rule belongs to.
+        kind: "prerequisite" or "corequisite".
+
+    Returns:
+        The verdict tree, mirroring the rule's shape.
     """
     def counts(item: Taken) -> bool:
+        """Return whether an item is early enough to count toward this rule."""
         return item.term < term or (kind == "corequisite" and item.term == term)
 
     def best(results: list[Result]) -> Result:
+        """Return the strongest of several verdicts, or None for none."""
         return max(results, key=lambda r: RANK[r.status]) if results else None
 
     def leaf_course(node: dict) -> Result:
+        """Return the verdict on a course leaf from the best timely attempt at it."""
         key = code_key(node["course"])
         text = render(node)
         candidates = [item for item in record if key in item.codes]
@@ -355,9 +438,11 @@ def evaluate(rule: dict, record: list[Taken], term: tuple[int, int], kind: str =
         return best(results)
 
     def leaf_credits(node: dict) -> Result:
+        """Return the verdict on a credits leaf from timely, unfailed matching items."""
         subject, level = node.get("subject"), node.get("level")
 
         def qualifies(item: Taken) -> bool:
+            """Return whether an item matches the leaf's subject and level."""
             return any((subject is None or s == subject) and (level is None or level <= n < level + 100)
                        for s, n in item.codes)
 
@@ -373,6 +458,7 @@ def evaluate(rule: dict, record: list[Taken], term: tuple[int, int], kind: str =
         return Result(NOT_MET, render(node), detail)
 
     def walk(node: dict) -> Result:
+        """Return the verdict on a node, combining a group's parts."""
         if "course" in node:
             return leaf_course(node)
         if "credits" in node:

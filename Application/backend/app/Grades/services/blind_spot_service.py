@@ -1,18 +1,8 @@
-"""A category the student is quietly worse at than their own average.
+"""Blind spots: grade categories a student does worse in than their own overall average.
 
-Grades already answers "how is this course doing." This answers the question
-nothing else does: pooled across every course, is one *category* -- labs,
-quizzes, participation -- where marks are consistently lost, rather than one
-course being hard. Derived entirely from what `grades` and
-`course_category_weights` already store; nothing new is written.
-
-The comparison is pooled percentages, not course weights: every marked item of
-a category, across every graded course, earned over possible -- the same
-arithmetic `calculate_grade_category_average` does for one course, done here
-across all of them at once. Weighting by category *weight* would answer a
-different question (which category costs the most), and this one is about
-where marks are actually being lost relative to how the student does
-everywhere else.
+Pools every marked item of a category across all graded courses (earned over
+possible) and compares it with the same pooling over every category. Derived on
+read from stored grades; nothing is written.
 """
 
 import uuid
@@ -29,10 +19,26 @@ from app.Users.services.user_service import get_user
 
 
 def is_marked(grade) -> bool:
+    """Return whether a grade has a score, a positive maximum, and counts.
+
+    Args:
+        grade: A grade row.
+
+    Returns:
+        True when the grade has a score, a positive maximum and is not dropped.
+    """
     return grade.score is not None and grade.max_score > 0 and counts_toward_average(grade)
 
 
 def severity_for(gap: float) -> str | None:
+    """Return the band for a gap in percentage points, or None below the mildest.
+
+    Args:
+        gap: Points below the overall average.
+
+    Returns:
+        "mild", "moderate" or "severe" from `BLIND_SPOT_BANDS`, or None.
+    """
     for severity, (low, high) in BLIND_SPOT_BANDS.items():
         if low <= gap < high:
             return severity
@@ -40,6 +46,18 @@ def severity_for(gap: float) -> str | None:
 
 
 def category_blind_spots(db: Session, user_id: uuid.UUID) -> list[CategoryBlindSpot] | None:
+    """Return the categories trailing the student's own average in two or more courses.
+
+    Bonus categories and transfer credit are left out.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+
+    Returns:
+        Blind spots, largest gap first; empty when nothing is marked or nothing trails
+        by enough. None when the user does not exist.
+    """
     if get_user(db, user_id) is None:
         return None
 

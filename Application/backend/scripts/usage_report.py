@@ -1,39 +1,18 @@
-"""Phase 0 analytics: the numbers the vision's phase gates are written in.
+"""Print the phase-gate analytics as aggregate counts, read-only, for the owner to run.
 
     USAGE_REPORT_URL=postgresql://... python scripts/usage_report.py [--weeks 8]
 
-Prints aggregate counts and nothing else: no ids, names, emails or anything
-typed by a user. It reads per-user usage counters to compute those numbers,
-which is why it is a script the owner runs rather than an endpoint -- the API
-never reads across users, and under row-level security it cannot.
+Prints counts and nothing else: no ids, names, emails or anything a user typed. It
+reads every user's usage counters, which is why it is an owner-run script and never
+an endpoint. Read-only is enforced: every Postgres transaction is declared READ
+ONLY, and a SQLite file is opened in read-only mode.
 
-**Read-only, enforced, not promised.** On Postgres every transaction is
-declared READ ONLY, so a write would be refused by the server; on SQLite the
-file is opened in read-only mode. Point it at a copy if you like, but it cannot
-change the database it is pointed at.
-
-What it reports, and which gate each answers (account-vision.md §8, §11):
-
-* **Accounts** -- total, and new per week where the signup time is known.
-* **Weekly actives** -- anyone who opened or added anything that week.
-* **Universe test** -- people who used two or more rooms in one week, and the
-  stricter form the vision's gate is written in (§13.2): two or more rooms
-  with at least one visit unprompted -- not opened from a notification. The
-  rooms are grades, calendar, tasks, jobs and budget; the dashboard and
-  settings are not rooms.
-* **Retention** -- of last week's actives, how many came back this week.
-* **Module adoption** -- distinct people per room over the last four weeks, and
-  rows per table, which is how a zero-row feature gets noticed.
-* **Time to first value** -- from signup to the first thing created, for
-  accounts made after signup times started being recorded.
-* **Would you be disappointed** -- the Sean Ellis question's answers, counted
-  (Phase 1 gate: at least three "very disappointed").
-* **The money room, unprompted** -- per week, people who opened Budget without
-  a notification sending them (Phase 1 gate: used weekly without prompting).
-* **Syllabus to term** -- from a syllabus read to its term confirmed, review
-  included (Phase 1 gate: under five minutes), and how many were confirmed
-  with nothing changed (§15's no-change rate). The clock starts once the read
-  has returned, so the read itself -- its own 60-second goal -- is not in it.
+Reports accounts and new signups per week; weekly actives; the universe test (two
+or more rooms in a week, and the strict form with at least one unprompted visit);
+week-on-week retention; unprompted Budget use; room adoption and rows per table;
+time from signup to first creation; the disappointment survey's answers; and
+syllabus read-to-confirm times with the no-change rate. The rooms are grades,
+calendar, tasks, jobs and budget.
 """
 from __future__ import annotations
 
@@ -56,10 +35,23 @@ from app._database import models  # noqa: E402
 from app._database.db import Base, connect_args_for, normalize_database_url  # noqa: E402
 
 VARIABLE = "USAGE_REPORT_URL"
+"""The environment variable holding the database URL to report on."""
 ROOMS = ("grades", "calendar", "tasks", "jobs", "budget")
+"""The modules that count as rooms; the dashboard and settings do not."""
 
 
 def read_only_engine(raw: str):
+    """Return an engine that cannot write: read-only transactions, or a read-only file.
+
+    Args:
+        raw: The database URL from `USAGE_REPORT_URL`.
+
+    Returns:
+        An unpooled engine; on Postgres every transaction begins `READ ONLY`.
+
+    Raises:
+        SystemExit: If a SQLite URL names no file.
+    """
     url = normalize_database_url(raw)
     parsed = make_url(url)
     if parsed.get_backend_name() == "sqlite":
@@ -73,16 +65,34 @@ def read_only_engine(raw: str):
 
     @event.listens_for(engine, "begin")
     def _read_only(conn):
+        """Declare each new transaction read-only."""
         conn.exec_driver_sql("SET TRANSACTION READ ONLY")
 
     return engine
 
 
 def monday(day: date) -> date:
+    """Return the Monday of the week a date falls in.
+
+    Args:
+        day: Any date.
+
+    Returns:
+        The Monday on or before `day`.
+    """
     return day - timedelta(days=day.weekday())
 
 
 def collect(engine) -> dict:
+    """Read the rows the report needs, across every user.
+
+    Args:
+        engine: The read-only engine.
+
+    Returns:
+        A dict of "users", "usage", "answers", "parses" and per-table row counts
+        ("tables").
+    """
     users = models.UserModel.__table__
     usage = models.UsageEventModel.__table__
     with engine.connect() as conn:
@@ -105,6 +115,16 @@ def collect(engine) -> dict:
 
 
 def report(data: dict, weeks: int, today: date) -> list[str]:
+    """Return the report's lines from collected data.
+
+    Args:
+        data: What `collect` returned.
+        weeks: How many weeks of weekly rows to show, ending with this week.
+        today: The day the weeks are counted back from.
+
+    Returns:
+        The lines to print.
+    """
     out: list[str] = []
     live = [u for u in data["users"] if u.deleted_at is None]
     this_week = monday(today)
@@ -214,6 +234,11 @@ def report(data: dict, weeks: int, today: date) -> list[str]:
 
 
 def main() -> int:
+    """Print the report for `USAGE_REPORT_URL`.
+
+    Returns:
+        0 after printing; 2 when `USAGE_REPORT_URL` is unset.
+    """
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--weeks", type=int, default=8)
     args = parser.parse_args()

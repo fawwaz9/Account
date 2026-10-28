@@ -1,13 +1,7 @@
-"""How a list of grades is ordered.
+"""Display order of a course's grades: by name, ignoring case, numbers as numbers.
 
-Grades had no ordering at all: they came back in whatever order the database
-returned them, which is insertion order in practice, so a course's items sat in
-the sequence they happened to be typed in. Adding a quiz you had missed put it
-at the bottom, under the final exam.
-
-One rule, in one pure function, because it has to hold on both paths that hand
-grades to a client -- the course detail response and the grade list endpoint --
-and two sorts that drifted apart would be worse than none.
+Both the course detail response and the grade list use this one rule, so the two
+always agree.
 """
 import re
 
@@ -17,27 +11,16 @@ _CHUNKS = re.compile(r"(\d+)")
 
 
 def grade_sort_key(name: str) -> tuple:
-    """Alphabetical, case-insensitively, with numbers read as numbers.
+    """Return a sort key ordering names alphabetically, digit runs read as numbers.
 
-    Two deliberate departures from a plain string sort, both earned by the data
-    rather than invented:
+    "Quiz 2" sorts before "Quiz 10", and case is ignored.
 
-    **Case-insensitive.** SQLite's default collation is byte order, which puts
-    every capital before every lowercase letter -- so "assignments" would sort
-    after "Quiz 1" rather than before it. Three of the names in use start
-    lowercase, so this is not hypothetical.
+    Args:
+        name: A grade's name.
 
-    **Numbers compared as numbers.** Strictly, "Quiz 10" *does* precede "Quiz 2"
-    alphabetically, and that is the answer nobody wants. A third of the names in
-    use are numbered, and a weekly quiz in a thirteen-week term reaches ten, so
-    the plain sort would start interleaving the moment it mattered. Comparing the
-    digit runs numerically keeps "Quiz 2" before "Quiz 10" while leaving every
-    unnumbered name in ordinary alphabetical order.
-
-    The key is a tuple of alternating text and number parts. Text parts are
-    lower-cased strings and number parts are ints, and because the split always
-    alternates, two keys only ever compare a string against a string and an int
-    against an int.
+    Returns:
+        A tuple alternating lower-cased text parts and integer digit runs, so two keys
+        only ever compare text with text and numbers with numbers.
     """
     parts = _CHUNKS.split(name.strip().lower())
     # Odd indices are the digit runs, by construction of the split.
@@ -48,11 +31,16 @@ def grade_sort_key(name: str) -> tuple:
 
 
 def sorted_grades(grades):
-    """The same list, in display order. A new list -- never sorts in place.
+    """Return the grades in display order as a new list, never sorting in place.
 
-    Sorting a SQLAlchemy relationship collection in place would mutate the
-    session's idea of the object and risk a flush over something that is purely
-    a presentation choice. There is no ordering column behind this and there
-    should not be: it is derived from the name every time.
+    Args:
+        grades: Grade rows, such as a course's `grades` relationship.
+
+    Returns:
+        A new list ordered by `grade_sort_key` of each name.
+
+    Note:
+        Sorting a relationship collection in place would mutate the session's view of
+        the course and could be flushed; the order is derived on every read.
     """
     return sorted(grades, key=lambda grade: grade_sort_key(grade.name))

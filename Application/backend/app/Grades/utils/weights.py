@@ -1,8 +1,7 @@
-"""Sanity checks on a course's category weights.
+"""Warnings about a course's category weights that are worth showing the student.
 
-Kept separate from the schema validators: those decide what the API will
-*accept*, which has to stay permissive because a course marked out of 101% is
-legitimate. These decide what is worth pointing out to the student.
+Separate from the schema validators, which decide what the API accepts and stay
+permissive (a course may be marked out of 101%).
 """
 
 from app.Grades.utils.enums import GradeCategory, is_additive, scoring_weight
@@ -16,10 +15,23 @@ MAX_EXPECTED_TOTAL = 110.0
 #: LARGE_CATEGORY, is almost certainly two weights entered the wrong way round.
 LOPSIDED_FINAL = 5.0
 LARGE_CATEGORY = 20.0
+"""A category at least this heavy, beside a tiny final, suggests two weights swapped."""
 
 
 def weight_problems(course) -> list[str]:
-    """Human-readable problems with a course's weights, or an empty list."""
+    """Return readable problems with a course's category weights, or an empty list.
+
+    Flags a scoring total (bonus excluded) below `MIN_EXPECTED_TOTAL` or above
+    `MAX_EXPECTED_TOTAL`, and a final under `LOPSIDED_FINAL` beside another category of
+    at least `LARGE_CATEGORY`, which looks like two weights swapped. A course with no
+    weights, or weights totalling 0, reports nothing.
+
+    Args:
+        course: A course row, read through its `category_weights`.
+
+    Returns:
+        One sentence per problem; empty when the weights look sound.
+    """
     weights = course.category_weights
     if not weights:
         return []

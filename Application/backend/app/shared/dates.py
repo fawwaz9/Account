@@ -1,28 +1,9 @@
-"""What "today" is, in one place -- on the student's clock, not the server's.
+"""The user's own "now" and "today", from the time zone in their Settings.
 
-Nine services defined this identically -- across Tasks, Finances and Jobs -- and
-nine copies of a one-line function are nine chances for one of them to start
-meaning something slightly different: a timezone, a test seam, a clock injected
-for one module and not the rest.
-
-**It used to be `date.today()`, and on Cloud Run that is UTC.** The container sets
-no `TZ`, so `datetime.now()` and `utcnow()` return the same instant. Every figure
-anchored to "today" was therefore anchored to a day that, for a student in
-`America/Regina`, begins six hours early and rolls over at six in the evening.
-Free time was the visible symptom: after 18:00 local, UTC was already tomorrow, so
-the day the client had asked about was in the past and was skipped entirely --
-no free time for the rest of every evening. The study window's *hours* came from
-the student's preferences all along, which is what made it read as inconsistent
-rather than simply wrong.
-
-So the naive `today()` is gone rather than deprecated. Leaving it would leave the
-mistake one import away, and the failure is silent: the wrong answer is a
-plausible date, off by a day only some of the time.
-
-Everything here resolves through `preferences.timezone`, which the student sets in
-Settings. `at` exists on each function so a test can fix the instant: without it a
-test can only express times relative to the same function it is checking, which
-makes it agree with any clock the function chooses -- including a wrong one.
+Every date anchored to today goes through here, never `date.today()`, which is UTC on
+Cloud Run and a day ahead of a student in the Americas every evening. Each function
+takes an optional `at` so a test can fix the instant; the `user_*` helpers look the
+user up by id, so resolve the day once per request rather than once per row.
 """
 
 import uuid
@@ -41,10 +22,14 @@ FALLBACK_ZONE = ZoneInfo("UTC")
 
 
 def zone_of(user: UserModel | None) -> ZoneInfo:
-    """The student's own time zone, falling back to UTC if it is unreadable.
+    """Return a user's time zone from their preferences, or UTC when it is unknown.
 
-    A stored zone is validated on the way in, so a bad one here means the row
-    predates that validation. Falling back beats failing the whole page.
+    Args:
+        user: The user row; None falls back to UTC.
+
+    Returns:
+        The zone named in `preferences.timezone`; UTC if the user is None or the stored
+        zone cannot be read.
     """
     if user is None:
         return FALLBACK_ZONE
@@ -55,32 +40,48 @@ def zone_of(user: UserModel | None) -> ZoneInfo:
 
 
 def local_now(user: UserModel | None, at: datetime | None = None) -> datetime:
-    """Now, on the student's own clock, naive so it compares with stored wall times.
+    """Return the current moment on the user's own clock, as a naive datetime.
 
-    Naive on purpose: `remind_at` and the study window are naive *local* wall
-    times, and an aware value would refuse to compare with them.
+    Args:
+        user: The user row; None uses UTC.
+        at: Timezone-aware instant to convert instead of now, for tests. A naive value
+            is read as the server's local time.
+
+    Returns:
+        Local wall time with `tzinfo` removed, comparable with naive local columns such
+        as `reminders.remind_at`.
     """
     moment = at or datetime.now(timezone.utc)
     return moment.astimezone(zone_of(user)).replace(tzinfo=None)
 
 
 def local_today(user: UserModel | None, at: datetime | None = None) -> date:
-    """The calendar day it is where the student is standing.
+    """Return the calendar date where the user is.
 
-    This is the function that replaced `date.today()`. The difference is a whole
-    day for part of every day, which is why it is worth a call rather than a
-    constant.
+    Args:
+        user: The user row; None uses UTC.
+        at: Timezone-aware instant to use instead of now, for tests.
+
+    Returns:
+        The user's local date.
     """
     return local_now(user, at).date()
 
 
 def local_day_in_utc(user: UserModel | None, day: date) -> tuple[datetime, datetime]:
-    """When the student's calendar `day` starts and ends, in UTC, naive to match
-    stored timestamps (`utc_now`). For counting rows stamped in UTC by the
-    student's own day.
+    """Return when one of the user's local days starts and ends, in naive UTC.
 
-    `func.date(created_at) == today` does not do this: it compares a UTC date
-    with a local one, and west of Greenwich they are a day apart every evening.
+    For counting rows stamped in UTC (with `utc_now`) by the user's own day, which
+    comparing `date(created_at)` with a local date gets wrong every evening west of
+    Greenwich.
+
+    Args:
+        user: The user row; None uses UTC.
+        day: The user's local calendar date.
+
+    Returns:
+        (start, end) as naive UTC datetimes: local midnight of `day` and of the next
+        day, so the range is half-open.
     """
     zone = zone_of(user)
     start = datetime.combine(day, time.min, tzinfo=zone)
@@ -99,17 +100,54 @@ def local_day_in_utc(user: UserModel | None, day: date) -> tuple[datetime, datet
 # --------------------------------------------------------------------------
 
 def user_for(db: Session, user_id: uuid.UUID) -> UserModel | None:
+    """Return the user row for an id, or None if there is none.
+
+    Args:
+        db: Open database session.
+        user_id: The user to load.
+
+    Returns:
+        The `UserModel`, or None.
+    """
     return db.query(UserModel).filter(UserModel.id == user_id).first()
 
 
 def user_zone(db: Session, user_id: uuid.UUID) -> ZoneInfo:
+    """Return a user's time zone by id; UTC when the user or the zone is unknown.
+
+    Args:
+        db: Open database session.
+        user_id: The user.
+
+    Returns:
+        The user's zone.
+    """
     return zone_of(user_for(db, user_id))
 
 
 def user_now(db: Session, user_id: uuid.UUID, at: datetime | None = None) -> datetime:
+    """Return the current moment on a user's own clock, by id, as a naive datetime.
+
+    Args:
+        db: Open database session.
+        user_id: The user.
+        at: Timezone-aware instant to use instead of now, for tests.
+
+    Returns:
+        The user's local wall time with `tzinfo` removed.
+    """
     return local_now(user_for(db, user_id), at)
 
 
 def user_today(db: Session, user_id: uuid.UUID, at: datetime | None = None) -> date:
-    """Today, for a service that was handed an id. The common case."""
+    """Return today's date in a user's own time zone, by id.
+
+    Args:
+        db: Open database session.
+        user_id: The user.
+        at: Timezone-aware instant to use instead of now, for tests.
+
+    Returns:
+        The user's local date.
+    """
     return local_today(user_for(db, user_id), at)

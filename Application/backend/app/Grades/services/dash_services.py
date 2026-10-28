@@ -1,3 +1,10 @@
+"""The grades dashboard: courses rolled up into averages, credits, trend, Attention.
+
+Built from one load of the user's courses (grades and weights included), with no
+per-course queries. Cumulative average and CGPA are credit-weighted over courses
+with a final grade; term and year averages are plain means of course results.
+"""
+
 import itertools
 import uuid
 from sqlalchemy.orm import Session
@@ -29,38 +36,60 @@ from app.Users.services.user_service import get_preferences, get_user
 
 
 DEFAULT_TARGET_GRADE = 90.0
+"""Target the needed-final figures use when the request names none."""
 
 
 def is_graded(course) -> bool:
-    """Whether this course has a mark that belongs in an average.
+    """Return whether a course belongs in averages: everything but transfer credit.
 
-    False only for a transfer credit, which by definition carries credits and no
-    score. Left in an average it would count as a zero, which is the whole
-    reason the flag exists.
+    Args:
+        course: A course row or schema.
+
+    Returns:
+        False only for transfer credit.
     """
     return not course.transfer_credit
 
 
 def counts_toward_credits(course) -> bool:
-    """Archived courses keep their grade but stop counting toward the degree."""
+    """Return whether a course counts toward credits: all but archived ones.
+
+    Args:
+        course: A course row or schema.
+
+    Returns:
+        False only for an archived course.
+    """
     return not course.archived
 
 
 def expects_a_final(course) -> bool:
-    """Whether "finished, but no final grade recorded" is worth saying.
+    """Return whether a missing final grade is worth flagging for this course.
 
-    A course with no final exam is finished when the term ends, and a transfer
-    credit was never going to be marked. Neither is something to act on.
+    False for a course with no final exam and for transfer credit.
+
+    Args:
+        course: A course row or schema.
+
+    Returns:
+        True unless the course is `no_final` or transfer credit.
     """
     return not course.no_final and not course.transfer_credit
 
 
 def get_dashboard(db: Session, user_id: uuid.UUID, target_grade: float = DEFAULT_TARGET_GRADE):
-    """Roll every course up into one view.
+    """Return the grades dashboard for a user.
 
-    `target_grade` drives the "what do I need on the final" figures. It used to
-    be hard-coded at 90, so every course was measured against an A+ regardless
-    of what the student was actually aiming for.
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        target_grade: Target used for every course's `needed_final_score`; the route
+            defaults it to `DEFAULT_TARGET_GRADE` (90), not the course or account
+            target. Attention uses each course's own target instead.
+
+    Returns:
+        The dashboard; with no graded course, a zeroed one. None when the user does not
+        exist.
     """
     user = get_user(db, user_id)
     if user is None:
@@ -175,7 +204,14 @@ def get_dashboard(db: Session, user_id: uuid.UUID, target_grade: float = DEFAULT
 
 
 def plain_average(courses) -> float:
-    """Unweighted mean over courses that have a result, skipping the rest."""
+    """Return the unweighted mean of the courses' results, skipping courses without one.
+
+    Args:
+        courses: Courses to average.
+
+    Returns:
+        The mean rounded to 2 places; 0.0 when no course has a result.
+    """
     results = [g for g in (course_result_grade(c) for c in courses) if g is not None]
     if not results:
         return 0.0
@@ -184,12 +220,15 @@ def plain_average(courses) -> float:
 
 
 def calculate_cumulative_average(courses):
-    """Credit-weighted average over courses with a final grade recorded.
+    """Return the credit-weighted average over graded courses with a final grade.
 
-    Only finished courses count. A running average is a snapshot of work in
-    progress, not a result, so a term you are partway through does not move
-    your cumulative figure -- that is what the semester average is for.
-    Credit-weighted, so a 6-credit course counts double a 3.
+    In-progress courses never move it.
+
+    Args:
+        courses: Course rows.
+
+    Returns:
+        The average rounded to 2 places; 0.0 when no course has a final grade.
     """
     total_quality_points = 0.0
     total_credits = 0.0
@@ -207,11 +246,15 @@ def calculate_cumulative_average(courses):
 
 
 def calculate_cgpa(courses) -> float | None:
-    """Credit-weighted grade points over courses with a final grade recorded.
+    """Return the credit-weighted grade points over graded courses with a final grade.
 
-    Deliberately the same set as calculate_cumulative_average: the two are the
-    same measure on different scales, and letting one count in-progress work
-    while the other did not would put contradictory figures side by side.
+    The same courses as `calculate_cumulative_average`, on the 4.33 scale.
+
+    Args:
+        courses: Course rows.
+
+    Returns:
+        The CGPA rounded to 2 places; None when no course has a final grade.
     """
     total_points = 0.0
     total_credits = 0.0
@@ -230,12 +273,16 @@ def calculate_cgpa(courses) -> float | None:
 
 
 def credits_by_state(courses) -> tuple[float, float]:
-    """(completed, in progress).
+    """Return (completed, in progress) credits, leaving archived courses out of both.
 
-    Completed is every past-term credit plus current-term courses that already
-    have a final grade recorded -- a course finished mid-year should not sit in
-    "in progress" until the whole term rolls over. Archived courses count
-    toward neither, which is the point of archiving one.
+    Completed is every past-term credit, transfer credit, and current courses that
+    already have a final grade; in progress is the rest of the current term.
+
+    Args:
+        courses: Courses with `term_bucket` set.
+
+    Returns:
+        Completed credits and in-progress credits.
     """
     completed = 0.0
     in_progress = 0.0
@@ -254,10 +301,15 @@ def credits_by_state(courses) -> tuple[float, float]:
 
 
 def summarize_years(courses, bucket: str) -> list[YearSummary]:
-    """Group one bucket's courses by school year, newest year first for past.
+    """Return one summary per school year for a term bucket's courses, oldest first.
 
-    Uses year_average, so a course that was never filled in is skipped rather
-    than pulling its year toward zero.
+    Args:
+        courses: Course rows with `term_bucket` attached.
+        bucket: `PAST` or `FUTURE`.
+
+    Returns:
+        Each school year's plain average (None when nothing is recorded) and course
+        count.
     """
     by_year: dict[int, list] = {}
     for course in courses:
@@ -277,9 +329,18 @@ def summarize_years(courses, bucket: str) -> list[YearSummary]:
 
 
 def collect_attention(courses, default_target: float) -> list[AttentionItem]:
-    """Things worth acting on, most actionable first.
+    """Return what on the grades page is worth acting on, most actionable first.
 
-    Deliberately built from data already loaded -- no extra queries.
+    In order: finished courses missing a final grade, current courses below target
+    (with what the final must do), weight problems, and current courses without a
+    section. Built from loaded data only.
+
+    Args:
+        courses: Course rows with `term_bucket` attached and grades loaded.
+        default_target: The account's default target percentage.
+
+    Returns:
+        The items; transfer credit is never included.
     """
     missing: list[AttentionItem] = []
     below: list[AttentionItem] = []
@@ -331,13 +392,15 @@ def collect_attention(courses, default_target: float) -> list[AttentionItem]:
 
 
 def final_needed(course, target: float) -> str | None:
-    """What the final must do about a course below target, in words.
+    """Return what the final must score for a course below target, in words, or None.
 
-    Phase 1 item 2: the figure already existed behind a modal; here it is where
-    the shortfall is reported. Nothing when the final is not still ahead -- no
-    final, a final already marked -- because then there is nothing it can do.
-    Built from the loaded course, like the rest of this function's callers: no
-    query of its own.
+    Args:
+        course: Course row with grades and weights loaded.
+        target: The course's effective target.
+
+    Returns:
+        "needs X% on the final", "out of reach even with 100% on the final", or None
+        when there is no final still to come or none is needed.
     """
     if not expects_a_final(course):
         return None
@@ -361,10 +424,13 @@ def final_needed(course, target: float) -> str | None:
 
 
 def completed_credits_by_kind(courses) -> tuple[float, float]:
-    """(required, elective) among completed credits.
+    """Return (required, elective) credits among completed, non-archived courses.
 
-    The `required` flag has been on the model since the beginning with nothing
-    reading it.
+    Args:
+        courses: Courses with `term_bucket` set.
+
+    Returns:
+        Credits of completed required courses, then of completed electives.
     """
     required = elective = 0.0
     for course in courses:
@@ -379,11 +445,14 @@ def completed_credits_by_kind(courses) -> tuple[float, float]:
 
 
 def is_completed(course) -> bool:
-    """Past terms, plus current courses that already carry a final grade.
+    """Return whether a course is complete: past, transfer credit, or final recorded.
 
-    A transfer credit is complete the moment it exists: the credit has already
-    been granted, and waiting for a term it was never enrolled in to roll over
-    would leave it in "in progress" forever.
+    Args:
+        course: A course with `term_bucket` set.
+
+    Returns:
+        True for transfer credit, a past course, or a current one with a final grade
+        above 0.
     """
     if course.transfer_credit:
         return True
@@ -393,11 +462,16 @@ def is_completed(course) -> bool:
 
 
 def build_term_history(courses) -> list[TermPoint]:
-    """One point per term, in order, with the running cumulative beside it.
+    """Return one trend point per term with a result, with the running cumulative.
 
-    Relies on get_all_courses returning courses sorted by year then term, so
-    consecutive runs are the terms. Terms where nothing is recorded are left
-    out rather than plotted as zero, which would drag the line to the floor.
+    Relies on the courses being sorted by school year and term, as `get_all_courses`
+    returns them; terms with nothing recorded are left out rather than plotted as zero.
+
+    Args:
+        courses: Course rows in term order.
+
+    Returns:
+        The points; a point's cumulative average is None until a final grade exists.
     """
     history: list[TermPoint] = []
     accumulated: list = []

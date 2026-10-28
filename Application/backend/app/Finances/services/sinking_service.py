@@ -1,24 +1,9 @@
-"""Putting money aside for something that lands all at once.
+"""Service functions for sinking funds: money set aside monthly for a dated cost.
 
-Tuition in January is not a surprise, but it behaves like one if nothing
-reserves for it. A fund says what the thing costs and when it is due; the
-monthly figure falls out of those two and what has already been set aside.
-
-**Nothing about the schedule is stored.** `per_month` is
-`(target − saved) ÷ months left`, recomputed on every read. A stored schedule
-goes stale the moment a month is missed or the target changes, and the recovery
-from either is the same division — so storing it would only be a second answer
-that could disagree with the first.
-
-**A contribution row exists only once the money has moved.** A planned
-contribution is not a transaction for the same reason a projected payment is
-not: nothing has moved, and a balance counting it would report money as gone
-while it is still in the account.
-
-**How this reaches safe-to-spend.** A *confirmed* contribution needs no special
-handling — the money is in a savings account, which safe-to-spend already
-excludes. What it subtracts is this month's contribution while it is still a
-promise. Doing both would take the same money off twice.
+Nothing about the schedule is stored: the monthly figure is (target - saved) /
+months left, recomputed on every read. A contribution row exists only once its
+transfer is written, and safe-to-spend earmarks only this month's contribution
+while it is still a promise. Every figure takes the day it is computed for.
 """
 
 import uuid
@@ -54,19 +39,39 @@ from app.Finances.services.counted import uncounted_accounts
 
 
 def first_of(day: date) -> date:
+    """Return the first day of the month a date falls in.
+
+    Args:
+        day: Any date.
+
+    Returns:
+        The first of that month.
+    """
     return day.replace(day=1)
 
 
 def months_between(start: date, end: date) -> int:
-    """Whole months from one date to another, by calendar month rather than days."""
+    """Return the whole calendar months from one date's month to another's.
+
+    Args:
+        start: Earlier date; only its month counts.
+        end: Later date; only its month counts.
+
+    Returns:
+        Month difference; negative when `end` is in an earlier month.
+    """
     return (end.year - start.year) * 12 + (end.month - start.month)
 
 
 def months_left(due_on: date, anchor: date) -> int:
-    """Contributions remaining, counting this month.
+    """Return the contributions left before a due date, counting this month.
 
-    Zero once the due date is behind us, which is what makes `per_month` fall
-    back to the whole remainder rather than dividing by nothing.
+    Args:
+        due_on: The fund's due date.
+        anchor: The day to count from.
+
+    Returns:
+        0 once the due date has passed, otherwise the months to it plus one.
     """
     if due_on < anchor:
         return 0
@@ -74,6 +79,16 @@ def months_left(due_on: date, anchor: date) -> int:
 
 
 def owned_account(db: Session, user_id: uuid.UUID, account_id: uuid.UUID):
+    """Return the user's account with this id, or None.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+        account_id: The account to fetch.
+
+    Returns:
+        The account, or None when it is missing or another user's.
+    """
     return (
         db.query(AccountModel)
         .filter(AccountModel.id == account_id, AccountModel.user_id == user_id)
@@ -82,6 +97,16 @@ def owned_account(db: Session, user_id: uuid.UUID, account_id: uuid.UUID):
 
 
 def as_schema(fund: SinkingFundModel, anchor: date) -> SinkingFund:
+    """Build a fund's response with its derived figures as of a day.
+
+    Args:
+        fund: The fund row, with its contributions.
+        anchor: The day the figures are computed for.
+
+    Returns:
+        The fund; past its due date with money owed, `per_month` is the whole
+        remainder.
+    """
     contributions = sorted(fund.contributions or [], key=lambda row: row.for_month)
     saved = money(sum(row.amount for row in contributions))
     remaining = money(max(0.0, fund.target_amount - saved))
@@ -121,6 +146,18 @@ def list_funds(
     include_archived: bool = False,
     on_day: date | None = None,
 ):
+    """Return the user's sinking funds, earliest due first.
+
+    Args:
+        db: Open database session.
+        user_id: Whose funds.
+        include_archived: Also return archived funds.
+        on_day: The day the figures are computed for; defaults to the user's
+            today.
+
+    Returns:
+        The funds; None when the user does not exist.
+    """
     if not user_exists(db, user_id):
         return None
 
@@ -134,6 +171,16 @@ def list_funds(
 
 
 def get_fund(db: Session, user_id: uuid.UUID, fund_id: uuid.UUID):
+    """Return the user's fund row with this id, or None.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+        fund_id: The fund to fetch.
+
+    Returns:
+        The fund row, or None when it is missing or another user's.
+    """
     return (
         db.query(SinkingFundModel)
         .filter(SinkingFundModel.id == fund_id, SinkingFundModel.user_id == user_id)
@@ -142,6 +189,17 @@ def get_fund(db: Session, user_id: uuid.UUID, fund_id: uuid.UUID):
 
 
 def check_accounts(db: Session, user_id: uuid.UUID, from_id, to_id) -> None:
+    """Refuse a fund whose two accounts are the same or not both the user's.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+        from_id: Account the contributions leave.
+        to_id: Account the contributions arrive in.
+
+    Raises:
+        ValueError: If the accounts are the same, or either is not the user's.
+    """
     if from_id == to_id:
         raise ValueError("Money has to move between two different accounts")
     if owned_account(db, user_id, from_id) is None:
@@ -153,6 +211,23 @@ def check_accounts(db: Session, user_id: uuid.UUID, from_id, to_id) -> None:
 def create_fund(
     db: Session, user_id: uuid.UUID, data: SinkingFundCreate, on_day: date | None = None
 ):
+    """Create a sinking fund for the user.
+
+    Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose fund.
+        data: The fund; the name is stripped and the target rounded to cents.
+        on_day: The day the figures are computed for; defaults to the user's
+            today.
+
+    Returns:
+        The new fund; None when the user does not exist.
+
+    Raises:
+        ValueError: If the accounts are the same or not both the user's.
+    """
     if not user_exists(db, user_id):
         return None
 
@@ -182,6 +257,25 @@ def update_fund(
     data: SinkingFundUpdate,
     on_day: date | None = None,
 ):
+    """Change the fields sent on one of the user's funds.
+
+    The monthly figure follows on the read; nothing is recalculated or stored.
+    Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose fund.
+        fund_id: The fund.
+        data: The fields to change.
+        on_day: The day the figures are computed for; defaults to the user's
+            today.
+
+    Returns:
+        The updated fund; None when it is not the user's.
+
+    Raises:
+        ValueError: If the accounts would be the same or not both the user's.
+    """
     fund = get_fund(db, user_id, fund_id)
     if fund is None:
         return None
@@ -206,11 +300,24 @@ def transfer_rows(
     occurred_on: date,
     group_id: uuid.UUID,
 ) -> list[TransactionModel]:
-    """The two halves of the transfer a contribution writes, unsaved.
+    """Build, unsaved, the two transfer rows a contribution writes.
 
-    Built here rather than through `record_transfer`, which commits on its own:
-    the transfer and the contribution row have to land together, or a failure
-    halfway leaves money moved with nothing explaining why.
+    Built here rather than through the transfer service, which commits, so the
+    transfer and the contribution land in one transaction.
+
+    Args:
+        db: Open database session.
+        user_id: Whose ledger.
+        fund: The fund, naming both accounts.
+        amount: Dollars to move, positive.
+        occurred_on: The transfer's date.
+        group_id: The id tying the two rows together.
+
+    Returns:
+        The outgoing and incoming rows.
+
+    Raises:
+        ValueError: If either account no longer belongs to the user.
     """
     source = owned_account(db, user_id, fund.from_account_id)
     target = owned_account(db, user_id, fund.to_account_id)
@@ -235,7 +342,24 @@ def transfer_rows(
 def contribute(
     db: Session, user_id: uuid.UUID, fund_id: uuid.UUID, data: ContributionRequest
 ):
-    """Set this month's money aside for real, writing the transfer."""
+    """Set money aside for a fund, writing the transfer and the contribution together.
+
+    The month funded is the month of `occurred_on` (default today); the amount
+    defaults to `per_month` and is capped at what remains. Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose fund.
+        fund_id: The fund.
+        data: The optional amount and date.
+
+    Returns:
+        The fund as of the contribution's date; None when it is not the user's.
+
+    Raises:
+        ValueError: If that month is already funded, the target is reached, there
+            is nothing to set aside, or an account is gone.
+    """
     fund = get_fund(db, user_id, fund_id)
     if fund is None:
         return None
@@ -283,7 +407,13 @@ def contribute(
 
 
 def clear_transfer(db: Session, user_id: uuid.UUID, group_id: uuid.UUID | None) -> None:
-    """Remove the ledger rows a contribution wrote. Literal filter, one model."""
+    """Delete the ledger rows a contribution's transfer wrote, if it has a group.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+        group_id: The contribution's transfer group; None does nothing.
+    """
     if group_id is None:
         return
 
@@ -300,7 +430,21 @@ def undo_contribution(
     contribution_id: uuid.UUID,
     on_day: date | None = None,
 ):
-    """Take back a month's set-aside, moving the money with it."""
+    """Take back one contribution, deleting its transfer with it.
+
+    Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose fund.
+        fund_id: The fund.
+        contribution_id: The contribution.
+        on_day: The day the figures are computed for; defaults to the user's
+            today.
+
+    Returns:
+        The fund; None when the fund or contribution is not the user's.
+    """
     fund = get_fund(db, user_id, fund_id)
     if fund is None:
         return None
@@ -326,11 +470,19 @@ def undo_contribution(
 def delete_fund(
     db: Session, user_id: uuid.UUID, fund_id: uuid.UUID, on_day: date | None = None
 ):
-    """Remove a fund, its contributions, and the transfers they wrote.
+    """Delete a fund, its contributions and the transfers they wrote.
 
-    All of it, because a contribution only ever existed to serve the fund: left
-    behind, the transfers would sit in the ledger under a name nothing explains.
-    Archiving is the way to keep the history.
+    Archiving is the way to keep the history. Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose fund.
+        fund_id: The fund.
+        on_day: The day the figures are computed for; defaults to the user's
+            today.
+
+    Returns:
+        A copy of the deleted fund; None when it is not the user's.
     """
     fund = get_fund(db, user_id, fund_id)
     if fund is None:
@@ -346,7 +498,18 @@ def delete_fund(
 
 
 def unfunded_total(db: Session, user_id: uuid.UUID, anchor: date) -> float:
-    """This month's promised-but-unmoved contributions, for safe-to-spend."""
+    """Return this month's promised but unmade contributions, for safe-to-spend.
+
+    Sums `unfunded_this_month` over unarchived funds whose source account counts.
+
+    Args:
+        db: Open database session.
+        user_id: Whose funds.
+        anchor: The day that decides which month is "this month".
+
+    Returns:
+        The total in dollars, rounded to cents.
+    """
     funds = (
         db.query(SinkingFundModel)
         .filter(

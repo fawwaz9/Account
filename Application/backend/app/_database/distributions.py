@@ -1,10 +1,9 @@
-"""The daily recount of anonymous grade contributions (Phase 2 item 13, D25).
+"""The recount of opted-in grades into the sealed `grade_distributions` table.
 
-On Postgres it is one definer function, ``account_recount_grade_distributions``,
-which reads across users and writes only bucket counts into a table the API's
-role can't read (rls.SEALED_TABLES). On SQLite, which has no row security,
-the same rebuild is a plain query written to mean exactly what the function
-means; the tests run both.
+On Postgres it is one call to the definer function
+`account_recount_grade_distributions`, the only writer of a table the app role can
+neither read nor write. On SQLite, which has no row security, `recount` rebuilds the
+same counts with plain queries; the tests run both.
 """
 from collections import Counter
 
@@ -17,15 +16,22 @@ from app._database.models import (
 
 
 def bucket_of(grade: float) -> int:
-    """The band's lower bound: 0 below 50, then 50, 55, ... 95 (100 and any
-    bonus above it land in 95)."""
+    """Return the lower bound of the five-point band a grade falls in.
+
+    Args:
+        grade: Percentage grade.
+
+    Returns:
+        0 for anything below 50, otherwise 50, 55 ... 95; 100 and bonus above it land
+        in 95.
+    """
     if grade < 50:
         return 0
     return min(95, int(grade // 5) * 5)
 
 
 def _grade(course: CourseModel) -> float | None:
-    """The same rule as the function: the final grade, else the running average."""
+    """Return the final grade if recorded, else the average if above 0, else None."""
     if course.final_grade and course.final_grade > 0:
         return course.final_grade
     if course.average and course.average > 0:
@@ -34,7 +40,22 @@ def _grade(course: CourseModel) -> float | None:
 
 
 def recount(db: Session) -> int:
-    """Rebuild the sealed table from scratch. Returns how many rows it wrote."""
+    """Rebuild the grade distributions from scratch from every opted-in term review.
+
+    Counts each contributing review's grade into its course-term's band, skipping
+    skipped reviews, transfer credit, accounts being deleted and reviews without a
+    course key or term code, and writes nothing for a course-term with fewer than
+    `COHORT_FLOOR` contributions.
+
+    Args:
+        db: Open database session; needs no acting user.
+
+    Returns:
+        The number of band rows written.
+
+    Note:
+        Deletes every existing row before writing, and commits.
+    """
     if db.get_bind().dialect.name == "postgresql":
         written = db.execute(text("SELECT account_recount_grade_distributions()")).scalar()
         db.commit()

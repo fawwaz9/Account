@@ -1,6 +1,16 @@
+"""Grade enumerations and their rules: terms, categories, scheduling and priority.
+
+Pure values and functions with no session, shared by Grades, Tasks, Calendar and
+Intake.
+"""
+
 from enum import Enum
 
 class Semester(str, Enum):
+    """A term of the school year, as stored in `courses.semester`.
+
+    Declared out of calendar order; compare terms with `SEMESTER_ORDER`.
+    """
     FALL = "Fall"
     WINTER = "Winter"
     SUMMER = "Summer"
@@ -17,6 +27,10 @@ SEMESTER_ORDER: dict[str, int] = {
 }
 
 class GradeCategory(str, Enum):
+    """The category of a piece of assessed work, as stored in `grades.category`.
+
+    Every category but `BONUS` composes the course's 100%; see `ADDITIVE_CATEGORIES`.
+    """
     ASSIGNMENT = "Assignment"
     LAB = "Lab"
     QUIZ = "Quiz"
@@ -43,17 +57,26 @@ ADDITIVE_CATEGORIES: frozenset[str] = frozenset({GradeCategory.BONUS.value})
 
 
 def is_additive(category) -> bool:
-    """True when a category adds to the average instead of composing it."""
+    """Return whether a category's marks add on top of the average rather than form it.
+
+    Args:
+        category: A `GradeCategory` or its string value.
+
+    Returns:
+        True for a category in `ADDITIVE_CATEGORIES` (bonus).
+    """
     value = category.value if isinstance(category, GradeCategory) else category
     return value in ADDITIVE_CATEGORIES
 
 
 def scoring_weight(weights: dict) -> float:
-    """Total weight of the categories the course is actually marked out of.
+    """Return the total weight of the categories a course is marked out of.
 
-    The denominator, in other words -- bonus excluded. Every caller that used to
-    write `sum(weights.values())` wants this instead, because that sum stopped
-    meaning "out of how much" the moment an additive category existed.
+    Args:
+        weights: Category name to weight percentage.
+
+    Returns:
+        The sum of every non-additive category's weight: the average's denominator.
     """
     return sum(
         weight for category, weight in weights.items()
@@ -61,14 +84,7 @@ def scoring_weight(weights: dict) -> float:
     )
 
 class GradeSchedule(str, Enum):
-    """How a dated grade shows up outside the gradebook.
-
-    Two different things wear a date. An assignment due Friday is work: you want
-    it on a list, and you want it to stop nagging once it is marked. A midterm on
-    the 15th is not work you complete -- you sit it, and ticking it off afterwards
-    means nothing. Forcing both through a task made the second read as a chore
-    that never quite closed.
-    """
+    """What a dated grade raises outside the gradebook (`grades.schedule_as`)."""
 
     #: Raises a task that closes itself when the score lands.
     TASK = "task"
@@ -83,6 +99,7 @@ SCHEDULE_EVENT_KINDS: dict[str, str] = {
     GradeCategory.FINAL.value: "final",
 }
 DEFAULT_SCHEDULE_EVENT_KIND = "deadline"
+"""Event kind for a grade-raised event whose category has no kind of its own."""
 
 #: The lowest and highest a task's priority may be.
 MIN_PRIORITY = 1
@@ -109,6 +126,13 @@ CATEGORY_PRIORITY: dict[str, int] = {
 
 
 def priority_for_category(category) -> int:
-    """What a task raised from a grade in this category starts at."""
+    """Return the starting priority of a task raised from a grade in this category.
+
+    Args:
+        category: A `GradeCategory` or its string value.
+
+    Returns:
+        The category's entry in `CATEGORY_PRIORITY`, else `DEFAULT_PRIORITY`.
+    """
     value = getattr(category, "value", category)
     return CATEGORY_PRIORITY.get(value, DEFAULT_PRIORITY)

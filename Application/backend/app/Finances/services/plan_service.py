@@ -1,19 +1,10 @@
-"""The year plan: one running balance from now to the end of the school year.
+"""Service functions for the year plan: one running balance to the school year's end.
 
-Phase 1 item 10 (account-vision.md §13.4). Compose, don't re-enter: every input
-already lives somewhere in the app, and this assembles them. It is the forecast's
-engine pointed at a wider question:
-
-* **All liquid money,** not just spending accounts -- spending, savings and
-  emergency. The spreadsheet it replaces tracks everything you could live on.
-  Transfers between them net to nothing; a transfer to investments is money out.
-* **To the end of the school year** (the Winter term's last day), not the term.
-* **Solved backwards.** Given a target balance and date, the shortfall divided
-  by what one extra hour of your hourly job adds, spread over the weeks left --
-  shown as scenarios, because students think in "what if I picked up a shift".
-
-Plan-versus-actual (§13.4's third part) needs a saved plan to compare against,
-and is not built here.
+The forecast's engine pointed at a wider question: all liquid money (spending,
+savings and emergency accounts that count) from today to the Winter term's last
+day, rolled up by month. Given a target balance and date it is solved backwards
+into the extra weekly hours at the main hourly job. Comparing saved plans with
+what happened lives in `plan_review_service`.
 """
 
 import math
@@ -58,6 +49,23 @@ def plan(
     target: float | None = None,
     target_on: date | None = None,
 ) -> AnnualPlan | None:
+    """Return the year plan, and the hours a target needs when one is given.
+
+    Args:
+        db: Open database session.
+        user_id: Whose money.
+        on_day: The day to plan from; defaults to the user's today.
+        target: A balance to reach by the plan's end, in dollars; None for no goal.
+        target_on: The date the plan runs to instead of the school year's end.
+
+    Returns:
+        The monthly rows, the ending and lowest balances, the goal when it can be
+        priced, and every assumption; None when the user does not exist.
+
+    Raises:
+        ValueError: If `target_on` is not after today or is more than `MAX_DAYS`
+            ahead.
+    """
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
     if user is None:
         return None
@@ -127,10 +135,17 @@ def plan(
 
 
 def school_year_end(user: UserModel, anchor: date) -> tuple[date, bool]:
-    """The last day of the school year's Winter term, or the next April 30.
+    """Return the last day of the school year's Winter term, or the next April 30.
 
-    In the spring and summer the school year that matters is the next one: a
-    plan that ended last April would be empty.
+    Within 30 days of that Winter's end, the next school year's is used instead, so
+    a plan made in spring or summer still looks ahead.
+
+    Args:
+        user: The user, for their school year and first-year anchor.
+        anchor: Today.
+
+    Returns:
+        The end date and whether it came from the user's school year.
     """
     if user.current_school_year is not None:
         span = term_dates("Winter", user.current_school_year, user.first_year_calendar_year)
@@ -146,6 +161,15 @@ def school_year_end(user: UserModel, anchor: date) -> tuple[date, bool]:
 
 
 def liquid_accounts(db: Session, user_id: uuid.UUID) -> dict[uuid.UUID, float]:
+    """Return the balances of the user's counted, unarchived liquid accounts, by id.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+
+    Returns:
+        Balance in dollars by account id; empty when there are none.
+    """
     accounts = (
         db.query(AccountModel)
         .filter(
@@ -161,7 +185,18 @@ def liquid_accounts(db: Session, user_id: uuid.UUID) -> dict[uuid.UUID, float]:
 
 
 def monthly(points, events, daily: float, anchor: date) -> list[PlanMonth]:
-    """Roll the daily projection up into months, the spreadsheet's rows."""
+    """Roll the daily projection up into the plan's monthly rows.
+
+    Args:
+        points: The daily balances.
+        events: The dated movements, signed.
+        daily: Day-to-day spending per day, charged from the day after `anchor`.
+        anchor: Today.
+
+    Returns:
+        One row per month the points cover, with money in, money out (positive)
+        and the last balance seen in that month.
+    """
     money_in: dict[date, float] = defaultdict(float)
     money_out: dict[date, float] = defaultdict(float)
     for event in events:
@@ -199,11 +234,24 @@ def solve(
     share: float,
     assumptions: list[str],
 ) -> Goal | None:
-    """The weekly extra hours a target needs, priced at the main hourly job.
+    """Return the extra weekly hours a target needs, priced at the main hourly job.
 
-    The main job is the first current hourly one in your own order, the one
-    you would pick up shifts at. Extra hours are on top of the shifts already
-    scheduled, which the plan has already counted.
+    The main job is the first current, unarchived hourly job with a rate, in the
+    user's order. One extra hour adds the rate after the recent deduction rate,
+    times the liquid accounts' share of the income split. Adds its assumption.
+
+    Args:
+        db: Open database session.
+        user_id: Whose jobs.
+        anchor: Today.
+        ends_on: The target date.
+        target: The balance wanted, in dollars.
+        base_end: The plan's ending balance with no extra work.
+        share: The liquid accounts' share of the income split.
+        assumptions: The list to add the assumption sentence to.
+
+    Returns:
+        The goal with scenarios; None when no hourly job can price an hour.
     """
     job = (
         db.query(JobModel)

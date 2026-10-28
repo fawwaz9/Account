@@ -1,19 +1,10 @@
-"""When a job pays: the one place that turns a job's pay schedule into dates.
+"""Turn a job's pay schedule into the dates it pays; the one place that does.
 
-A job pays either by the shared repeat rule (every other Friday, the 25th of each
-month) or by set days of the month (next.md, decided 2026-10-03): dates such as
-the 15th and the 30th, the last day of the month, or an Nth weekday such as the
-last Friday. The second exists because the shared rule cannot say any of those,
-and because it skips a month that lacks the date. That is right for rent, where
-inventing a date would move it, and wrong for pay, where it means no cheque in
-February.
-
-Safe to spend (through `next_pay_on`), the earnings figures, the forecast and the
-year plan all read pay dates from here. They used to build the rule each on its
-own, three copies that a fourth pattern would have had to reach separately.
-
-Nothing is ever materialised: a cheque exists because one arrived and was
-entered, never because a date came round.
+A job pays by the shared repeat rule (every other Friday, the 25th) or by set
+days of the month: dates such as the 15th, the last day, or an Nth weekday such
+as the last Friday. A set date the month lacks pays on its last day, and a set
+date on a weekend moves as the job says. Safe-to-spend, the earnings figures,
+the forecast and the year plan all read `pay_dates`; nothing is materialised.
 """
 from __future__ import annotations
 
@@ -32,7 +23,15 @@ CODES = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"]
 
 @dataclass(frozen=True)
 class Pattern:
-    """Set days of the month, as stored on a job."""
+    """A job's set-days-of-the-month schedule, as read from its columns.
+
+    Attributes:
+        dates: Days of the month, 1-31.
+        last_day: Whether it also pays on the month's last day.
+        nth: (n, weekday code) pairs; n is 1-4, or -1 for the last.
+        weekend: Where a set date on a weekend moves.
+        until: Last scheduled pay date, inclusive; None for no end.
+    """
 
     dates: tuple[int, ...]
     last_day: bool
@@ -42,18 +41,41 @@ class Pattern:
 
 
 def parse_nth(text: str | None) -> tuple[tuple[int, str], ...]:
-    """'-1FR,2TH' -> ((-1, 'FR'), (2, 'TH'))."""
+    """Parse a stored Nth-weekday list such as "-1FR,2TH" into (n, code) pairs.
+
+    Args:
+        text: The stored `pay_nth_weekdays` value.
+
+    Returns:
+        The pairs in stored order; empty for None or an empty string.
+    """
     if not text:
         return ()
     return tuple((int(item[:-2]), item[-2:]) for item in text.split(",") if item)
 
 
 def format_nth(items: list[NthWeekday]) -> str | None:
+    """Format Nth weekdays as the stored string ("-1FR,2TH"), or None for none.
+
+    Args:
+        items: Nth weekdays; may be empty.
+
+    Returns:
+        Comma-joined `n` and weekday codes, or None when `items` is empty.
+    """
     return ",".join(f"{item.n}{item.day.value}" for item in items) or None
 
 
 def pattern_of(job) -> Pattern | None:
-    """The job's days-of-the-month pattern, or None when it pays by the rule."""
+    """Return the job's set-days pattern, or None when it pays by the shared rule.
+
+    Args:
+        job: A job row.
+
+    Returns:
+        The pattern, with its end taken from `recur_until`; None when no set
+        dates, last day or Nth weekdays are stored.
+    """
     dates = tuple(int(day) for day in (job.pay_month_days or "").split(",") if day)
     nth = parse_nth(job.pay_nth_weekdays)
     if not dates and not job.pay_last_day and not nth:
@@ -68,7 +90,14 @@ def pattern_of(job) -> Pattern | None:
 
 
 def pay_days_of(job) -> PayDays | None:
-    """The pattern as the API's object, for reading a job back."""
+    """Return the job's set-days pattern as the API's `PayDays`, or None.
+
+    Args:
+        job: The job row.
+
+    Returns:
+        The pattern, or None when the job pays by its repeat rule or not at all.
+    """
     pattern = pattern_of(job)
     if pattern is None:
         return None
@@ -82,12 +111,16 @@ def pay_days_of(job) -> PayDays | None:
 
 
 def apply_pay_days(job, pay_days: PayDays | None) -> None:
-    """Write a pattern onto the job, or clear it.
+    """Write a set-days pattern onto a job's columns, or clear the pattern.
 
-    A pattern also sets `recur_freq` to "monthly", with nothing else on the rule
-    but its end, so every check of "does this job have a pay schedule" keeps
-    reading one column. Clearing touches only the pattern's own columns; the
-    caller writes the rule.
+    Writing also sets the shared rule's columns to a plain monthly rule ending on
+    the pattern's `until`, so "has a pay schedule" is still one column. Clearing
+    touches only the pattern's own columns; the caller writes the rule. Only
+    changes the row.
+
+    Args:
+        job: A job row.
+        pay_days: The pattern to store; None clears it.
     """
     if pay_days is None:
         job.pay_month_days = None
@@ -108,7 +141,17 @@ def apply_pay_days(job, pay_days: PayDays | None) -> None:
 
 
 def nth_weekday(year: int, month: int, n: int, code: str) -> date | None:
-    """The Nth (or, with -1, the last) given weekday of a month."""
+    """Return the Nth (or with n=-1, the last) given weekday of a month.
+
+    Args:
+        year: The year.
+        month: The month, 1-12.
+        n: 1 to 4, or -1 for the last.
+        code: A weekday code, "MO" to "SU".
+
+    Returns:
+        The date; None when the month has no Nth such weekday.
+    """
     target = CODES.index(code)
     days = calendar.monthrange(year, month)[1]
     matching = [day for day in range(1, days + 1) if date(year, month, day).weekday() == target]
@@ -118,7 +161,15 @@ def nth_weekday(year: int, month: int, n: int, code: str) -> date | None:
 
 
 def off_weekend(day: date, rule: WeekendRule) -> date:
-    """Move a Saturday or Sunday pay date as the job says. Weekdays stay."""
+    """Move a Saturday or Sunday pay date as the job's weekend rule says.
+
+    Args:
+        day: The scheduled date.
+        rule: Previous (the Friday before), next (the Monday after) or keep.
+
+    Returns:
+        The date it is paid; weekdays are returned unchanged.
+    """
     if day.weekday() < 5 or rule == WeekendRule.KEEP:
         return day
     if rule == WeekendRule.PREVIOUS:
@@ -127,6 +178,15 @@ def off_weekend(day: date, rule: WeekendRule) -> date:
 
 
 def months_between(start: date, end: date):
+    """Yield (year, month) for every month from `start`'s through `end`'s, inclusive.
+
+    Args:
+        start: Any date in the first month.
+        end: Any date in the last month.
+
+    Yields:
+        (year, month) pairs in order; nothing when `end` is in an earlier month.
+    """
     year, month = start.year, start.month
     while (year, month) <= (end.year, end.month):
         yield year, month
@@ -136,13 +196,20 @@ def months_between(start: date, end: date):
 
 
 def pattern_dates(pattern: Pattern, starts_on: date, start: date, end: date) -> list[date]:
-    """Every pay date the pattern produces in [start, end], from `starts_on` on.
+    """Return every pay date a set-days pattern produces in a window.
 
-    A month is expanded a week either side of the window, so a date the
-    weekend rule moves across the window's edge is still found. `starts_on` and
-    `until` are compared with the date as scheduled, before it moves: "the
-    first cheque is the 15th" means the 15th's cheque, wherever the weekend
-    puts it.
+    Months are expanded a week beyond each end of the window so a date the weekend
+    rule moves across the edge is still found. `starts_on` and `until` are compared
+    with the scheduled date, before any weekend move.
+
+    Args:
+        pattern: The job's pattern.
+        starts_on: The job's first pay date.
+        start: First date of the window, inclusive.
+        end: Last date of the window, inclusive.
+
+    Returns:
+        The dates paid, ascending and without duplicates.
     """
     found: set[date] = set()
     for year, month in months_between(start - timedelta(days=7), end + timedelta(days=7)):
@@ -168,7 +235,17 @@ def pattern_dates(pattern: Pattern, starts_on: date, start: date, end: date) -> 
 
 
 def pay_dates(job, start: date, end: date) -> list[date]:
-    """Every date this job pays in [start, end], by whichever schedule it has."""
+    """Return every date a job pays in a window, by whichever schedule it has.
+
+    Args:
+        job: A job row.
+        start: First date of the window, inclusive.
+        end: Last date of the window, inclusive.
+
+    Returns:
+        The pay dates, ascending; empty when the job has no schedule or no first
+        pay date.
+    """
     if job.pay_starts_on is None or not job.recur_freq:
         return []
     pattern = pattern_of(job)

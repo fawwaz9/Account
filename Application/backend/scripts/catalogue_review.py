@@ -1,33 +1,20 @@
-"""Owner review: proposals in, shared catalogue rows out (Phase 2 item 6, D13).
+"""Owner review of prerequisite proposals: list them as counts, approve or reject them.
 
-    CATALOGUE_REVIEW_URL=postgresql://... python scripts/catalogue_review.py
-    CATALOGUE_REVIEW_URL=... python scripts/catalogue_review.py approve 3fa2c1d0 [--session 2026W]
-    CATALOGUE_REVIEW_URL=... python scripts/catalogue_review.py reject 3fa2c1d0
+    export CATALOGUE_REVIEW_URL=postgresql://...
+    python scripts/catalogue_review.py
+    python scripts/catalogue_review.py approve 3fa2c1d0 [--session 2026W]
+    python scripts/catalogue_review.py reject 3fa2c1d0
 
-The only writer of the shared catalogue. The API's role cannot write it (D9),
-so this runs as the tables' owner -- the role the schema step runs as -- and
-refuses to run as the app role, or as anything that cannot write them.
+The only writer of the shared catalogue: it runs as the tables' owner and refuses
+the API's role or any role that cannot write them. Pending proposals are grouped by
+course, kind and rule tree and shown as how many distinct accounts proposed each,
+never who, and never a note or syllabus wording.
 
-**What it shows: counts, never people.** Pending proposals are grouped by
-course and rule, and each group says how many *different accounts* proposed
-it. No names, no emails, no ids, no notes and no syllabus wording: a rule tree
-holds course codes and numbers and nothing typed by a person, and that tree is
-all that ever reaches the catalogue (D6). Two proposals by one account count
-once.
-
-**What it suggests.** A group several accounts agree on is marked; two groups
-that disagree about one course are shown together, beside whatever the
-catalogue already says.
-
-**Approve** writes the catalogue course if it is missing, and the rule for the
-session (the most common session among the group's proposals, or --session),
-marked ``reviewed-proposal``. Every proposal in the group becomes accepted.
-An existing rule for that course, kind and session is replaced only with
---replace. **Reject** marks the group's proposals rejected; they keep applying
-to their authors, as yours always does.
-
-Group ids are a hash of the course, kind and rule, so the id printed by a
-listing names the same group when you approve it, however long you wait.
+Approve writes the catalogue course if missing and the group's rule for one session
+(the group's most common, or --session) as "reviewed-proposal", replacing an
+existing rule only with --replace, and marks the group's proposals accepted. Reject
+marks them rejected; they keep applying to their authors. Group ids hash the
+course, kind and rule, so a listed id stays valid.
 """
 from __future__ import annotations
 
@@ -61,14 +48,28 @@ from app.Grades.services.catalogue_service import key_of  # noqa: E402
 from app.Grades.utils.prerequisites import render, validate  # noqa: E402
 
 VARIABLE = "CATALOGUE_REVIEW_URL"
+"""The environment variable holding the review's database URL."""
 
 
 class Refused(SystemExit):
-    """Not safe to run against this connection; the message says why."""
+    """Raised (as an exit) when the connection is not safe to review with; says why."""
 
 
 @dataclass
 class Group:
+    """Pending proposals that agree on one course, kind and rule tree.
+
+    Attributes:
+        id: Eight hex characters hashing the course, kind and rule.
+        campus: "UBCV" or "UBCO" from the course code, or None when it names none.
+        subject: Subject code.
+        number: Course number.
+        kind: "prerequisite" or "corequisite".
+        rule: The validated rule tree.
+        accounts: Distinct proposing user ids; only their count is ever shown.
+        proposal_ids: The proposals in the group.
+        sessions: How many proposals name each calendar session.
+    """
     id: str
     campus: str | None
     subject: str
@@ -81,18 +82,35 @@ class Group:
 
     @property
     def course(self) -> str:
+        """The course as "CAMPUS SUBJECT NUMBER", with "????" for an unknown campus."""
         return f"{self.campus or '????'} {self.subject} {self.number}"
 
 
 def group_id(campus, subject, number, kind, rule) -> str:
+    """Return the stable eight-character id of a (course, kind, rule) group.
+
+    Args:
+        campus: Campus code, or None.
+        subject: Subject code, such as "CPSC".
+        number: Course number.
+        kind: "prerequisite" or "corequisite".
+        rule: The rule tree.
+
+    Returns:
+        The first 8 hex characters of a SHA-256 of the canonical JSON.
+    """
     canonical = json.dumps([campus, subject, number, kind, rule], sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode()).hexdigest()[:8]
 
 
 def check_connection(session: Session) -> None:
-    """Refuse the app role, and anything that cannot write the catalogue.
+    """Refuse to run as the API's role, or as a role that cannot write the catalogue.
 
-    On SQLite (a local copy, and the tests) there are no roles to check.
+    Args:
+        session: The review session; on SQLite nothing is checked.
+
+    Raises:
+        Refused: If connected as `rls.APP_ROLE` or without INSERT on a shared table.
     """
     if session.bind.dialect.name != "postgresql":
         return
@@ -106,6 +124,17 @@ def check_connection(session: Session) -> None:
 
 
 def pending_groups(session: Session) -> list[Group]:
+    """Return every pending proposal grouped by course, kind and rule.
+
+    Proposals whose course code or rule cannot be read are skipped.
+
+    Args:
+        session: The review session.
+
+    Returns:
+        The groups ordered by subject, number, campus and kind, the most-supported
+        first within each.
+    """
     rows = (
         session.query(PrerequisiteProposalModel, CourseModel.code)
         .join(CourseModel, CourseModel.id == PrerequisiteProposalModel.course_id)
@@ -131,6 +160,15 @@ def pending_groups(session: Session) -> list[Group]:
 
 
 def existing_rule(session: Session, group: Group) -> CataloguePrerequisiteModel | None:
+    """Return the catalogue's latest rule of this kind for the course, or None.
+
+    Args:
+        session: Session acting as the catalogue's owner.
+        group: The proposal group.
+
+    Returns:
+        The newest rule by `session`, or None when the course or rule is not catalogued.
+    """
     if group.campus is None:
         return None
     course = session.query(CatalogueCourseModel).filter_by(
@@ -142,6 +180,17 @@ def existing_rule(session: Session, group: Group) -> CataloguePrerequisiteModel 
 
 
 def listing(session: Session) -> list[str]:
+    """Return the review listing as lines, course by course.
+
+    Groups are marked when several accounts agree, when they disagree with another
+    group, when they match the catalogue, or when the campus is unknown.
+
+    Args:
+        session: The review session.
+
+    Returns:
+        The lines to print; "Nothing pending." when there is nothing to review.
+    """
     groups = pending_groups(session)
     if not groups:
         return ["Nothing pending."]
@@ -171,6 +220,7 @@ def listing(session: Session) -> list[str]:
 
 
 def _find(session: Session, gid: str) -> Group:
+    """Return the pending group with an id, or exit saying to list again."""
     for group in pending_groups(session):
         if group.id == gid:
             return group
@@ -179,6 +229,28 @@ def _find(session: Session, gid: str) -> Group:
 
 def approve(session: Session, gid: str, session_name: str | None = None, campus: str | None = None,
             replace: bool = False) -> str:
+    """Write a group's rule into the shared catalogue and accept its proposals.
+
+    Only the rule tree is written; the note and any syllabus wording never are.
+
+    Args:
+        session: The review session, as the tables' owner.
+        gid: The group id from the listing.
+        session_name: The calendar session to file under; defaults to the group's most
+            common.
+        campus: The campus when the codes name none.
+        replace: Replace an existing rule for that course, kind and session.
+
+    Returns:
+        A line describing what was approved.
+
+    Raises:
+        SystemExit: If the group is gone, the campus or session cannot be decided, or a
+            rule exists and `replace` is False.
+
+    Note:
+        Commits.
+    """
     group = _find(session, gid)
     campus = group.campus or campus
     if campus not in ("UBCV", "UBCO"):
@@ -214,6 +286,21 @@ def approve(session: Session, gid: str, session_name: str | None = None, campus:
 
 
 def reject(session: Session, gid: str) -> str:
+    """Mark a group's proposals rejected; they still apply to their authors.
+
+    Args:
+        session: The review session.
+        gid: The group id from the listing.
+
+    Returns:
+        A line describing what was rejected.
+
+    Raises:
+        SystemExit: If the group is no longer pending.
+
+    Note:
+        Commits.
+    """
     group = _find(session, gid)
     session.query(PrerequisiteProposalModel).filter(PrerequisiteProposalModel.id.in_(group.proposal_ids)).update(
         {"status": "rejected", "reviewed_at": utc_now()}, synchronize_session=False)
@@ -222,12 +309,29 @@ def reject(session: Session, gid: str) -> str:
 
 
 def open_session(raw: str) -> Session:
+    """Return a session on the given database URL, with no connection pooling.
+
+    Args:
+        raw: A database URL as pasted; normalised first.
+
+    Returns:
+        A new session; the caller closes it.
+    """
     url = normalize_database_url(raw)
     engine = create_engine(url, connect_args=connect_args_for(url), poolclass=NullPool)
     return sessionmaker(bind=engine)()
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run the review from the command line: list (the default), approve or reject.
+
+    Args:
+        argv: Arguments instead of `sys.argv`, for tests.
+
+    Returns:
+        0 on success; 2 when `CATALOGUE_REVIEW_URL` is unset, the connection is refused,
+        or approve/reject has no group id.
+    """
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("action", nargs="?", default="list", choices=("list", "approve", "reject"))
     parser.add_argument("group", nargs="?")

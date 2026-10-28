@@ -1,3 +1,5 @@
+"""Response schema for blind spots: categories a student is weaker at across courses."""
+
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -20,13 +22,20 @@ MIN_COURSES = 2
 
 
 class CategoryBlindSpot(BaseModel):
-    """A category the student is quietly worse at than their own average, in
-    more than one course.
+    """A category that trails the student's own overall average in several courses.
 
-    Nothing here is stored. Every read pools every marked item of this
-    category, across every graded course, and compares the result to the same
-    pooling done across every category -- so there is nothing to keep in sync
-    when a grade is corrected later.
+    Computed on every read by pooling every marked item, so nothing is stored or kept in
+    step.
+
+    Attributes:
+        category: Grade category name.
+        average: Pooled percentage over every marked item in the category.
+        overall_average: The same pooling over every marked item in every category.
+        gap: `overall_average - average` in percentage points; always positive.
+        severity: "mild", "moderate" or "severe", by `BLIND_SPOT_BANDS`.
+        course_count: Courses the category's dip appears in, at least `MIN_COURSES`.
+        item_count: Marked items pooled.
+        course_codes: Codes of the courses involved.
     """
 
     category: str

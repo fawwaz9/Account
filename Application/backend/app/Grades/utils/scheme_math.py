@@ -1,22 +1,10 @@
-"""Grading-scheme arithmetic, pure: a course and a list of components in, a figure out.
+"""Grading-scheme arithmetic: a course and a list of components in, an average out.
 
-One engine for every question a scheme answers (Phase 1 D18, D25):
-
-* **live** -- the average from what is marked, the way the course's own average
-  is computed (categories with nothing marked stay out of the denominator);
-* **assumed** -- every unmarked item scored `fill` of its max, and an empty
-  weighted category taken whole at `fill`, the way the grade band and the
-  cheapest path project the course's own weights;
-* **what-if** -- particular grades forced to a value by id, which is how the
-  required final asks "what if the final went this way".
-
-With the course's own weights and no rules it gives exactly the course's own
-figures in each mode; the tests hold it to that, so a scheme can only ever
-differ for a reason it can show.
-
-Components are anything with `category`, `weight`, `drop_lowest` and
-`replace_with` -- SchemeComponent, in practice. No session, no service import:
-grade_service and scheme_service both read it.
+One engine answers every scheme question: the live average from marked work, an
+assumed average with unmarked work at a given score (the band and cheapest path),
+and a what-if with chosen grades forced by id (the required final). With the
+course's own weights and no rules it reproduces the course's own figures. Pure: no
+session, and no import of the services that read it.
 """
 
 from dataclasses import dataclass
@@ -26,18 +14,31 @@ from app.Grades.utils.marks import MAX_COURSE_PERCENT, counts_toward_average
 
 
 def _value(category) -> str:
+    """Return an enum's string value, or the argument if it is already a string."""
     return category.value if hasattr(category, "value") else category
 
 
 def category_average(
     course, category: str, drop_lowest: int = 0, fill: float | None = None, overrides: dict | None = None,
 ) -> tuple[float | None, int]:
-    """(average, how many dropped), point-weighted like the course's own.
+    """Return a category's point-weighted average and how many items were dropped.
 
-    `fill` None is live: only marked items count, and nothing marked is None.
-    `fill` a fraction scores every unmarked item at that share of its max. An
-    override by grade id beats both. Drops are by percentage, keeping at least
-    one, over whatever is being counted.
+    Dropped (`excluded`) grades and items with no maximum never count. Each counted
+    item scores, in order of precedence: its override, its mark, or `fill` of its
+    maximum when unmarked. The lowest `drop_lowest` by percentage are then dropped,
+    always keeping at least one.
+
+    Args:
+        course: Course row whose `grades` are read.
+        category: Category name.
+        drop_lowest: How many of the lowest-scoring items to drop.
+        fill: Fraction (0-1) of its maximum an unmarked item is assumed to score; None
+            counts marked items only (the live average).
+        overrides: Grade id to a forced fraction (0-1) of its maximum.
+
+    Returns:
+        (average percentage rounded to 2 places, number dropped); the average is None
+        when nothing in the category counts.
     """
     overrides = overrides or {}
     items = [
@@ -64,6 +65,15 @@ def category_average(
 
 @dataclass
 class Line:
+    """The working for one component of a scheme projection.
+
+    Attributes:
+        category: The component's category.
+        weight: Its weight in percent.
+        average: The category's average after drops and replacement; None when unknown.
+        dropped: How many lowest items were dropped.
+        replaced_by: The category whose higher average replaced this one, or None.
+    """
     category: object
     weight: float
     average: float | None
@@ -74,13 +84,27 @@ class Line:
 def project(
     course, components, fill: dict | None = None, overrides: dict | None = None, precise: bool = False,
 ) -> tuple[float, list[Line]]:
-    """(the course average under these components, the working per category).
+    """Return the course average under a scheme's components, and the working.
 
-    `fill` maps a category to the fraction its unmarked items -- and, when it
-    has none at all, the category itself -- are assumed to score. A category
-    missing from `fill` is live. So `{c: 1.0 for every c}` is the best case,
-    `{}` is the live average. `precise` skips the last rounding, for a search
-    that must not mistake a hundredth's rounding for having reached its target.
+    A category missing from `fill` is live; one in `fill` scores its unmarked items at
+    that fraction, and when it has nothing at all it takes the fraction whole. A
+    `replace_with` swaps in the other category's average when that is higher. Scoring
+    weights divide by at most `MAX_COURSE_PERCENT`; bonus categories add on top; the
+    result is capped at 100.
+
+    Args:
+        course: Course row whose `grades` are read.
+        components: Anything with `category`, `weight`, `drop_lowest` and
+            `replace_with`.
+        fill: Category to an assumed fraction (0-1); `{}` gives the live average and 1.0
+            everywhere the best case.
+        overrides: Grade id to a forced fraction (0-1) of its maximum.
+        precise: True skips the final rounding, so a search cannot mistake rounding for
+            reaching its target.
+
+    Returns:
+        (average percentage, one `Line` per component); the average is 0.0 when no
+        category has anything to count.
     """
     fill = fill or {}
     averages: dict[str, float | None] = {}
@@ -127,5 +151,13 @@ def project(
 
 
 def everywhere(components, fraction: float) -> dict:
-    """A `fill` that assumes `fraction` in every category the components name."""
+    """Return a `fill` assuming the same fraction in every category the components name.
+
+    Args:
+        components: The scheme's components.
+        fraction: Assumed share (0-1) of each maximum.
+
+    Returns:
+        Category name to `fraction`.
+    """
     return {_value(c.category): fraction for c in components}

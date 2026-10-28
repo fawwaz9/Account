@@ -1,27 +1,11 @@
-"""Is this cheque right? The shifts, BC's rules, and the arithmetic shown.
+"""Service functions that check a recorded paycheque against its shifts.
 
-Phase 1 item 11 (account-vision.md §13.11): "Your Oct 15 cheque looks $38
-short -- Tuesday was 9 hours, overtime may apply." Unique to this app, because
-only here do the shifts and the cheques live together.
-
-It cuts both ways (§15): a false "you're short" erodes trust as fast as a
-missed real one. So:
-
-* **Every figure shows its working,** line by line, each naming its rule.
-* **Vacation pay is checked both ways.** The app does not know whether an
-  employer pays the 4% on each cheque or holds it, and guessing wrong would
-  flag every cheque. A cheque matching either expectation matches; one
-  between the two says to check the vacation-pay line.
-* **Short is measured against the smaller expectation** (no vacation pay on the
-  cheque), so a "short" flag never depends on that guess.
-* **What it cannot see, it says:** statutory holidays are not checked, hours
-  from unconfirmed shifts are assumed from the schedule, and a week that runs
-  past the pay period only counts the days inside it -- which can only ever
-  make the expectation smaller, never manufacture a shortfall.
-
-Computed on demand from the shifts as they are now. The cheque's stored
-`expected_gross` is the verdict reached when it was recorded, and this does not
-change it.
+The check applies BC's overtime and vacation-pay rules (`pay_rules`) and shows
+its arithmetic line by line, each line naming its rule. It cuts both ways:
+vacation pay is checked on and off the cheque, "short" is judged against the
+smaller expectation, and what it cannot see (statutory holidays, unconfirmed
+hours) it says. Computed on demand; the cheque's stored `expected_gross` is
+never changed.
 """
 
 import uuid
@@ -57,11 +41,34 @@ STAT_NOTE = "Statutory holiday pay isn't checked."
 
 
 def tolerance(expected: float) -> float:
-    """Rounding on a real cheque is cents, sometimes a dollar; never a percent."""
+    """Return how far a cheque may differ from the expectation and still match.
+
+    Args:
+        expected: The expected gross, in dollars.
+
+    Returns:
+        A dollar, or 0.5% of `expected` when that is larger.
+    """
     return max(1.0, expected * 0.005)
 
 
 def check_paycheque(db: Session, user_id: uuid.UUID, paycheque_id: uuid.UUID) -> PayCheck | None:
+    """Check one of the user's cheques against the shifts in its pay period.
+
+    Hourly pay is split into regular, overtime and double time at each shift's
+    rate; a salaried cheque is compared with the period amount; on-cheque tips are
+    added to both. A contract cheque, a cheque with no period, or one whose job is
+    gone cannot be checked.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        paycheque_id: The cheque.
+
+    Returns:
+        The verdict, its lines and its notes; None when the cheque is not the
+        caller's.
+    """
     cheque = (
         db.query(PaychequeModel)
         .filter(PaychequeModel.id == paycheque_id, PaychequeModel.user_id == user_id)
@@ -73,6 +80,7 @@ def check_paycheque(db: Session, user_id: uuid.UUID, paycheque_id: uuid.UUID) ->
     actual = money(cheque.gross_amount)
 
     def cannot(summary: str) -> PayCheck:
+        """Return a "cannot_check" verdict with only a summary and the actual gross."""
         return PayCheck(paycheque_id=cheque.id, status="cannot_check", summary=summary, actual_gross=actual)
 
     if job is None:
@@ -160,6 +168,19 @@ def check_paycheque(db: Session, user_id: uuid.UUID, paycheque_id: uuid.UUID) ->
 def verdict(
     actual: float, expected: float, with_vacation: float | None, percent: float | None,
 ) -> tuple[str, str, float]:
+    """Decide whether a cheque matches, is short, is over, or sits between the two.
+
+    Args:
+        actual: The cheque's gross.
+        expected: The expectation without vacation pay.
+        with_vacation: The expectation with vacation pay on the cheque; None for a
+            salaried job.
+        percent: The vacation-pay rate used, or None.
+
+    Returns:
+        The status, a one-sentence summary and the signed difference against the
+        expectation the status is about.
+    """
     tol = tolerance(expected)
     if abs(actual - expected) <= tol:
         tail = " Vacation pay isn't on it, so it may be held for later." if percent else ""
@@ -187,4 +208,12 @@ def verdict(
 
 
 def money_text(amount: float) -> str:
+    """Format dollars for a sentence, such as "$1,234.50".
+
+    Args:
+        amount: Dollars.
+
+    Returns:
+        The amount with a dollar sign, thousands separators and cents.
+    """
     return f"${amount:,.2f}"

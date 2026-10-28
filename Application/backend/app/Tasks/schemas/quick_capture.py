@@ -1,3 +1,10 @@
+"""Request and response bodies for quick capture: one typed line turned into a task.
+
+The client previews the line as the student types and then submits the same
+text; `quick_capture_service` parses it with the shared tokenizer and matches
+any course code against the user's own courses.
+"""
+
 from datetime import date
 from uuid import UUID
 
@@ -7,15 +14,35 @@ from app.Tasks.schemas.task import Task
 
 
 class QuickCaptureRequest(BaseModel):
+    """Request body carrying the line to turn into a task.
+
+    Attributes:
+        text: The typed line, 1-300 characters.
+    """
+
     text: str = Field(..., min_length=1, max_length=300)
 
 
 class QuickCapturePreview(BaseModel):
-    """What one line was understood to mean, before anything is written.
+    """What one typed line would create, worked out before anything is written.
 
-    Sent back as the student types so the guess is visible while it is still
-    cheap to reword. A capture box that silently files things wrongly is worse
-    than a form, because nothing on screen says what it did.
+    Attributes:
+        text: The line exactly as typed.
+        title: What remains once recognised tokens are taken out; it becomes the
+            task's title. An unmatched course code stays in it.
+        due_date: The date the line names, read against the user's today; None
+            when it names none.
+        estimated_minutes: The duration the line names, 1-2400; None when absent
+            or out of range.
+        course_id: The user's course the typed code matched; None without a
+            single match.
+        course_code: That course's code.
+        unmatched_course: A typed code that matched none, or several, of the
+            user's courses.
+        matched: Which kinds of token were recognised: course, date, duration,
+            amount, score.
+        can_create: False when nothing is left to be a title, so the client can
+            keep submit disabled.
     """
 
     #: Exactly what was typed, so the client can always fall back to it.
@@ -38,7 +65,12 @@ class QuickCapturePreview(BaseModel):
 
 
 class QuickCaptureResult(BaseModel):
-    """The task that was created, and the reading it came from."""
+    """Response body for a capture: the task created and the reading behind it.
+
+    Attributes:
+        task: The new task.
+        preview: The reading it was created from.
+    """
 
     task: Task
     preview: QuickCapturePreview

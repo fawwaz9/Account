@@ -1,35 +1,9 @@
-"""Which remaining item is worth doing next.
+""""Worth doing next": a course's unmarked items ranked by what they are worth.
 
-A running average says where a course is. It does not say what to do about it,
-and with six things outstanding the useful question is which one moves the
-number most -- and, where the student has said how long something will take,
-which moves it most per hour.
-
-**Leverage is a spread, not a projection.** Each item is scored by the
-difference between the course average with that item at full marks and the same
-average with it at zero, every other outstanding item held constant. That
-difference is the share of the final average the item controls, and it comes out
-the same whatever the other items are assumed to do, because their contribution
-appears in both halves and cancels.
-
-**Ranked by rate, then by points, and cut to three.** Points per hour leads,
-because the question the panel answers is what to spend the next hour on, and
-points break ties beneath it. Hours come from the task a dated grade raised.
-
-An item with no estimate has no rate and is given none: zero would sort it last
-as if it paid nothing, infinity first as if it were free, and both are lies. So
-rated items rank above unrated, and the unrated fall back to points among
-themselves.
-
-That carries a consequence worth stating plainly, because it was a bug here
-once. A single estimated item ranks first on its course whatever it is worth,
-since nothing else has a rate to beat it -- a lab worth four points can sit
-above a final worth forty-five. With one estimate across twenty-three
-outstanding items that is the common case, not the corner, which is why the
-panel keeps asking for the missing ones. The ranking is worth exactly as much
-as the estimates feeding it.
-
-Three rows, because a ranked list of eight is one you read the top of anyway.
+Each item's leverage is the spread between the projected average with it at full
+marks and at zero, everything else outstanding held at `BASELINE`. Items rank by
+points per hour where the student estimated the task, then by points, and the top
+`TOP_N` are returned; an item without an estimate is never given a rate.
 """
 import uuid
 
@@ -58,41 +32,42 @@ TOP_N = 3
 
 
 def rank_key(item: RemainingItem) -> tuple[int, float, float, str]:
-    """Rate first, then points. Unrated items sort below every rated one.
+    """Return the sort key: rated items first, by points per hour, then points.
 
-    Separated out because it is the whole product decision, and burying it in a
-    lambda inside a hundred-line function is how it gets changed by accident.
+    Args:
+        item: One outstanding item.
 
-    The first element is deliberately belt-and-braces, and a mutation proved it:
-    removing it changes no behaviour and fails no test today, because an item
-    only reaches here with leverage above zero and a positive number of minutes,
-    so every rated item already has a rate above zero and the `or 0.0` alone
-    puts the unrated last. It stays because that is an invariant held by a
-    filter fifty lines away -- admit one zero-leverage item and the fallback
-    silently starts ranking unrated work among the rated instead of beneath it.
+    Returns:
+        A tuple that sorts ascending into the display order; the name breaks ties.
     """
     rated = item.per_hour is not None
     return (0 if rated else 1, -(item.per_hour or 0.0), -item.leverage, item.name)
 
 
 def item_leverage(course: CourseModel, grade: GradeModel) -> float:
-    """How many points of final average this one item still controls."""
+    """Return the points of final average one unmarked item still controls.
+
+    Args:
+        course: The course the item belongs to.
+        grade: The unmarked item.
+
+    Returns:
+        Projected average at full marks minus at zero, rounded to 2 places.
+    """
     full = project_course(course, BASELINE, {grade.id: 1.0})
     none = project_course(course, BASELINE, {grade.id: 0.0})
     return round(full - none, 2)
 
 
 def estimates_by_grade(db: Session, course_id: uuid.UUID) -> dict[uuid.UUID, int]:
-    """Minutes the student put on the task each of this course's grades raised.
+    """Return the student's minute estimates from the tasks this course's grades raised.
 
-    Their own number: `sync_task` seeds a task from a grade but never overwrites
-    an estimate, precisely so re-saving a grade cannot revert one.
+    Args:
+        db: Open database session.
+        course_id: The course.
 
-    Scoped to the course, which it was not at first: the filter named only
-    "has a grade and has an estimate", so every course page load read every such
-    task in the table. Nothing came back wrong, because a grade id matches one
-    grade -- it was a full scan whose result happened to be right, which is the
-    kind of thing that stays invisible until the table is large.
+    Returns:
+        Grade id to estimated minutes, for tasks that carry an estimate.
     """
     rows = (
         db.query(TaskModel.grade_id, TaskModel.estimated_minutes)
@@ -107,7 +82,22 @@ def estimates_by_grade(db: Session, course_id: uuid.UUID) -> dict[uuid.UUID, int
 
 
 def cheapest_path(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> CheapestPath:
-    """Rank what is left in a course by what it is worth doing."""
+    """Return the three unmarked items in a course most worth doing next.
+
+    Dropped, bonus and zero-leverage items are left out.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        course_id: The course.
+
+    Returns:
+        The target, the stored current average, the best case, whether the target is
+        reachable, and the ranked items with counts.
+
+    Raises:
+        ValueError: If the course is missing or another user's.
+    """
     course = get_user_course(db, user_id, course_id)
     if course is None:
         raise ValueError("Course not found.")
@@ -175,7 +165,17 @@ def cheapest_path(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> Chea
 
 
 def default_target(db: Session, user_id: uuid.UUID) -> float:
-    """The account default a course with no target of its own falls back to."""
+    """Return the account's default target, or `DEFAULT_TARGET_GRADE` without one.
+
+    A default of 0 also falls back to `DEFAULT_TARGET_GRADE`.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+
+    Returns:
+        The target as a percentage.
+    """
     from app.Grades.services.dash_services import DEFAULT_TARGET_GRADE
     from app.Users.services.user_service import get_preferences, get_user
 

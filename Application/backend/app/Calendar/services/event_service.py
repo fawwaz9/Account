@@ -1,8 +1,9 @@
-"""Events, and the dates they land on.
+"""Service functions for calendar events and the dates they fall on.
 
-Storage is one row per event, however often it repeats. Everything that reads a
-week or a month goes through `list_occurrences`, which expands the rules in
-memory for exactly the window asked for.
+One row stores an event however often it repeats; `list_occurrences` expands the
+rules in memory for exactly the window asked for, subtracting skipped dates and,
+for course events, term blackouts. Shifts, grade blocks and the load figures all
+read the calendar through it.
 """
 
 import uuid
@@ -28,11 +29,16 @@ MAX_WINDOW_DAYS = 400
 
 
 def attach_recurrence(event: EventModel) -> EventModel:
-    """Expose the rule columns as the nested object the schema declares.
+    """Set the nested `recurrence` the response schema expects on an event row.
 
-    Set on the instance rather than as a model property for the same reason the
-    grades module does it: models.py is imported by this service, so a property
-    reaching back into it would be a circular import.
+    Only the instance changes; `skipped_dates` is left as stored ISO strings, since
+    assigning dates to the JSON column would fail at the next commit.
+
+    Args:
+        event: The event row.
+
+    Returns:
+        The same row, with `recurrence` attached.
     """
     event.recurrence = recurrence_of(event)
 
@@ -46,14 +52,41 @@ def attach_recurrence(event: EventModel) -> EventModel:
 
 
 def parse_date(value) -> date:
+    """Return a date from a stored ISO string, passing a date through unchanged.
+
+    Args:
+        value: A `date`, or an ISO YYYY-MM-DD string.
+
+    Returns:
+        The value as a `date`.
+    """
     return value if isinstance(value, date) else date.fromisoformat(value)
 
 
 def user_exists(db: Session, user_id: uuid.UUID) -> bool:
+    """Return whether a user row with this id exists.
+
+    Args:
+        db: Open database session.
+        user_id: Id to look up.
+
+    Returns:
+        True when the user row exists.
+    """
     return db.query(UserModel).filter(UserModel.id == user_id).first() is not None
 
 
 def owned_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> CourseModel | None:
+    """Return the user's course with this id, or None.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+        course_id: The course to fetch.
+
+    Returns:
+        The course, or None when it is missing or another user's.
+    """
     return (
         db.query(CourseModel)
         .filter(CourseModel.id == course_id, CourseModel.user_id == user_id)
@@ -62,6 +95,16 @@ def owned_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> Cours
 
 
 def get_event(db: Session, user_id: uuid.UUID, event_id: uuid.UUID) -> EventModel | None:
+    """Return one of the user's events with its recurrence attached, or None.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+        event_id: The event to fetch.
+
+    Returns:
+        The event with `recurrence` set, or None when it is missing or another user's.
+    """
     event = (
         db.query(EventModel)
         .filter(EventModel.id == event_id, EventModel.user_id == user_id)
@@ -71,6 +114,16 @@ def get_event(db: Session, user_id: uuid.UUID, event_id: uuid.UUID) -> EventMode
 
 
 def list_events(db: Session, user_id: uuid.UUID, course_id: uuid.UUID | None = None):
+    """Return the user's event rows, by start date and time.
+
+    Args:
+        db: Open database session.
+        user_id: Whose events.
+        course_id: Only events of this course; None for all.
+
+    Returns:
+        The rows with recurrence attached; None when the user does not exist.
+    """
     if not user_exists(db, user_id):
         return None
 
@@ -83,6 +136,22 @@ def list_events(db: Session, user_id: uuid.UUID, course_id: uuid.UUID | None = N
 
 
 def create_event(db: Session, user_id: uuid.UUID, data: EventCreate):
+    """Create an event for the user, one-off or repeating.
+
+    Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose event.
+        data: The event; its title is stripped and its skipped dates
+            de-duplicated.
+
+    Returns:
+        The new row with recurrence attached; None when the user does not exist.
+
+    Raises:
+        ValueError: If `course_id` is not one of the user's courses.
+    """
     if not user_exists(db, user_id):
         return None
 
@@ -117,6 +186,25 @@ def create_event(db: Session, user_id: uuid.UUID, data: EventCreate):
 
 
 def update_event(db: Session, user_id: uuid.UUID, event_id: uuid.UUID, data: EventUpdate):
+    """Change the fields sent on one of the user's events.
+
+    The start and end times, and the repeat's end against the start, are checked
+    once the patch is merged. Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose event.
+        event_id: The event.
+        data: The fields to change; a null `recurrence` makes it a one-off.
+
+    Returns:
+        The updated row with recurrence attached; None when it is not the user's.
+
+    Raises:
+        ValueError: If a new `course_id` is not one of the user's courses, the
+            event would end at or before it starts, or the repeat would end
+            before `starts_on`.
+    """
     event = get_event(db, user_id, event_id)
     if event is None:
         return None
@@ -166,6 +254,18 @@ def update_event(db: Session, user_id: uuid.UUID, event_id: uuid.UUID, data: Eve
 
 
 def delete_event(db: Session, user_id: uuid.UUID, event_id: uuid.UUID):
+    """Delete one of the user's events, the whole series if it repeats.
+
+    Its members and invite links go with it. Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose event.
+        event_id: The event.
+
+    Returns:
+        A copy of the deleted event; None when it is not the user's.
+    """
     event = get_event(db, user_id, event_id)
     if event is None:
         return None
@@ -181,10 +281,22 @@ def delete_event(db: Session, user_id: uuid.UUID, event_id: uuid.UUID):
 
 
 def skip_occurrence(db: Session, user_id: uuid.UUID, event_id: uuid.UUID, on_date: date):
-    """Cancel one date of a series without ending the series.
+    """Cancel one date of a repeating event without ending the series.
 
-    Deleting the event is the only other option, and "no lecture next Monday"
-    must not mean "no lectures ever again".
+    Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose event.
+        event_id: The series.
+        on_date: The date to cancel.
+
+    Returns:
+        The event with the date added to `skipped_dates`; None when it is not the
+        user's.
+
+    Raises:
+        ValueError: If the event does not repeat (delete it instead).
     """
     event = get_event(db, user_id, event_id)
     if event is None:
@@ -206,7 +318,19 @@ def skip_occurrence(db: Session, user_id: uuid.UUID, event_id: uuid.UUID, on_dat
 
 
 def restore_occurrence(db: Session, user_id: uuid.UUID, event_id: uuid.UUID, on_date: date):
-    """Undo a skip."""
+    """Undo a skip, putting one cancelled date of a series back.
+
+    Restoring a date that was never skipped changes nothing. Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose event.
+        event_id: The series.
+        on_date: The date to restore.
+
+    Returns:
+        The event; None when it is not the user's.
+    """
     event = get_event(db, user_id, event_id)
     if event is None:
         return None
@@ -226,10 +350,24 @@ def list_occurrences(
     window_start: date,
     window_end: date,
 ) -> list[EventOccurrence] | None:
-    """Every date every event falls on in the window, in order.
+    """Return every date every one of the user's events falls on in a window.
 
-    One query for the events, one for the course codes, then pure arithmetic --
-    so a month costs two round trips however many series it contains.
+    Skipped dates are left out, and term blackouts are left out of every event that
+    belongs to a course. Two queries however many series there are.
+
+    Args:
+        db: Open database session.
+        user_id: Whose events.
+        window_start: First date, inclusive.
+        window_end: Last date, inclusive.
+
+    Returns:
+        The occurrences by date, all-day items first within a day, then by start
+        time; None when the user does not exist.
+
+    Raises:
+        ValueError: If the window ends before it starts or spans more than
+            `MAX_WINDOW_DAYS` days.
     """
     if not user_exists(db, user_id):
         return None
@@ -293,7 +431,15 @@ def list_occurrences(
 
 
 def course_codes(db: Session, user_id: uuid.UUID) -> dict[uuid.UUID, str]:
-    """course id -> code, in one query rather than one per event."""
+    """Return the user's course ids mapped to their codes, in one query.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+
+    Returns:
+        Course id to code, for every course the user has.
+    """
     rows = (
         db.query(CourseModel.id, CourseModel.code)
         .filter(CourseModel.user_id == user_id)

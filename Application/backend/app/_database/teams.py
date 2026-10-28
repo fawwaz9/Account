@@ -1,13 +1,10 @@
-"""The cross-user steps of teams (Phase 2 item 11, D26).
+"""Cross-user steps for teams and their games on the Fitness page.
 
-Like ``sharing.py``: on Postgres each is a ``SECURITY DEFINER`` function in
-``rls.FUNCTION_SQL``, keyed on the session's identity; on SQLite, which has no
-row security, the same rule is a plain query written to mean exactly what the
-function means. The tests run both.
-
-"On the team" means the captain or a member, of a captain whose account is
-not being deleted. Every game write comes through here, the captain's
-included.
+On Postgres each function calls its `SECURITY DEFINER` twin in `rls.FUNCTION_SQL`,
+keyed on the session's acting user; on SQLite a plain query gives the same answer
+for the `user_id` argument. "On the team" means the captain or a member, while the
+captain's account is not being deleted, and every game write goes through here, the
+captain's included.
 """
 import uuid
 from dataclasses import dataclass
@@ -22,11 +19,19 @@ from app._database.models import (
 
 
 def _is_postgres(db: Session) -> bool:
+    """Return True when the session is bound to a Postgres database."""
     return db.get_bind().dialect.name == "postgresql"
 
 
 @dataclass(frozen=True)
 class TeamInvitePreview:
+    """What a live team link reveals before it is accepted.
+
+    Attributes:
+        captain_name: The captain's display name.
+        team_name: The team's name.
+        sport: The team's sport, or None.
+    """
     captain_name: str
     team_name: str
     sport: str | None
@@ -34,6 +39,15 @@ class TeamInvitePreview:
 
 @dataclass(frozen=True)
 class MemberTeam:
+    """A team the caller plays on as a member, as the definer function reports it.
+
+    Attributes:
+        team_id: The team's id.
+        team_name: The team's name.
+        sport: The team's sport, or None.
+        captain_name: The captain's name, as copied when the caller joined.
+        member_names: Every member's copied name, in joining order.
+    """
     team_id: uuid.UUID
     team_name: str
     sport: str | None
@@ -43,6 +57,24 @@ class MemberTeam:
 
 @dataclass(frozen=True)
 class Game:
+    """One game as a player on the team sees it: names, never other players' ids.
+
+    Attributes:
+        game_id: The game's id.
+        played_on: Date of the game.
+        opponent: Opponent's name.
+        our_score: The team's score.
+        their_score: The opponent's score.
+        recorded_by_name: Name of the player who recorded it.
+        recorded_by_me: Whether the caller recorded it.
+        confirmed_by_name: Name of the player who confirmed it, or None while
+            unconfirmed.
+        confirmed_at: When it was confirmed (naive UTC), or None.
+        disputed_by_name: Name of the player disputing it, or None.
+        disputed_by_me: Whether the caller is the one disputing it.
+        disputed_our: The disputed version of our score, or None.
+        disputed_their: The disputed version of their score, or None.
+    """
     game_id: uuid.UUID
     played_on: date
     opponent: str
@@ -59,11 +91,13 @@ class Game:
 
 
 def _live(db: Session, user_id: uuid.UUID) -> UserModel | None:
+    """Return the user if their account exists and is not being deleted, else None."""
     user = db.get(UserModel, user_id)
     return user if user is not None and user.deleted_at is None else None
 
 
 def _on_team(db: Session, user_id: uuid.UUID, team_id: uuid.UUID) -> TeamModel | None:
+    """Return the team if the caller is on it and its captain is live, else None."""
     team = db.get(TeamModel, team_id)
     if team is None or _live(db, team.user_id) is None:
         return None
@@ -74,14 +108,17 @@ def _on_team(db: Session, user_id: uuid.UUID, team_id: uuid.UUID) -> TeamModel |
 
 
 def _scores_ok(*scores) -> bool:
+    """Return True when every score is present and between 0 and 999."""
     return all(s is not None and 0 <= s <= 999 for s in scores)
 
 
 def _opponent_ok(opponent: str | None) -> bool:
+    """Return True when the opponent's name, stripped, is 1-60 characters."""
     return 1 <= len((opponent or "").strip()) <= 60
 
 
 def _live_invite(db: Session, token_hash: str):
+    """Return the unrevoked, unexpired team link with this token hash, or None."""
     return (
         db.query(TeamInviteModel)
         .filter(TeamInviteModel.token_hash == token_hash, TeamInviteModel.revoked_at.is_(None),
@@ -91,6 +128,18 @@ def _live_invite(db: Session, token_hash: str):
 
 
 def invite_preview(db: Session, user_id: uuid.UUID, token_hash: str) -> TeamInvitePreview | None:
+    """Return what a team link shows: the captain's name, the team's name and its sport.
+
+    Args:
+        db: Open session acting as the caller.
+        user_id: The caller. Read on SQLite only; Postgres uses the session's acting
+            user.
+        token_hash: SHA-256 hex digest of the link's token.
+
+    Returns:
+        The preview, or None when the link is unknown, revoked or expired, or the
+        captain's account is being deleted.
+    """
     if _is_postgres(db):
         row = db.execute(text("SELECT * FROM account_team_invite_preview(:h)"), {"h": token_hash}).first()
         return TeamInvitePreview(row.captain_name, row.team_name, row.sport) if row else None
@@ -101,7 +150,22 @@ def invite_preview(db: Session, user_id: uuid.UUID, token_hash: str) -> TeamInvi
 
 
 def accept_invite(db: Session, user_id: uuid.UUID, token_hash: str) -> str:
-    """'accepted', 'invalid', 'own', 'already' or 'full'."""
+    """Join a team through its link, adding the caller as a member.
+
+    Args:
+        db: Open session acting as the caller.
+        user_id: The caller. Read on SQLite only; Postgres uses the session's acting
+            user.
+        token_hash: SHA-256 hex digest of the link's token.
+
+    Returns:
+        "accepted"; "invalid" when the link is unusable or either account is being
+        deleted; "own" for the captain; "already" for an existing member; "full" once
+        the team has `MAX_TEAM_MEMBERS` members.
+
+    Note:
+        Commits.
+    """
     if _is_postgres(db):
         status = db.execute(text("SELECT account_accept_team_invite(:h)"), {"h": token_hash}).scalar()
         db.commit()
@@ -127,7 +191,17 @@ def accept_invite(db: Session, user_id: uuid.UUID, token_hash: str) -> str:
 
 
 def member_teams(db: Session, user_id: uuid.UUID) -> list[MemberTeam]:
-    """Teams the caller plays on as a member; a captain reads their own."""
+    """Return the teams the caller plays on as a member; captains read their own.
+
+    Args:
+        db: Open session acting as the caller.
+        user_id: The caller. Read on SQLite only; Postgres uses the session's acting
+            user.
+
+    Returns:
+        One `MemberTeam` per membership whose captain is live; empty when there are
+        none.
+    """
     if _is_postgres(db):
         rows = db.execute(text("SELECT * FROM account_my_teams()")).all()
         return [MemberTeam(r.team_id, r.team_name, r.sport, r.captain_name, list(r.member_names or [])) for r in rows]
@@ -144,6 +218,18 @@ def member_teams(db: Session, user_id: uuid.UUID) -> list[MemberTeam]:
 
 
 def games(db: Session, user_id: uuid.UUID, team_id: uuid.UUID) -> list[Game]:
+    """Return a team's games for anyone on it, newest first.
+
+    Args:
+        db: Open session acting as the caller.
+        user_id: The caller. Read on SQLite only; Postgres uses the session's acting
+            user.
+        team_id: The team.
+
+    Returns:
+        The games by date then recording time, newest first; empty when the caller is
+        not on the team.
+    """
     if _is_postgres(db):
         rows = db.execute(text("SELECT * FROM account_team_games(:t)"), {"t": team_id}).all()
         return [Game(**r._mapping) for r in rows]
@@ -158,6 +244,25 @@ def games(db: Session, user_id: uuid.UUID, team_id: uuid.UUID) -> list[Game]:
 
 def record_game(db: Session, user_id: uuid.UUID, team_id: uuid.UUID, played_on: date, opponent: str,
                 ours: int, theirs: int) -> uuid.UUID | None:
+    """Record a game for a team the caller is on; it counts once someone else confirms.
+
+    Args:
+        db: Open session acting as the caller.
+        user_id: The caller. Read on SQLite only; Postgres uses the session's acting
+            user.
+        team_id: The team.
+        played_on: Date of the game; required.
+        opponent: Opponent's name; stripped, then 1-60 characters.
+        ours: The team's score, 0-999.
+        theirs: The opponent's score, 0-999.
+
+    Returns:
+        The new game's id, or None when the caller is not on the team or a value is
+        invalid.
+
+    Note:
+        Commits.
+    """
     if _is_postgres(db):
         new_id = db.execute(text("SELECT account_record_team_game(:t, :d, :o, :a, :b)"),
                             {"t": team_id, "d": played_on, "o": opponent, "a": ours, "b": theirs}).scalar()
@@ -176,6 +281,7 @@ def record_game(db: Session, user_id: uuid.UUID, team_id: uuid.UUID, played_on: 
 
 
 def _game_on_team(db: Session, user_id: uuid.UUID, game_id: uuid.UUID) -> GameModel | None:
+    """Return the game if the caller is on its team, else None."""
     game = db.get(GameModel, game_id)
     if game is None or _on_team(db, user_id, game.team_id) is None:
         return None
@@ -183,10 +289,26 @@ def _game_on_team(db: Session, user_id: uuid.UUID, game_id: uuid.UUID) -> GameMo
 
 
 def _clear_dispute(game: GameModel) -> None:
+    """Clear every dispute field on a game."""
     game.disputed_by = game.disputed_by_name = game.disputed_our = game.disputed_their = None
 
 
 def confirm_game(db: Session, user_id: uuid.UUID, game_id: uuid.UUID) -> bool:
+    """Confirm another player's unconfirmed game, withdrawing the caller's own dispute.
+
+    Args:
+        db: Open session acting as the caller.
+        user_id: The caller. Read on SQLite only; Postgres uses the session's acting
+            user.
+        game_id: The game.
+
+    Returns:
+        True if confirmed; False for the game's recorder, a game already confirmed, a
+        game disputed by someone else, or a caller not on the team.
+
+    Note:
+        Commits.
+    """
     if _is_postgres(db):
         done = bool(db.execute(text("SELECT account_confirm_team_game(:g)"), {"g": game_id}).scalar())
         db.commit()
@@ -202,6 +324,23 @@ def confirm_game(db: Session, user_id: uuid.UUID, game_id: uuid.UUID) -> bool:
 
 
 def dispute_game(db: Session, user_id: uuid.UUID, game_id: uuid.UUID, ours: int, theirs: int) -> bool:
+    """Dispute another player's unconfirmed game with the scores the caller believes.
+
+    Args:
+        db: Open session acting as the caller.
+        user_id: The caller. Read on SQLite only; Postgres uses the session's acting
+            user.
+        game_id: The game.
+        ours: The disputed team score, 0-999.
+        theirs: The disputed opponent score, 0-999.
+
+    Returns:
+        True if the dispute was recorded; False for the recorder, a confirmed game,
+        invalid scores or a caller not on the team.
+
+    Note:
+        Commits. A game holds one dispute, so a later dispute replaces an earlier one.
+    """
     if _is_postgres(db):
         done = bool(db.execute(text("SELECT account_dispute_team_game(:g, :a, :b)"),
                                {"g": game_id, "a": ours, "b": theirs}).scalar())
@@ -218,6 +357,25 @@ def dispute_game(db: Session, user_id: uuid.UUID, game_id: uuid.UUID, ours: int,
 
 def correct_game(db: Session, user_id: uuid.UUID, game_id: uuid.UUID, played_on: date, opponent: str,
                  ours: int, theirs: int) -> bool:
+    """Let a game's recorder correct it while unconfirmed, clearing any dispute.
+
+    Args:
+        db: Open session acting as the caller.
+        user_id: The caller. Read on SQLite only; Postgres uses the session's acting
+            user.
+        game_id: The game.
+        played_on: Corrected date; required.
+        opponent: Corrected opponent; stripped, then 1-60 characters.
+        ours: Corrected team score, 0-999.
+        theirs: Corrected opponent score, 0-999.
+
+    Returns:
+        True if corrected; False when the caller is not the recorder, the game is
+        confirmed, or a value is invalid.
+
+    Note:
+        Commits.
+    """
     if _is_postgres(db):
         done = bool(db.execute(text("SELECT account_correct_team_game(:g, :d, :o, :a, :b)"),
                                {"g": game_id, "d": played_on, "o": opponent, "a": ours, "b": theirs}).scalar())
@@ -234,6 +392,20 @@ def correct_game(db: Session, user_id: uuid.UUID, game_id: uuid.UUID, played_on:
 
 
 def delete_game(db: Session, user_id: uuid.UUID, game_id: uuid.UUID) -> bool:
+    """Delete a game: the recorder while it is unconfirmed, or the captain at any time.
+
+    Args:
+        db: Open session acting as the caller.
+        user_id: The caller. Read on SQLite only; Postgres uses the session's acting
+            user.
+        game_id: The game.
+
+    Returns:
+        True if deleted; False when the caller may not delete it.
+
+    Note:
+        Commits.
+    """
     if _is_postgres(db):
         done = bool(db.execute(text("SELECT account_delete_team_game(:g)"), {"g": game_id}).scalar())
         db.commit()
@@ -250,6 +422,20 @@ def delete_game(db: Session, user_id: uuid.UUID, game_id: uuid.UUID) -> bool:
 
 
 def leave_team(db: Session, user_id: uuid.UUID, team_id: uuid.UUID) -> bool:
+    """Remove the caller from a team's members.
+
+    Args:
+        db: Open session acting as the caller.
+        user_id: The caller. Read on SQLite only; Postgres uses the session's acting
+            user.
+        team_id: The team.
+
+    Returns:
+        True if a membership was removed, False when the caller was not a member.
+
+    Note:
+        Commits.
+    """
     if _is_postgres(db):
         done = bool(db.execute(text("SELECT account_leave_team(:t)"), {"t": team_id}).scalar())
         db.commit()

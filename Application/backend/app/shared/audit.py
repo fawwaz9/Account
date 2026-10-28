@@ -1,19 +1,9 @@
-"""A record of who authenticated and what got destroyed.
+"""Audit log lines for authentication attempts and irreversible deletes.
 
-The app had no logging of any kind -- no access log, no failed-authentication
-log, nothing recording who deleted which course. A breach left no trace to find
-afterwards and there was nothing to alert on.
-
-Two kinds of event are worth keeping, and nothing else yet:
-
-* **Authentication** -- every attempt, successful or not, so a guessing run is
-  visible after the fact rather than inferred.
-* **Destruction** -- deletes, because they are the mutations that cannot be
-  undone by looking at the current state.
-
-Never log a password, a hash, or a token. Emails are logged on authentication
-because an auth log that cannot say *which account* was attacked is not much use;
-they are identifying data, so the log file deserves the same care as the database.
+Both write one space-separated line to the `app.audit` logger: every sign-in,
+registration and password attempt with its outcome, and every delete of user data.
+Passwords, hashes and tokens are never logged; email addresses are, on
+authentication events, so the log needs the same care as the database.
 """
 
 import logging
@@ -31,7 +21,17 @@ def auth_event(
     client: str | None = None,
     detail: str | None = None,
 ) -> None:
-    """One authentication attempt: `event` is what was tried, `outcome` how it went."""
+    """Log one authentication attempt and how it went.
+
+    Args:
+        event: What was tried, such as "login", "register" or "google".
+        outcome: "success", or the failure kind such as "invalid_credentials" or
+            "throttled"; anything but "success" logs at WARNING, success at INFO.
+        email: Address the attempt named, if any.
+        user_id: Account involved, once known.
+        client: The caller's address, from `client_of`.
+        detail: Extra context, such as a verification error's message.
+    """
     parts = [f"auth.{event}", f"outcome={outcome}"]
     if email:
         parts.append(f"email={email}")
@@ -49,7 +49,14 @@ def auth_event(
 
 
 def deletion(entity: str, *, user_id: UUID, target_id: object, detail: str | None = None) -> None:
-    """Something irreversible was removed."""
+    """Log that something irreversible was deleted, at INFO.
+
+    Args:
+        entity: What kind of thing was deleted, such as "task" or "course".
+        user_id: Whose data it was.
+        target_id: Id of the deleted row.
+        detail: Extra context, such as the deleted item's title.
+    """
     parts = [f"delete.{entity}", f"user={user_id}", f"target={target_id}"]
     if detail:
         parts.append(f"detail={detail}")

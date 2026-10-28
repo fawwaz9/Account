@@ -1,19 +1,9 @@
-"""The one door to a language model: task-named, provider-agnostic.
+"""The one door to a language model: named by task, independent of provider.
 
-account-vision.md §13.21. Call sites ask for a task -- `extract_document` --
-never for a provider. Which provider and model answer is configuration
-(LLM_PROVIDER, LLM_MODEL_EXTRACT, LLM_API_KEY), so switching is an env change
-plus a rerun of the golden-document eval, not an edit.
-
-What may be sent is decided by the caller, and the caller is narrow on purpose:
-syllabi, which are course documents. Personal documents are not sent until
-their rule is decided (Phase 1 D3), and nothing identifying a user -- no
-email, no name, no id -- goes in a request.
-
-Each provider is two pure functions, a request builder and a response reader,
-so the shapes are tested without the network. The live call is one place.
-Untested against the live APIs until a key exists: the first real parse should
-be watched (see Phase 1 decisions).
+Callers ask for a task (`extract_document`); which provider and model answer is
+configuration (`LLM_PROVIDER`, `LLM_MODEL_EXTRACT`, `LLM_API_KEY`). Each provider is
+a pure request builder and response reader, so their shapes are tested without the
+network; nothing identifying a user is ever sent.
 """
 
 import base64
@@ -29,24 +19,44 @@ MAX_OUTPUT_TOKENS = 4096
 
 
 class NotConfigured(Exception):
-    """No provider, model or key: the feature reports itself unavailable."""
+    """Raised when no usable provider, model and key are configured."""
 
 
 class ProviderError(Exception):
-    """The provider answered with something unusable, or not at all."""
+    """Raised when the provider cannot be reached, refuses, or answers unusably."""
 
 
 def configured() -> bool:
+    """Return whether a provider, model and key are set; the provider is not checked.
+
+    Returns:
+        True when all three settings are non-empty.
+    """
     return bool(settings.LLM_PROVIDER and settings.LLM_MODEL_EXTRACT and settings.LLM_API_KEY)
 
 
 def _b64(content: bytes) -> str:
+    """Return bytes as base64 text."""
     return base64.b64encode(content).decode("ascii")
 
 
 # --- request builders: (url, headers, body) --------------------------------
 
 def openai_request(model: str, key: str, system: str, prompt: str, content: bytes, media_type: str, filename: str):
+    """Return the (url, headers, body) for an OpenAI chat completion asking for JSON.
+
+    Args:
+        model: The provider's model name.
+        key: The provider's API key.
+        system: The system instruction.
+        prompt: The task prompt sent after the document.
+        content: The document's bytes.
+        media_type: "application/pdf" or "text/plain"; text is decoded as UTF-8.
+        filename: The document's file name.
+
+    Returns:
+        The request's URL, headers and JSON body.
+    """
     if media_type == "application/pdf":
         document = {"type": "file", "file": {
             "filename": filename, "file_data": f"data:application/pdf;base64,{_b64(content)}",
@@ -69,6 +79,22 @@ def openai_request(model: str, key: str, system: str, prompt: str, content: byte
 
 
 def gemini_request(model: str, key: str, system: str, prompt: str, content: bytes, media_type: str, filename: str):
+    """Return the (url, headers, body) for a Gemini call asking for JSON.
+
+    The key travels in a header, never in the URL.
+
+    Args:
+        model: The provider's model name.
+        key: The provider's API key.
+        system: The system instruction.
+        prompt: The task prompt sent after the document.
+        content: The document's bytes.
+        media_type: "application/pdf" or "text/plain"; text is decoded as UTF-8.
+        filename: The document's file name.
+
+    Returns:
+        The request's URL, headers and JSON body.
+    """
     if media_type == "application/pdf":
         document = {"inline_data": {"mime_type": "application/pdf", "data": _b64(content)}}
     else:
@@ -86,6 +112,20 @@ def gemini_request(model: str, key: str, system: str, prompt: str, content: byte
 
 
 def anthropic_request(model: str, key: str, system: str, prompt: str, content: bytes, media_type: str, filename: str):
+    """Return the (url, headers, body) for an Anthropic Messages API call.
+
+    Args:
+        model: The provider's model name.
+        key: The provider's API key.
+        system: The system instruction.
+        prompt: The task prompt sent after the document.
+        content: The document's bytes.
+        media_type: "application/pdf" or "text/plain"; text is decoded as UTF-8.
+        filename: The document's file name.
+
+    Returns:
+        The request's URL, headers and JSON body.
+    """
     if media_type == "application/pdf":
         document = {"type": "document", "source": {
             "type": "base64", "media_type": "application/pdf", "data": _b64(content),
@@ -107,14 +147,38 @@ def anthropic_request(model: str, key: str, system: str, prompt: str, content: b
 # --- response readers: provider JSON -> the model's text -------------------
 
 def openai_text(body: dict) -> str:
+    """Return the answer text from an OpenAI chat completion response.
+
+    Args:
+        body: The parsed JSON response.
+
+    Returns:
+        The first choice's message content.
+    """
     return body["choices"][0]["message"]["content"]
 
 
 def gemini_text(body: dict) -> str:
+    """Return the answer text from a Gemini response, its parts joined.
+
+    Args:
+        body: The parsed JSON response.
+
+    Returns:
+        The text of the first candidate's parts, concatenated.
+    """
     return "".join(part.get("text", "") for part in body["candidates"][0]["content"]["parts"])
 
 
 def anthropic_text(body: dict) -> str:
+    """Return the answer text from an Anthropic response, its text blocks joined.
+
+    Args:
+        body: The parsed JSON response.
+
+    Returns:
+        The text of every text block, concatenated.
+    """
     return "".join(block.get("text", "") for block in body["content"] if block.get("type") == "text")
 
 
@@ -123,10 +187,21 @@ PROVIDERS = {
     "gemini": (gemini_request, gemini_text),
     "anthropic": (anthropic_request, anthropic_text),
 }
+"""Each supported `LLM_PROVIDER` value and its (request builder, response reader)."""
 
 
 def parse_json(text: str) -> dict:
-    """The model's answer as JSON, tolerating a fenced code block around it."""
+    """Return the model's answer as a JSON object, tolerating a fenced code block.
+
+    Args:
+        text: The model's answer.
+
+    Returns:
+        The decoded object.
+
+    Raises:
+        ProviderError: If the answer is not JSON or not an object.
+    """
     cleaned = text.strip()
     fence = re.match(r"^```(?:json)?\s*(.*?)\s*```$", cleaned, re.DOTALL)
     if fence:
@@ -143,10 +218,24 @@ def parse_json(text: str) -> dict:
 def extract_document(
     content: bytes, media_type: str, filename: str, system: str, prompt: str, *, transport=None,
 ) -> dict:
-    """Read a document into the JSON the prompt describes.
+    """Send a document to the configured model and return its JSON answer.
 
-    `transport` stands in for the network in tests: a callable taking
-    (url, headers, body) and returning the provider's JSON.
+    Args:
+        content: The document's bytes.
+        media_type: "application/pdf" or "text/plain".
+        filename: The document's file name.
+        system: The system instruction.
+        prompt: The task prompt, describing the JSON wanted.
+        transport: Stand-in for the network in tests: a callable taking (url, headers,
+            body) and returning the provider's JSON; None makes the real call.
+
+    Returns:
+        The model's answer as a dict.
+
+    Raises:
+        NotConfigured: If no provider, model or key is set, or the provider is unknown.
+        ProviderError: If the provider is unreachable, refuses, or answers with an
+            unexpected shape or non-JSON text.
     """
     if not configured():
         raise NotConfigured
@@ -168,6 +257,20 @@ def extract_document(
 
 
 def http_post(url: str, headers: dict, body: dict) -> dict:
+    """POST a JSON body to a provider and return its JSON answer (90 s timeout).
+
+    Args:
+        url: The provider endpoint.
+        headers: Request headers, including the key.
+        body: The JSON body.
+
+    Returns:
+        The decoded response body.
+
+    Raises:
+        ProviderError: If the request fails or the status is 400 or above; the message
+            carries only the status, never the provider's body.
+    """
     try:
         response = requests.post(url, headers=headers, json=body, timeout=TIMEOUT_SECONDS)
     except requests.RequestException as exc:

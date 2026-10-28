@@ -1,3 +1,5 @@
+"""Usage routes under `/api/usage`: the client reports module visits."""
+
 from fastapi import APIRouter, Response, status
 
 from app._database.dependencies import DBSession
@@ -10,6 +12,15 @@ router = APIRouter()
 
 @router.post("/{user_id}/visits", status_code=status.HTTP_204_NO_CONTENT)
 def add_visit(user_id: VerifiedUserId, visit: VisitCreate, db: DBSession):
-    """Count today's visit to a module. Answers 204 whatever happens to the count."""
+    """Count today's visit to a module; answers 204 whatever happens to the count.
+
+    Args:
+        user_id: The verified caller's id.
+        visit: The module, and whether a notification prompted the visit.
+        db: Request-scoped database session.
+
+    Returns:
+        204 No Content.
+    """
     record(db, user_id, PROMPTED_VISIT if visit.prompted else VISIT, visit.module.value)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

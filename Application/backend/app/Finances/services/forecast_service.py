@@ -1,28 +1,11 @@
-"""Where the spending accounts are heading: a dated forecast, runway, run-rates.
+"""Service functions for the cash-flow forecast: balance ahead, runway and run-rates.
 
-Phase 1 item 9 (account-vision.md §13.3), the money room's edge: not another
-ledger, but "at this pace you go negative on March 3". Every number is
-arithmetic over things the app already holds, and every response says what it
-assumed, because a forecast that hides its assumptions misleads real decisions.
-
-What goes in, and why each piece is counted once:
-
-* **Starting point:** spending-account balances, exactly as safe-to-spend counts
-  them. Savings and investments are money already decided against.
-* **Standing instructions:** the projections `/recurring/upcoming` already
-  makes, as they touch the spending accounts. A transfer to savings is money
-  leaving; a transfer between two spending accounts nets to nothing.
-* **Pay:** each current job's pay dates. An hourly job is paid for its
-  scheduled shifts since the pay date before; the first cheque also carries the
-  work no cheque has covered yet. A salaried job pays its period amount. Pay is
-  taken net of the deduction rate your recorded cheques show, and only the
-  spending accounts' share of your income split counts.
-* **Day-to-day spending:** the average of recent one-off expenses -- expenses
-  with no standing instruction behind them and no tuition, from the spending
-  accounts and from cards -- carried forward daily from tomorrow. Card
-  purchases count as they happen because the card is paid off by a transfer,
-  which the pace never sees. Recurring rows are left out of the average because they
-  are already projected individually; counting both would charge rent twice.
+Arithmetic over figures the app already holds, from today to the term's end:
+spending balances as safe-to-spend counts them, standing instructions as
+`/recurring/upcoming` projects them, pay from each current job's pay dates (net
+of the deduction rate recent cheques show, at the spending accounts' share of
+the income split), and day-to-day spending at the recent one-off pace. Every
+response lists what it assumed. `plan_service` reuses the pieces.
 """
 
 import re
@@ -81,6 +64,21 @@ RUN_RATE_MIN_OCCURRENCES = 2
 
 
 def forecast(db: Session, user_id: uuid.UUID, on_day: date | None = None) -> CashFlowForecast | None:
+    """Return the forecast for the user's counted spending accounts.
+
+    Args:
+        db: Open database session.
+        user_id: Whose money.
+        on_day: The day to forecast from; defaults to the user's today.
+
+    Returns:
+        The daily balances, the dated events, when the balance first goes below
+        zero, its lowest point, runway, run-rates and the assumptions; None when
+        the user does not exist.
+
+    Raises:
+        ValueError: If the recurring projection refuses the window.
+    """
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
     if user is None:
         return None
@@ -152,10 +150,16 @@ def forecast(db: Session, user_id: uuid.UUID, on_day: date | None = None) -> Cas
 # --- the horizon and the history ------------------------------------------
 
 def horizon(user: UserModel, anchor: date) -> tuple[date, bool]:
-    """The end of the current term, or sixteen weeks when that isn't known.
+    """Return the forecast's end: the current term's last day, or 16 weeks out.
 
-    A term that ends within the next week falls back too: a forecast of six days
-    answers nothing a student would ask it.
+    The term's end is used only when it falls between a week and `MAX_DAYS` ahead.
+
+    Args:
+        user: The user, for their term and first-year anchor.
+        anchor: Today.
+
+    Returns:
+        The end date and whether it is the term's end.
     """
     span = term_dates(user.current_semester, user.current_school_year, user.first_year_calendar_year)
     if span is not None:
@@ -166,10 +170,18 @@ def horizon(user: UserModel, anchor: date) -> tuple[date, bool]:
 
 
 def days_of_history(db: Session, user_id: uuid.UUID, anchor: date) -> int:
-    """How many days of the look-back the ledger actually covers.
+    """Return how many days of the 56-day look-back the user's ledger actually covers.
 
-    An account opened three weeks ago has three weeks of pace, not eight; dividing
-    its spending by 56 would understate it by more than half.
+    Counted from the earliest row before today on a counted account, so a new
+    ledger's pace is not understated by dividing by 56.
+
+    Args:
+        db: Open database session.
+        user_id: Whose ledger.
+        anchor: Today.
+
+    Returns:
+        0 to `LOOKBACK_DAYS`; 0 when there is no history.
     """
     first = (
         db.query(TransactionModel.occurred_on)
@@ -187,11 +199,14 @@ def days_of_history(db: Session, user_id: uuid.UUID, anchor: date) -> int:
 
 
 def debt_account_ids(db: Session, user_id: uuid.UUID) -> set[uuid.UUID]:
-    """Cards and loans: a purchase on one is spending the spending accounts will pay.
+    """Return the ids of the user's counted, unarchived debt accounts.
 
-    Paying a card off is a transfer, which the pace never counts, so leaving
-    card purchases out too would leave a student who pays by card with almost
-    no spending at all.
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+
+    Returns:
+        Ids of the matching accounts; empty when there are none.
     """
     rows = (
         db.query(AccountModel.id)
@@ -203,6 +218,15 @@ def debt_account_ids(db: Session, user_id: uuid.UUID) -> set[uuid.UUID]:
 
 
 def tuition_transaction_ids(db: Session, user_id: uuid.UUID) -> set[uuid.UUID]:
+    """Return the ids of the ledger rows that tuition payments own.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+
+    Returns:
+        Transaction ids owned by a tuition payment.
+    """
     rows = (
         db.query(TuitionPaymentModel.transaction_id)
         .filter(TuitionPaymentModel.user_id == user_id)
@@ -219,7 +243,19 @@ def one_off_expenses(
     excluded: set[uuid.UUID],
     account_ids: set[uuid.UUID] | None = None,
 ) -> list[TransactionModel]:
-    """Recent expenses with no standing instruction behind them and no tuition."""
+    """Return recent expenses with no standing instruction behind them and no tuition.
+
+    Args:
+        db: Open database session.
+        user_id: Whose ledger.
+        anchor: Today; rows from before today count.
+        history_days: How far back to look.
+        excluded: Row ids to leave out (tuition).
+        account_ids: Only these accounts; None for every counted account.
+
+    Returns:
+        The expense rows; empty with no history or an empty account set.
+    """
     if history_days == 0:
         return []
     query = db.query(TransactionModel).filter(
@@ -246,6 +282,19 @@ def daily_one_off_spending(
     history_days: int,
     excluded: set[uuid.UUID],
 ) -> float:
+    """Return the average one-off spending per day over the look-back, never negative.
+
+    Args:
+        db: Open database session.
+        user_id: Whose ledger.
+        spendable_ids: Accounts to read (spending and debt).
+        anchor: Today.
+        history_days: Days the average is taken over.
+        excluded: Row ids to leave out (tuition).
+
+    Returns:
+        Dollars per day, rounded to cents; 0 with no history.
+    """
     rows = one_off_expenses(db, user_id, anchor, history_days, excluded, spendable_ids)
     if not rows:
         return 0.0
@@ -265,6 +314,22 @@ def recurring_events(
     end: date,
     share: float,
 ) -> list[ForecastEvent]:
+    """Turn the standing instructions due in a window into events on the given accounts.
+
+    An expense or income counts when its account is in the set; a transfer counts by
+    its net effect on the set; a deposit counts at `share`.
+
+    Args:
+        db: Open database session.
+        user_id: Whose instructions.
+        spendable_ids: The accounts being forecast.
+        start: First date, inclusive.
+        end: Last date, inclusive.
+        share: The fraction of a deposit that lands in those accounts.
+
+    Returns:
+        The events, skipping any that leave the set unchanged.
+    """
     events: list[ForecastEvent] = []
     for charge in upcoming(db, user_id, start, end) or []:
         if charge.kind == "deposit":
@@ -293,14 +358,30 @@ def recurring_events(
 
 
 def pay_dates(job: JobModel, start: date, end: date) -> list[date]:
-    """The job's pay dates in the window, by whichever schedule it has."""
+    """Return a job's pay dates in a window, by whichever schedule it has.
+
+    Args:
+        job: The job whose pay schedule to read.
+        start: First day of the window, inclusive.
+        end: Last day of the window, inclusive.
+
+    Returns:
+        Pay dates in the window, from `pay_schedule.pay_dates`.
+    """
     return job_pay_dates(job, start, end)
 
 
 def spendable_income_share(db: Session, user_id: uuid.UUID, spendable_ids: set[uuid.UUID]) -> float | None:
-    """The fraction of a deposit the income split sends to spending accounts.
+    """Return the fraction of incoming money the income split sends to some accounts.
 
-    None when no split is set: a deposit then has nowhere defined to go.
+    Args:
+        db: Open database session.
+        user_id: Whose accounts.
+        spendable_ids: The accounts whose share is wanted.
+
+    Returns:
+        Their shares over the total of every unarchived account's share; None
+        when no account has a share.
     """
     accounts = (
         db.query(AccountModel)
@@ -315,7 +396,15 @@ def spendable_income_share(db: Session, user_id: uuid.UUID, spendable_ids: set[u
 
 
 def income_share_note(share: float | None) -> str:
-    """What was assumed about where pay and deposits land."""
+    """Return the assumption sentence about where pay and deposits land.
+
+    Args:
+        share: Fraction of income that lands in spending accounts, 0-1; None when no
+            split is set.
+
+    Returns:
+        The sentence to list among the forecast's assumptions.
+    """
     if share is None:
         return "No income split is set, so pay and deposits are assumed to land in your spending accounts."
     return (
@@ -333,6 +422,26 @@ def pay_events(
     share: float,
     assumptions: list[str],
 ) -> list[ForecastEvent]:
+    """Return the pay each current job is expected to bring in a window.
+
+    Pay dates come from each unended, unarchived job's schedule, from tomorrow. An
+    hourly cheque pays the scheduled shifts since the previous pay date (the first
+    also carries work no cheque has covered); a salaried one pays its period amount;
+    contract jobs are not predicted. Amounts are taken after the recent deduction
+    rate and scaled by `share`. Notes are appended to `assumptions`.
+
+    Args:
+        db: Open database session.
+        user_id: Whose jobs.
+        spendable_ids: The accounts being forecast.
+        anchor: Today.
+        end: Last date, inclusive.
+        share: The fraction of pay that lands in those accounts.
+        assumptions: The list to add assumption sentences to.
+
+    Returns:
+        The pay events; empty when there are no current jobs.
+    """
     jobs = (
         db.query(JobModel)
         .filter(JobModel.user_id == user_id, JobModel.ended_on.is_(None), JobModel.archived.is_(False))
@@ -409,7 +518,22 @@ def pay_events(
 def project(
     starting: float, daily: float, events: list[ForecastEvent], start: date, end: date,
 ) -> tuple[list[ForecastPoint], date | None, float, date]:
-    """Walk the days. Today keeps what has already been spent; spending starts tomorrow."""
+    """Walk the balance day by day from today to the end of the window.
+
+    Today keeps what was already spent; daily spending starts tomorrow. Events land
+    on their dates.
+
+    Args:
+        starting: Today's balance.
+        daily: Spending per day from tomorrow.
+        events: Dated movements, signed.
+        start: Today.
+        end: The last day, inclusive.
+
+    Returns:
+        The daily points, the first day below zero (or None), the lowest balance
+        and its day.
+    """
     by_day: dict[date, float] = defaultdict(float)
     for event in events:
         by_day[event.on_date] += event.amount
@@ -438,11 +562,21 @@ def project(
 def runway(
     db: Session, user_id: uuid.UUID, anchor: date, history_days: int, assumptions: list[str],
 ) -> Runway | None:
-    """Liquid money divided by the recent net outflow, as a date.
+    """Return how long liquid money lasts at the recent net pace of money in and out.
 
-    All money in and out over the look-back counts here, tuition and rent
-    included, because runway asks "at the pace I have actually been living".
-    Transfers are left out: moving money between your own accounts burns none.
+    Every income and expense on counted accounts over the look-back counts, rent
+    and tuition included; transfers burn nothing. Adds its assumption sentence.
+
+    Args:
+        db: Open database session.
+        user_id: Whose money.
+        anchor: Today.
+        history_days: Days of history to average over.
+        assumptions: The list to add the assumption sentence to.
+
+    Returns:
+        The liquid balance, the daily burn and the day it runs out; None with no
+        history.
     """
     if history_days == 0:
         return None
@@ -489,7 +623,16 @@ _SPACES = re.compile(r"\s+")
 
 
 def merchant_key(description: str | None) -> str:
-    """"Subway #1234" and "SUBWAY 0042" are the same place."""
+    """Normalise a description into a merchant key, dropping digits, # and *.
+
+    "Subway #1234" and "SUBWAY 0042" give the same key; None or empty gives "".
+
+    Args:
+        description: A transaction description; may be None.
+
+    Returns:
+        The lower-cased key, or "" for an empty description.
+    """
     if not description:
         return ""
     return _SPACES.sub(" ", _NOISE.sub(" ", description.lower())).strip(" -.,")
@@ -503,9 +646,21 @@ def run_rates(
     history_days: int,
     excluded: set[uuid.UUID],
 ) -> list[MerchantRunRate]:
-    """The one-off places spending goes most, carried at their pace to the horizon.
+    """Return the merchants taking the most one-off spending, carried to the horizon.
 
-    Every account, cards included: a coffee on credit is still a coffee.
+    Every counted account counts, cards included. A merchant needs at least two
+    purchases in the look-back.
+
+    Args:
+        db: Open database session.
+        user_id: Whose ledger.
+        anchor: Today.
+        ends_on: The forecast's horizon.
+        history_days: Days of history the pace is taken over.
+        excluded: Row ids to leave out (tuition).
+
+    Returns:
+        Up to five merchants, by projected spending.
     """
     rows = one_off_expenses(db, user_id, anchor, history_days, excluded)
     groups: dict[str, list[TransactionModel]] = defaultdict(list)
@@ -534,4 +689,12 @@ def run_rates(
 
 
 def money_text(amount: float) -> str:
+    """Format dollars for a sentence, such as "$1,234.50".
+
+    Args:
+        amount: Dollars.
+
+    Returns:
+        The amount with a dollar sign, thousands separators and cents.
+    """
     return f"${amount:,.2f}"

@@ -1,3 +1,11 @@
+"""User accounts: sign-up, sign-in lookups, profile and preference edits, and deletion.
+
+Lookups by email or Google id go through the definer functions in `identity.py`
+and then `act_as` the account they found, so its row can be read under row
+security. Deletion is requested, revocable for `DELETION_GRACE_DAYS`, and carried
+out by `purge_expired_users` at startup.
+"""
+
 import logging
 from datetime import date, datetime, time, timedelta
 from uuid import UUID, uuid4
@@ -35,6 +43,22 @@ from app.Users.schemas.user import (
 
 
 def create_user(db: Session, user_data: UserCreate):
+    """Create an account from a verified Google sign-in.
+
+    Args:
+        db: Request-scoped database session; it is made to act as the new account.
+        user_data: Name, email and Google id from the verified token.
+
+    Returns:
+        The new user, with `email_verified` set.
+
+    Raises:
+        ValueError: If another account already has the email.
+
+    Note:
+        Commits. The sign-up allowlist is checked by the caller,
+        `get_or_create_user_by_google_id`.
+    """
     if email_taken(db, user_data.email):
         raise ValueError(error_user["already_exists"])
 
@@ -58,16 +82,27 @@ def create_user(db: Session, user_data: UserCreate):
 
 
 def get_user(db: Session, user_id: UUID):
+    """Return the user row for an id, or None (row security shows only the actor).
+
+    Args:
+        db: Open database session.
+        user_id: Id to look up.
+
+    Returns:
+        The user row, or None.
+    """
     return db.query(UserModel).filter(UserModel.id == user_id).first()
 
 
 def get_user_by_email(db: Session, email: str):
-    """The account for ``email``, and from here on the session acts for it.
+    """Return the account registered to an email, and make the session act as it.
 
-    Only sign-in and registration ask this, and both are about that account:
-    signing in makes it the caller, and registration needs to know what kind of
-    account already holds the address. Acting as it is what lets the row be
-    read under row-level security.
+    Args:
+        db: Request-scoped database session.
+        email: Address to look up, case-insensitively.
+
+    Returns:
+        The user, or None when no account has the address.
     """
     user_id = user_id_by_email(db, email)
     if user_id is None:
@@ -77,7 +112,23 @@ def get_user_by_email(db: Session, email: str):
 
 
 def create_local_user(db: Session, data: RegisterRequest):
-    """Register an email + password account."""
+    """Register an email-and-password account.
+
+    Args:
+        db: Request-scoped database session.
+        data: Name, normalised email and password.
+
+    Returns:
+        The new user; `email_verified` stays False, since nothing proves the mailbox.
+
+    Raises:
+        ValueError: If the address is not on the sign-up allowlist; if an account
+            already holds it (with a message pointing to Google when that account
+            uses Google); or if a concurrent registration of the same address won.
+
+    Note:
+        Commits. Never attaches a password to an existing account.
+    """
     if not may_sign_up(data.email):
         raise ValueError(error_auth["not_invited"])
 
@@ -118,12 +169,19 @@ def create_local_user(db: Session, data: RegisterRequest):
 
 
 def authenticate_local_user(db: Session, email: str, password: str):
-    """Return the user for valid credentials, otherwise None.
+    """Return the user for a correct email and password, otherwise None.
 
-    The caller must not distinguish the failure cases in its response. An
-    unregistered address, a Google-only account, and a wrong password all
-    return None, and the no-account path still spends a bcrypt verification
-    so the three take comparable time.
+    Every failure (no account, no password on the account, wrong password) returns
+    None, and the no-account path spends a bcrypt verification so all take comparable
+    time. The caller must answer them identically.
+
+    Args:
+        db: Request-scoped database session.
+        email: The normalised address.
+        password: The password as typed.
+
+    Returns:
+        The user, or None.
     """
     user = get_user_by_email(db, email)
     if user is None or not user.password_hash:
@@ -135,7 +193,15 @@ def authenticate_local_user(db: Session, email: str, password: str):
 
 
 def get_user_by_google_id(db: Session, google_id: str):
-    """The account linked to ``google_id``; the session then acts for it."""
+    """Return the account linked to a Google subject, and make the session act as it.
+
+    Args:
+        db: Open session; it acts as the account found.
+        google_id: The Google account's subject (`sub`).
+
+    Returns:
+        The user row, or None when no account is linked to it.
+    """
     user_id = user_id_by_google_id(db, google_id)
     if user_id is None:
         return None
@@ -144,11 +210,21 @@ def get_user_by_google_id(db: Session, google_id: str):
 
 
 def get_or_create_user_by_google_id(db: Session, user_data: UserCreate):
-    """Login-or-signup entry point for the Google OAuth flow.
+    """Sign in with Google: find by Google id, then by email, or else create.
 
-    Google is reached only after ``verify_google_token`` has confirmed
-    ``email_verified``, so arriving here proves the person controls the
-    address. That is what makes linking safe.
+    An existing account found by email gets the Google identity linked. Only creation
+    is gated by the sign-up allowlist; existing accounts always sign in.
+
+    Args:
+        db: Request-scoped database session.
+        user_data: Details from a token whose email Google verified.
+
+    Returns:
+        The signed-in user.
+
+    Raises:
+        ValueError: If a new account would be needed and the address is not on the
+            allowlist, or another account took the address meanwhile.
     """
     existing = get_user_by_google_id(db, user_data.google_id)
     if existing is not None:
@@ -168,17 +244,21 @@ def get_or_create_user_by_google_id(db: Session, user_data: UserCreate):
 
 
 def link_google_to_account(db: Session, user: UserModel, google_id: str):
-    """Attach a verified Google identity to an existing local account.
+    """Attach a verified Google identity to an existing account.
 
-    Local signup cannot verify an address — there is no verification email —
-    so a password on an unverified account proves nothing about who owns the
-    mailbox. Someone could register victim@example.com before the real owner
-    ever signs in with Google, then keep password access to their account
-    afterwards (an account pre-hijacking attack).
+    An unverified account's password is dropped, since it proves nothing about who owns
+    the mailbox (pre-hijacking); the email is then marked verified.
 
-    Google's assertion settles ownership, so the unproven password is dropped
-    at link time. The real owner can set a new one from account settings once
-    signed in.
+    Args:
+        db: Request-scoped database session.
+        user: The account to link.
+        google_id: Google's subject id.
+
+    Returns:
+        The updated user.
+
+    Note:
+        Commits.
     """
     user.google_id = google_id
     if not user.email_verified:
@@ -190,11 +270,23 @@ def link_google_to_account(db: Session, user: UserModel, google_id: str):
 
 
 def set_password(db: Session, user: UserModel, new_password: str, current_password: str | None = None):
-    """Add or change the password on the signed-in user's account.
+    """Add a first password, or change the current one, on the signed-in account.
 
-    Changing an existing password requires the current one, so a stolen
-    session cannot silently lock the owner out. An account with no password
-    yet (Google signup) can set its first one without that step.
+    Args:
+        db: Request-scoped database session.
+        user: The signed-in user.
+        new_password: The new password, already length-checked.
+        current_password: Required when the account already has a password.
+
+    Returns:
+        The updated user.
+
+    Raises:
+        ValueError: If the current password is missing or wrong.
+
+    Note:
+        Commits and bumps `session_epoch`, revoking every outstanding session; the
+        route issues a fresh token.
     """
     if user.has_password:
         if not current_password:
@@ -213,6 +305,25 @@ def set_password(db: Session, user: UserModel, new_password: str, current_passwo
 
 
 def update_user(db: Session, user_id: UUID, data: UserUpdate):
+    """Apply a partial edit to the user's name, email and preferences.
+
+    Preferences are merged over the stored ones, as JSON, only for the keys sent. A
+    changed email is no longer verified.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        data: The fields to change.
+
+    Returns:
+        The updated user, or None when the user does not exist.
+
+    Raises:
+        ValueError: If another account already has the new email.
+
+    Note:
+        Commits.
+    """
     user = get_user(db, user_id)
     if user is None:
         return None
@@ -269,15 +380,34 @@ def update_user(db: Session, user_id: UUID, data: UserUpdate):
 
 
 def get_preferences(user: UserModel) -> UserPreferences:
-    """Stored preferences, filled in with defaults for anything unset."""
+    """Return the user's stored preferences with defaults filled in.
+
+    Args:
+        user: The user row.
+
+    Returns:
+        The preferences, every key present.
+
+    Raises:
+        pydantic.ValidationError: If a stored value no longer validates.
+    """
     return UserPreferences(**(user.preferences or {}))
 
 
 def update_academic_status(db: Session, user_id: UUID, data: AcademicStatusUpdate):
-    """Set which term the student is currently in.
+    """Set the student's current school year, term, term label and first-year anchor.
 
-    Everything past/current/future on the grades page is decided by comparing a
-    course against these three fields.
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        data: The fields to change; omitted ones stay, explicit nulls clear.
+
+    Returns:
+        The updated user with `suggested_first_year` attached, or None when the user
+        does not exist.
+
+    Note:
+        Commits.
     """
     user = get_user(db, user_id)
     if user is None:
@@ -300,11 +430,14 @@ def update_academic_status(db: Session, user_id: UUID, data: AcademicStatusUpdat
 
 
 def attach_year_suggestion(db: Session, user: UserModel) -> UserModel:
-    """Put the anchor Settings should offer onto the payload.
+    """Attach the first-year anchor suggested by the user's dated courses.
 
-    Read-only and derived, so it is attached rather than stored -- the same
-    shape `attach_course_code` and `attach_balances` use. A student who has
-    entered no dates anywhere gets None and types the year themselves.
+    Args:
+        db: Open database session.
+        user: The user row; `suggested_first_year` is set on it, not stored.
+
+    Returns:
+        The same user.
     """
     user.suggested_first_year = suggest_first_year(
         db.query(CourseModel).filter(CourseModel.user_id == user.id).all()
@@ -313,21 +446,33 @@ def attach_year_suggestion(db: Session, user: UserModel) -> UserModel:
 
 
 def deletes_on(user: UserModel) -> date | None:
-    """The day a deleted account stops being recoverable."""
+    """Return the day a deleted account stops being recoverable, else None.
+
+    Args:
+        user: The user row.
+
+    Returns:
+        `deleted_at` plus the grace period, as a date; None when not deleted.
+    """
     if user.deleted_at is None:
         return None
     return (user.deleted_at + timedelta(days=DELETION_GRACE_DAYS)).date()
 
 
 def delete_user(db: Session, user_id: UUID):
-    """Mark the account for deletion, rather than destroying it now.
+    """Request deletion of an account; it stays recoverable for the grace period.
 
-    Every session is revoked at the same moment, so a stolen token that asked
-    for this cannot carry on using the account while the grace period runs --
-    the owner signs in again, sees the date, and undoes it.
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
 
-    Nothing is removed here. `purge_expired_users` does that, once the window
-    has actually passed.
+    Returns:
+        The user with `deleted_at` set, or None when the user does not exist. A repeat
+        request changes nothing.
+
+    Note:
+        Commits and bumps `session_epoch`, signing every session out, so a stolen
+        token that asked for this cannot keep using the account.
     """
     user = get_user(db, user_id)
     if user is None:
@@ -343,7 +488,18 @@ def delete_user(db: Session, user_id: UUID):
 
 
 def restore_user(db: Session, user_id: UUID):
-    """Cancel a pending deletion. Returns None if there is nothing to cancel."""
+    """Cancel a pending account deletion.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+
+    Returns:
+        The restored user, or None when there was no pending deletion.
+
+    Note:
+        Commits.
+    """
     user = get_user(db, user_id)
     if user is None or user.deleted_at is None:
         return None
@@ -355,14 +511,21 @@ def restore_user(db: Session, user_id: UUID):
 
 
 def purge_expired_users(db: Session, on_day: date | None = None) -> int:
-    """Really delete the accounts whose grace period has run out.
+    """Delete for good every account whose deletion grace period has passed.
 
-    Deleted one at a time through the ORM rather than in a bulk statement, so
-    the cascades on UserModel actually run -- a bulk delete bypasses them and
-    would leave exactly the orphans those cascades exist to prevent.
+    Each account is purged as itself, through the ORM so every cascade runs: its kept
+    syllabus files first, then its rows. An account whose files cannot be deleted, or
+    whose delete fails, is rolled back, logged and left for the next purge.
 
-    Idempotent, and safe to call on every startup: a user is only past the
-    deadline once, and after this call they are gone.
+    Args:
+        db: A session of its own; it is made to act as each account in turn.
+        on_day: Day to measure the grace period from, for tests; None means now.
+
+    Returns:
+        How many accounts were purged.
+
+    Note:
+        Commits once per account. Idempotent; runs at every startup.
     """
     cutoff = utc_now() - timedelta(days=DELETION_GRACE_DAYS)
     if on_day is not None:

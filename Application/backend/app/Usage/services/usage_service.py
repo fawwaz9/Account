@@ -1,18 +1,8 @@
-"""Recording that someone used a module today. Phase 0, item 4.
+"""Counting module use: one counter per user, day, kind and module.
 
-Two kinds, both counted per user per day per module:
-
-* **visit** -- a page of the module was opened. Sent by the client, once per
-  module per day per tab, because only the client knows which page is open: the
-  dashboard alone reads grades, budget and calendar data, so counting API calls
-  would say everyone visits every room every day.
-* **create** -- something was added in it. Recorded by the create routes
-  themselves, which is what makes time-to-first-value measurable.
-
-**Recording never breaks the thing being recorded.** It runs after the action
-has committed, inside its own savepoint, and swallows its own failures. A lost
-counter is a rounding error in a report; a course that failed to save because a
-counter did is a broken app.
+Visits come from the client, once per module per day per tab; creates are recorded by
+the create routes after their own commit. Recording never breaks what it records: it
+runs in its own savepoint and swallows its failures.
 """
 import logging
 import uuid
@@ -25,15 +15,29 @@ from app.shared.dates import user_today
 logger = logging.getLogger("app.usage")
 
 VISIT = "visit"
+"""A page of the module was opened."""
 #: A visit that began from a push notification. Kept as its own kind rather
 #: than a flag so the per-day counter stays one row per kind, and so an
 #: unprompted visit later the same day is still counted as one.
 PROMPTED_VISIT = "prompted_visit"
 CREATE = "create"
+"""Something was added in the module."""
 
 
 def record(db: Session, user_id: uuid.UUID, kind: str, module: str) -> None:
-    """Count one ``kind`` of use of ``module`` for today. Never raises."""
+    """Count one use of a module for the user's local today; never raises.
+
+    Args:
+        db: The request's session, with the action already committed.
+        user_id: The user.
+        kind: `VISIT`, `PROMPTED_VISIT` or `CREATE`.
+        module: The module name, such as "grades".
+
+    Note:
+        Skipped, with a warning, when the session holds unsaved changes, so it never
+        commits or rolls back the caller's work. Commits its own change; any failure is
+        logged and rolled back.
+    """
     if db.new or db.dirty or db.deleted:
         # Something unsaved is in the session. Recording now would either
         # commit it as a side effect or, on failure, roll it back -- both the

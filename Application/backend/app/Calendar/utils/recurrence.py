@@ -1,21 +1,10 @@
-"""Turning a repeat rule into the dates it actually falls on.
+"""Expand a stored repeat rule into the dates it falls on.
 
-A repeating event is stored as the rule that generates it and nothing else.
-Writing the occurrences out as rows would mean thirty-six lecture rows per
-course per term, all of which need rewriting when the room changes, and no way
-to ask "does this repeat?" without counting them. So occurrences are
-materialised here, on read, for the window the caller asked for.
-
-The rule is a small fixed set -- frequency, interval, weekdays, and an end
-expressed either as a last date or a number of occurrences -- rather than a full
-RFC 5545 RRULE string. A timetable, a monthly payment and a weekly chore are all
-expressible in it, it survives being read in a database browser, and it needs no
-parser. If something later genuinely needs BYSETPOS, that is the point to reach
-for a library, not before.
-
-This module is pure: dates in, dates out, no session and no models. It is meant
-to be the one scheduler in the app -- class times, recurring payments and
-repeating tasks all resolve through it.
+A repeating thing is stored as its rule (five `recur_*` columns), never as a row
+per date; this module turns the rule into occurrences on read, for the window a
+caller asks for. It is pure (dates in, dates out, no session or models) and is
+the one scheduler behind class times, shifts, standing payments, repeating tasks
+and pay schedules.
 """
 
 from dataclasses import dataclass
@@ -42,7 +31,21 @@ MAX_STEPS = 20_000
 
 @dataclass(frozen=True)
 class Rule:
-    """How an event repeats. `freq` of None is a one-off."""
+    """A repeat rule: how often, on which weekdays, and when it stops.
+
+    Attributes:
+        freq: "daily", "weekly" or "monthly"; None, or any other value, is a one-off.
+        interval: Units of `freq` between occurrences; values below 1 act as 1.
+        byday: Weekday codes ("MO" to "SU") a weekly rule falls on; empty means the
+            weekday `starts_on` falls on. Ignored by other frequencies.
+        until: Last date the series may produce, inclusive; None for no end date.
+        count: How many occurrences the series runs, counted from its first date;
+            None for no limit.
+
+    Note:
+        The API's `Recurrence` refuses `until` and `count` together; if both reach
+        the engine anyway, whichever ends the series first wins.
+    """
 
     freq: str | None = None
     interval: int = 1
@@ -54,11 +57,20 @@ class Rule:
 
     @property
     def repeats(self) -> bool:
+        """Whether the rule repeats at all, rather than describing a one-off."""
         return self.freq in FREQUENCIES
 
 
 def parse_byday(raw: str | None) -> tuple[str, ...]:
-    """"MO,WE,FR" -> ("MO", "WE", "FR"), ignoring anything unrecognised."""
+    """Parse a stored weekday list such as "MO,WE,FR" into a tuple of codes.
+
+    Args:
+        raw: Comma-separated weekday codes, any case, as stored in `recur_byday`.
+
+    Returns:
+        The recognised codes in the order given; unknown parts are dropped and
+        duplicates kept. Empty for None or an empty string.
+    """
     if not raw:
         return ()
 
@@ -67,7 +79,15 @@ def parse_byday(raw: str | None) -> tuple[str, ...]:
 
 
 def format_byday(codes: Iterable[str]) -> str | None:
-    """Back to the stored form, in week order so the column reads sensibly."""
+    """Format weekday codes as the stored comma-separated string.
+
+    Args:
+        codes: Weekday codes in any order and case; unknown codes are ignored.
+
+    Returns:
+        The distinct codes joined in Monday-to-Sunday order (for example
+        "MO,WE,FR"), or None when no valid code remains.
+    """
     kept = {code.strip().upper() for code in codes if code.strip().upper() in WEEKDAY_CODES}
     if not kept:
         return None
@@ -76,10 +96,19 @@ def format_byday(codes: Iterable[str]) -> str | None:
 
 
 def add_months(anchor: date, months: int) -> date | None:
-    """The same day of the month, `months` later.
+    """Return the same day of the month a number of months later.
 
-    None when the target month is too short: the 31st simply does not occur in
-    February, and inventing the 28th for it would silently move a rent day.
+    Args:
+        anchor: The starting date; its day of the month is kept.
+        months: How many months to move forward (negative moves back).
+
+    Returns:
+        The shifted date, or None when the target month lacks that day (the 31st in
+        April, the 29th of February in a common year).
+
+    Note:
+        The missing day is skipped rather than clamped to the month's end, so a
+        standing payment on the 31st never quietly moves to the 30th.
     """
     total = anchor.month - 1 + months
     year = anchor.year + total // 12
@@ -91,10 +120,10 @@ def add_months(anchor: date, months: int) -> date | None:
 
 
 def _generated_dates(rule: Rule, starts_on: date) -> Iterator[date]:
-    """Every date the rule produces, ascending and unbounded.
+    """Yield every date the rule produces from `starts_on`, ascending and unbounded.
 
-    Bounding is the caller's job, since `until`, `count` and the requested
-    window each cut the sequence at a different point.
+    The caller applies `until`, `count` and its window; a one-off yields only
+    `starts_on`.
     """
     if not rule.repeats:
         yield starts_on
@@ -141,15 +170,24 @@ def occurrences(
     window_end: date,
     skipped: Iterable[date] = (),
 ) -> list[date]:
-    """The dates this event falls on between `window_start` and `window_end`.
+    """Return the dates a repeating item falls on inside a window.
 
-    Both ends inclusive. `count` is measured from the event's own start rather
-    than from the window, so paging forward a month cannot hand you occurrences
-    seven and eight of a series that was only meant to run five times.
+    Walks the series from its own start, so `count` means the whole series rather
+    than the part inside the window: paging forward never reveals occurrences past
+    the end of a five-time series.
 
-    A skipped date consumes one of `count`, matching how an exception to a
-    series behaves: cancelling one week of a five-week booking leaves four, not
-    five running a week longer.
+    Args:
+        rule: The repeat rule; a one-off rule yields at most `starts_on`.
+        starts_on: The first date of the series, which anchors the rule.
+        window_start: First date to report, inclusive.
+        window_end: Last date to report, inclusive.
+        skipped: Cancelled dates to leave out. Each one still uses up one of
+            `count`, as cancelling one week of a five-week booking leaves four.
+
+    Returns:
+        The occurrence dates in ascending order; empty when none fall in the
+        window. Capped at `MAX_OCCURRENCES` dates, and the walk stops after
+        `MAX_STEPS` generated dates, so an extreme window is silently truncated.
     """
     excluded = set(skipped)
     found: list[date] = []

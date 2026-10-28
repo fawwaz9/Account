@@ -1,3 +1,5 @@
+"""Request and response schemas for courses, their links and their category weights."""
+
 from datetime import date
 from uuid import UUID, uuid4
 from typing import List
@@ -24,13 +26,29 @@ MAX_LINK_URL = 500
 
 
 class CourseLink(BaseModel):
-    """One place a course lives: Canvas, Piazza, a syllabus."""
+    """One place a course lives online, such as Canvas or a syllabus.
+
+    Attributes:
+        title: Link name, 1-40 characters; stripped.
+        url: Address, at most `MAX_LINK_URL` characters; a bare domain gets `https://`,
+            and only http and https are accepted.
+    """
 
     title: str = Field(..., min_length=1, max_length=40)
     url: str = Field(..., min_length=1, max_length=MAX_LINK_URL)
 
     @model_validator(mode="after")
     def validate_link(self):
+        """Strip both fields, add `https://` to a bare domain, allow only http(s).
+
+        Returns:
+            The cleaned link.
+
+        Raises:
+            ValueError: If the name or address is blank, or the scheme is not http or
+                https
+                (a 422).
+        """
         self.title = self.title.strip()
         self.url = self.url.strip()
 
@@ -55,10 +73,14 @@ class CourseLink(BaseModel):
 
 
 def clean_links(links: list["CourseLink"] | None) -> list[dict]:
-    """The stored shape: plain dicts, so the JSON column holds no model objects.
+    """Return links as plain dicts for the JSON column, dropping exact duplicates.
 
-    Duplicate titles are allowed -- two Canvas links for a cross-listed course is
-    a real thing -- but an exact duplicate of both fields is a double-click.
+    Args:
+        links: Validated links; None means none.
+
+    Returns:
+        `{"title", "url"}` dicts in order; a link whose title and url both match an
+        earlier one, ignoring case, is dropped, while a repeated title alone is kept.
     """
     seen: set[tuple[str, str]] = set()
     cleaned: list[dict] = []
@@ -72,7 +94,14 @@ def clean_links(links: list["CourseLink"] | None) -> list[dict]:
 
 
 def clean_section(value: str | None) -> str | None:
-    """A blank section is no section: stored as null, so Attention sees it missing."""
+    """Return a section stripped, or None when it is missing or blank.
+
+    Args:
+        value: The submitted section, such as "101"; may be None.
+
+    Returns:
+        The trimmed section, or None.
+    """
     if value is None:
         return None
     value = value.strip()
@@ -80,11 +109,28 @@ def clean_section(value: str | None) -> str | None:
 
 
 def default_category_weights() -> dict[GradeCategory, float]:
+    """Return every grade category with a weight of 0.
+
+    Returns:
+        A weight of 0.0 for every `GradeCategory`.
+    """
     return dict.fromkeys(GradeCategory, 0.0)
 
 def normalize_category_weights(
     weights: dict[GradeCategory, float] | None
 ) -> dict[GradeCategory, float]:
+    """Return a checked weight for every category, the given ones over zeros.
+
+    Args:
+        weights: Category to weight percentage; None or missing categories get 0.
+
+    Returns:
+        Every `GradeCategory` mapped to its weight.
+
+    Raises:
+        ValueError: If a weight is outside 0-100 or the total exceeds
+            `MAX_TOTAL_WEIGHT`.
+    """
     normalized = default_category_weights()
     if weights:
         normalized.update(weights)
@@ -100,6 +146,29 @@ def normalize_category_weights(
     return normalized
 
 class CourseBase(BaseModel):
+    """A course's fields and the rules a complete course must satisfy.
+
+    Attributes:
+        code: Course code, 3-20 characters, not blank; unique per user.
+        name: Course title, 1-100 characters, not blank.
+        year: School year, 1-10.
+        semester: The term of the school year.
+        credits: Credit value, 0.5-10; 3 by default.
+        required: True for a requirement, False for an elective.
+        professor: Instructor's name, at most 100 characters.
+        section: Section, at most 20 characters; blank is stored as null.
+        final_grade: Final percentage, 0-100; 0 means none recorded, and a transfer
+            credit may not carry one.
+        target_grade: Target percentage, 0-100; null uses the account default.
+        category_weights: Category to weight percentage, each 0-100, total at most
+            `MAX_TOTAL_WEIGHT`; missing categories become 0.
+        start_date: First day of the course.
+        end_date: Last day of the course; not before `start_date`.
+        no_final: The course has no final exam.
+        transfer_credit: Credit granted without taking the course; counts credits only.
+        archived: Kept and averaged, but not counted toward credits completed.
+        links: At most 20 links.
+    """
     code: str = Field(..., min_length=3, max_length=20, description="The unique code for the course (e.g., CS101, MATH202)")
     name: str = Field(..., min_length=1, max_length=100, description="The name of the course (e.g., Introduction to Computer Science, Calculus II)")
     year: int = Field(..., ge=1, le=10, description="The academic year of the course (e.g., 1 for first year, 2 for second year, etc.)")
@@ -124,6 +193,16 @@ class CourseBase(BaseModel):
 
     @model_validator(mode="after")
     def validate_course_logic(self):
+        """Enforce the cross-field rules of a complete course and normalise its weights.
+
+        Returns:
+            The model with its section cleaned and every category weighted.
+
+        Raises:
+            ValueError: If the code or name is blank, the end date is before the start,
+                a transfer credit has a final grade, or a weight is out of range (a
+                422).
+        """
         if self.code.strip() == "":
             raise ValueError("course code cannot be empty")
 
@@ -145,13 +224,28 @@ class CourseBase(BaseModel):
         return self
 
 class CourseCreate(CourseBase):
+    """Request body for adding a course; the fields and rules of `CourseBase`."""
     pass
 
 class CategoryWeightsUpdate(BaseModel):
+    """Request body replacing a course's category weights.
+
+    Attributes:
+        category_weights: Category to weight percentage, each 0-100, total at most
+            `MAX_TOTAL_WEIGHT`.
+    """
     category_weights: dict[GradeCategory, float] = Field(..., description="Category weights to update")
 
     @model_validator(mode="after")
     def validate_category_weights(self):
+        """Check each weight is 0-100 and the total is at most `MAX_TOTAL_WEIGHT`.
+
+        Returns:
+            The model, unchanged.
+
+        Raises:
+            ValueError: If a weight or the total is out of range (a 422).
+        """
         total = 0.0
         for weight in self.category_weights.values():
             if weight < 0 or weight > 100:
@@ -164,6 +258,30 @@ class CategoryWeightsUpdate(BaseModel):
         return self
 
 class CourseUpdate(BaseModel):
+    """Request body for editing a course; omitted fields stay as they are.
+
+    Per-field limits only, plus the weights and a start and end date sent together;
+    the merged course is not re-checked (see `CourseBase` for the full rules).
+
+    Attributes:
+        code: New code, 3-20 characters.
+        name: New title, 1-100 characters.
+        year: New school year, 1-10.
+        semester: New term.
+        credits: New credit value, 0.5-10.
+        required: Requirement or elective.
+        professor: New instructor name, at most 100 characters.
+        section: New section; "" clears it.
+        final_grade: New final percentage, 0-100.
+        target_grade: New target, 0-100; null falls back to the account default.
+        category_weights: New weights, each 0-100, total at most `MAX_TOTAL_WEIGHT`.
+        start_date: New first day.
+        end_date: New last day; checked against `start_date` only if both are sent.
+        no_final: Whether the course has no final exam.
+        transfer_credit: Whether the course is transfer credit.
+        archived: Whether the course is archived.
+        links: The whole new list of links, at most 20; replaces the old one.
+    """
     code: str | None = Field(default=None, min_length=3, max_length=20, description="The unique code for the course (e.g., CS101, MATH202)")
     name: str | None = Field(default=None, min_length=1, max_length=100, description="The name of the course (e.g., Introduction to Computer Science, Calculus II)")
     year: int | None = Field(default=None, ge=1, le=10, description="The academic year of the course (e.g., 1 for first year, 2 for second year, etc.)")
@@ -186,6 +304,15 @@ class CourseUpdate(BaseModel):
 
     @model_validator(mode="after")
     def validate_course_update(self):
+        """Clean a sent section and check sent weights and a sent date pair.
+
+        Returns:
+            The model, with the section cleaned if it was sent.
+
+        Raises:
+            ValueError: If a weight or the total is out of range, or both dates are sent
+                with the end before the start (a 422).
+        """
         # Sent as "" to clear it, which is stored as null like any other unset
         # section. Only when sent: assigning a field marks it as set, and an
         # unsent section would then be cleared by every edit that omits it.
@@ -208,6 +335,24 @@ class CourseUpdate(BaseModel):
         return self
 
 class Course(CourseBase):
+    """A course as the API returns it, with figures the server computes.
+
+    Inherits `CourseBase` and its validator, so every stored course is re-checked on
+    the way out.
+
+    Attributes:
+        id: The course's id.
+        average: Current average, read from the attached `reported_average`; null
+            when nothing is marked.
+        letter_grade: Letter grade for the average on the user's scale.
+        grade_points: Grade points for the average on the user's scale.
+        term_bucket: "past", "current" or "future" relative to the student's term.
+        counting_scheme_id: The grading scheme picked as the grade; null uses the
+            course's own weights.
+        projected_before_final: The projection just before the final was marked; set by
+            the server only.
+        projected_on: The day that projection was taken.
+    """
     id: UUID = Field(default_factory=uuid4)
     #: Null when the course has no marked work, rather than 0.0.
     #:
@@ -237,11 +382,19 @@ class Course(CourseBase):
     projected_on: date | None = None
 
     class Config:
+        """Pydantic v1-style settings: read attributes; accept `average` by name."""
         from_attributes = True
         # So `Course(average=...)` still works by field name alongside the alias.
         populate_by_name = True
 
 class CourseDetail(Course):
+    """A course with its grades and per-category figures, for the course page.
+
+    Attributes:
+        grades: The course's grades in display order (see `grade_sort_key`).
+        category_averages: Point-weighted average per category, 0-100.
+        category_points: Marks each category contributes, out of its weight.
+    """
     grades: List[Grade] =  Field(default_factory=list)
 
     # Ordered here rather than at every call site that builds one of these, so a
@@ -250,6 +403,14 @@ class CourseDetail(Course):
     @field_validator("grades")
     @classmethod
     def order_grades(cls, grades: List[Grade]) -> List[Grade]:
+        """Return the grades in display order.
+
+        Args:
+            grades: The course's grades as loaded.
+
+        Returns:
+            The same grades sorted by `sorted_grades`.
+        """
         return sorted_grades(grades)
     # Point-weighted average per category, computed server-side so the client
     # renders one authoritative number instead of reimplementing the formula.
@@ -267,4 +428,5 @@ class CourseDetail(Course):
     )
 
     class Config:
+        """Pydantic v1-style settings: build the model from object attributes."""
         from_attributes = True

@@ -1,3 +1,11 @@
+"""Grades and the course figures derived from them: averages, projections, letters.
+
+Every write that changes a grade recomputes the stored `courses.average` through
+`course_grade` (the picked scheme or the course's own weights) and keeps the
+grade's task or calendar block in step via `grade_schedule`, in one transaction.
+Readers use the stored average and never recompute it.
+"""
+
 import uuid
 from dataclasses import dataclass
 from datetime import date
@@ -23,10 +31,29 @@ MAX_SCORE_MULTIPLE = 2.0
 
 
 def score_exceeds_limit(score: float | None, max_score: float) -> bool:
+    """Return whether a score is more than `MAX_SCORE_MULTIPLE` times its maximum.
+
+    Args:
+        score: The entered score; None is never over the limit.
+        max_score: The item's maximum.
+
+    Returns:
+        True when the score is implausibly high.
+    """
     return score is not None and score > max_score * MAX_SCORE_MULTIPLE
 
 
 def get_user_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> CourseModel | None:
+    """Return the caller's course with its grades and weights loaded, or None.
+
+    Args:
+        db: Open database session.
+        user_id: The course's owner.
+        course_id: The course.
+
+    Returns:
+        The course, or None when it is missing or another user's.
+    """
     return (
         db.query(CourseModel)
         .options(joinedload(CourseModel.grades), joinedload(CourseModel.category_weight_rows))
@@ -36,6 +63,16 @@ def get_user_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> Co
 
 
 def get_category_weights(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
+    """Return a course's category weights.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        course_id: The course.
+
+    Returns:
+        Category name to weight, or None when the course is missing or another user's.
+    """
     course = get_user_course(db, user_id, course_id)
     if course is None:
         return None
@@ -43,6 +80,28 @@ def get_category_weights(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
 
 
 def update_category_weights(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, weights: dict[GradeCategory, float]):
+    """Merge new category weights into a course and recompute its average.
+
+    The sent weights are merged over the stored ones and the whole set is checked
+    before anything is written; the grades of the changed categories take the new
+    weights.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        course_id: The course.
+        weights: Category to weight percentage, for the categories to change.
+
+    Returns:
+        The course's full weight map after the change, or None when the course is
+        missing or another user's.
+
+    Raises:
+        ValueError: If a weight is outside 0-100 or the total exceeds 200.
+
+    Note:
+        Commits.
+    """
     course = get_user_course(db, user_id, course_id)
     if course is None:
         return None
@@ -75,6 +134,12 @@ def update_category_weights(db: Session, user_id: uuid.UUID, course_id: uuid.UUI
 
 
 def sync_grade_weights(course: CourseModel, categories: set[str] | None = None):
+    """Copy each category's weight onto its grades, for the given categories or all.
+
+    Args:
+        course: The course whose grades to update; nothing is flushed.
+        categories: Category names to update; None updates every grade.
+    """
     weights = course.category_weights
     for grade in course.grades:
         if categories is None or grade.category in categories:
@@ -82,6 +147,20 @@ def sync_grade_weights(course: CourseModel, categories: set[str] | None = None):
 
 
 def add_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_data: GradeCreate):
+    """Add a grade to a course, recompute the average and raise its task or block.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        course_id: The course.
+        grade_data: The new grade.
+
+    Returns:
+        The new grade, or None when the course is missing or another user's.
+
+    Note:
+        Commits once, so a failure leaves neither the grade nor its task behind.
+    """
     course = get_user_course(db, user_id, course_id)
     if course is None:
         return None
@@ -119,11 +198,19 @@ def add_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_data:
 
 
 def add_grades_bulk(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grades: list[GradeCreate]):
-    """Create several grades in one transaction.
+    """Add several grades to a course in one transaction: all of them or none.
 
-    Entering a course's categories one modal at a time meant eleven sequential
-    requests, any of which could fail and leave the course half-populated. This
-    commits once: either every row lands or none does.
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        course_id: The course.
+        grades: The new grades.
+
+    Returns:
+        The new grades, or None when the course is missing or another user's.
+
+    Note:
+        Commits once; any failure rolls back every row and re-raises.
     """
     course = get_user_course(db, user_id, course_id)
     if course is None:
@@ -174,6 +261,18 @@ def add_grades_bulk(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade
 
 
 def find_course_and_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id: uuid.UUID):
+    """Return the caller's course and one of its grades.
+
+    Args:
+        db: Open database session.
+        user_id: The course's owner.
+        course_id: The course.
+        grade_id: The grade.
+
+    Returns:
+        (course, grade); (None, None) when the course is missing or another user's,
+        and (course, None) when the grade is not in it.
+    """
     course = get_user_course(db, user_id, course_id)
     if course is None:
         return None, None
@@ -183,6 +282,30 @@ def find_course_and_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID,
 
 
 def update_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id: uuid.UUID, data: GradeUpdate):
+    """Apply a partial edit to a grade, recompute the average and resync its schedule.
+
+    The merged grade is checked: the score multiple, a time needs a date, a length
+    needs a time. Removing a date also removes the time and length, and removing a time
+    that existed makes the calendar block all-day again.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        course_id: The course.
+        grade_id: The grade.
+        data: The fields to change; omitted ones stay.
+
+    Returns:
+        The updated grade, or None when the course or grade is missing or another
+        user's.
+
+    Raises:
+        ValueError: If the merged grade breaks one of the rules above; nothing is
+            committed.
+
+    Note:
+        Commits.
+    """
     course, grade = find_course_and_grade(db, user_id, course_id, grade_id)
     if grade is None:
         return None
@@ -260,6 +383,22 @@ def update_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id
 
 
 def delete_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id: uuid.UUID):
+    """Delete a grade, with the task or block it raised, and recompute the average.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        course_id: The course.
+        grade_id: The grade.
+
+    Returns:
+        The deleted grade as a `Grade` schema, or None when the course or grade is
+        missing or another user's.
+
+    Note:
+        Commits. The row is validated as a `Grade` before deletion, so a stored grade
+        that schema refuses raises instead of being deleted.
+    """
     course, grade = find_course_and_grade(db, user_id, course_id, grade_id)
     if grade is None:
         return None
@@ -276,11 +415,33 @@ def delete_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id
 
 
 def get_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id: uuid.UUID):
+    """Return one of a course's grades.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        course_id: The course.
+        grade_id: The grade.
+
+    Returns:
+        The grade, or None when the course or grade is missing or another user's.
+    """
     _, grade = find_course_and_grade(db, user_id, course_id, grade_id)
     return grade
 
 
 def get_all_grades(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
+    """Return a course's grades in display order.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        course_id: The course.
+
+    Returns:
+        The grades sorted as on the course page, or None when the course is missing or
+        another user's.
+    """
     course = get_user_course(db, user_id, course_id)
     if course is None:
         return None
@@ -290,6 +451,24 @@ def get_all_grades(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
 
 
 def record_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id: uuid.UUID, score: float):
+    """Set a grade's score, recompute the average, and close the task it raised.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        course_id: The course.
+        grade_id: The grade.
+        score: Points earned; 0 or more, at most `MAX_SCORE_MULTIPLE` times the maximum.
+
+    Returns:
+        The marked grade, or None when the course or grade is missing or another user's.
+
+    Raises:
+        ValueError: If the score is negative or over the limit.
+
+    Note:
+        Commits.
+    """
     course, grade = find_course_and_grade(db, user_id, course_id, grade_id)
     if grade is None:
         return None
@@ -311,13 +490,16 @@ def record_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id
 
 
 def bonus_contribution(course: CourseModel) -> float:
-    """Percentage points an additive category adds on top of the average.
+    """Return the percentage points the bonus categories add on top of the average.
 
-    Measured against the whole course, never against the graded slice: a bonus
-    worth 5% of the course is worth 5 points whenever you earn it, in week two or
-    in week twelve. Dividing by the graded weight instead would have made the
-    same bonus worth 25 points in a term that was only a fifth marked, which is
-    the kind of number that looks like a bug because it is one.
+    Each bonus category adds its average times its weight over 100, measured against the
+    whole course, so a 5% bonus is worth 5 points whenever it is earned.
+
+    Args:
+        course: Course with its grades and weights loaded.
+
+    Returns:
+        Points to add; 0.0 when there is no weighted bonus category.
     """
     weights = course.category_weights
     contribution = 0.0
@@ -331,11 +513,14 @@ def bonus_contribution(course: CourseModel) -> float:
 
 
 def counting_components(course: CourseModel):
-    """The components of the scheme picked as this course's grade, or None.
+    """Return the components of the scheme picked as the course's grade, or None.
 
-    None when no scheme is picked -- and, defensively, when the id names no
-    scheme of this course, so a stale id falls back to the course's own weights
-    rather than to nothing.
+    Args:
+        course: Course with its grading schemes loaded.
+
+    Returns:
+        The picked scheme's components; None when no scheme is picked or the id names
+        no scheme of this course, so the course's own weights apply.
     """
     scheme_id = getattr(course, "counting_scheme_id", None)
     if scheme_id is None:
@@ -350,12 +535,25 @@ def counting_components(course: CourseModel):
 
 @dataclass(frozen=True)
 class Forecast:
-    """The course's grade as it stood before a write, and whether it was still a forecast."""
+    """A course's grade before a write, and whether it was still a projection.
+
+    Attributes:
+        grade: The grade before the write; None when nothing was marked.
+        ended: Whether the final was already marked or the result already entered.
+    """
     grade: float | None  # None: nothing marked, so nothing was projected
     ended: bool
 
 
 def final_is_marked(course: CourseModel) -> bool:
+    """Return whether any counted final-exam grade has a score.
+
+    Args:
+        course: The course with its grades loaded.
+
+    Returns:
+        True when a counted Final-category grade has a score.
+    """
     return any(
         g.category == GradeCategory.FINAL.value and g.score is not None and counts_toward_average(g)
         for g in course.grades
@@ -363,12 +561,27 @@ def final_is_marked(course: CourseModel) -> bool:
 
 
 def forecast_ended(course: CourseModel) -> bool:
-    """The final is marked or the official result is in: no longer a prediction."""
+    """Return whether the course's grade is no longer a projection.
+
+    Args:
+        course: The course with its grades loaded.
+
+    Returns:
+        True once a final is marked or an official final grade above 0 is recorded.
+    """
     return final_is_marked(course) or bool(course.final_grade and course.final_grade > 0)
 
 
 def forecast_before(course: CourseModel) -> Forecast:
-    """Read before a write that might end the forecast (Phase 1 D34)."""
+    """Return the course's grade and forecast state, read just before a write.
+
+    Args:
+        course: Course with its grades loaded, before the change.
+
+    Returns:
+        The current grade (None when nothing outside bonus is marked) and whether the
+        forecast had already ended.
+    """
     marked = any(
         g.score is not None and g.max_score > 0 and counts_toward_average(g) and not is_additive(g.category)
         for g in course.grades
@@ -377,10 +590,16 @@ def forecast_before(course: CourseModel) -> Forecast:
 
 
 def keep_projection(course: CourseModel, before: Forecast, today: date) -> None:
-    """Keep the last projection before the final, the first time a write ends the forecast.
+    """Record the last projection before the final, when a write first ends it.
 
-    Only the first time: a final re-entered later must not replace the number
-    that was a real prediction with one that was not.
+    Args:
+        course: The course after the write; `projected_before_final` and `projected_on`
+            are set on it, not committed.
+        before: The forecast read before the write.
+        today: The user's local today, stored as `projected_on`.
+
+    Note:
+        Only the first time: a projection already recorded is never replaced.
     """
     if course.projected_before_final is not None or before.grade is None or before.ended:
         return
@@ -390,11 +609,16 @@ def keep_projection(course: CourseModel, before: Forecast, today: date) -> None:
 
 
 def course_grade(course: CourseModel) -> float:
-    """The course's grade: the picked scheme's average, or the course's own.
+    """Return the course's grade: the picked scheme's average, or its own weights'.
 
-    The one function every stored average is written through (Phase 1 D25), so
-    the dashboard, letter, GPA, cumulative and Attention -- which all read the
-    stored figure -- follow a picked scheme without knowing schemes exist.
+    Every stored `courses.average` is written through this, so everything reading the
+    stored figure follows a picked scheme.
+
+    Args:
+        course: Course with its grades, weights and schemes loaded.
+
+    Returns:
+        The average percentage, capped at 100; 0.0 when nothing is marked.
     """
     components = counting_components(course)
     if components is None:
@@ -403,7 +627,16 @@ def course_grade(course: CourseModel) -> float:
 
 
 def project_course(course: CourseModel, unmarked: float, overrides: dict | None = None) -> float:
-    """project_average, through the picked scheme when there is one."""
+    """Return the course average with every unmarked item at an assumed score.
+
+    Args:
+        course: Course with its grades, weights and schemes loaded.
+        unmarked: Fraction (0-1) of its maximum each unmarked item is assumed to score.
+        overrides: Grade id to a forced fraction (0-1).
+
+    Returns:
+        The projected average, through the picked scheme when there is one.
+    """
     components = counting_components(course)
     if components is None:
         return project_average(course, unmarked, overrides)
@@ -411,6 +644,17 @@ def project_course(course: CourseModel, unmarked: float, overrides: dict | None 
 
 
 def calculate_current_average(course: CourseModel) -> float:
+    """Return the live course average from marked grades and the course's weights.
+
+    Each marked category's point-weighted average is weighted by the category, divided
+    by the marked categories' weight (at most 100), and the bonus is added on top.
+
+    Args:
+        course: Course with its grades and weights loaded.
+
+    Returns:
+        The average, rounded to 2 places and capped at 100; 0.0 when nothing is marked.
+    """
     graded = [
         g for g in course.grades
         if g.score is not None and g.max_score > 0 and counts_toward_average(g)
@@ -468,6 +712,14 @@ GRADE_SCALE: list[tuple[float, str, float]] = [
 
 
 def grade_scale_row(average: float) -> tuple[str, float]:
+    """Return the letter and grade points for a percentage on the 4.33 scale.
+
+    Args:
+        average: A percentage.
+
+    Returns:
+        (letter, grade points); ("F", 0.0) below every band.
+    """
     for minimum, letter, points in GRADE_SCALE:
         if average >= minimum:
             return letter, points
@@ -476,14 +728,14 @@ def grade_scale_row(average: float) -> tuple[str, float]:
 
 
 def calculate_letter_grade(course, average: float | None = None) -> str:
-    """Letter for the course's result, or "" when nothing is recorded.
+    """Return the letter for a course's result: the final grade, else the average.
 
-    Reads course_result_grade rather than the raw average, so a finished course
-    carrying only the professor's final_grade does not read as an F, and an
-    untouched course shows no letter at all instead of failing.
+    Args:
+        course: The course row.
+        average: A freshly computed average to use instead of the stored one.
 
-    `average` is passed straight through, for a caller holding a freshly
-    computed value it has deliberately not written to the row.
+    Returns:
+        The letter, or "" when the course has no result yet.
     """
     result = course_result_grade(course, average)
     if result is None:
@@ -493,24 +745,31 @@ def calculate_letter_grade(course, average: float | None = None) -> str:
 
 
 def calculate_gpa_points(average: float | None) -> float:
-    """Grade points for a percentage, on the configured scale."""
+    """Return the grade points for a percentage; None counts as 0.
+
+    Args:
+        average: A percentage, or None.
+
+    Returns:
+        Grade points on the 4.33 scale.
+    """
     return grade_scale_row(average or 0.0)[1]
 
 
 def category_average_assuming(
     course: CourseModel, category, unmarked: float, overrides: dict | None = None
 ) -> float | None:
-    """A category's average if every unmarked item scored `unmarked` of its max.
+    """Return a category's average if every unmarked item scored a given share.
 
-    `unmarked` is a fraction: 1.0 for the optimistic case, 0.0 for the grim one.
-    Returns None when the category holds nothing at all, which the caller has to
-    treat differently -- an empty category is unknown, not zero.
+    Args:
+        course: Course with its grades loaded.
+        category: A `GradeCategory` or its value.
+        unmarked: Fraction (0-1) of its maximum each unmarked item scores.
+        overrides: Grade id to a forced fraction (0-1).
 
-    The granularity matters. An assignment added before it is marked already
-    carries its max_score, so a course that has been kept up to date knows
-    exactly how much work is outstanding and how much it is worth. Projecting a
-    whole category as all-or-nothing would throw that away and give a band so
-    wide it says nothing.
+    Returns:
+        The point-weighted percentage, rounded to 2 places; None when the category
+        holds no counted item, which is unknown rather than zero.
     """
     category_value = category.value if isinstance(category, GradeCategory) else category
     items = [
@@ -529,14 +788,15 @@ def category_average_assuming(
 
 
 def assumed_score(grade, unmarked: float, overrides: dict | None) -> float:
-    """What one grade is worth under an assumption.
+    """Return a grade's points: its override, else its score, else `unmarked`.
 
-    `overrides` names particular grades by id and wins over everything, which is
-    what lets a caller ask "and what if *this* one went full marks" without
-    touching the row. It has to be a parameter rather than a temporary write:
-    setting grade.score and restoring it would make a read that mutates a mapped
-    column, which is one stray commit from a GET that changes data -- the same
-    trap course_result_grade's docstring warns about.
+    Args:
+        grade: The grade.
+        unmarked: Fraction (0-1) of the maximum assumed when unmarked.
+        overrides: Grade id to a forced fraction (0-1); never written to the row.
+
+    Returns:
+        Points, out of the grade's maximum.
     """
     if overrides is not None and grade.id in overrides:
         return overrides[grade.id] * grade.max_score
@@ -548,11 +808,18 @@ def assumed_score(grade, unmarked: float, overrides: dict | None) -> float:
 def project_average(
     course: CourseModel, unmarked: float, overrides: dict | None = None
 ) -> float:
-    """The course average if everything still outstanding went `unmarked` way.
+    """Return the course average with everything outstanding scored at a given share.
 
-    Same shape as calculate_current_average, and deliberately so: a projection
-    that did not agree with the live number at the ends -- all marked, or none --
-    would be a second opinion about the same course.
+    Uses the course's own weights; an empty weighted category takes the assumption
+    whole. With nothing outstanding it matches `calculate_current_average`.
+
+    Args:
+        course: Course with its grades and weights loaded.
+        unmarked: Fraction (0-1) each unmarked item scores: 1.0 best case, 0.0 worst.
+        overrides: Grade id to a forced fraction (0-1).
+
+    Returns:
+        The projected average, rounded to 2 places and capped at 100.
     """
     weights = course.category_weights
 
@@ -589,12 +856,19 @@ def project_average(
 
 
 def calculate_grade_band(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
-    """Where this course can still finish: best case, worst case, and now.
+    """Return where a course can still finish: best case, worst case and now.
 
-    The question a running average cannot answer. 78% with everything marked is
-    a result; 78% with the final still to come is anywhere between a fail and an
-    A, and which one it is decides whether this is the course to spend the
-    weekend on.
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        course_id: The course.
+
+    Returns:
+        A dict with "best", "worst" and "current" averages, "settled" (nothing left to
+        mark), "outstanding_items" and "empty_categories".
+
+    Raises:
+        ValueError: If the course is missing or another user's.
     """
     course = get_user_course(db, user_id, course_id)
     if course is None:
@@ -639,11 +913,27 @@ def calculate_required_final(
     target_grade: float,
     course: CourseModel | None = None,
 ):
-    """What the final must score to finish at `target_grade`.
+    """Return what the final must score for the course to finish at a target.
 
-    `course` lets a caller that already holds the row pass it in. The dashboard
-    does, and without it this re-fetched a course that was already in the
-    identity map once per course -- a third of the N+1 on that page.
+    Under a picked scheme the answer comes from `required_final_under_scheme`;
+    otherwise from a closed formula over the marked categories, with banked bonus
+    lowering the bar.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        course_id: The course.
+        target_grade: Target percentage.
+        course: The course row, when the caller already holds it.
+
+    Returns:
+        A dict with "needed" (percentage, possibly below 0 or above 100), "possible"
+        (needed within 0-100) and "unfinished_categories" (weighted categories with
+        nothing marked, left out of the sum).
+
+    Raises:
+        ValueError: If the course is missing or another user's, or has no weighted
+            final.
     """
     if course is None:
         course = get_user_course(db, user_id, course_id)
@@ -721,14 +1011,22 @@ REQUIRED_FINAL_CEILING = 1000.0
 
 
 def required_final_under_scheme(course: CourseModel, components, target_grade: float) -> dict:
-    """calculate_required_final's answer, under a picked scheme.
+    """Return the required final under a picked scheme, by searching for it.
 
-    A scheme's drops and replacements make the course's average piecewise, so
-    instead of the closed formula this searches for the lowest final score that
-    reaches the target -- the average never falls as the final rises, which is
-    what makes the search sound. Asked the same way as the formula: every final
-    item scores the value tried, an empty final takes it whole, and categories
-    with nothing marked stay out, reported as unfinished.
+    Drops and replacements make the average piecewise, so this bisects between 0 and
+    `REQUIRED_FINAL_CEILING`, relying on the average never falling as the final rises.
+
+    Args:
+        course: Course with its grades loaded.
+        components: The picked scheme's components.
+        target_grade: Target percentage.
+
+    Returns:
+        The same dict as `calculate_required_final`; "needed" is the ceiling when even
+        that falls short.
+
+    Raises:
+        ValueError: If the scheme has no weighted final.
     """
     final = GradeCategory.FINAL.value
     final_component = next((c for c in components if c.category.value == final and c.weight > 0), None)
@@ -738,6 +1036,7 @@ def required_final_under_scheme(course: CourseModel, components, target_grade: f
     final_ids = [g.id for g in course.grades if g.category == final and counts_toward_average(g)]
 
     def average_with_final(percent: float) -> float:
+        """Return the unrounded average with every final item at `percent`."""
         fraction = percent / 100.0
         return scheme_math.project(
             course, components, {final: fraction}, {grade_id: fraction for grade_id in final_ids}, precise=True,
@@ -772,29 +1071,17 @@ def required_final_under_scheme(course: CourseModel, components, target_grade: f
 
 
 def category_points(course: CourseModel, category) -> float:
-    """What a category contributes to the course, in marks out of its weight.
+    """Return the marks a category contributes to the course, out of its weight.
 
-    The figure beside each category on the course page: "11.83/12". Computed here
-    rather than in the client, which had the weight and the *rounded* average and
-    multiplied them -- rounding twice, so a category worth exactly 11.825 read
-    11.82.
+    Computed in `Decimal` from the raw scores, rounded half up once, so an exact
+    11.825 reads 11.83 where float rounding gives 11.82.
 
-    Done in Decimal, which is not fussiness. COSC 111's assignments are 236.5 of
-    240 at a weight of 12, exactly 11.825, which should read 11.83. In binary
-    floating point 11.825 does not exist: the nearest double is
-    11.82499999999999928..., genuinely below the midpoint, so every rounding
-    scheme that touches a float -- round(), Decimal(float).quantize, JavaScript's
-    Math.round(x * 100) / 100 -- correctly rounds it down and the hundredth is
-    already gone before anyone can round it. Converting through str() is what
-    keeps it exact: Decimal(str(236.5)) is 236.5, while Decimal(236.5) is the
-    binary approximation spelled out in full.
+    Args:
+        course: Course with its grades and weights loaded.
+        category: A `GradeCategory` or its value.
 
-    Deliberately standalone. The averaging engine still scales from the rounded
-    category average, because changing that would move the number stored on the
-    course and therefore the dashboard, the GPA and the letter grade -- for a
-    hundredth that is invisible there. This is the one figure a student reads
-    against their own arithmetic on a page of marks, so this is the one that
-    earns the ceremony.
+    Returns:
+        Points to 2 places; 0.0 when the category is unweighted or nothing is marked.
     """
     category_value = category.value if isinstance(category, GradeCategory) else category
     weight = course.category_weights.get(category_value, 0.0)
@@ -817,6 +1104,15 @@ def category_points(course: CourseModel, category) -> float:
 
 
 def calculate_grade_category_average(course: CourseModel, category: GradeCategory) -> float:
+    """Return a category's point-weighted average over its marked, counted grades.
+
+    Args:
+        course: Course with its grades loaded.
+        category: A `GradeCategory` or its value.
+
+    Returns:
+        The percentage rounded to 2 places; 0.0 when nothing is marked.
+    """
     category_value = category.value if isinstance(category, GradeCategory) else category
     category_grades = [
         g for g in course.grades

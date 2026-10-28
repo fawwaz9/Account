@@ -1,3 +1,12 @@
+"""Database engine, session factory and declarative base, built from `DATABASE_URL`.
+
+The URL defaults to the SQLite file `backend/data/app.db`; production points it at
+Supabase Postgres through the transaction-mode pooler. The helpers here pick the
+driver arguments and pool settings each backend needs, and SQLite connections get
+their pragmas as they open. `get_db` is the request-scoped session dependency
+behind `DBSession`.
+"""
+
 import os
 from pathlib import Path
 from sqlalchemy import create_engine, event
@@ -14,18 +23,18 @@ DEFAULT_DB_PATH = BACKEND_DIR / "data" / "app.db"
 # docker-compose (DATABASE_URL=sqlite:////app/data/app.db, bind-mounted from
 # backend/data) used a different file entirely, and the two silently diverged.
 def normalize_database_url(database_url: str) -> str:
-    """Let a connection string be pasted from a dashboard and just work.
+    """Return the URL with a bare `postgresql://` scheme pointed at psycopg 3.
 
-    Supabase hands you ``postgresql://...`` with no driver named. SQLAlchemy
-    resolves a bare ``postgresql://`` to **psycopg2**, which is not installed and
-    never will be -- D1.2 chose psycopg 3 -- so copying the string verbatim gives
-    you ``ModuleNotFoundError: No module named 'psycopg2'`` at import, which says
-    nothing about the actual problem and would be an easy hour to lose at the
-    exact moment of first connecting to a real database.
+    SQLAlchemy reads a bare `postgresql://` as psycopg2, which is not installed, so a
+    string pasted from the Supabase dashboard would fail at import.
 
-    Only the bare form is rewritten. ``postgresql+psycopg2://`` is left alone,
-    because that spelling is someone stating a preference rather than omitting
-    one, and silently overriding it would be worse than failing.
+    Args:
+        database_url: Any SQLAlchemy URL string.
+
+    Returns:
+        `postgresql+psycopg://...` with the password kept in clear when the driver was
+        bare `postgresql`; otherwise the input unchanged, including an explicitly named
+        driver such as `postgresql+psycopg2`.
     """
     url = make_url(database_url)
     if url.drivername == "postgresql":
@@ -37,24 +46,24 @@ def normalize_database_url(database_url: str) -> str:
 
 
 DATABASE_URL = normalize_database_url(os.getenv("DATABASE_URL", f"sqlite:///{DEFAULT_DB_PATH}"))
+"""Normalised connection URL: `DATABASE_URL` if set, else the local SQLite file."""
 
 
 def connect_args_for(database_url: str) -> dict:
-    """The DBAPI arguments this URL's driver will actually accept.
+    """Return the DBAPI `connect_args` the URL's driver accepts.
 
-    ``check_same_thread`` is SQLite's alone. It was passed unconditionally, so
-    every non-SQLite ``DATABASE_URL`` died at import with psycopg rejecting an
-    argument it has never heard of -- while ``docker-compose.yml`` advertised the
-    variable as configurable. The database was swappable in documentation only.
+    The URL is normalised first, so a bare `postgresql://` gets the psycopg arguments.
 
-    The URL is parsed rather than string-matched: ``make_url`` understands
-    ``sqlite+pysqlite://`` and ``postgresql+psycopg://`` alike, where
-    ``startswith("sqlite")`` is a guess about a structured value that quietly
-    does the wrong thing for the first driver-qualified URL nobody thought of.
+    Args:
+        database_url: Any SQLAlchemy URL string.
 
-    Separate from the engine so it can be tested without one. The bug it fixes
-    only ever surfaced on a first connection, which is exactly the moment a test
-    cannot reach without a live server.
+    Returns:
+        `{"check_same_thread": False}` for SQLite, `{"prepare_threshold": None}` for
+        psycopg, and an empty dict for any other driver.
+
+    Note:
+        `prepare_threshold=None` turns off server-side prepared statements, which a
+        transaction-mode pooler cannot keep between transactions.
     """
     # Normalised first, so this is right whatever it is handed. Called with a
     # raw `postgresql://` -- which is exactly what a dashboard gives you, and
@@ -106,20 +115,14 @@ POOL_RECYCLE_SECONDS = 1800
 
 
 def engine_kwargs_for(database_url: str) -> dict:
-    """Pooling settings, which only mean anything across a network.
+    """Return the connection-pool keyword arguments for `create_engine`.
 
-    Deliberately empty for SQLite. The file is local, so there is nothing to
-    pre-ping and no latency to amortise -- and the in-memory database the tests
-    use gets a ``SingletonThreadPool``, which has no concept of overflow and
-    would reject the argument outright.
+    Args:
+        database_url: Any SQLAlchemy URL string.
 
-    ``pool_pre_ping`` is the important one. It issues a trivial statement when a
-    connection is checked out and quietly replaces it if it has died. Poolers
-    drop connections at their own discretion, Cloud Run tears instances down
-    constantly, and a Supabase project pauses after seven idle days -- so a
-    connection that was good when it was pooled is not necessarily good when it
-    is used. Without this, the first request after any of those is a 500 for
-    whoever happens to arrive first. D2.4.
+    Returns:
+        An empty dict for SQLite; otherwise `pool_pre_ping` plus the size, overflow,
+        timeout and recycle values from this module's pool constants.
     """
     if make_url(database_url).get_backend_name() == "sqlite":
         return {}
@@ -159,18 +162,14 @@ BUSY_TIMEOUT_MS = 5000
 
 
 def apply_sqlite_pragmas(dbapi_connection) -> None:
-    """The three settings SQLite needs before it behaves like a database.
+    """Turn on WAL, foreign keys and the busy timeout for one SQLite connection.
 
-    Separate from the event hook so the test fixtures can call it against their
-    own engine: a test suite running without foreign keys enforced cannot catch
-    the orphan it is meant to be guarding against.
+    Args:
+        dbapi_connection: A raw `sqlite3` connection.
 
-    * **WAL** lets readers carry on during a write. On the default journal a
-      single write blocks every reader for its duration.
-    * **foreign_keys** is OFF by default in SQLite, which means every
-      ``ForeignKey`` in models.py is documentation rather than a rule, and a
-      cascade that the ORM does not happen to know about leaves orphans.
-    * **busy_timeout** is above.
+    Note:
+        All three settings are per connection, so they must run on every new one; the
+        test fixtures call this directly on their own engine.
     """
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA journal_mode=WAL")
@@ -186,9 +185,20 @@ def apply_sqlite_pragmas(dbapi_connection) -> None:
 if IS_SQLITE:
     @event.listens_for(engine, "connect")
     def _set_sqlite_pragmas(dbapi_connection, _connection_record):
+        """Apply `apply_sqlite_pragmas` to each connection the SQLite engine opens."""
         apply_sqlite_pragmas(dbapi_connection)
 
 def get_db():
+    """Yield a database session for one request and close it when the request ends.
+
+    Yields:
+        A new `Session` from `SessionLocal`; closing it rolls back anything left
+        uncommitted.
+
+    Note:
+        The session carries no acting user. `get_current_user` calls `act_as` on it;
+        without that, row security on Postgres returns no rows.
+    """
     db = SessionLocal()
     try:
         yield db

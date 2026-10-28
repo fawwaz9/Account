@@ -1,3 +1,5 @@
+"""Request and response schemas for grades: the assessed work in a course."""
+
 from datetime import date, time
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator
@@ -9,6 +11,22 @@ from app.Grades.utils.enums import GradeCategory, GradeSchedule
 MAX_SCORE_MULTIPLE = 2.0
 
 class GradeBase(BaseModel):
+    """A grade's fields and the rules a complete grade must satisfy.
+
+    Attributes:
+        name: Assessment name, 1-100 characters, not blank.
+        score: Points earned, 0 or more; null while unmarked. May exceed `max_score`
+            (bonus) up to `MAX_SCORE_MULTIPLE` times it.
+        max_score: Points possible, above 0.
+        category: The grade category.
+        due_date: When the work is due; a dated grade raises a task or a calendar block.
+        due_time: Time of day on `due_date`; null means end of day for a task and all
+            day for an event. Needs `due_date`.
+        duration_minutes: Length of the calendar block, 5-1440 minutes; needs
+            `due_time`.
+        schedule_as: "task" or "event": what the date raises. Ignored without a date.
+        excluded: Dropped: kept on the course but out of every average.
+    """
     name: str = Field(..., min_length=1, max_length=100, description="The name of the grade (e.g., Midterm Exam, Final Project)")
     # Optional so an assignment can be added before it has been marked. Every
     # averaging function already skips grades whose score is None, and the
@@ -52,6 +70,16 @@ class GradeBase(BaseModel):
 
     @model_validator(mode="after")
     def validate_grade_logic(self):
+        """Enforce the cross-field rules of a complete grade.
+
+        Returns:
+            The model, unchanged.
+
+        Raises:
+            ValueError: If the name is blank, the score exceeds `MAX_SCORE_MULTIPLE`
+                times
+                the maximum, a time has no date, or a length has no time (a 422).
+        """
         if self.name.strip() == "":
             raise ValueError("Grade name cannot be empty")
         # Bonus marks are real, so a score may exceed its max -- but not by an
@@ -73,9 +101,27 @@ class GradeBase(BaseModel):
         return self
  
 class GradeCreate(GradeBase):
+    """Request body for adding a grade; the fields and rules of `GradeBase`."""
     pass
 
 class GradeUpdate(BaseModel):
+    """Request body for editing a grade; omitted fields stay as they are.
+
+    Per-field limits only. `grade_service.update_grade` checks the score multiple and
+    the time and length rules on the merged result, and clears a time and length when
+    their date or time is removed.
+
+    Attributes:
+        name: New name, 1-100 characters.
+        score: New score, 0 or more; null marks it unmarked again.
+        max_score: New maximum, above 0.
+        category: New category; the grade's weight follows it.
+        due_date: New due date; null removes it, with its time and length.
+        due_time: New time of day; null removes it, with its length.
+        duration_minutes: New block length, 5-1440 minutes.
+        schedule_as: "task" or "event"; null leaves it unchanged.
+        excluded: Drop the grade from, or restore it to, every average.
+    """
     name: str | None = Field(default=None, min_length=1, max_length=100)
     score: float | None = Field(default=None, ge=0)
     max_score: float | None = Field(default=None, gt=0)
@@ -87,8 +133,18 @@ class GradeUpdate(BaseModel):
     excluded: bool | None = Field(default=None)
 
 class Grade(GradeBase):
+    """A grade as the API returns it.
+
+    Inherits `GradeBase` and its validator, so every stored grade is re-checked on the
+    way out.
+
+    Attributes:
+        id: The grade's id.
+        weight: Its category's weight in the course, 0-100.
+    """
     id: UUID = Field(default_factory=uuid4)
     weight: float = Field(..., ge=0, le=100, description="The weight assigned by the grade category")
 
     class Config:
+        """Pydantic v1-style settings: build the model from object attributes."""
         from_attributes = True

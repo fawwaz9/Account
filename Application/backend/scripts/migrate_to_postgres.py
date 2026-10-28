@@ -1,22 +1,15 @@
-"""Copy every row from a SQLite database into an empty Postgres one.
+r"""Copy every row from a copy of the SQLite database into an empty Postgres one.
 
-Run it against a **copy** of `data/app.db`, made with `VACUUM INTO` rather than
-`cp`: SQLite in WAL mode keeps recent writes in a sidecar file, so a plain copy
-of the main file can be missing whatever has not been checkpointed yet.
-`VACUUM INTO` produces a consistent single file whatever the writer is doing.
-This script refuses to open the real database at all.
-
-**Why through SQLAlchemy rather than a SQL dump.** `sqlalchemy.types.Uuid`
-stores as `CHAR(32)` on SQLite and as a native `uuid` on Postgres; `Boolean` is
-`0`/`1` against `false`/`true`; `JSON` is text against `jsonb`. Reading and
-writing through the same metadata means each column's type converts itself on
-the way through. A dump carries the SQLite spelling across and produces either a
-type error or -- far worse -- valid-looking wrong data. D1.4.
+Make the copy with `VACUUM INTO`, not `cp`, so writes still in the WAL file are
+included; the script refuses the live `data/app.db`. Rows travel through the models'
+metadata, so each column's type (UUID, boolean, JSON) converts itself, in one
+transaction on the target. Afterwards every table is compared by row count and by
+a hash of every value; integer-keyed sequences are advanced past the copied ids.
 
 Usage:
 
-    python -m scripts.migrate_to_postgres \\
-        --source /tmp/app-copy.db \\
+    python -m scripts.migrate_to_postgres \
+        --source /tmp/app-copy.db \
         --target-env SUPABASE_DATABASE_URL
 """
 
@@ -50,16 +43,20 @@ BATCH = 500
 
 
 class Refused(Exception):
-    """A guard said no. The message is the whole explanation."""
+    """Raised when a guard refuses to run; the message is the whole explanation."""
 
 
 def check_source(path: Path) -> Path:
-    """The one rule: never the live database.
+    """Return the source path resolved, refusing a missing file or the live database.
 
-    A migration reads, so in principle pointing it at the original is harmless.
-    In practice it is one flag away from a script that also writes, the file is
-    open under a WAL, and a copy costs a second. The guard compares resolved
-    paths so a symlink or a relative path cannot walk around it.
+    Args:
+        path: The SQLite file given as `--source`.
+
+    Returns:
+        The resolved path.
+
+    Raises:
+        Refused: If the file does not exist, or resolves to `DEFAULT_DB_PATH`.
     """
     path = path.resolve()
     if not path.exists():
@@ -75,13 +72,16 @@ def check_source(path: Path) -> Path:
 
 
 def canonical(value) -> str:
-    """One spelling for a value, whichever database it came out of.
+    """Return one spelling for a value, so equal values from both databases match.
 
-    Both sides are read through the same metadata, so the types arrive already
-    converted -- a `uuid.UUID` either way, a `date` either way. What is left is
-    the handful of places two equal values still print differently: a dict whose
-    keys came back in another order, and a float that is 5 on one side and 5.0
-    on the other.
+    JSON is dumped with sorted keys, floats to 12 significant digits, booleans as
+    "true"/"false", and None as a NUL character.
+
+    Args:
+        value: A column value from either database.
+
+    Returns:
+        The comparable string.
     """
     import json
 
@@ -99,13 +99,17 @@ def canonical(value) -> str:
 
 
 def fingerprint(connection, table) -> str:
-    """A hash of every value in a table, order-independent.
+    """Return an order-independent hash of every value in a table.
 
-    Counting rows proves a table is not missing. It says nothing about whether a
-    boolean arrived as the right boolean, a UUID kept its bytes, or a JSON blob
-    survived the trip -- and those are exactly the failures a type conversion
-    produces. Each row is hashed on its own and the digests are combined by XOR,
-    so the two sides need no shared ORDER BY and no stable primary-key ordering.
+    Each row's canonical values are hashed with BLAKE2b and the digests combined by
+    XOR, so no shared ordering is needed.
+
+    Args:
+        connection: Connection to either database.
+        table: The table to hash.
+
+    Returns:
+        The combined digest as 32 hex characters.
     """
     import hashlib
 
@@ -118,7 +122,14 @@ def fingerprint(connection, table) -> str:
 
 
 def counts(connection) -> dict[str, int]:
-    """Rows per table, for the same metadata on either side."""
+    """Return the row count of every model table on one side.
+
+    Args:
+        connection: An open connection to one database.
+
+    Returns:
+        Row count by table name, for every table in the metadata.
+    """
     return {
         table.name: connection.execute(select(func.count()).select_from(table)).scalar_one()
         for table in Base.metadata.sorted_tables
@@ -126,7 +137,16 @@ def counts(connection) -> dict[str, int]:
 
 
 def copy_table(source, target, table) -> int:
-    """Every row of one table, in batches, types converted by the metadata."""
+    """Copy every row of one table in batches; return how many were copied.
+
+    Args:
+        source: Connection to read from.
+        target: Connection to write to, in its transaction.
+        table: The table to copy.
+
+    Returns:
+        The number of rows copied.
+    """
     rows = source.execute(select(table)).mappings().all()
     if not rows:
         return 0
@@ -136,15 +156,13 @@ def copy_table(source, target, table) -> int:
 
 
 def resettable_sequences() -> list[tuple[str, str]]:
-    """Integer primary keys that Postgres backs with a sequence.
+    """Return (table, column) for each integer primary key a sequence may back.
 
-    Every other table keys on a UUID the application generates, so this is a
-    list of one today -- `course_category_weights.id`. It is derived rather than
-    written down because the consequence of missing a future one is invisible
-    until somebody writes a row: inserting explicit ids does not advance the
-    sequence, so the next insert asks for id 1, collides, and keeps colliding.
-    The migration would look perfect and the table would be permanently
-    unwritable.
+    Derived from the metadata so a future one is not missed; inserting explicit ids
+    does not advance a sequence, so the next insert would collide.
+
+    Returns:
+        (table name, column name) pairs.
     """
     found = []
     for table in Base.metadata.sorted_tables:
@@ -155,6 +173,14 @@ def resettable_sequences() -> list[tuple[str, str]]:
 
 
 def reset_sequences(target) -> list[str]:
+    """Advance each integer key's sequence past the highest copied id.
+
+    Args:
+        target: Connection to the Postgres target, inside the copy's transaction.
+
+    Returns:
+        "table.column" for each sequence advanced.
+    """
     done = []
     for table_name, column in resettable_sequences():
         sequence = target.execute(
@@ -174,6 +200,13 @@ def reset_sequences(target) -> list[str]:
 
 
 def main() -> int:
+    """Run the migration from the command line and print the verification table.
+
+    Returns:
+        0 when every table matches by count and values; 1 when any differs; 2 when a
+        guard refuses (the live database, no target URL, a SQLite target); 3 when the
+        target already holds rows and `--replace` was not given.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", required=True, type=Path, help="a COPY of data/app.db")
     parser.add_argument("--target-env", default="SUPABASE_DATABASE_URL",

@@ -1,3 +1,10 @@
+"""Request and response bodies for accounts, investment readings, net worth, activity.
+
+An account is a user-defined pot of money whose balance is the sum of its ledger
+rows. `account_service` and `activity_service` build these; `DEFAULT_ACCOUNTS`
+seeds a new user's pots.
+"""
+
 from datetime import date
 from enum import Enum
 from uuid import UUID, uuid4
@@ -8,6 +15,13 @@ from app.Finances.schemas.budget import CategorySpend
 
 
 class AccountKind(str, Enum):
+    """What an account is for, which drives a few rules beyond its styling.
+
+    Safe-to-spend and the forecast read spending accounts only, the year plan
+    counts spending, savings and emergency as liquid, a debt account's balance reads
+    negative, and only an investment account takes market-value readings.
+    """
+
     SPENDING = "spending"
     SAVINGS = "savings"
     INVESTMENT = "investment"
@@ -48,6 +62,19 @@ DEFAULT_ACCOUNTS: list[tuple[str, AccountKind, float]] = [
 
 
 class AccountBase(BaseModel):
+    """Fields shared by an account's create body and its response.
+
+    Attributes:
+        name: 1-60 characters and not blank; unique per user, ignoring case.
+        kind: What the account is for; defaults to spending.
+        income_share: Default share of incoming money, 0-100. Shares are ratios:
+            each is divided by the total of all accounts' shares.
+        archived: Keeps its history but is no longer offered.
+        position: Sort order, 0 or more.
+        counts_toward_net_worth: Whether the account counts toward net worth and
+            every other multi-account figure; any account may turn it off.
+    """
+
     name: str = Field(..., min_length=1, max_length=60)
     kind: AccountKind = Field(default=AccountKind.SPENDING)
     income_share: float = Field(default=0.0, ge=0, le=100, description="Default share of income, percent")
@@ -60,16 +87,48 @@ class AccountBase(BaseModel):
 
     @model_validator(mode="after")
     def validate_account(self):
+        """Refuse a name that is only whitespace.
+
+        Returns:
+            The validated model.
+
+        Raises:
+            ValueError: If the name is blank.
+
+        Note:
+            This also runs whenever a stored account is serialised as `Account`, so a
+            row that breaks it makes its response fail.
+        """
         if self.name.strip() == "":
             raise ValueError("Account name cannot be empty")
         return self
 
 
 class AccountCreate(AccountBase):
+    """Request body for creating an account: the fields of `AccountBase`.
+
+    A name the user already has, ignoring case, is refused.
+    """
+
     pass
 
 
 class AccountUpdate(BaseModel):
+    """Request body for editing an account; only the fields sent are changed.
+
+    Archiving, or changing the kind of, the last unarchived spending or savings
+    account is refused.
+
+    Attributes:
+        name: New name, 1-60 characters; refused if another of the user's accounts
+            has it, ignoring case.
+        kind: New kind.
+        income_share: New default share of income, 0-100.
+        archived: Archive or unarchive.
+        position: New sort position, 0 or more.
+        counts_toward_net_worth: Count or stop counting the account.
+    """
+
     name: str | None = Field(default=None, min_length=1, max_length=60)
     kind: AccountKind | None = None
     income_share: float | None = Field(default=None, ge=0, le=100)
@@ -79,17 +138,22 @@ class AccountUpdate(BaseModel):
 
 
 class InvestmentReturn(BaseModel):
-    """What an investment account's holding is worth, over and above what went in.
+    """What an investment account's holding is worth over its ledger, from one reading.
 
-    Null on every account that is not an investment, and on an investment nobody
-    has recorded a reading for -- one nullable object rather than a handful of
-    nullable numbers, so "no reading" is one state the client checks once instead
-    of four fields it could check inconsistently.
-
-    `difference_amount` is a **level**: how far above (positive) or below
-    (negative) the ledger balance the holding sits, as of `as_of`. It is not a
-    month's gain and a column of them must never be summed -- see
-    `Finances/utils/returns.py`.
+    Attributes:
+        difference_amount: The reading, a level: dollars above (positive) or below
+            (negative) the ledger balance. Readings never sum.
+        return_percent: `difference_amount` over `ledger_balance` as a percentage,
+            1 dp; None when the balance is zero or negative.
+        as_of: The month the reading was taken for, as its first day.
+        is_carried_forward: True when the month asked for has no reading of its own
+            and an earlier one stands in.
+        ledger_balance: The balance the percentage divides by.
+        market_value: The figure typed when the reading was recorded, for showing
+            back; never used in arithmetic.
+        month_gain: How far the holding moved during the month asked for; None when
+            no month was asked for, the reading is carried forward, or it is the
+            first reading.
     """
 
     #: The reading itself. Positive is up on what you put in.
@@ -123,16 +187,16 @@ class InvestmentReturn(BaseModel):
 
 
 class AccountMonthValueUpsert(BaseModel):
-    """One month's reading, on its way in.
+    """Request body recording one month's reading for an investment account.
 
-    Takes **exactly one of** the two. The client sends `market_value`, because
-    that is the number you can read straight off a statement, and the service
-    subtracts the month's ledger balance to get the level it stores. Accepting
-    `difference_amount` directly costs one validator and is what lets a figure be
-    set without a ledger lookup -- correcting an old month, or a restore.
+    Send exactly one figure: `market_value`, from which the service subtracts the
+    month's ledger balance to get the level it stores, or `difference_amount`,
+    stored as given.
 
-    Sending both would be two answers to one question, and whichever the service
-    happened to prefer would silently discard the other.
+    Attributes:
+        month: Any day of the month; normalised to the first.
+        market_value: What the holding was worth, in dollars.
+        difference_amount: The level itself: dollars above or below the ledger.
     """
 
     month: date
@@ -141,6 +205,14 @@ class AccountMonthValueUpsert(BaseModel):
 
     @model_validator(mode="after")
     def exactly_one_figure(self):
+        """Require exactly one of `market_value` and `difference_amount`.
+
+        Returns:
+            The validated model.
+
+        Raises:
+            ValueError: If both or neither is given.
+        """
         given = [self.market_value is not None, self.difference_amount is not None]
         if sum(given) != 1:
             raise ValueError(
@@ -150,12 +222,27 @@ class AccountMonthValueUpsert(BaseModel):
 
     @model_validator(mode="after")
     def normalize_month(self):
-        """A month is one value, or September is stored twenty-eight ways."""
+        """Normalise `month` to the first day of its month.
+
+        Returns:
+            The model, with `month` moved to the first.
+        """
         self.month = self.month.replace(day=1)
         return self
 
 
 class Account(AccountBase):
+    """An account as the API returns it: the `AccountBase` fields plus these.
+
+    Attributes:
+        id: The account's id.
+        balance: Sum of its ledger rows, in dollars; negative for a debt.
+        role_locked: True for the last unarchived spending or savings account,
+            which cannot be deleted, archived or given another kind.
+        investment_return: The latest reading overall, for an investment account
+            that has one; None otherwise.
+    """
+
     id: UUID = Field(default_factory=uuid4)
     #: Sum of the account's transactions. Derived rather than stored: a balance
     #: that disagrees with its own ledger is worse than one that costs a query.
@@ -170,21 +257,21 @@ class Account(AccountBase):
     investment_return: InvestmentReturn | None = None
 
     class Config:
+        """Pydantic settings: allow building the model from an ORM row."""
+
         from_attributes = True
 
 
 class NetWorth(BaseModel):
-    """What you have, and what you owe, as two figures rather than one total.
+    """What the user has and owes, across counted, unarchived accounts.
 
-    `net_worth` is the sum of the balances that count, **plus** the latest
-    recorded gain on each investment account, so the figure reflects what the
-    holdings are worth rather than only what was paid for them. Debt needs no
-    special case either way: a debt account's balance is already negative.
-    `debt_total` reports the same money as a positive magnitude, because "Debt
-    -1,000" reads as a double negative on screen.
-
-    Accounts toggled out of the total are silently absent from both -- money
-    someone else is holding is neither an asset nor a debt.
+    Attributes:
+        net_worth: Counted balances summed, plus `investment_gain`. A debt balance
+            is already negative, so it subtracts itself.
+        debt_total: Counted debt accounts' balances as a positive magnitude; part
+            of `net_worth`, never to be subtracted from it again.
+        investment_gain: The latest reading on each counted investment account,
+            summed.
     """
 
     net_worth: float = 0.0
@@ -199,7 +286,13 @@ class NetWorth(BaseModel):
 # ------------------------------------------------------------------ activity --
 
 class DayFlow(BaseModel):
-    """One calendar day of an account's movement, split by direction."""
+    """One calendar day of an account's movement, split by direction.
+
+    Attributes:
+        day: The date.
+        money_in: Income and incoming transfer legs, in dollars.
+        money_out: Expenses and outgoing transfer legs, as a positive amount.
+    """
 
     day: date
     money_in: float = 0.0
@@ -207,10 +300,11 @@ class DayFlow(BaseModel):
 
 
 class BalancePoint(BaseModel):
-    """The account's running balance as of the end of a day that had activity.
+    """The account's running balance at the end of one day it moved.
 
-    One point per active date rather than per calendar day: the line is a step
-    function either way, and a quiet year should not cost 365 points.
+    Attributes:
+        day: The date.
+        balance: The balance after that day's rows, in dollars.
     """
 
     day: date
@@ -218,12 +312,36 @@ class BalancePoint(BaseModel):
 
 
 class AccountActivity(BaseModel):
-    """Everything the account page shows, for one month, in one response.
+    """Everything the account page shows for one month, in one response.
 
-    Composed server-side for the same reason the deposit preview is: the
-    direction rule that decides what counts as money out lives in one place,
-    and a chart assembled from a capped page of rows would quietly lose the
-    oldest ones.
+    Attributes:
+        account_id: The account's id.
+        account_name: The account's name.
+        month: First day of the month shown.
+        kind: The account's kind.
+        balance: All-time balance, as on the account card.
+        total_in: Money in during the month: income and incoming transfers.
+        total_out: Money out during the month, positive: expenses and outgoing
+            transfers.
+        net: `total_in` less `total_out`.
+        transaction_count: Ledger rows in the month.
+        planned: The month's planned spending: the sum of the account's category
+            limits when it has any, otherwise its hand-set target.
+        remaining: `planned` less `total_out`.
+        used_percent: `total_out / planned * 100`, 1 dp; 0 when nothing is planned.
+        planned_is_derived: True when `planned` comes from category limits.
+        daily: One entry per day of the month, zero-filled.
+        by_category: The month's expenses by category with this account's limits;
+            a limited category appears even with nothing spent.
+        balance_history: The running balance after each day the account moved,
+            from its first row.
+        investment_return: The reading that applies to the month (its own, or the
+            last one before it); None for other kinds.
+        all_time_return: The latest reading against the all-time balance, as on the
+            account card; None for other kinds.
+        ledger_balance_at_month: The ledger at the month's end, or today for the
+            current month, which a typed market value is measured against; 0 for
+            other kinds.
     """
 
     account_id: UUID

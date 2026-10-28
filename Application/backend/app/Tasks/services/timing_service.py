@@ -1,12 +1,8 @@
-"""How early or late work actually gets finished.
+"""Service functions for completion timing: how early or late tasks get finished.
 
-Derived entirely from what is already stored: a task carries `due_date` and, once
-it is ticked off, `completed_at`. The difference between them is the whole
-measurement, so this needs no new column and no new table.
-
-The one thing it does need is care about time zones, and getting that wrong is
-not a rounding error -- it is a bias in one direction across most of the sample.
-See `local_completion_date`.
+Derived from what is stored: a completed task's due date and `completed_at`. The
+one thing it needs care with is time zones: `completed_at` is naive UTC and must
+be read on the student's clock before it is compared with a local due date.
 """
 
 import uuid
@@ -27,21 +23,35 @@ PAST_WEEK_DAYS = 7
 
 
 def local_completion_date(completed_at: datetime, zone: ZoneInfo) -> date:
-    """The calendar day a task was ticked off, where the student was standing.
+    """Return the local calendar day a task was ticked off on.
 
-    `completed_at` is naive UTC (see `utc_now`), while `due_date` is a plain
-    local date with no zone at all. Subtracting one from the other directly is
-    wrong in a way that hides: in America/Regina, UTC-6, anything finished after
-    18:00 local is stored on the following UTC day, so an evening's work on its
-    due date reads as a day late. Evening is when most of it gets done, so the
-    error is not noise -- it is a systematic drift toward "late" that would make
-    the whole figure a lie.
+    Args:
+        completed_at: When it was completed, naive UTC.
+        zone: The user's time zone.
+
+    Returns:
+        The date in that zone.
+
+    Note:
+        Comparing the UTC date directly would shift evening completions west of
+        Greenwich onto the next day and bias every figure toward late.
     """
     return completed_at.replace(tzinfo=timezone.utc).astimezone(zone).date()
 
 
 def summarise(label: str, starts_on: date, ends_on: date, deltas: list[int]) -> TimingWindow:
-    """Turn a window's day-deltas into the figures the page shows."""
+    """Turn one window's day differences into the timing figures.
+
+    Args:
+        label: The window's name.
+        starts_on: First day of the window.
+        ends_on: Last day of the window.
+        deltas: Completion date minus due date for each counted task, in days
+            (positive is late).
+
+    Returns:
+        The window's figures; only the label and dates when `deltas` is empty.
+    """
     window = TimingWindow(label=label, starts_on=starts_on, ends_on=ends_on)
     if not deltas:
         return window
@@ -64,11 +74,19 @@ def summarise(label: str, starts_on: date, ends_on: date, deltas: list[int]) -> 
 
 
 def completion_timing(db: Session, user_id: uuid.UUID, on_day: date | None = None):
-    """Both windows, from one pass over the completed tasks.
+    """Return how early or late the user finished dated work, over two windows.
 
-    Completed tasks are archived by `set_done`, so this deliberately does not go
-    through `list_tasks`, which filters out done and archived work by default and
-    would return nothing at all.
+    Reads every completed task (done tasks are archived, so `list_tasks` would miss
+    them) and buckets each by the local day it was finished.
+
+    Args:
+        db: Open database session.
+        user_id: Whose tasks.
+        on_day: The day to report on; defaults to the user's today.
+
+    Returns:
+        The past seven days and the calendar month to date, plus how many undated
+        tasks were finished in either; None when the user does not exist.
     """
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
     if user is None:

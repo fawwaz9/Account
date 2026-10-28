@@ -1,15 +1,13 @@
-"""Is the connection string usable, and is it the right one?
-
-Every failure this reports produces a confusing error somewhere later: a wrong
-password reads as a wrong username, the direct connection times out with no
-explanation from Cloud Run, and session-mode pooling only misbehaves under load.
-Each check below names the specific fix instead.
-
-Prints nothing secret. The password is described -- length, which characters --
-never shown.
+"""Check that the Supabase connection string is usable, and is the right one.
 
     python scripts/check_db_connection.py                  # reads ../.env
     python scripts/check_db_connection.py path/to/.env
+
+Reads `SUPABASE_DATABASE_URL` from the env file and checks, in order: that it is
+Postgres, that it is the transaction pooler (not the direct host or session mode),
+that the username carries the project reference, and that six queries succeed past
+psycopg's prepare threshold. Each failure names its fix. The password is described
+(length, character classes), never printed.
 """
 
 from __future__ import annotations
@@ -31,6 +29,7 @@ from app._database.db import (  # noqa: E402
 )
 
 VARIABLE = "SUPABASE_DATABASE_URL"
+"""The env-file variable holding the Supabase connection string."""
 #: Characters that mean something structural inside a URL, so a password
 #: containing one has to be percent-encoded or the string parses into the wrong
 #: pieces -- and sends the wrong password, or connects to the wrong host.
@@ -38,6 +37,15 @@ NEEDS_ENCODING = set("@:/?#[]%&= ")
 
 
 def read(env_path: Path, key: str) -> str | None:
+    """Return a variable's value from an env file, unquoted, or None if absent.
+
+    Args:
+        env_path: The env file; a missing file reads as nothing.
+        key: The variable's name.
+
+    Returns:
+        The value after the first `=`, stripped of quotes; None when not set.
+    """
     if not env_path.exists():
         return None
     for line in env_path.read_text().splitlines():
@@ -47,6 +55,15 @@ def read(env_path: Path, key: str) -> str | None:
 
 
 def fail(problem: str, *fixes: str) -> int:
+    """Print a failed check with its suggested fixes, and return exit status 1.
+
+    Args:
+        problem: What went wrong.
+        *fixes: Suggestions, one per line.
+
+    Returns:
+        1, the script's exit status.
+    """
     print(f"\n  FAIL  {problem}")
     for fix in fixes:
         print(f"        -> {fix}")
@@ -54,14 +71,17 @@ def fail(problem: str, *fixes: str) -> int:
 
 
 def describe_password(password: str) -> int:
-    """Why authentication failed, without showing what was sent.
+    """Explain why authentication failed without showing the password, and return 1.
 
-    Ordered by likelihood, and the first check is the one that actually happens:
-    `[YOUR-PASSWORD]` is a placeholder for the whole token, brackets included,
-    and replacing only the words inside them is the obvious misreading. It also
-    has to come before the percent-encoding advice, because brackets ARE
-    reserved characters -- so the generic check fires on this case and gives an
-    answer ("encode them") that is technically true and completely unhelpful.
+    Checks in order: no password, the dashboard's `[YOUR-PASSWORD]` brackets left in,
+    the placeholder itself, unencoded URL-reserved characters; otherwise the password
+    is well formed and simply wrong.
+
+    Args:
+        password: The password parsed from the URL.
+
+    Returns:
+        1, always: this is only reached after a failed authentication.
     """
     print(f"  password: {len(password)} characters")
 
@@ -103,6 +123,14 @@ def describe_password(password: str) -> int:
 
 
 def main() -> int:
+    """Run every check against the connection string in the env file.
+
+    The env file is the first argument, or `Application/.env` by default.
+
+    Returns:
+        0 when the string is right and the database answered; 1 at the first failed
+        check.
+    """
     env_path = Path(sys.argv[1]) if len(sys.argv) > 1 else BACKEND_DIR.parent / ".env"
 
     raw = read(env_path, VARIABLE)

@@ -1,13 +1,8 @@
-"""The tax packet: a year's employment income from what you recorded (Phase 2 item 14, D21).
+"""Service functions for the tax packet: a calendar year's recorded employment income.
 
-Built from recorded paycheques, shift tips and tuition payments only. The app
-never reads a T4 (D20): the slip is the most personal document there is, and
-the page tells you to check these sums against it instead.
-
-A cheque counts in the calendar year it arrived (``occurred_on``), which is
-when employment income is taxed. A deduction is sorted by its name -- income
-tax, CPP, EI, or kept under its own name -- because that is all a recorded
-deduction says about itself.
+Built only from what the user recorded (paycheques, shift tips and tuition
+payments); the app never reads a T4. A cheque counts in the year it arrived,
+and a deduction is sorted by its own name into income tax, CPP, EI or other.
 """
 import re
 import uuid
@@ -26,6 +21,15 @@ KIND_LABELS = {"income_tax": "Income tax", "cpp": "CPP", "ei": "EI"}
 
 
 def deduction_kind(description: str) -> str:
+    """Sort a deduction into a tax-packet kind by its description.
+
+    Args:
+        description: The deduction's name as entered.
+
+    Returns:
+        "cpp" (CPP or QPP), "ei", "income_tax" (anything mentioning tax) or
+        "other".
+    """
     text = description.lower()
     if re.search(r"\b(cpp|qpp)\d?\b|canada pension|pension plan", text):
         return "cpp"
@@ -37,10 +41,22 @@ def deduction_kind(description: str) -> str:
 
 
 def _money(value: float) -> float:
+    """Round to cents, normalising negative zero; a copy of `shared.money.money`."""
     return round(value + 0.0, 2)
 
 
 def tax_packet(db: Session, user_id: uuid.UUID, year: int) -> TaxPacket | None:
+    """Return a year's recorded pay per job, its deductions, tips and tuition paid.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        year: The calendar year.
+
+    Returns:
+        The packet, one entry per job with a cheque or a tip that year (highest
+        gross first); None when the user does not exist.
+    """
     if user_for(db, user_id) is None:
         return None
     first, last = date(year, 1, 1), date(year, 12, 31)
@@ -86,6 +102,7 @@ def tax_packet(db: Session, user_id: uuid.UUID, year: int) -> TaxPacket | None:
     employers.sort(key=lambda e: (-e.gross, e.job_name))
 
     def total(kind):
+        """Return one deduction kind's total across every job, rounded to cents."""
         return _money(sum(line.amount for e in employers for line in e.deductions if line.kind == kind))
 
     tuition = (

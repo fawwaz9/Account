@@ -1,3 +1,11 @@
+"""Service functions for the ledger: income, expenses and transfers.
+
+A balance is the sum of an account's rows, so amounts are stored signed:
+positive into the account, negative out. A transfer is two rows tied by a
+`group_id`, written and edited together. Rows owned by a tuition payment, a
+paycheque or a sinking contribution take their owner with them when deleted.
+"""
+
 import uuid
 from datetime import date
 
@@ -24,6 +32,16 @@ from app.Finances.schemas.transaction import (
 
 
 def owned_account(db: Session, user_id: uuid.UUID, account_id: uuid.UUID):
+    """Return the user's account with this id, or None.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+        account_id: The account to fetch.
+
+    Returns:
+        The account, or None when it is missing or another user's.
+    """
     return (
         db.query(AccountModel)
         .filter(AccountModel.id == account_id, AccountModel.user_id == user_id)
@@ -32,10 +50,17 @@ def owned_account(db: Session, user_id: uuid.UUID, account_id: uuid.UUID):
 
 
 def owned_category(db: Session, user_id: uuid.UUID, category_id: uuid.UUID):
-    """A category the caller owns, or None.
+    """Return the user's spending category with this id, or None.
 
-    Checked on every write: category_id arrives from the client, and an id
-    belonging to someone else would otherwise be stored happily.
+    Checked on every write, since the id comes from the client.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+        category_id: The category to fetch.
+
+    Returns:
+        The category, or None when it is missing or another user's.
     """
     return (
         db.query(SpendCategoryModel)
@@ -45,10 +70,17 @@ def owned_category(db: Session, user_id: uuid.UUID, category_id: uuid.UUID):
 
 
 def owned_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
-    """A course the caller owns, or None.
+    """Return the user's course with this id, or None.
 
-    Same reason as owned_category: the id arrives from the client, and one
-    belonging to someone else would otherwise be stored happily.
+    Checked on every write, since the id comes from the client.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+        course_id: The course to fetch.
+
+    Returns:
+        The course, or None when it is missing or another user's.
     """
     return (
         db.query(CourseModel)
@@ -58,12 +90,17 @@ def owned_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
 
 
 def tuition_payment_ids(db: Session, user_id: uuid.UUID) -> dict[uuid.UUID, uuid.UUID]:
-    """transaction id -> tuition payment id, for the rows a tuition payment owns.
+    """Return transaction id to tuition payment id for every row a payment owns.
 
-    One query for the whole ledger rather than one per row, the same way
-    group_sizes works. The client needs it to send a tuition row to its own
-    editor: editing the amount directly would leave the rate saying one thing
-    and the ledger another.
+    One query for the whole ledger, so a list can send tuition rows to their own
+    editor.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+
+    Returns:
+        Payment id by the id of the ledger row it owns.
     """
     rows = (
         db.query(TuitionPaymentModel.transaction_id, TuitionPaymentModel.id)
@@ -74,7 +111,15 @@ def tuition_payment_ids(db: Session, user_id: uuid.UUID) -> dict[uuid.UUID, uuid
 
 
 def group_sizes(db: Session, user_id: uuid.UUID) -> dict[uuid.UUID, int]:
-    """How many rows share each group, in one grouped query rather than one per row."""
+    """Return how many rows share each group id, in one grouped query.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+
+    Returns:
+        Row count by group id; ungrouped rows are absent.
+    """
     rows = (
         db.query(TransactionModel.group_id, func.count(TransactionModel.id))
         .filter(TransactionModel.user_id == user_id, TransactionModel.group_id.isnot(None))
@@ -85,10 +130,14 @@ def group_sizes(db: Session, user_id: uuid.UUID) -> dict[uuid.UUID, int]:
 
 
 def signed(kind: TransactionKind, amount: float) -> float:
-    """Money in is positive, money out is negative.
+    """Return an amount signed by kind: positive for income, negative otherwise.
 
-    Applied here rather than trusted from the caller, so an expense cannot be
-    recorded in a way that raises a balance.
+    Args:
+        kind: The transaction kind.
+        amount: The magnitude, positive.
+
+    Returns:
+        The signed amount; a transfer's caller signs each leg itself.
     """
     return amount if kind == TransactionKind.INCOME else -amount
 
@@ -98,13 +147,15 @@ def as_schema(
     group_size: int = 1,
     tuition_payment_id: uuid.UUID | None = None,
 ) -> Transaction:
-    """Build the API shape without touching the mapped instance.
+    """Build a detached response from a row, without touching the row itself.
 
-    An earlier version flipped transaction.amount to its magnitude for display,
-    which marked the row dirty. A delete in the same session then removed it
-    while that UPDATE was still pending, and the flush raised StaleDataError.
-    Returning a detached snapshot also means a deleted row can still be
-    serialized back to the caller.
+    Args:
+        transaction: The row.
+        group_size: How many rows share its group.
+        tuition_payment_id: The tuition payment that owns it, if any.
+
+    Returns:
+        The response, with `amount` as a magnitude and `signed_amount` as stored.
     """
     return Transaction(
         id=transaction.id,
@@ -130,17 +181,25 @@ def list_transactions(
     start: date | None = None,
     end: date | None = None,
 ):
-    """The account holder's movements, newest first, optionally windowed.
+    """Return the user's ledger rows newest first, optionally for one account or window.
 
-    `limit` truncates the *oldest* rows, because the ordering is newest-first.
-    A caller that wants a specific stretch of time must therefore narrow with
-    `start`/`end` rather than fetch a page and filter it, or the rows it drops
-    are silently the ones furthest back.
+    `limit` drops the oldest rows, so a caller after a stretch of time should narrow
+    with `start` and `end` rather than page.
 
-    Raises for a window that cannot contain anything, and for an account that
-    does not exist. Both used to answer `200 []`, which reads as "you have no
-    transactions" -- the one answer that is certainly wrong, and the hardest
-    kind of bug to notice on a money page.
+    Args:
+        db: Open database session.
+        user_id: Whose ledger.
+        account_id: Only this account's rows; None for every account.
+        limit: Most rows to return.
+        start: Earliest date, inclusive; None for no bound.
+        end: Latest date, inclusive; None for no bound.
+
+    Returns:
+        The rows with group sizes and owning tuition payments attached.
+
+    Raises:
+        ValueError: If `start` is after `end`.
+        LookupError: If `account_id` is not one of the user's accounts.
     """
     if start is not None and end is not None and start > end:
         raise ValueError("The start of the range is after its end")
@@ -169,6 +228,22 @@ def list_transactions(
 
 
 def create_transaction(db: Session, user_id: uuid.UUID, data: TransactionCreate):
+    """Record income or an expense on one of the user's accounts.
+
+    A category and a course are kept only on an expense. Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose ledger.
+        data: The transaction; its amount is a positive magnitude.
+
+    Returns:
+        The new row's response; None when the account is not the user's.
+
+    Raises:
+        ValueError: If the kind is transfer, or the category or course is not the
+            user's.
+    """
     if data.kind == TransactionKind.TRANSFER:
         raise ValueError("Use the transfer endpoint to move money between accounts")
 
@@ -203,9 +278,16 @@ def create_transaction(db: Session, user_id: uuid.UUID, data: TransactionCreate)
 
 
 def create_transfer(db: Session, user_id: uuid.UUID, data: TransferCreate):
-    """Two rows sharing a group_id: one out of the source, one into the target.
+    """Move money between two of the user's accounts as two rows in one commit.
 
-    Written in a single commit so a transfer can never exist as half of itself.
+    Args:
+        db: Open database session.
+        user_id: Whose ledger.
+        data: The amount, date, description and both accounts.
+
+    Returns:
+        The outgoing and incoming rows' responses; None when either account is
+        not the user's.
     """
     source = owned_account(db, user_id, data.from_account_id)
     target = owned_account(db, user_id, data.to_account_id)
@@ -242,6 +324,16 @@ def create_transfer(db: Session, user_id: uuid.UUID, data: TransferCreate):
 
 
 def get_transaction(db: Session, user_id: uuid.UUID, transaction_id: uuid.UUID):
+    """Return one of the user's rows with its group size, or None if not theirs.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+        transaction_id: The row to fetch.
+
+    Returns:
+        The row as a `Transaction` with `group_size` set, or None.
+    """
     transaction = (
         db.query(TransactionModel)
         .filter(TransactionModel.id == transaction_id, TransactionModel.user_id == user_id)
@@ -268,6 +360,25 @@ def get_transaction(db: Session, user_id: uuid.UUID, transaction_id: uuid.UUID):
 def update_transaction(
     db: Session, user_id: uuid.UUID, transaction_id: uuid.UUID, data: TransactionUpdate
 ):
+    """Change the fields sent on one of the user's rows.
+
+    A new amount keeps the row's direction. On a transfer the other leg follows the
+    amount, date and description; a deposit's other rows are left alone. Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose ledger.
+        transaction_id: The row.
+        data: The fields to change.
+
+    Returns:
+        The updated row's response; None when it is not the user's.
+
+    Raises:
+        ValueError: If the amount of a tuition payment's row is changed (that goes
+            through the tuition editor), or the category or course is not the
+            user's.
+    """
     transaction = (
         db.query(TransactionModel)
         .filter(TransactionModel.id == transaction_id, TransactionModel.user_id == user_id)
@@ -350,13 +461,26 @@ def delete_transaction(
     transaction_id: uuid.UUID,
     scope: str = "group",
 ):
-    """Remove one row, or the whole group it belongs to.
+    """Delete one row, or the whole group it belongs to, with whatever owns it.
 
-    A transfer is always removed whole and ignores `scope` -- half a transfer is
-    not a thing. A deposit's allocations share a group_id as well, but each is an
-    independent income row, so there the caller decides: "row" drops one
-    allocation, "group" drops the deposit. Defaulting to "group" keeps the
-    behaviour every existing caller already relies on.
+    A transfer is always deleted whole. For a deposit, `scope` "row" drops one
+    allocation and "group" the whole deposit. A tuition payment owning the row, and
+    a paycheque or sinking contribution owning its group, are deleted too.
+    Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose ledger.
+        transaction_id: The row.
+        scope: "group" (the default) or "row".
+
+    Returns:
+        A copy of the row the caller named; None when it is not the user's.
+
+    Note:
+        A cheque is deleted whenever its group is touched, even with scope "row",
+        which leaves its other rows behind; a shift record pointing at a cash-tip
+        row makes the delete fail its foreign key.
     """
     transaction = (
         db.query(TransactionModel)

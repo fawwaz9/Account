@@ -1,3 +1,9 @@
+"""Omnibox routes under /api/omnibox: preview and file one typed line.
+
+The line is routed to Grades, Finances or Tasks by `omnibox_service` and filed
+through that module's own service.
+"""
+
 from fastapi import APIRouter, HTTPException, Query
 
 from app._database.dependencies import DBSession
@@ -19,11 +25,18 @@ def preview_line(
     db: DBSession,
     text: str = Query(..., min_length=1, max_length=300),
 ):
-    """What one line would be filed as, without writing anything.
+    """Show what one typed line would be filed as, without writing anything.
 
-    A read, so the client can call it while the student types and show which
-    module the line is heading for. An omnibox that files silently is the one
-    shape of this feature worth not building.
+    Args:
+        user_id: The verified caller's id.
+        db: Request-scoped database session.
+        text: The typed line, 1-300 characters.
+
+    Returns:
+        The reading: which module, what would be created, and why not if it cannot.
+
+    Raises:
+        HTTPException: 404 if the user does not exist.
     """
     preview = build_preview(db, user_id, text)
     if preview is None:
@@ -34,7 +47,21 @@ def preview_line(
 
 @router.post("/{user_id}", response_model=OmniboxResult, responses=responses["user_both"])
 def file_line(user_id: VerifiedUserId, request: OmniboxRequest, db: DBSession):
-    """File the line into whichever module it belongs to."""
+    """File one typed line as a task, an expense or a grade.
+
+    Args:
+        user_id: The verified caller's id.
+        request: The typed line.
+        db: Request-scoped database session.
+
+    Returns:
+        What was created and where.
+
+    Raises:
+        HTTPException: 400 if the line cannot be filed (no course for a grade, no
+            account for an expense, nothing left for a task title) or the owning
+            service refuses it; 404 if the user does not exist.
+    """
     try:
         result = file_it(db, user_id, request.text)
     except ValueError as exc:

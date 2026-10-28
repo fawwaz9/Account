@@ -1,8 +1,9 @@
-"""End-of-term reviews: what you thought of a finished course, and whether
-to add your grade to its distribution (Phase 2 item 13, D25).
+"""End-of-term reviews of finished courses, and the opt-in to add a grade to the counts.
 
-Everything here reads and writes only the caller's own rows. The cross-user
-step is the daily recount (``distributions``), which no request triggers.
+Everything here reads and writes the caller's own rows only. A course is asked about
+from `ASK_AFTER_DAYS` to `ASK_UNTIL_DAYS` after its term ends; answers lock after
+`EDIT_DAYS`, while the grade opt-in stays changeable. The cross-user recount lives
+in `_database/distributions.py`.
 """
 import uuid
 from datetime import date, timedelta
@@ -28,19 +29,37 @@ TERM_PART = {"Fall": "1", "Winter": "2", "Spring": "1", "Summer": "2"}
 
 
 class ReviewError(ValueError):
+    """Raised when a review cannot be saved or skipped; the message says why."""
     pass
 
 
 def term_code_of(course: CourseModel, first_year: int | None) -> str | None:
-    """UBC's name for the term: "2025W1" is Fall 2025, "2025W2" the Winter after."""
+    """Return UBC's code for a course's term, such as "2025W1" for Fall 2025, or None.
+
+    Args:
+        course: The course row.
+        first_year: The first-year anchor.
+
+    Returns:
+        The session plus the half ("1" or "2"); None when the anchor or term is unknown.
+    """
     session = session_of(course.semester, course.year, first_year)
     part = TERM_PART.get(course.semester or "")
     return f"{session}{part}" if session and part else None
 
 
 def course_key_of(db: Session, course: CourseModel) -> str | None:
-    """"UBCV CPSC 221": the catalogue's course when the course is linked to
-    one, otherwise its own code (with no campus when the code names none)."""
+    """Return the key a course's grades are counted under, such as "UBCV CPSC 221".
+
+    Args:
+        db: Open database session.
+        course: The course row.
+
+    Returns:
+        The linked catalogue course's campus, subject and number; otherwise the course's
+        own code read as a key (no campus when it names none); None when the code is not
+        a course code.
+    """
     linked = link_of(db, course).course
     if linked is not None:
         return f"{linked.campus} {linked.subject} {linked.number}"
@@ -51,7 +70,10 @@ def course_key_of(db: Session, course: CourseModel) -> str | None:
 
 
 def _window(course: CourseModel, first_year: int | None, today: date) -> tuple[date, str] | None:
-    """When this course's term ended and its label, if it is in its asking window."""
+    """Return (term end, label) if the course is in its review window today, else None.
+
+    Transfer credit and undated terms are never asked about.
+    """
     if course.transfer_credit:
         return None
     dates = term_dates(course.semester, course.year, first_year)
@@ -64,10 +86,12 @@ def _window(course: CourseModel, first_year: int | None, today: date) -> tuple[d
 
 
 def _editable(review: TermReviewModel) -> bool:
+    """Return whether a review's answers are still inside their edit window."""
     return utc_now() <= review.created_at + timedelta(days=EDIT_DAYS)
 
 
 def _out(review: TermReviewModel) -> TermReview:
+    """Return a review row as the `TermReview` schema."""
     return TermReview(
         hours_per_week=review.hours_per_week, difficulty=review.difficulty, clarity=review.clarity,
         would_take_again=review.would_take_again, contribute_grade=review.contribute_grade,
@@ -76,6 +100,16 @@ def _out(review: TermReviewModel) -> TermReview:
 
 
 def overview(db: Session, user_id: uuid.UUID) -> TermReviews | None:
+    """Return the student's courses in their review window, with any review of each.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+
+    Returns:
+        The courses by code and how many are not yet answered or skipped; None when the
+        user does not exist.
+    """
     user = user_for(db, user_id)
     if user is None:
         return None
@@ -99,6 +133,7 @@ def overview(db: Session, user_id: uuid.UUID) -> TermReviews | None:
 
 
 def _own_course_in_window(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
+    """Return (user, course) for the caller's course, or (None, None) if missing."""
     user = user_for(db, user_id)
     course = db.query(CourseModel).filter(CourseModel.id == course_id, CourseModel.user_id == user_id).first()
     if user is None or course is None:
@@ -107,7 +142,28 @@ def _own_course_in_window(db: Session, user_id: uuid.UUID, course_id: uuid.UUID)
 
 
 def save(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, data: TermReviewIn) -> TermReview | None:
-    """None when the course is not yours. ReviewError when it can't be saved."""
+    """Answer, or change, the review of a finished course.
+
+    The course key and term code are snapshotted on every save. A skipped review can be
+    answered, which starts its edit window.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        course_id: The course.
+        data: The answers and the grade opt-in.
+
+    Returns:
+        The saved review, or None when the course is missing or another user's.
+
+    Raises:
+        ReviewError: If there is no review yet and the course is outside its window; if
+            the answers changed after they locked; or if contributing is asked for a
+            course with no grade, key or term.
+
+    Note:
+        Commits.
+    """
     user, course = _own_course_in_window(db, user_id, course_id)
     if course is None:
         return None
@@ -141,7 +197,23 @@ def save(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, data: TermReview
 
 
 def skip(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> TermReview | None:
-    """Don't ask about this course again. Only for one not yet answered."""
+    """Decline to review a course, so it is not asked about again.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        course_id: The course.
+
+    Returns:
+        The skipped review, or None when the course is missing or another user's.
+
+    Raises:
+        ReviewError: If the course was already answered, or has no review and is
+            outside its window.
+
+    Note:
+        Commits.
+    """
     user, course = _own_course_in_window(db, user_id, course_id)
     if course is None:
         return None
@@ -160,7 +232,21 @@ def skip(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> TermReview | 
 
 
 def remove(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> bool:
-    """Delete your review, contribution and all. The next recount drops it."""
+    """Delete the student's review of a course, grade contribution included.
+
+    The next recount drops the contribution.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        course_id: The course.
+
+    Returns:
+        True if a review was deleted.
+
+    Note:
+        Commits.
+    """
     gone = db.query(TermReviewModel).filter(
         TermReviewModel.user_id == user_id, TermReviewModel.course_id == course_id,
     ).delete(synchronize_session=False)

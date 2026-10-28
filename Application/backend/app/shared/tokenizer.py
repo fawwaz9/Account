@@ -1,31 +1,10 @@
-"""One parser for the things a student types in a hurry.
+"""One parser for quick-typed text: course codes, dates, durations, amounts and scores.
 
-"CS221 lab due fri", "coffee 4.50", "CPSC 221 midterm 78/100" -- five kinds of
-token show up across all of them: a course code, a date word, a duration, an
-amount, and a score out of a maximum. Quick capture reads this first; the
-omnibox is this plus a router.
-
-Written once, deliberately. Three parsers is how "fri" comes to mean the coming
-Friday in one box and next week's in another, and the disagreement only surfaces
-when someone misses a deadline.
-
-Pure text in, structured fields out. No session, no models, and no idea what a
-course id is -- resolving "CS221" to an actual course needs the database and is
-somebody else's job. That split is what keeps this testable without fixtures and
-reusable by every module.
-
-The rules it follows:
-
-* More specific patterns win. "78/100" is a score, not the numbers 78 and 100;
-  "1h30" is a duration, not the amount 1. Each match consumes its span so a
-  later pattern cannot re-read it.
-* A bare number is never an amount. "COSC 121" and "12 readings" would both be
-  money otherwise. Only an explicit "$" or a two-decimal figure counts.
-* A weekday means the next one on or after today, so "fri" typed on a Friday is
-  today rather than a week away -- which is what someone typing it means.
-* Anything left over is the title. A parser that throws away what it did not
-  understand is worse than useless here, because that is the part the student
-  actually wrote.
+`parse` turns a line such as "CPSC 221 midterm 78/100 fri" into structured fields
+plus the leftover title; quick capture and the omnibox both read it. Pure text in,
+fields out: resolving a code to a course needs the database and happens elsewhere.
+More specific patterns claim their text first, a bare number is never an amount,
+and a weekday means the next one on or after today.
 """
 
 import re
@@ -45,6 +24,7 @@ WEEKDAYS = {
     "sat": 5, "saturday": 5,
     "sun": 6, "sunday": 6,
 }
+"""Weekday words and abbreviations, mapped to `date.weekday()` numbers (Monday is 0)."""
 
 MONTHS = {
     "jan": 1, "january": 1, "feb": 2, "february": 2, "mar": 3, "march": 3,
@@ -52,9 +32,12 @@ MONTHS = {
     "aug": 8, "august": 8, "sep": 9, "sept": 9, "september": 9,
     "oct": 10, "october": 10, "nov": 11, "november": 11, "dec": 12, "december": 12,
 }
+"""Month names and abbreviations, mapped to month numbers."""
 
 MONTH_NAMES = "|".join(sorted(MONTHS, key=len, reverse=True))
+"""Regex alternation of every month word, longest first so "june" beats "jun"."""
 WEEKDAY_NAMES = "|".join(sorted(WEEKDAYS, key=len, reverse=True))
+"""Regex alternation of every weekday word, longest first so "friday" beats "fri"."""
 
 #: A course code as this app stores them: COSC 101, CPSC_V 210, ENG 109. The
 #: separator is optional so "cs221" typed in a hurry still matches; whether such
@@ -64,6 +47,7 @@ COURSE_PATTERN = re.compile(
 )
 
 SCORE_PATTERN = re.compile(r"\b(\d+(?:\.\d+)?)\s*/\s*(\d+(?:\.\d+)?)\b")
+"""A score over a maximum, such as "78/100" or "7.5 / 10"."""
 
 #: Money needs saying so. A bare integer is far more often a course number, a
 #: question count or a week number than it is a price.
@@ -87,7 +71,20 @@ WEEKDAY_PATTERN = re.compile(rf"\b(next\s+)?({WEEKDAY_NAMES})\b", re.IGNORECASE)
 
 @dataclass
 class Parsed:
-    """Everything the text gave up, plus what was left of it."""
+    """Everything `parse` found in one line of text, plus what was left of it.
+
+    Attributes:
+        text: The input, unchanged.
+        title: What remains once every match and the filler beside it is removed.
+        course_code: A course code's letters and number joined by one space, such as "cs
+            221"; None if none was found.
+        on_date: The date a date word resolved to; None if none was found.
+        minutes: A duration in minutes; None if none was found.
+        amount: Dollars, from "$4" or a two-decimal figure; None if none was found.
+        score: Points earned from "78/100"; None if no score was found.
+        max_score: Points possible from "78/100"; None if no score was found.
+        matched: Kinds found, in order: "score", "duration", "date", "course", "amount".
+    """
 
     #: The raw text, unchanged, so a caller can always fall back to it.
     text: str
@@ -107,16 +104,23 @@ class Parsed:
 
     @property
     def found_anything(self) -> bool:
+        """Whether any token was recognised."""
         return bool(self.matched)
 
 
 def parse(text: str, today: date) -> Parsed:
-    """Pull every token out of one line, most specific first.
+    """Pull every recognisable token out of one line, most specific pattern first.
 
-    Told the day rather than asking for it. Every relative word here -- "today",
-    "tomorrow", "friday" -- is resolved against it, and the server's clock is UTC,
-    so typing "tomorrow" at nine in the evening in Regina used to land two days
-    out. The caller holds the student and resolves their local today.
+    The order is score, duration, date, course code, then amount, and each match claims
+    its span so a later, looser pattern cannot re-read its digits. Only the first match
+    of each kind is kept.
+
+    Args:
+        text: The line as typed.
+        today: The user's local today, which every relative date word resolves against.
+
+    Returns:
+        The parsed fields, with the unmatched remainder as the title.
     """
     now = today
     result = Parsed(text=text)
@@ -127,10 +131,12 @@ def parse(text: str, today: date) -> Parsed:
     taken: list[tuple[int, int]] = []
 
     def free(start: int, end: int) -> bool:
+        """Return True when no claimed span overlaps `start`-`end`."""
         return not any(start < claimed_end and end > claimed_start
                        for claimed_start, claimed_end in taken)
 
     def claim(start: int, end: int, kind: str) -> None:
+        """Mark a span as taken and record the kind of token found in it."""
         taken.append((start, end))
         if kind not in result.matched:
             result.matched.append(kind)
@@ -198,16 +204,19 @@ def parse(text: str, today: date) -> Parsed:
 
 
 def _hours_minutes(match: re.Match) -> int:
+    """Return the minutes in an "1h30"-style match."""
     hours = int(match.group(1))
     minutes = int(match.group(2) or 0)
     return hours * 60 + minutes
 
 
 def _minutes(match: re.Match) -> int:
+    """Return the minutes in a "45m"-style match."""
     return int(match.group(1))
 
 
 def _iso_date(match: re.Match, _today: date) -> date | None:
+    """Return the date in a "2026-10-23" match, or None if it is not a real date."""
     try:
         return date(int(match.group(1)), int(match.group(2)), int(match.group(3)))
     except ValueError:
@@ -215,18 +224,20 @@ def _iso_date(match: re.Match, _today: date) -> date | None:
 
 
 def _month_first(match: re.Match, today: date) -> date | None:
+    """Return the next occurrence of a "sep 12"-style month and day."""
     return _month_and_day(MONTHS[match.group(1).lower()], int(match.group(2)), today)
 
 
 def _day_first(match: re.Match, today: date) -> date | None:
+    """Return the next occurrence of a "12 sep"-style day and month."""
     return _month_and_day(MONTHS[match.group(2).lower()], int(match.group(1)), today)
 
 
 def _month_and_day(month: int, day: int, today: date) -> date | None:
-    """A bare month and day means the next time it comes round.
+    """Return the next date on or after today with this month and day.
 
-    "sep 12" typed in November is next September, not ten months ago -- someone
-    writing a deadline without a year always means one that has not happened.
+    Tries this year, then next; returns None for a day the month never has, or as soon
+    as this year lacks it (February 29 outside a leap year).
     """
     for year in (today.year, today.year + 1):
         try:
@@ -239,12 +250,14 @@ def _month_and_day(month: int, day: int, today: date) -> date | None:
 
 
 def _relative(match: re.Match, today: date) -> date:
+    """Return today plus the days or weeks in an "in 3 days" match."""
     count = int(match.group(1))
     unit = match.group(2).lower()
     return today + timedelta(weeks=count) if unit.startswith("week") else today + timedelta(days=count)
 
 
 def _named_day(match: re.Match, today: date) -> date:
+    """Return the date a word such as "today", "tomorrow" or "yesterday" names."""
     word = match.group(1).lower()
     if word in ("tomorrow", "tmr", "tmrw"):
         return today + timedelta(days=1)
@@ -254,11 +267,7 @@ def _named_day(match: re.Match, today: date) -> date:
 
 
 def _weekday(match: re.Match, today: date) -> date:
-    """The next such weekday, counting today.
-
-    "fri" typed on a Friday means today: someone writing it about next week
-    writes "next fri", which the prefix below adds seven days for.
-    """
+    """Return the next such weekday counting today; "next" adds a week."""
     wanted = WEEKDAYS[match.group(2).lower()]
     ahead = (wanted - today.weekday()) % 7
     # "next fri" is the Friday of the following week, whichever day it is said
@@ -269,7 +278,7 @@ def _weekday(match: re.Match, today: date) -> date:
 
 
 def _leftover(text: str, taken: list[tuple[int, int]]) -> str:
-    """The text with every match cut out, tidied into a title."""
+    """Return the text minus every claimed span, with filler trimmed from the ends."""
     kept = []
     cursor = 0
     for start, end in sorted(taken):

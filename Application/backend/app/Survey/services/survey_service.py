@@ -1,10 +1,7 @@
-"""In-app questions, asked once. Phase 1 item 13.
+"""The in-app survey: one question, asked once of people who have used the app a week.
 
-The Phase 1 exit gate counts people who would be "very disappointed" without
-the app (account-vision.md §11), which nobody can read without asking. So the
-app asks -- once, of people who have used it enough to have an opinion, and
-never again after an answer or a "don't ask again". The answers are counted by
-the owner-run usage report and read nowhere else.
+Answers, "don't ask again" included, are final and read only by the owner-run usage
+report, as counts.
 """
 import uuid
 
@@ -21,10 +18,20 @@ ELIGIBLE_DAYS = 7
 
 
 class AlreadyAnswered(Exception):
+    """Raised when the user has already answered the question."""
     pass
 
 
 def days_used(db: Session, user_id: uuid.UUID) -> int:
+    """Return on how many distinct days the user has any recorded use.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+
+    Returns:
+        The count of distinct days in `usage_events`; 0 when none.
+    """
     return (
         db.query(func.count(func.distinct(UsageEventModel.day)))
         .filter(UsageEventModel.user_id == user_id)
@@ -33,6 +40,16 @@ def days_used(db: Session, user_id: uuid.UUID) -> int:
 
 
 def answered(db: Session, user_id: uuid.UUID, question: Question) -> bool:
+    """Return whether the user has answered a question, dismissal included.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+        question: The survey question.
+
+    Returns:
+        True when a response row exists for it.
+    """
     return (
         db.query(SurveyResponseModel.id)
         .filter(SurveyResponseModel.user_id == user_id, SurveyResponseModel.question == question.value)
@@ -42,6 +59,16 @@ def answered(db: Session, user_id: uuid.UUID, question: Question) -> bool:
 
 
 def pending(db: Session, user_id: uuid.UUID) -> Question | None:
+    """Return the question to ask now, or None.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+
+    Returns:
+        The disappointment question once the user has used the app on `ELIGIBLE_DAYS`
+        days and not answered it; otherwise None.
+    """
     question = Question.DISAPPOINTMENT
     if answered(db, user_id, question):
         return None
@@ -49,7 +76,21 @@ def pending(db: Session, user_id: uuid.UUID) -> Question | None:
 
 
 def respond(db: Session, user_id: uuid.UUID, question: Question, answer: Answer) -> None:
-    """Record the answer. A second answer to the same question is refused, not merged."""
+    """Record the user's answer to a question; a second answer is refused, never merged.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        question: The question answered.
+        answer: The answer, "dismissed" meaning never ask again.
+
+    Raises:
+        AlreadyAnswered: If the question was answered before, including by a concurrent
+            request.
+
+    Note:
+        Commits.
+    """
     if answered(db, user_id, question):
         raise AlreadyAnswered
     db.add(SurveyResponseModel(

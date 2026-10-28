@@ -1,8 +1,9 @@
-"""Which accounts count: one switch for net worth and every analytic (Phase 1 D39).
+"""Which accounts count: the one switch behind net worth and every money analytic.
 
-Its own module, depending only on the models, because every service that totals
-money across accounts reads it -- account, budget, forecast, plan, tuition,
-sinking funds, subscriptions -- and several of those import each other.
+An account with `counts_toward_net_worth` off is treated as absent by every
+figure built from more than one account; its own ledger and page are untouched.
+Kept in a module that depends only on the models, since the services reading it
+import one another.
 """
 import uuid
 
@@ -13,13 +14,13 @@ from app._database.models import AccountModel, TransactionModel
 
 
 def uncounted_accounts(user_id: uuid.UUID):
-    """The ids of the accounts the student unticked, as a subquery (Phase 1 D39).
+    """Return a subquery of the ids of the user's accounts that do not count.
 
-    One switch per account (`counts_toward_net_worth`) takes it out of net worth
-    and every analytic -- safe to spend, the forecast, the year plan, spending
-    summaries -- as if it did not exist. Recording is untouched: its ledger, its
-    page, deposits into it. A subquery rather than a set, so a query that reads
-    transactions adds one filter and no round trip.
+    Args:
+        user_id: Whose accounts.
+
+    Returns:
+        A SELECT of account ids, for use inside another query's filter.
     """
     return select(AccountModel.id).where(
         AccountModel.user_id == user_id,
@@ -28,10 +29,25 @@ def uncounted_accounts(user_id: uuid.UUID):
 
 
 def on_counted_accounts(user_id: uuid.UUID):
-    """A filter for TransactionModel queries: rows on accounts that count."""
+    """Return a filter for transaction queries that keeps rows on accounts that count.
+
+    Args:
+        user_id: Whose accounts.
+
+    Returns:
+        A SQL expression for `TransactionModel` queries.
+    """
     return TransactionModel.account_id.notin_(uncounted_accounts(user_id))
 
 
 def uncounted_account_ids(db: Session, user_id: uuid.UUID) -> set[uuid.UUID]:
-    """The same accounts as a set, for filtering rows already in Python."""
+    """Return the ids of the user's accounts that do not count, as a set.
+
+    Args:
+        db: Open database session.
+        user_id: Whose accounts.
+
+    Returns:
+        The account ids; empty when every account counts.
+    """
     return set(db.execute(uncounted_accounts(user_id)).scalars())

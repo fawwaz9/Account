@@ -1,3 +1,11 @@
+"""Job routes under /api/jobs: jobs, shifts, earnings, paycheques and the tax packet.
+
+Each handler parses the request, calls one Jobs service and maps its result to a
+status: a service ValueError is a 400, a None is a 404. Literal paths
+(`/jobs/shifts`, `/paycheques/preview`) are declared above the `{id}` routes
+that would otherwise parse them as ids.
+"""
+
 from datetime import date
 from uuid import UUID
 
@@ -66,6 +74,21 @@ JOB_BOTH = {**JOB_404, 400: {"description": "Invalid job data"}}
 @router.get("/{user_id}/shift-conflicts", response_model=ShiftConflicts, responses=responses["user_404"])
 def get_shift_conflicts(user_id: VerifiedUserId, db: DBSession,
                         start: date | None = Query(default=None), end: date | None = Query(default=None)):
+    """List shifts that overlap, or end too close before, the caller's exams.
+
+    Args:
+        user_id: The verified caller's id.
+        db: Request-scoped database session.
+        start: First exam date to report; defaults to today.
+        end: Last exam date to report; defaults to 60 days after `start`.
+
+    Returns:
+        The exam buffer used and the conflicts.
+
+    Raises:
+        HTTPException: 400 if both dates are given and the window is inverted or
+            longer than a year; 404 if the user does not exist.
+    """
     if start and end and end < start:
         raise HTTPException(status_code=400, detail="The window ends before it starts")
     if start and end and (end - start).days > 366:
@@ -79,8 +102,22 @@ def get_shift_conflicts(user_id: VerifiedUserId, db: DBSession,
 @router.get("/{user_id}/tax-packet", response_model=TaxPacket, responses=responses["user_404"])
 def get_tax_packet(user_id: VerifiedUserId, db: DBSession,
                    calendar_year: int = Query(..., ge=2000, le=2100)):
-    """``calendar_year``, not ``year``: everywhere else in the API a year is a
-    school year (1-10), and the two must never be mistaken for each other."""
+    """Get a calendar year's recorded pay, deductions, tips and tuition paid.
+
+    `calendar_year` rather than `year`, because elsewhere in the API a year is a
+    school year (1-10).
+
+    Args:
+        user_id: The verified caller's id.
+        db: Request-scoped database session.
+        calendar_year: The calendar year, 2000-2100.
+
+    Returns:
+        The tax packet.
+
+    Raises:
+        HTTPException: 404 if the user does not exist.
+    """
     found = tax_packet(db, user_id, calendar_year)
     if found is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
@@ -95,7 +132,19 @@ def get_jobs(
         default=False, description="Also return jobs that have been archived"
     ),
 ):
-    """Every job, current ones first. A job you have left keeps its history."""
+    """List the caller's jobs, current ones first.
+
+    Args:
+        user_id: The verified caller's id.
+        db: Request-scoped database session.
+        include_archived: Also return archived jobs.
+
+    Returns:
+        The jobs, each with its next pay date.
+
+    Raises:
+        HTTPException: 404 if the user does not exist.
+    """
     jobs = list_jobs(db, user_id, include_archived)
     if jobs is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
@@ -111,10 +160,19 @@ def get_jobs(
     responses=responses["user_both"],
 )
 def choose_cash_tip_account(user_id: VerifiedUserId, choice: CashTipAccountChoice, db: DBSession):
-    """Choose the one account cash tips go to, and file every tip held for want of one.
+    """Choose the account cash tips go to, and file every tip held for want of one.
 
-    404 when the account is not one of yours, or is archived -- and then nothing
-    is written, neither the choice nor any tip.
+    Args:
+        user_id: The verified caller's id.
+        choice: The account, or null to clear the choice.
+        db: Request-scoped database session.
+
+    Returns:
+        The account now chosen and how many held tips were filed.
+
+    Raises:
+        HTTPException: 404 if the account is not one of the caller's active
+            accounts; nothing is written.
     """
     filed = set_cash_tip_account(db, user_id, choice.account_id)
     if filed is None:
@@ -124,6 +182,19 @@ def choose_cash_tip_account(user_id: VerifiedUserId, choice: CashTipAccountChoic
 
 @router.post("/{user_id}/jobs", response_model=Job, responses=responses["user_both"])
 def add_job(user_id: VerifiedUserId, job: JobCreate, db: DBSession):
+    """Create a job.
+
+    Args:
+        user_id: The verified caller's id.
+        job: The job and its pay schedule.
+        db: Request-scoped database session.
+
+    Returns:
+        The created job.
+
+    Raises:
+        HTTPException: 404 if the user does not exist.
+    """
     created = create_job(db, user_id, job)
     if created is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
@@ -145,11 +216,22 @@ def get_shifts(
     start: date = Query(..., description="First date of the window, inclusive"),
     end: date = Query(..., description="Last date of the window, inclusive"),
 ):
-    """Every shift date in the window, with what is known about each.
+    """List every shift date in a window, with what is known about each.
 
-    A past shift nobody has confirmed is returned with its scheduled hours and
-    `assumed` set, rather than left out: forgetting the admin should not make a
-    fortnight of work read as an idle one.
+    A past shift nobody confirmed is returned at its scheduled hours with `assumed`
+    set, never left out.
+
+    Args:
+        user_id: The verified caller's id.
+        db: Request-scoped database session.
+        start: First date of the window, inclusive.
+        end: Last date of the window, inclusive.
+
+    Returns:
+        The shift occurrences, by date and start time.
+
+    Raises:
+        HTTPException: 404 if the user does not exist.
     """
     shifts = list_shifts(db, user_id, start, end)
     if shifts is None:
@@ -166,11 +248,19 @@ def get_shifts(
 def add_single_shift(
     user_id: VerifiedUserId, job_id: UUID, shift: ShiftCreate, db: DBSession
 ):
-    """Add one shift on one date.
+    """Add one shift on one date for one of the caller's jobs.
 
-    The ordinary way shifts arrive for part-time work, which is rarely the same
-    hours every week. A repeating pattern is the exception and goes through
-    /schedule instead.
+    Args:
+        user_id: The verified caller's id.
+        job_id: The job.
+        shift: The date, times and location.
+        db: Request-scoped database session.
+
+    Returns:
+        The new shift event's id.
+
+    Raises:
+        HTTPException: 404 if the job is missing or not the caller's.
     """
     created = add_shift(db, user_id, job_id, shift)
     if created is None:
@@ -185,10 +275,20 @@ def add_single_shift(
     responses=JOB_BOTH,
 )
 def delete_single_shift(user_id: VerifiedUserId, event_id: UUID, db: DBSession):
-    """Remove a one-off shift and anything recorded about it.
+    """Delete a one-off shift and everything recorded about it, cash tips included.
 
-    A date generated by a pattern has no row to delete; cancelling one of those
-    is a skipped date on the rule, which the calendar already offers.
+    Args:
+        user_id: The verified caller's id.
+        event_id: The shift event.
+        db: Request-scoped database session.
+
+    Returns:
+        The deleted event's id.
+
+    Raises:
+        HTTPException: 400 if the shift comes from a weekly pattern (skip its date
+            on the calendar instead); 404 if the shift is missing or not the
+            caller's.
     """
     try:
         removed = remove_shift(db, user_id, event_id)
@@ -213,10 +313,20 @@ def record_shift(
     record: ShiftRecordUpsert,
     db: DBSession,
 ):
-    """Confirm what was actually worked on one date of a shift.
+    """Record what was actually worked on one date of a shift, replacing any record.
 
-    A PUT because `(event_id, on_date)` names the thing being written, and
-    confirming the same Friday twice must leave one answer rather than two.
+    Args:
+        user_id: The verified caller's id.
+        event_id: The shift event.
+        on_date: The date of the occurrence.
+        record: Worked times, confirmation, tip, rate override and notes.
+        db: Request-scoped database session.
+
+    Returns:
+        The saved record.
+
+    Raises:
+        HTTPException: 404 if the event is not one of the caller's shifts.
     """
     try:
         saved = confirm_shift(db, user_id, event_id, on_date, record)
@@ -235,11 +345,20 @@ def record_shift(
     responses=responses["user_404"],
 )
 def get_earnings(user_id: VerifiedUserId, db: DBSession):
-    """Hours and money over a week, a month and the term, from one pass.
+    """Get the caller's hours and money over the past week, the month and the term.
 
-    Earned and paid are reported separately throughout: earned comes from the
-    shifts and is a prediction, paid comes from cheques that arrived. One
-    combined figure would hide a fortnight of work nobody has paid for.
+    Earned (predicted from shifts) and paid (cheques that arrived) are reported
+    apart throughout.
+
+    Args:
+        user_id: The verified caller's id.
+        db: Request-scoped database session.
+
+    Returns:
+        The earnings summary.
+
+    Raises:
+        HTTPException: 404 if the user does not exist.
     """
     summary = earnings_summary(db, user_id)
     if summary is None:
@@ -259,6 +378,19 @@ def get_paycheques(
     db: DBSession,
     job_id: UUID | None = Query(default=None, description="Only this job's cheques"),
 ):
+    """List the caller's paycheques, latest first.
+
+    Args:
+        user_id: The verified caller's id.
+        db: Request-scoped database session.
+        job_id: Only this job's cheques; omit for all.
+
+    Returns:
+        The cheques, with their deductions and variance.
+
+    Raises:
+        HTTPException: 404 if the user does not exist.
+    """
     cheques = list_paycheques(db, user_id, job_id)
     if cheques is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
@@ -272,7 +404,21 @@ def get_paycheques(
     responses=responses["user_both"],
 )
 def add_paycheque(user_id: VerifiedUserId, paycheque: PaychequeCreate, db: DBSession):
-    """Record a cheque. Only the net reaches the ledger, split by income share."""
+    """Record a cheque that arrived; only its net reaches the ledger.
+
+    Args:
+        user_id: The verified caller's id.
+        paycheque: The cheque, its deductions and any allocations.
+        db: Request-scoped database session.
+
+    Returns:
+        The recorded cheque.
+
+    Raises:
+        HTTPException: 400 if the net cannot be split (no income shares and no
+            allocations) or an allocation names an account that is not the
+            caller's; 404 if the job is missing or not the caller's.
+    """
     try:
         created = record_paycheque(db, user_id, paycheque)
     except ValueError as exc:
@@ -296,7 +442,22 @@ def preview(
     period_start: date = Query(..., description="First date of the pay period"),
     period_end: date = Query(..., description="Last date of the pay period"),
 ):
-    """What the shifts in this period say the cheque should come to."""
+    """Get what the shifts in a pay period say a cheque for it should come to.
+
+    Args:
+        user_id: The verified caller's id.
+        db: Request-scoped database session.
+        job_id: The job being paid.
+        period_start: First date of the pay period.
+        period_end: Last date of the pay period.
+
+    Returns:
+        The expected gross and the shifts behind it.
+
+    Raises:
+        HTTPException: 400 if the period ends before it starts; 404 if the job is
+            missing or not the caller's.
+    """
     if period_end < period_start:
         raise HTTPException(status_code=400, detail="A pay period cannot end before it starts")
 
@@ -313,8 +474,19 @@ def preview(
     responses=JOB_404,
 )
 def check_single_paycheque(user_id: VerifiedUserId, paycheque_id: UUID, db: DBSession):
-    """This cheque against its shifts, BC overtime and vacation pay applied, with
-    every line of the arithmetic and the rule each comes from."""
+    """Check one of the caller's cheques against its shifts under BC's pay rules.
+
+    Args:
+        user_id: The verified caller's id.
+        paycheque_id: The cheque.
+        db: Request-scoped database session.
+
+    Returns:
+        The verdict, every line of the arithmetic with its rule, and notes.
+
+    Raises:
+        HTTPException: 404 if the cheque is missing or not the caller's.
+    """
     result = check_paycheque(db, user_id, paycheque_id)
     if result is None:
         raise HTTPException(status_code=404, detail="Paycheque not found")
@@ -327,6 +499,19 @@ def check_single_paycheque(user_id: VerifiedUserId, paycheque_id: UUID, db: DBSe
     responses=JOB_404,
 )
 def get_single_paycheque(user_id: VerifiedUserId, paycheque_id: UUID, db: DBSession):
+    """Get one of the caller's paycheques.
+
+    Args:
+        user_id: The verified caller's id.
+        paycheque_id: The cheque.
+        db: Request-scoped database session.
+
+    Returns:
+        The cheque.
+
+    Raises:
+        HTTPException: 404 if the cheque is missing or not the caller's.
+    """
     cheque = get_paycheque(db, user_id, paycheque_id)
     if cheque is None:
         raise HTTPException(status_code=404, detail="Paycheque not found")
@@ -345,7 +530,22 @@ def edit_paycheque(
     paycheque: PaychequeUpdate,
     db: DBSession,
 ):
-    """Correct a cheque. Its ledger rows are rewritten to match."""
+    """Correct one of the caller's cheques; its ledger rows are rewritten to match.
+
+    Args:
+        user_id: The verified caller's id.
+        paycheque_id: The cheque.
+        paycheque: The fields to change.
+        db: Request-scoped database session.
+
+    Returns:
+        The corrected cheque.
+
+    Raises:
+        HTTPException: 400 if the period would be inverted, the deductions would
+            reach the gross, or the net cannot be split; 404 if the cheque is
+            missing or not the caller's.
+    """
     try:
         updated = update_paycheque(db, user_id, paycheque_id, paycheque)
     except ValueError as exc:
@@ -363,7 +563,19 @@ def edit_paycheque(
     responses=JOB_404,
 )
 def remove_paycheque(user_id: VerifiedUserId, paycheque_id: UUID, db: DBSession):
-    """Remove a cheque and the ledger rows it wrote."""
+    """Delete one of the caller's cheques and the ledger rows it wrote.
+
+    Args:
+        user_id: The verified caller's id.
+        paycheque_id: The cheque.
+        db: Request-scoped database session.
+
+    Returns:
+        A copy of the deleted cheque.
+
+    Raises:
+        HTTPException: 404 if the cheque is missing or not the caller's.
+    """
     deleted = delete_paycheque(db, user_id, paycheque_id)
     if deleted is None:
         raise HTTPException(status_code=404, detail="Paycheque not found")
@@ -377,6 +589,19 @@ def remove_paycheque(user_id: VerifiedUserId, paycheque_id: UUID, db: DBSession)
 
 @router.get("/{user_id}/jobs/{job_id}", response_model=Job, responses=JOB_404)
 def get_single_job(user_id: VerifiedUserId, job_id: UUID, db: DBSession):
+    """Get one of the caller's jobs.
+
+    Args:
+        user_id: The verified caller's id.
+        job_id: The job.
+        db: Request-scoped database session.
+
+    Returns:
+        The job.
+
+    Raises:
+        HTTPException: 404 if the job is missing or not the caller's.
+    """
     job = get_job(db, user_id, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -386,6 +611,22 @@ def get_single_job(user_id: VerifiedUserId, job_id: UUID, db: DBSession):
 
 @router.patch("/{user_id}/jobs/{job_id}", response_model=Job, responses=JOB_BOTH)
 def edit_job(user_id: VerifiedUserId, job_id: UUID, job: JobUpdate, db: DBSession):
+    """Change the fields sent on one of the caller's jobs.
+
+    Args:
+        user_id: The verified caller's id.
+        job_id: The job.
+        job: The fields to change.
+        db: Request-scoped database session.
+
+    Returns:
+        The updated job.
+
+    Raises:
+        HTTPException: 400 if both kinds of pay schedule would be set, the job
+            would end before it starts, or its kind's pay field is missing; 404 if
+            the job is missing or not the caller's.
+    """
     try:
         updated = update_job(db, user_id, job_id, job)
     except ValueError as exc:
@@ -399,10 +640,21 @@ def edit_job(user_id: VerifiedUserId, job_id: UUID, job: JobUpdate, db: DBSessio
 
 @router.delete("/{user_id}/jobs/{job_id}", response_model=Job, responses=JOB_404)
 def remove_job(user_id: VerifiedUserId, job_id: UUID, db: DBSession):
-    """Remove a job entered by mistake, and the calendar blocks it put up.
+    """Delete a job entered by mistake, with its shifts, records and paycheques.
 
-    Ending a job is `ended_on` and hiding one is `archived`; both keep the
-    history. This does not.
+    Ending a job (`ended_on`) or archiving it keeps the history; this does not.
+    Ledger rows already written stay.
+
+    Args:
+        user_id: The verified caller's id.
+        job_id: The job.
+        db: Request-scoped database session.
+
+    Returns:
+        A copy of the deleted job.
+
+    Raises:
+        HTTPException: 404 if the job is missing or not the caller's.
     """
     deleted = delete_job(db, user_id, job_id)
     if deleted is None:
@@ -423,7 +675,21 @@ def put_shift_schedule(
     schedule: ShiftScheduleCreate,
     db: DBSession,
 ):
-    """Replace this job's recurring shifts with the pattern given."""
+    """Replace one of the caller's jobs' weekly shift pattern; one-off shifts stay.
+
+    Args:
+        user_id: The verified caller's id.
+        job_id: The job.
+        schedule: The weekly blocks and, optionally, the dates.
+        db: Request-scoped database session.
+
+    Returns:
+        The new shift events' ids.
+
+    Raises:
+        HTTPException: 400 if no start date is given or stored, or the dates are
+            inverted; 404 if the job is missing or not the caller's.
+    """
     try:
         created = set_shift_schedule(db, user_id, job_id, schedule)
     except ValueError as exc:

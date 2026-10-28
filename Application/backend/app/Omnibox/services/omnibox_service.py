@@ -1,20 +1,10 @@
-"""One input, anywhere: read a line, decide which module it belongs to, file it.
+"""Service functions for the omnibox: read one typed line, decide its module, file it.
 
-The tokenizer already says what is in the text. All this adds is the routing
-rule and the lookups that need a database -- which account "savings" means, which
-course "cs221" is, which category "groceries" is.
-
-The routing rule is deliberately small and ordered, because a wrong guess here
-is worse than no omnibox at all:
-
-1. A score out of a maximum can only be a grade. Nothing else is written "78/100".
-2. An amount can only be money. A bare integer never counts as one, so this
-   fires on "$5" and "4.50" and not on "COSC 121".
-3. Everything else is a task, which is the only kind that needs nothing but words.
-
-Filing goes through each module's own service, so an omnibox expense is
-indistinguishable from one typed into the money dialog -- same signing, same
-validation, same everything.
+The shared tokenizer says what is in the text; this adds the routing rule and
+the lookups that need the database (which account, course or category a word
+names). The rule is small and ordered: a score out of a maximum is a grade, an
+amount is an expense, anything else is a task. Filing goes through each
+module's own service, so an omnibox entry is identical to one typed elsewhere.
 """
 
 import uuid
@@ -51,7 +41,14 @@ CATEGORY_WORDS: list[tuple[str, GradeCategory]] = [
 
 
 def route(parsed: Parsed) -> OmniboxKind:
-    """Which module the line belongs to. Ordered, and the order is the rule."""
+    """Return which module a parsed line belongs to; the order of checks is the rule.
+
+    Args:
+        parsed: The tokenizer's reading of the line.
+
+    Returns:
+        GRADE for a score and a maximum, EXPENSE for an amount, otherwise TASK.
+    """
     if parsed.score is not None and parsed.max_score is not None:
         return OmniboxKind.GRADE
     if parsed.amount is not None:
@@ -60,12 +57,17 @@ def route(parsed: Parsed) -> OmniboxKind:
 
 
 def match_named(title: str, names: dict[str, object]) -> tuple[object | None, str]:
-    """Find a known name inside the leftover text and take it out.
+    """Find a known name in the leftover text, on word boundaries, and take it out.
 
-    Longest name first, so "Emergency Savings" is not matched as "Savings" and
-    left looking like a deposit into the wrong pot. Returns what was found and
-    the title with that phrase removed, because a name that has been understood
-    should not also be left in the description.
+    Longest names are tried first, so "Emergency Savings" is not read as "Savings".
+
+    Args:
+        title: The text left after tokenising.
+        names: Display names mapped to the rows they name.
+
+    Returns:
+        The matched row (None when nothing matched) and the title with that
+        phrase removed.
     """
     lowered = title.lower()
     for name in sorted(names, key=len, reverse=True):
@@ -87,10 +89,17 @@ def match_named(title: str, names: dict[str, object]) -> tuple[object | None, st
 
 
 def default_account(db: Session, user_id: uuid.UUID) -> AccountModel | None:
-    """Where an expense lands when the line does not say.
+    """Return the account an expense lands in when the line names none.
 
-    The first spending account, because that is what day-to-day money comes out
-    of; failing that, whichever account comes first.
+    The first unarchived spending account in display order, else the first
+    unarchived account; None when the user has no accounts.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+
+    Returns:
+        The account to use, or None.
     """
     accounts = (
         db.query(AccountModel)
@@ -106,6 +115,14 @@ def default_account(db: Session, user_id: uuid.UUID) -> AccountModel | None:
 
 
 def grade_category_for(title: str) -> GradeCategory:
+    """Return the grade category a word in the title names ("midterm"), else Other.
+
+    Args:
+        title: The parsed title of the line.
+
+    Returns:
+        The first category whose word appears in the title, else Other.
+    """
     lowered = title.lower()
     for word, category in CATEGORY_WORDS:
         if word in lowered:
@@ -114,7 +131,19 @@ def grade_category_for(title: str) -> GradeCategory:
 
 
 def build_preview(db: Session, user_id: uuid.UUID, text: str) -> OmniboxPreview | None:
-    """Read one line and say exactly what filing it would do."""
+    """Read one typed line and say exactly what filing it would do, writing nothing.
+
+    A course code that matches none (or several) of the user's courses is put back
+    into the title.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        text: The typed line.
+
+    Returns:
+        The preview; None when the user does not exist.
+    """
     if not user_exists(db, user_id):
         return None
 
@@ -149,6 +178,7 @@ def build_preview(db: Session, user_id: uuid.UUID, text: str) -> OmniboxPreview 
 
 
 def _grade_preview(parsed: Parsed, title: str, course, common) -> OmniboxPreview:
+    """Build a grade's preview; it can be filed only when a course was matched."""
     category = grade_category_for(title)
     name = title or category.value
 
@@ -175,6 +205,11 @@ def _grade_preview(parsed: Parsed, title: str, course, common) -> OmniboxPreview
 
 
 def _expense_preview(db: Session, user_id: uuid.UUID, parsed: Parsed, title: str, common) -> OmniboxPreview:
+    """Build an expense's preview, resolving the account and category the line names.
+
+    With no category named, one is suggested the way an import does; the date
+    defaults to today.
+    """
     accounts = {
         account.name: account
         for account in db.query(AccountModel).filter(
@@ -240,6 +275,7 @@ def _expense_preview(db: Session, user_id: uuid.UUID, parsed: Parsed, title: str
 
 
 def _task_preview(parsed: Parsed, title: str, course, common) -> OmniboxPreview:
+    """Build a task's preview; it can be filed only when a title is left."""
     minutes = parsed.minutes
     if minutes is not None and not (1 <= minutes <= MAX_ESTIMATED_MINUTES):
         minutes = None
@@ -264,11 +300,21 @@ def _task_preview(parsed: Parsed, title: str, course, common) -> OmniboxPreview:
 
 
 def file_it(db: Session, user_id: uuid.UUID, text: str):
-    """Create whatever the line describes, through the owning module's service.
+    """Create whatever one line describes, through the owning module's service.
 
-    Built from the same preview the client showed, so what lands is exactly what
-    was on screen -- two readings of one line could otherwise drift apart
-    between the keystroke and the submit.
+    Built from the same preview the client showed. Commits through that service.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        text: The typed line.
+
+    Returns:
+        What was created and where; None when the user does not exist.
+
+    Raises:
+        ValueError: If the preview cannot be filed (the reason says why), the
+            account has gone, or the owning service refuses the values.
     """
     preview = build_preview(db, user_id, text)
     if preview is None:

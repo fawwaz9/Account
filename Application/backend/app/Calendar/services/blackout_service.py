@@ -1,8 +1,8 @@
-"""Stretches of term when classes do not run.
+"""Service functions for term blackouts: breaks when no class runs.
 
-Kept apart from an event's own `skipped_dates`, which cancels one lecture on one
-date. This is the other case: a reading break applies to every class at once,
-and entering it on each of six courses is how one of them ends up wrong.
+A blackout is a date range that cancels every occurrence of the user's
+course-linked events inside it, where an event's own `skipped_dates` cancels one
+date of one series. Repeating payments, tasks and shifts are never affected.
 """
 
 import uuid
@@ -25,6 +25,14 @@ MAX_BLACKOUT_DAYS = 120
 
 
 def as_schema(row: TermBlackoutModel) -> TermBlackout:
+    """Build a blackout's response from its row, counting the days it covers.
+
+    Args:
+        row: The stored blackout.
+
+    Returns:
+        The blackout with its inclusive day count.
+    """
     return TermBlackout(
         id=row.id,
         label=row.label,
@@ -35,6 +43,15 @@ def as_schema(row: TermBlackoutModel) -> TermBlackout:
 
 
 def list_blackouts(db: Session, user_id: uuid.UUID) -> list[TermBlackout] | None:
+    """Return the user's blackouts, earliest first.
+
+    Args:
+        db: Open database session.
+        user_id: Whose blackouts.
+
+    Returns:
+        The blackouts; None when the user does not exist.
+    """
     if not user_exists(db, user_id):
         return None
     rows = (
@@ -47,11 +64,17 @@ def list_blackouts(db: Session, user_id: uuid.UUID) -> list[TermBlackout] | None
 
 
 def blackout_dates(db: Session, user_id: uuid.UUID) -> set[date]:
-    """Every date any blackout covers, as a flat set.
+    """Return every date any of the user's blackouts covers, as one flat set.
 
-    Ranges are stored, dates are what the recurrence engine subtracts -- it
-    already takes a set of skipped dates, so expanding here means the engine
-    needs no idea that blackouts exist.
+    The recurrence engine subtracts these like skipped dates. Each range is capped
+    at `MAX_BLACKOUT_DAYS` when expanded.
+
+    Args:
+        db: Open database session.
+        user_id: Whose blackouts.
+
+    Returns:
+        The covered dates; empty when there are none.
     """
     covered: set[date] = set()
     rows = (
@@ -67,6 +90,21 @@ def blackout_dates(db: Session, user_id: uuid.UUID) -> set[date]:
 
 
 def create_blackout(db: Session, user_id: uuid.UUID, data: TermBlackoutCreate):
+    """Create a blackout for the user.
+
+    Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose blackout.
+        data: The label (stripped) and the inclusive date range.
+
+    Returns:
+        The new blackout; None when the user does not exist.
+
+    Raises:
+        ValueError: If the range is longer than `MAX_BLACKOUT_DAYS` days.
+    """
     if not user_exists(db, user_id):
         return None
 
@@ -92,6 +130,24 @@ def create_blackout(db: Session, user_id: uuid.UUID, data: TermBlackoutCreate):
 def update_blackout(
     db: Session, user_id: uuid.UUID, blackout_id: uuid.UUID, data: TermBlackoutUpdate
 ):
+    """Change the fields sent on one of the user's blackouts.
+
+    The merged range is checked once both ends are in place; null fields are
+    ignored. Commits, or rolls back on a refusal.
+
+    Args:
+        db: Open database session.
+        user_id: Whose blackout.
+        blackout_id: The blackout.
+        data: The fields to change.
+
+    Returns:
+        The updated blackout; None when it is not the user's.
+
+    Raises:
+        ValueError: If the range would end before it starts, or be longer than
+            `MAX_BLACKOUT_DAYS` days.
+    """
     row = (
         db.query(TermBlackoutModel)
         .filter(
@@ -125,6 +181,18 @@ def update_blackout(
 
 
 def delete_blackout(db: Session, user_id: uuid.UUID, blackout_id: uuid.UUID):
+    """Delete one of the user's blackouts.
+
+    Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose blackout.
+        blackout_id: The blackout.
+
+    Returns:
+        A copy of the deleted blackout; None when it is not the user's.
+    """
     row = (
         db.query(TermBlackoutModel)
         .filter(

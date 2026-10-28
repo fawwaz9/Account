@@ -1,12 +1,8 @@
-"""The job application tracker (Phase 3 item 1, D2-D5).
+"""Service functions for the job application tracker and its recruiting seasons.
 
-Single-user: every function reads and writes only the caller's own rows, under
-the ordinary per-user and child policies. Nothing here crosses users, and the
-offer's pay (D5) is read by nobody else.
-
-The history is the point (D2). Replies, days to a reply and the Sankey are all
-read from `application_steps`; the `status` column is only the latest step,
-kept so a list needn't read every history.
+Every function reads and writes only the caller's own rows. An application's
+`status` is just its latest step, kept so a list need not read each history;
+replies, days to a reply and the Sankey are all read from `application_steps`.
 """
 from __future__ import annotations
 
@@ -34,6 +30,7 @@ REPLIES = {"screening", "interview", "offer", "accepted", "rejected"}
 
 
 def _own(db: Session, user_id: uuid.UUID, application_id: uuid.UUID) -> JobApplicationModel | None:
+    """Return the caller's application with its steps loaded, or None."""
     return (
         db.query(JobApplicationModel)
         .options(selectinload(JobApplicationModel.steps))
@@ -43,17 +40,27 @@ def _own(db: Session, user_id: uuid.UUID, application_id: uuid.UUID) -> JobAppli
 
 
 def _ordered(row: JobApplicationModel) -> list[ApplicationStepModel]:
+    """Return an application's steps by date, then by when they were recorded."""
     return sorted(row.steps, key=lambda step: (step.on_date, step.created_at or utc_now()))
 
 
 def _settle(row: JobApplicationModel) -> None:
-    """The row's status is its latest step."""
+    """Set an application's status to its latest step's, and stamp `updated_at`."""
     steps = _ordered(row)
     row.status = steps[-1].status if steps else "applied"
     row.updated_at = utc_now()
 
 
 def as_schema(row: JobApplicationModel, today: date) -> Application:
+    """Build an application's response, with its last step and whether it is quiet.
+
+    Args:
+        row: The application with its steps loaded.
+        today: The user's today, for the 30-day quiet check.
+
+    Returns:
+        The application with its steps oldest first.
+    """
     steps = _ordered(row)
     last = steps[-1].on_date if steps else row.applied_on
     return Application(
@@ -69,6 +76,10 @@ def as_schema(row: JobApplicationModel, today: date) -> Application:
 
 
 def _all(db: Session, user_id: uuid.UUID, season: ApplicationSeasonModel | None = None) -> list[JobApplicationModel]:
+    """Return the caller's applications, newest applied first, optionally in a season.
+
+    A season includes every application whose applied date falls in its months.
+    """
     query = (
         db.query(JobApplicationModel)
         .options(selectinload(JobApplicationModel.steps))
@@ -82,10 +93,14 @@ def _all(db: Session, user_id: uuid.UUID, season: ApplicationSeasonModel | None 
 
 
 class NoSuchSeason(Exception):
-    """A season id that isn't the caller's: answered as 404, like any other row."""
+    """Raised when a season id is not one of the caller's; answered as a 404."""
 
 
 def _season_for(db: Session, user_id: uuid.UUID, season_id: uuid.UUID | None) -> ApplicationSeasonModel | None:
+    """Return the caller's season for an id, or None when no id is given.
+
+    Raises NoSuchSeason when the id is not one of the caller's seasons.
+    """
     if season_id is None:
         return None
     season = _own_season(db, user_id, season_id)
@@ -95,6 +110,20 @@ def _season_for(db: Session, user_id: uuid.UUID, season_id: uuid.UUID | None) ->
 
 
 def list_applications(db: Session, user_id: uuid.UUID, season_id: uuid.UUID | None = None) -> list[Application] | None:
+    """Return the caller's applications, newest applied first.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        season_id: Only applications applied for within this season's months;
+            None for all.
+
+    Returns:
+        The applications; None when the user does not exist.
+
+    Raises:
+        NoSuchSeason: If `season_id` is not one of the caller's seasons.
+    """
     if user_for(db, user_id) is None:
         return None
     today = user_today(db, user_id)
@@ -102,10 +131,24 @@ def list_applications(db: Session, user_id: uuid.UUID, season_id: uuid.UUID | No
 
 
 def _clean(text: str | None) -> str | None:
+    """Return text stripped, or None when it is empty or missing."""
     return (text or "").strip() or None
 
 
 def create(db: Session, user_id: uuid.UUID, data: ApplicationIn) -> Application | None:
+    """Record a new job application, with its first "applied" step.
+
+    Commits.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        data: The application; company and role are stripped, empty optional text
+            becomes None.
+
+    Returns:
+        The new application; None when the user does not exist.
+    """
     if user_for(db, user_id) is None:
         return None
     now = utc_now()
@@ -126,6 +169,25 @@ def create(db: Session, user_id: uuid.UUID, data: ApplicationIn) -> Application 
 
 
 def update(db: Session, user_id: uuid.UUID, application_id: uuid.UUID, data: ApplicationUpdate) -> Application | None:
+    """Change the fields sent on one of the caller's applications.
+
+    A new `applied_on` moves the "applied" step with it. The offer's amount and
+    period are checked as a pair against the stored row. Commits.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        application_id: The application.
+        data: The fields to change.
+
+    Returns:
+        The updated application; None when it is not the caller's.
+
+    Raises:
+        ValueError: If company or role would be blank, only one half of the offer's
+            pay would be set, or a later step is dated before the new
+            `applied_on`.
+    """
     row = _own(db, user_id, application_id)
     if row is None:
         return None
@@ -166,6 +228,18 @@ def update(db: Session, user_id: uuid.UUID, application_id: uuid.UUID, data: App
 
 
 def delete(db: Session, user_id: uuid.UUID, application_id: uuid.UUID) -> bool | None:
+    """Delete one of the caller's applications with its whole history.
+
+    Commits.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        application_id: The application.
+
+    Returns:
+        True when deleted; None when it is not the caller's.
+    """
     row = _own(db, user_id, application_id)
     if row is None:
         return None
@@ -175,6 +249,22 @@ def delete(db: Session, user_id: uuid.UUID, application_id: uuid.UUID) -> bool |
 
 
 def add_step(db: Session, user_id: uuid.UUID, application_id: uuid.UUID, data: StepIn) -> Application | None:
+    """Record a status change on one of the caller's applications.
+
+    The application's status becomes whichever step is now latest by date. Commits.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        application_id: The application.
+        data: The status, its date and an optional note.
+
+    Returns:
+        The updated application; None when it is not the caller's.
+
+    Raises:
+        ValueError: If the step is dated before the application.
+    """
     row = _own(db, user_id, application_id)
     if row is None:
         return None
@@ -190,8 +280,23 @@ def add_step(db: Session, user_id: uuid.UUID, application_id: uuid.UUID, data: S
 
 
 def delete_step(db: Session, user_id: uuid.UUID, application_id: uuid.UUID, step_id: uuid.UUID) -> Application | None:
-    """Take back a step entered by mistake. The first step, "applied", goes only
-    with the application."""
+    """Take back a step entered by mistake; the status falls back to the latest left.
+
+    The first "applied" step goes only with the application. Commits.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        application_id: The application.
+        step_id: The step.
+
+    Returns:
+        The updated application; None when the application or step is not the
+        caller's.
+
+    Raises:
+        ValueError: If the step is the "applied" step.
+    """
     row = _own(db, user_id, application_id)
     if row is None:
         return None
@@ -207,11 +312,17 @@ def delete_step(db: Session, user_id: uuid.UUID, application_id: uuid.UUID, step
 
 
 def path_of(row: JobApplicationModel) -> list[str]:
-    """The stages one application passed through, for the Sankey.
+    """Return the stages one application passed through, for the Sankey.
 
-    Interview rounds collapse into one stage. A "no reply" followed by a later
-    step is dropped, since the late answer undid it. One still open ends in
-    "waiting", so every band has somewhere to go.
+    Repeated statuses (interview rounds) collapse into one stage, a "no reply"
+    followed by a later step is dropped, and an application still open ends in
+    "waiting".
+
+    Args:
+        row: The application with its steps loaded.
+
+    Returns:
+        The stage names in order, starting with "applied".
     """
     statuses = [step.status for step in _ordered(row)]
     statuses = [status for at, status in enumerate(statuses)
@@ -226,6 +337,19 @@ def path_of(row: JobApplicationModel) -> list[str]:
 
 
 def stats(db: Session, user_id: uuid.UUID, season_id: uuid.UUID | None = None) -> ApplicationStats | None:
+    """Return the reply, interview and offer figures for the caller's applications.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        season_id: Only applications within this season's months; None for all.
+
+    Returns:
+        The figures and Sankey flows; None when the user does not exist.
+
+    Raises:
+        NoSuchSeason: If `season_id` is not one of the caller's seasons.
+    """
     if user_for(db, user_id) is None:
         return None
     rows = _all(db, user_id, _season_for(db, user_id, season_id))
@@ -268,23 +392,40 @@ def stats(db: Session, user_id: uuid.UUID, season_id: uuid.UUID | None = None) -
 # --- seasons (D7) -------------------------------------------------------------
 
 def _month(text: str) -> date:
+    """Return the first day of a month written YYYY-MM."""
     year, month = map(int, text.split("-"))
     return date(year, month, 1)
 
 
 def season_window(season: ApplicationSeasonModel) -> tuple[date, date]:
-    """The season's first day, and the first day after its last month."""
+    """Return a season's first day and the first day after its last month.
+
+    Args:
+        season: The season row.
+
+    Returns:
+        (first day, first day after the end month), a half-open range.
+    """
     end = season.ends_month
     after = date(end.year + (end.month == 12), end.month % 12 + 1, 1)
     return season.starts_month, after
 
 
 def season_schema(season: ApplicationSeasonModel) -> Season:
+    """Build a season's response, with its months written YYYY-MM.
+
+    Args:
+        season: The stored season.
+
+    Returns:
+        The season with `starts` and `ends` as YYYY-MM strings.
+    """
     return Season(id=season.id, name=season.name,
                   starts=season.starts_month.strftime("%Y-%m"), ends=season.ends_month.strftime("%Y-%m"))
 
 
 def _own_season(db: Session, user_id: uuid.UUID, season_id: uuid.UUID) -> ApplicationSeasonModel | None:
+    """Return the caller's season with this id, or None."""
     return (
         db.query(ApplicationSeasonModel)
         .filter(ApplicationSeasonModel.id == season_id, ApplicationSeasonModel.user_id == user_id)
@@ -293,6 +434,15 @@ def _own_season(db: Session, user_id: uuid.UUID, season_id: uuid.UUID) -> Applic
 
 
 def list_seasons(db: Session, user_id: uuid.UUID) -> list[Season] | None:
+    """Return the caller's recruiting seasons, latest start first, then by name.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+
+    Returns:
+        The seasons; None when the user does not exist.
+    """
     if user_for(db, user_id) is None:
         return None
     rows = (
@@ -305,6 +455,18 @@ def list_seasons(db: Session, user_id: uuid.UUID) -> list[Season] | None:
 
 
 def create_season(db: Session, user_id: uuid.UUID, data: SeasonIn) -> Season | None:
+    """Create a recruiting season for the caller.
+
+    Commits.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        data: The name (stripped) and the first and last months.
+
+    Returns:
+        The new season; None when the user does not exist.
+    """
     if user_for(db, user_id) is None:
         return None
     row = ApplicationSeasonModel(id=uuid.uuid4(), user_id=user_id, name=data.name.strip(),
@@ -315,6 +477,19 @@ def create_season(db: Session, user_id: uuid.UUID, data: SeasonIn) -> Season | N
 
 
 def update_season(db: Session, user_id: uuid.UUID, season_id: uuid.UUID, data: SeasonIn) -> Season | None:
+    """Replace one of the caller's seasons' name and months.
+
+    Commits.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        season_id: The season.
+        data: The new name and months.
+
+    Returns:
+        The updated season; None when it is not the caller's.
+    """
     row = _own_season(db, user_id, season_id)
     if row is None:
         return None
@@ -324,7 +499,18 @@ def update_season(db: Session, user_id: uuid.UUID, season_id: uuid.UUID, data: S
 
 
 def delete_season(db: Session, user_id: uuid.UUID, season_id: uuid.UUID) -> bool | None:
-    """Only the season goes: its applications were never in it, only within its months."""
+    """Delete one of the caller's seasons; its applications are untouched.
+
+    Commits.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        season_id: The season.
+
+    Returns:
+        True when deleted; None when it is not the caller's.
+    """
     row = _own_season(db, user_id, season_id)
     if row is None:
         return None

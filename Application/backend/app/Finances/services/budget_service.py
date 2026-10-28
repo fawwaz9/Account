@@ -1,3 +1,10 @@
+"""Service functions for spending categories, monthly targets, limits and the budget.
+
+Categories say what money went on, separately from which account paid. Targets
+and per-account category limits say what an account means to spend in a month,
+and `get_budget_summary` sets them against what actually went out.
+"""
+
 import uuid
 from calendar import monthrange
 from datetime import date
@@ -49,6 +56,14 @@ DEFAULT_CATEGORIES = [
 
 
 def month_bounds(month: date) -> tuple[date, date]:
+    """Return the first and last day of the month a date falls in.
+
+    Args:
+        month: Any date in the month.
+
+    Returns:
+        The month's first and last day, both inclusive.
+    """
     start = first_of_month(month)
     return start, start.replace(day=monthrange(start.year, start.month)[1])
 
@@ -56,6 +71,20 @@ def month_bounds(month: date) -> tuple[date, date]:
 # --------------------------------------------------------------- categories --
 
 def get_categories(db: Session, user_id: uuid.UUID, include_archived: bool = False):
+    """Return the user's spending categories, seeding the defaults on first read.
+
+    A user with no categories at all gets `DEFAULT_CATEGORIES` written (and
+    committed) before the list is returned.
+
+    Args:
+        db: Open database session.
+        user_id: Whose categories.
+        include_archived: Also return archived categories.
+
+    Returns:
+        The categories by position, then name; None when the user does not
+        exist.
+    """
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
     if user is None:
         return None
@@ -81,6 +110,22 @@ def get_categories(db: Session, user_id: uuid.UUID, include_archived: bool = Fal
 
 
 def create_category(db: Session, user_id: uuid.UUID, data: SpendCategoryCreate):
+    """Create a spending category for the user.
+
+    Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose category.
+        data: The category.
+
+    Returns:
+        The new category; None when the user does not exist.
+
+    Raises:
+        ValueError: If the user already has a category of that name, ignoring
+            case.
+    """
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
     if user is None:
         return None
@@ -107,6 +152,23 @@ def create_category(db: Session, user_id: uuid.UUID, data: SpendCategoryCreate):
 
 
 def update_category(db: Session, user_id: uuid.UUID, category_id: uuid.UUID, data: SpendCategoryUpdate):
+    """Rename, archive or reorder one of the user's categories.
+
+    Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose category.
+        category_id: The category.
+        data: The fields to change.
+
+    Returns:
+        The updated category; None when it is not the user's.
+
+    Raises:
+        ValueError: If another of the user's categories already has the new name,
+            ignoring case.
+    """
     category = (
         db.query(SpendCategoryModel)
         .filter(SpendCategoryModel.id == category_id, SpendCategoryModel.user_id == user_id)
@@ -150,10 +212,18 @@ def update_category(db: Session, user_id: uuid.UUID, category_id: uuid.UUID, dat
 
 
 def delete_category(db: Session, user_id: uuid.UUID, category_id: uuid.UUID):
-    """Detaches the category from its transactions rather than deleting them.
+    """Delete one of the user's categories, keeping the money it labelled.
 
-    A category is a label on an expense, not the expense itself -- removing the
-    label must not remove the money.
+    Its limits on every account are deleted, and its transactions and standing
+    instructions become uncategorised. Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose category.
+        category_id: The category.
+
+    Returns:
+        The deleted category row; None when it is not the user's.
     """
     category = (
         db.query(SpendCategoryModel)
@@ -196,7 +266,18 @@ def delete_category(db: Session, user_id: uuid.UUID, category_id: uuid.UUID):
 # ------------------------------------------------------------------ targets --
 
 def set_target(db: Session, user_id: uuid.UUID, data: BudgetTargetUpsert):
-    """One target per account per month, created or replaced."""
+    """Create or replace one account's planned spending for one month.
+
+    Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose account.
+        data: The account, month (already the first) and amount.
+
+    Returns:
+        The target row; None when the account is not the user's.
+    """
     account = (
         db.query(AccountModel)
         .filter(AccountModel.id == data.account_id, AccountModel.user_id == user_id)
@@ -237,15 +318,18 @@ def set_account_category_limit(
 ) -> bool:
     """Set or clear what one account may spend on one category.
 
-    False when either the account or the category is not this user's, which the
-    route maps to a 404 -- the same answer as "does not exist", deliberately, so
-    the API does not confirm which ids are real.
+    With no month the standing limit is written; with a month, that month's
+    override. A null amount deletes the row (no limit), which is different from a
+    limit of 0. Commits.
 
-    A `limit_amount` of None **deletes the row** rather than storing a zero. The
-    two are different instructions: no row means this account does not budget
-    that category, and a row of 0 means it budgets it at nothing. Storing 0 for
-    "remove" would also keep the account deriving its target when it should have
-    gone back to the manual one.
+    Args:
+        db: Open database session.
+        user_id: Whose account and category.
+        data: The pair, the optional month and the amount.
+
+    Returns:
+        True when written; False when the account or category is not the user's,
+        which the route answers as a 404.
     """
     account = (
         db.query(AccountModel)
@@ -327,6 +411,21 @@ def set_account_category_limit(
 # ------------------------------------------------------------------ summary --
 
 def get_budget_summary(db: Session, user_id: uuid.UUID, month: date):
+    """Return one month's planned and actual spending across counted accounts.
+
+    Each counted, unarchived account's plan is the sum of its category limits for
+    the month when it has any (overrides included), else its target; its actual is
+    expenses plus outgoing transfer legs. Categories total expenses on counted
+    accounts, with no limits attached.
+
+    Args:
+        db: Open database session.
+        user_id: Whose budget.
+        month: Any day of the month.
+
+    Returns:
+        The month's summary; None when the user does not exist.
+    """
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
     if user is None:
         return None

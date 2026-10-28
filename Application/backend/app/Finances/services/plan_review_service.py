@@ -1,23 +1,11 @@
-"""The year plan against what happened, month by month (Phase 1 D37).
+"""Service functions setting saved year plans against the months they forecast.
 
-The plan is recomputed on every read, so on its own it can never be wrong --
-which is why §13.4's third part needs a *saved* plan. The student saves one;
-each save is kept. A finished month is compared with the newest plan saved
-before that month began: a plan saved on March 14 has a March row covering only
-the 15th onward, so setting it against all of March would blame the plan for
-two weeks it never forecast.
-
-Actuals are read from the ledger by the plan's own definitions, or the
-comparison would measure the definitions rather than the month:
-
-* **Liquid money** is spending, savings and emergency accounts, archived ones
-  included -- an account closed in May still held March's money.
-* **Transfers between liquid accounts** net to nothing. A transfer to or from
-  anything else (investments, "other") is money out or in.
-* **Card purchases count when they happen,** as the plan's pace does, and paying
-  the card off counts for nothing: counting both would charge the month twice.
-* **Tuition counts,** because it left. The plan leaves it out, so each month
-  says how much of the gap it explains.
+The plan is recomputed on every read, so comparing it with what happened needs a
+saved copy. Each save is kept; a finished month is compared with the newest plan
+saved before that month began. Actuals are read by the plan's own definitions:
+liquid accounts that count (archived ones included), transfers between them
+netting to nothing, card purchases counted when made, and tuition counted but
+reported apart, since the plan leaves it out.
 """
 
 import uuid
@@ -36,7 +24,17 @@ from app.shared.money import money
 
 
 def save_plan(db: Session, user_id: uuid.UUID) -> SavedPlanModel | None:
-    """Keep the plan as it stands today. Never replaces an earlier one."""
+    """Save the year plan as it stands today; earlier saves are never replaced.
+
+    Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose plan.
+
+    Returns:
+        The saved plan row; None when the user does not exist.
+    """
     today = user_today(db, user_id)
     current = plan(db, user_id, on_day=today)
     if current is None:
@@ -65,10 +63,30 @@ def save_plan(db: Session, user_id: uuid.UUID) -> SavedPlanModel | None:
 
 
 def first_of_next(day: date) -> date:
+    """Return the first day of the month after a date's month.
+
+    Args:
+        day: Any date.
+
+    Returns:
+        The first of the following month, rolling over the year in December.
+    """
     return date(day.year + (day.month == 12), day.month % 12 + 1, 1)
 
 
 def review(db: Session, user_id: uuid.UUID, on_day: date | None = None) -> PlanReview:
+    """Return each finished month set against the newest plan saved before it began.
+
+    Args:
+        db: Open database session.
+        user_id: Whose plans.
+        on_day: The day that decides which months are finished; defaults to the
+            user's today.
+
+    Returns:
+        The latest saved plan and the reviewed months, oldest first; both empty
+        when nothing has been saved.
+    """
     today = on_day or user_today(db, user_id)
     saved = (
         db.query(SavedPlanModel)
@@ -111,7 +129,18 @@ def review(db: Session, user_id: uuid.UUID, on_day: date | None = None) -> PlanR
 
 
 def actuals(db: Session, user_id: uuid.UUID, first: date, last: date) -> dict[date, dict[str, float]]:
-    """Money in, out, tuition, and the closing liquid balance, per month from `first` to `last`."""
+    """Return money in, out, tuition and the closing liquid balance for each month.
+
+    Args:
+        db: Open database session.
+        user_id: Whose ledger.
+        first: First day of the earliest month.
+        last: Last day of the latest month.
+
+    Returns:
+        Month (its first day) to a dict with "in", "out" and "tuition" (positive
+        dollars) and "end" (the counted liquid balance at the month's end).
+    """
     # Accounts that count (D39). An unticked one is as if absent: its own rows
     # are skipped, and money moved to it counts as leaving.
     kinds = dict(

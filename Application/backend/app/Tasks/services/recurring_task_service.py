@@ -1,27 +1,13 @@
-"""Repeating tasks: the rule, and the occurrences it writes.
+"""Service functions for repeating tasks: the rule, and the occurrences it writes.
 
-The third consumer of the recurrence engine, alongside class times and standing
-payments. Where it sits between the two is worth stating, because the three are
-deliberately not the same.
+Unlike class times (expanded on read) and standing payments (written once
+paid), a repeating task writes a real task per occurrence for a rolling window,
+14 days back to 60 ahead, so each one can be ticked off on its own.
+Materialising is idempotent on (recurring_id, occurrence_date) and runs on every
+Tasks page load; there is no scheduler.
 
-* A **class time** is never written out. Nothing hangs off an individual lecture,
-  so the calendar expands the rule on read and stores one row per term.
-* A **standing payment** is written only once it has happened, because a balance
-  is the sum of its rows and a future payment in that sum is money wrongly gone.
-* A **repeating task** is written for a window that runs a little way ahead. Each
-  occurrence is ticked off separately -- this week's reading being done says
-  nothing about next week's -- so a virtual occurrence has nowhere to keep that.
-  And unlike a payment, an occurrence that has not happened yet costs nothing to
-  have sitting there: seeing Monday's reading on Sunday, and ticking it early, is
-  the point.
-
-Materialising is idempotent on (recurring_id, occurrence_date), so it is safe to
-call on every task and calendar load, and there is no scheduler anywhere.
-
-`occurrence_date` rather than `due_date` because the student can now edit a
-single occurrence, including moving it. Where an occurrence *sits* is theirs;
-which occurrence it *is* belongs to the rule, and the two need separate columns
-or moving one produces a duplicate on the day it left.
+`occurrence_date` is an occurrence's identity and never changes; `due_date` is
+where it currently sits and the student may move it.
 """
 
 import uuid
@@ -54,10 +40,29 @@ MATERIALISE_BEHIND_DAYS = 14
 
 
 def user_exists(db: Session, user_id: uuid.UUID) -> bool:
+    """Return whether a user row with this id exists.
+
+    Args:
+        db: Open database session.
+        user_id: Id to look up.
+
+    Returns:
+        True when the user row exists.
+    """
     return db.query(UserModel).filter(UserModel.id == user_id).first() is not None
 
 
 def owned_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> CourseModel | None:
+    """Return the user's course with this id, or None.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+        course_id: The course to fetch.
+
+    Returns:
+        The course, or None when it is missing or another user's.
+    """
     return (
         db.query(CourseModel)
         .filter(CourseModel.id == course_id, CourseModel.user_id == user_id)
@@ -66,6 +71,15 @@ def owned_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> Cours
 
 
 def course_codes(db: Session, user_id: uuid.UUID) -> dict[uuid.UUID, str]:
+    """Return the user's course ids mapped to their codes.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+
+    Returns:
+        Course id to code, for every course the user has.
+    """
     rows = (
         db.query(CourseModel.id, CourseModel.code)
         .filter(CourseModel.user_id == user_id)
@@ -75,20 +89,29 @@ def course_codes(db: Session, user_id: uuid.UUID) -> dict[uuid.UUID, str]:
 
 
 def skipped_of(rule: RecurringTaskModel) -> list[date]:
+    """Return a rule's cancelled dates, parsed from their stored ISO strings.
+
+    Args:
+        rule: The repeating task.
+
+    Returns:
+        Its skipped dates as `date` objects; empty when none.
+    """
     return [parse_date(value) for value in (rule.skipped_dates or [])]
 
 
 def written_dates(db: Session, recurring_id: uuid.UUID) -> set[date]:
-    """Occurrences already written, by the date the rule produced them for.
+    """Return the occurrence dates this rule has already written a task for.
 
-    (recurring_id, occurrence_date) is the dedup key: one repeating task cannot
-    produce two occurrences for the same day, however often the materialiser
-    runs.
+    Keyed on `occurrence_date`, never `due_date`, so an occurrence the student moved
+    still counts as written for the date the rule produced it.
 
-    **Not `due_date`**, which is where the occurrence currently sits. A student
-    who moves Monday's chore to Wednesday has not made Monday unwritten, and
-    reading `due_date` here would have the rule put a second copy back on the
-    Monday it thinks it still owes.
+    Args:
+        db: Open database session.
+        recurring_id: The rule.
+
+    Returns:
+        The set of occurrence dates; empty when none is written.
     """
     rows = (
         db.query(TaskModel.occurrence_date)
@@ -100,7 +123,18 @@ def written_dates(db: Session, recurring_id: uuid.UUID) -> set[date]:
 
 
 def attach_rule(db: Session, rule: RecurringTaskModel, codes: dict[uuid.UUID, str] | None = None):
-    """Expose the rule columns and the derived fields the schema declares."""
+    """Set the derived fields the response expects on a rule row.
+
+    Attaches `recurrence`, `course_code` and `next_due_on` to the instance only.
+
+    Args:
+        db: Open database session.
+        rule: The rule row.
+        codes: Course ids mapped to codes; None looks them up.
+
+    Returns:
+        The same row.
+    """
     rule.recurrence = recurrence_of(rule)
     rule.course_code = (codes or course_codes(db, rule.user_id)).get(rule.course_id)
     rule.next_due_on = next_due(db, rule)
@@ -108,7 +142,18 @@ def attach_rule(db: Session, rule: RecurringTaskModel, codes: dict[uuid.UUID, st
 
 
 def next_due(db: Session, rule: RecurringTaskModel) -> date | None:
-    """The first occurrence from today on that is not already done."""
+    """Return the rule's first occurrence from the owner's today that is not yet done.
+
+    Looks 60 days ahead. Done occurrences are matched by their current `due_date`,
+    not `occurrence_date`, so a moved occurrence can be reported as still due.
+
+    Args:
+        db: Open database session.
+        rule: The rule row.
+
+    Returns:
+        The date; None when nothing outstanding falls in the next 60 days.
+    """
     # The rule carries its owner, so the horizon is that student's today.
     horizon = user_today(db, rule.user_id)
     done = {
@@ -133,6 +178,17 @@ def next_due(db: Session, rule: RecurringTaskModel) -> date | None:
 # --------------------------------------------------------------------- CRUD --
 
 def list_rules(db: Session, user_id: uuid.UUID, include_inactive: bool = True):
+    """Return the user's repeating tasks, by start date.
+
+    Args:
+        db: Open database session.
+        user_id: Whose rules.
+        include_inactive: Also return paused rules.
+
+    Returns:
+        The rule rows with derived fields attached; None when the user does not
+        exist.
+    """
     if not user_exists(db, user_id):
         return None
 
@@ -146,6 +202,17 @@ def list_rules(db: Session, user_id: uuid.UUID, include_inactive: bool = True):
 
 
 def get_rule(db: Session, user_id: uuid.UUID, rule_id: uuid.UUID):
+    """Return one of the user's repeating tasks with derived fields, or None.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+        rule_id: The repeating task to fetch.
+
+    Returns:
+        The rule with its derived fields attached, or None when it is missing or another
+        user's.
+    """
     rule = (
         db.query(RecurringTaskModel)
         .filter(RecurringTaskModel.id == rule_id, RecurringTaskModel.user_id == user_id)
@@ -155,6 +222,21 @@ def get_rule(db: Session, user_id: uuid.UUID, rule_id: uuid.UUID):
 
 
 def create_rule(db: Session, user_id: uuid.UUID, data: RecurringTaskCreate):
+    """Create a repeating task and write its occurrences for the window at once.
+
+    Commits twice: the rule, then the occurrences.
+
+    Args:
+        db: Open database session.
+        user_id: Whose rule.
+        data: The rule and its template; the title is stripped.
+
+    Returns:
+        The new rule row with derived fields; None when the user does not exist.
+
+    Raises:
+        ValueError: If `course_id` is not one of the user's courses.
+    """
     if not user_exists(db, user_id):
         return None
 
@@ -191,6 +273,24 @@ def create_rule(db: Session, user_id: uuid.UUID, data: RecurringTaskCreate):
 
 
 def update_rule(db: Session, user_id: uuid.UUID, rule_id: uuid.UUID, data: RecurringTaskUpdate):
+    """Change the fields sent on a repeating task and bring its occurrences in line.
+
+    Commits the rule, then resyncs outstanding occurrences and writes any new dates
+    from today on (never back-filling), and commits again.
+
+    Args:
+        db: Open database session.
+        user_id: Whose rule.
+        rule_id: The rule.
+        data: The fields to change; a null `recurrence` keeps the rule.
+
+    Returns:
+        The updated rule row with derived fields; None when it is not the user's.
+
+    Raises:
+        ValueError: If a new `course_id` is not one of the user's courses, or the
+            repeat would end before it starts.
+    """
     rule = get_rule(db, user_id, rule_id)
     if rule is None:
         return None
@@ -221,32 +321,20 @@ def update_rule(db: Session, user_id: uuid.UUID, rule_id: uuid.UUID, data: Recur
 
 
 def resync_occurrences(db: Session, rule: RecurringTaskModel) -> None:
-    """Bring the occurrences this rule already wrote back in line with it.
+    """Bring a rule's outstanding occurrences back in line with its current template.
 
-    Without this, editing a rule looks like it does nothing at all. The window
-    runs sixty days ahead, so by the time you rename a daily chore there are
-    already sixty-odd rows carrying the old title, and `materialise` will not
-    touch them -- it only ever adds dates that are missing. The rule changed and
-    every occurrence on screen did not.
+    Every outstanding occurrence, overdue ones included, takes the rule's title,
+    notes, time, estimate, course, priority and tags; outstanding ones from today to
+    the window's end whose date the rule no longer produces are deleted. Ticked-off
+    occurrences are never touched. Flushes only.
 
-    What must *not* follow the rule is an occurrence already ticked off: renaming
-    a chore does not rename last week's completed one, which is a record of what
-    was actually done. So the dividing line is `done`, not the date:
+    Args:
+        db: Open database session.
+        rule: The rule row, already updated.
 
-    * A **completed** occurrence is history and is never touched.
-    * An **outstanding** occurrence is still work to do, so it takes the rule's
-      current title, notes, time, estimate, course and tags -- including one
-      already overdue, which is the same chore still waiting.
-
-    Dates the rule no longer generates are dropped as well, or changing a chore
-    from Monday to Thursday would leave the Mondays behind beside the new
-    Thursdays. Only dates from today forward are dropped: an overdue occurrence
-    was genuinely assigned at the time, and deleting it would erase work the
-    student may still mean to do.
-
-    One deliberate loss: nothing marks an occurrence the student hand-edited, so
-    a tweak to a future one is overwritten here. That is the better trade
-    against every edit appearing to do nothing.
+    Note:
+        Nothing marks a hand-edited occurrence, so an edit to a future one is
+        overwritten here; that is deliberate.
     """
     horizon = user_today(db, rule.user_id)
     window_end = horizon + timedelta(days=MATERIALISE_AHEAD_DAYS)
@@ -303,11 +391,18 @@ def resync_occurrences(db: Session, rule: RecurringTaskModel) -> None:
 
 
 def delete_rule(db: Session, user_id: uuid.UUID, rule_id: uuid.UUID, drop_pending: bool = True):
-    """Stop the repeat.
+    """Delete a repeating task, keeping the occurrences already ticked off.
 
-    Occurrences already ticked off stay: they are a record of work actually done.
-    Ones still outstanding go by default, since they only existed because the
-    repeat did and leaving them would strand chores nothing is maintaining.
+    Kept occurrences lose their link to the rule. Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose rule.
+        rule_id: The rule.
+        drop_pending: Also delete the outstanding occurrences (the default).
+
+    Returns:
+        A copy of the deleted rule; None when it is not the user's.
     """
     rule = get_rule(db, user_id, rule_id)
     if rule is None:
@@ -330,7 +425,20 @@ def delete_rule(db: Session, user_id: uuid.UUID, rule_id: uuid.UUID, drop_pendin
 
 
 def skip_occurrence(db: Session, user_id: uuid.UUID, rule_id: uuid.UUID, on_date: date):
-    """Cancel one occurrence -- a week the seminar did not run."""
+    """Cancel one occurrence of a repeating task.
+
+    Adds the date to `skipped_dates` and deletes any outstanding task whose
+    `due_date` is that day (matched on `due_date`, not `occurrence_date`). Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose rule.
+        rule_id: The rule.
+        on_date: The date to cancel.
+
+    Returns:
+        The rule row with derived fields; None when it is not the user's.
+    """
     rule = get_rule(db, user_id, rule_id)
     if rule is None:
         return None
@@ -363,14 +471,20 @@ def materialise(
     *,
     since: date | None = None,
 ) -> list[TaskModel]:
-    """Write this rule's occurrences for the rolling window, skipping any already there.
+    """Write a rule's missing occurrences for the rolling window. Flushes only.
 
-    `since` raises the start of the window. Catching up is right when a rule is
-    first run or has been idle -- a chore set up on Friday for a Monday that has
-    already gone should still appear. It is wrong when an existing rule is
-    *edited*: moving a weekly chore from Monday to Thursday would otherwise
-    back-fill last Thursday, handing the student an overdue task that was never
-    assigned. So an edit passes today and only writes forward.
+    The window runs from 14 days back (never before `starts_on`) to 60 days ahead of
+    the owner's today. A paused rule writes nothing.
+
+    Args:
+        db: Open database session.
+        user_id: The rule's owner.
+        rule: The rule row.
+        since: Raise the window's start to this date; an edit passes today so a
+            changed rule never back-fills overdue work that was never assigned.
+
+    Returns:
+        The task rows written; empty when nothing was missing.
     """
     if not rule.active:
         return []
@@ -419,10 +533,18 @@ def materialise(
 
 
 def run_due(db: Session, user_id: uuid.UUID) -> RecurringTaskRun | None:
-    """Materialise every active rule's window.
+    """Write the missing occurrences of every active repeating task the user has.
 
-    Idempotent, so calling it on every task and calendar load is safe and is what
-    makes a repeating chore simply be there without a scheduler.
+    Idempotent, so the Tasks page calls it on every load. Commits when it writes
+    anything.
+
+    Args:
+        db: Open database session.
+        user_id: Whose rules.
+
+    Returns:
+        How many occurrences were written and the rows themselves; None when the
+        user does not exist.
     """
     if not user_exists(db, user_id):
         return None

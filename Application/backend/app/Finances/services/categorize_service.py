@@ -1,24 +1,11 @@
-"""Suggesting a category for an expense: personal layers, cheapest first.
+"""Suggest a spending category for an expense from the user's own habits.
 
-Phase 1 item 8 (account-vision.md §13.10). Spending is habitual, so most of it
-can be categorised without a model at all. Three layers, tried in order, each
-only when the one before has nothing confident to say:
-
-1. **Your own merchant map.** Every expense you have already categorised is a
-   confirmation: "TIM HORTONS" went under Eating out before, so it does again.
-   Nothing to train -- the ledger is the map, so every categorisation you make
-   anywhere improves the next suggestion.
-2. **Curated keyword rules.** A short, hand-kept list of well-known Canadian
-   merchants and the category names they belong under, matched against the
-   names *you* use. Global, maintained by the developer, derived from no one.
-3. **Naive Bayes on your own history.** Merchant-name words against your
-   categories, for a merchant you have never categorised whose words you have.
-
-Below the confidence bar it suggests nothing: a wrong category erodes trust
-like a hallucinated syllabus weight, so "ask" beats "guess". The fourth layer
-(an LLM for never-seen merchants, cached into the map) and the shared pool wait
-for the provider work and for Phase 3 respectively. Nothing here reads another
-user's rows.
+Three layers, cheapest first, each consulted only when the one before has
+nothing confident to say: the user's own merchant map (every expense they have
+categorised), a short hand-kept list of Canadian merchants matched to the
+user's own category names, and naive Bayes over the user's history. Below the
+confidence bar nothing is suggested. Nothing here reads another user's rows;
+CSV import and the omnibox use it.
 """
 
 import math
@@ -103,18 +90,32 @@ RULES: list[tuple[str, tuple[str, ...]]] = [
 
 @dataclass(frozen=True)
 class Suggestion:
+    """A suggested category for one expense, and which layer produced it.
+
+    Attributes:
+        category_id: The suggested category; None to ask.
+        source: "learned", "rule" or "bayes"; None with no suggestion.
+    """
+
     category_id: uuid.UUID | None
     source: str | None = None
 
 
 NONE = Suggestion(None)
+"""The empty suggestion: no category, so the person is asked."""
 
 
 def _words(key: str) -> list[str]:
+    """Return a merchant key's words of two or more letters (and "&"), for Bayes."""
     return [word for word in re.findall(r"[a-z&]+", key) if len(word) >= 2]
 
 
 def _rule_target(key: str, by_name: dict[str, uuid.UUID]) -> uuid.UUID | None:
+    """Return the user's category a curated rule names for a merchant key, or None.
+
+    The first rule whose keyword appears as whole words decides; if the user has none
+    of its category names, nothing is suggested.
+    """
     padded = f" {key} "
     for keyword, names in RULES:
         if f" {keyword} " in padded:
@@ -126,9 +127,24 @@ def _rule_target(key: str, by_name: dict[str, uuid.UUID]) -> uuid.UUID | None:
 
 
 class Categorizer:
-    """Trained once per request from the user's own categorised expenses."""
+    """Category suggestions trained once, per request, on the user's own expenses.
+
+    Args:
+        db: Open database session.
+        user_id: Whose categories and history to learn from.
+
+    Attributes:
+        active: Ids of the user's unarchived categories.
+        by_name: Lower-cased category name to id.
+        map: Merchant key to how often each category was chosen for it.
+        word_counts: Per category, how often each merchant word appeared.
+        class_rows: Per category, how many expenses it holds.
+        vocabulary: Every merchant word seen.
+        trained: How many categorised expenses were learned from.
+    """
 
     def __init__(self, db: Session, user_id: uuid.UUID):
+        """Load the user's categories and learn from their categorised expenses."""
         categories = (
             db.query(SpendCategoryModel)
             .filter(SpendCategoryModel.user_id == user_id, SpendCategoryModel.archived.is_(False))
@@ -162,6 +178,16 @@ class Categorizer:
         self.trained = sum(self.class_rows.values())
 
     def suggest(self, description: str | None) -> Suggestion:
+        """Suggest a category for an expense description.
+
+        Args:
+            description: The expense's description, as typed or imported.
+
+        Returns:
+            The user's own past choice when one category holds at least 80% of it,
+            else a curated rule's category, else a Bayes guess at 75% confidence or
+            more, else no suggestion.
+        """
         key = merchant_key(description)
         if not key:
             return NONE
@@ -179,6 +205,7 @@ class Categorizer:
         return self._bayes(key)
 
     def _bayes(self, key: str) -> Suggestion:
+        """Return the naive Bayes guess for a merchant key, or nothing below the bar."""
         words = [word for word in _words(key) if word in self.vocabulary]
         if self.trained < BAYES_MIN_ROWS or not words:
             return NONE

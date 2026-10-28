@@ -1,3 +1,5 @@
+"""Response schemas for "worth doing next": a course's most valuable unmarked items."""
+
 from datetime import date
 from uuid import UUID
 
@@ -5,7 +7,21 @@ from pydantic import BaseModel, Field
 
 
 class RemainingItem(BaseModel):
-    """One unmarked item, and what doing it is worth."""
+    """One unmarked item and how much of the final average it still controls.
+
+    Attributes:
+        grade_id: The unmarked grade.
+        name: The grade's name.
+        category: Its grade category.
+        max_score: Points possible.
+        due_date: When it is due, or None.
+        leverage: Points of final course average at stake: finishing it perfectly
+            versus not at all.
+        estimated_minutes: The student's estimate from the task the grade raised; None
+            for most items.
+        per_hour: Leverage per hour of the estimate; None without an estimate, never a
+            default, so unestimated items rank below estimated ones.
+    """
 
     grade_id: UUID
     name: str
@@ -26,7 +42,18 @@ class RemainingItem(BaseModel):
 
 
 class CheapestPath(BaseModel):
-    """The three items in a course most worth doing next."""
+    """The three unmarked items in a course most worth doing next.
+
+    Attributes:
+        target: The course's target percentage.
+        current: The current average.
+        best: The average if everything outstanding went perfectly.
+        reachable: Whether the target can still be reached at all.
+        items: At most three items, ranked by points per hour, then by points.
+        remaining_count: Items outstanding before the cut to three.
+        estimated_count: How many of the items shown carry an estimate.
+        unestimated_count: How many of the items shown have none.
+    """
 
     target: float
     current: float

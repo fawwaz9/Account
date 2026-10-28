@@ -1,10 +1,7 @@
 """Finding the course a student means from the code they typed.
 
-Lives in Grades because that is what it looks up. It was written inside quick
-capture, which was the right place when Tasks was the only caller; it now has
-three (quick capture, the omnibox, and tagging an expense to a course), and a
-course lookup reached for from Finances should not have to import Tasks to get
-it. Same move as grade_tasks.py -> grade_schedule.py.
+In Grades because a course is what it looks up; quick capture, the omnibox and
+tagging an expense to a course all call it.
 """
 
 import re
@@ -16,13 +13,18 @@ from app._database.models import CourseModel
 
 
 CODE_PARTS = re.compile(r"^([A-Za-z_]+)\s*(\d+[A-Za-z]?)$")
+"""Letters (underscores allowed) then digits with an optional letter: a loose code."""
 
 
 def code_parts(code: str) -> tuple[str, str] | None:
-    """A code as (letters, number), with case, spacing and underscores ignored.
+    """Return a code as (letters, number), ignoring case, spacing and underscores.
 
-    Underscores go from both sides rather than just the stored one, so someone
-    typing "statv201" finds "STAT_V 201" as readily as "stat201" does.
+    Args:
+        code: A typed or stored code, such as "statv201" or "STAT_V 201".
+
+    Returns:
+        The upper-cased letters with underscores removed and the upper-cased number,
+        or None when the text is not letters followed by digits.
     """
     match = CODE_PARTS.match(code.strip())
     if match is None:
@@ -31,12 +33,19 @@ def code_parts(code: str) -> tuple[str, str] | None:
 
 
 def resolve_course(db: Session, user_id: uuid.UUID, typed: str) -> CourseModel | None:
-    """Match a typed code against the courses this account actually has.
+    """Return the student's course a typed code means, or None when it is unclear.
 
-    Exact first, then letters-as-a-prefix -- which is what makes "cpsc 210" find
-    "CPSC_V 210" without a hardcoded list of campus suffixes. An ambiguous
-    prefix resolves to nothing rather than guessing: filing a lab against the
-    wrong course is worse than filing it against none.
+    An exact match on letters and number wins; otherwise a single course whose letters
+    start with the typed ones ("cpsc 210" finds "CPSC_V 210"). Two candidates resolve
+    to nothing rather than a guess.
+
+    Args:
+        db: Open database session.
+        user_id: Whose courses to search.
+        typed: The code as typed.
+
+    Returns:
+        The one matching course, or None.
     """
     wanted = code_parts(typed)
     if wanted is None:

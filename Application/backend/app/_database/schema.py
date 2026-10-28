@@ -1,18 +1,9 @@
-"""Bringing the database's shape up to date, as a thing you run.
+"""Bring the database's schema up to date, as a deploy step or from app startup.
 
-This used to happen only inside the application's startup hook, which made it
-invisible: there was no way to update the schema without starting a server, and
-no way to start a server without updating the schema. On a host that scales to
-zero, that second half is the expensive one -- the work is repeated on every
-cold start to re-establish something that has not changed since the last deploy.
-
-So it lives here, callable two ways:
-
-    python -m app._database.schema      # as a deploy step
-    apply_schema()                      # from the lifespan, when asked
-
-Idempotent either way, which is what makes it safe to run as often as you like
-and safe to leave out of startup entirely.
+Run `python -m app._database.schema` against a database to create missing tables,
+add missing columns and indexes, and install row security; the app's lifespan calls
+`apply_schema` itself only when `RUN_SCHEMA_ON_STARTUP` asks it to. Every step is
+idempotent, so running it again is harmless.
 """
 import logging
 import time
@@ -26,11 +17,14 @@ logger = logging.getLogger("app.schema")
 
 
 def apply_schema() -> float:
-    """Create missing tables, add missing columns, create missing indexes.
+    """Create missing tables, columns and indexes, then install row security.
 
-    Returns how long it took, in seconds. Reported rather than discarded
-    because this is the work that was quietly on the critical path of every
-    request after an idle period, and a number makes that visible.
+    Runs `create_all`, `ensure_schema`, `ensure_indexes` and `rls.install` in that
+    order on the application engine, each step committing on its own; a failed run can
+    simply be repeated.
+
+    Returns:
+        How long the whole run took, in seconds.
     """
     started = time.monotonic()
 

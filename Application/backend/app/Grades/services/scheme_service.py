@@ -1,25 +1,10 @@
 """Alternative grading schemes: the same marks, read another way.
 
-Phase 1 item 4 (account-vision.md §7). Courses with more than one rubric break
-generic calculators. Here the course's own weights stay its grade, and each
-scheme is projected beside it with the working shown, because "87.2% under
-Scheme B" is meaningless without the breakdown (§7, "show the work").
-
-**The arithmetic is the course average's, extended.** A scheme with the
-course's own weights and no rules must give exactly the course's average --
-that is tested, so a scheme can only ever differ for a reason it can show:
-a different weight, a dropped mark, or a replacement.
-
-Rules, as the vision lists them:
-
-* **drop_lowest** -- leave out a category's N lowest marks by percentage,
-  keeping at least one. The marks are not touched; this is a reading.
-* **replace_with** -- when another category's average is higher, it stands in
-  for this one ("the final replaces the midterm if higher"). Only between two
-  categories that both have marks.
-
-Versioning (keeping a professor's mid-term rubric change as history) is not
-here yet: a scheme is edited in place.
+A scheme is a list of components with per-category weights and two rules,
+`drop_lowest` and `replace_with`; with the course's own weights and no rules it gives
+exactly the course's average. A picked scheme becomes the course's grade, and every
+change to it rewrites the stored average in the same commit. Schemes are edited in
+place, with no history.
 """
 
 import uuid
@@ -41,12 +26,31 @@ from app.Grades.utils.enums import GradeCategory
 
 
 def category_average(course, category: str, drop_lowest: int = 0) -> tuple[float | None, int]:
-    """(average, how many dropped) from what is marked. See scheme_math."""
+    """Return a category's live average and how many marks were dropped.
+
+    Args:
+        course: The course with its grades loaded.
+        category: Grade category value, such as "Quiz".
+        drop_lowest: How many of the category's lowest marks to leave out.
+
+    Returns:
+        (average or None when nothing is marked, number of marks dropped).
+    """
     return scheme_math.category_average(course, category, drop_lowest)
 
 
 def project(course, components: list[SchemeComponent], label: str, scheme_id=None) -> SchemeResult:
-    """The live average under these components, with the working per category."""
+    """Return the live average under some components, with the working per category.
+
+    Args:
+        course: Course with its grades loaded.
+        components: The scheme's components.
+        label: Name to report the result under.
+        scheme_id: The scheme's id; None for the course's own weights.
+
+    Returns:
+        The scheme's result, components included.
+    """
     average, lines = scheme_math.project(course, components)
     return SchemeResult(
         id=scheme_id, label=label, average=average, components=components,
@@ -59,6 +63,14 @@ def project(course, components: list[SchemeComponent], label: str, scheme_id=Non
 
 
 def own_components(course) -> list[SchemeComponent]:
+    """Return the course's own non-zero weights as scheme components.
+
+    Args:
+        course: The course whose weights to read.
+
+    Returns:
+        One component per category with a weight above 0.
+    """
     return [
         SchemeComponent(category=GradeCategory(category), weight=weight)
         for category, weight in course.category_weights.items()
@@ -67,6 +79,14 @@ def own_components(course) -> list[SchemeComponent]:
 
 
 def as_schema(row: GradingSchemeModel) -> GradingScheme:
+    """Return a stored scheme row as its API schema.
+
+    Args:
+        row: The stored scheme.
+
+    Returns:
+        The scheme with its components validated.
+    """
     return GradingScheme(
         id=row.id, course_id=row.course_id, label=row.label,
         components=[SchemeComponent.model_validate(c) for c in row.components],
@@ -75,6 +95,7 @@ def as_schema(row: GradingSchemeModel) -> GradingScheme:
 
 
 def _owned_scheme(db: Session, course_id: uuid.UUID, scheme_id: uuid.UUID) -> GradingSchemeModel | None:
+    """Return the scheme with this id if it belongs to this course, else None."""
     return (
         db.query(GradingSchemeModel)
         .filter(GradingSchemeModel.id == scheme_id, GradingSchemeModel.course_id == course_id)
@@ -83,6 +104,17 @@ def _owned_scheme(db: Session, course_id: uuid.UUID, scheme_id: uuid.UUID) -> Gr
 
 
 def compare(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> SchemeComparison | None:
+    """Return the course's own figure beside every scheme's.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        course_id: The course.
+
+    Returns:
+        The comparison, schemes in display order, or None when the course is missing or
+        another user's.
+    """
     course = get_user_course(db, user_id, course_id)
     if course is None:
         return None
@@ -106,6 +138,20 @@ def compare(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> SchemeComp
 
 
 def create_scheme(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, data: SchemeWrite) -> GradingScheme | None:
+    """Add a grading scheme to a course, last in display order.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        course_id: The course.
+        data: The scheme's label and components.
+
+    Returns:
+        The new scheme, or None when the course is missing or another user's.
+
+    Note:
+        Commits.
+    """
     course = get_user_course(db, user_id, course_id)
     if course is None:
         return None
@@ -123,6 +169,22 @@ def create_scheme(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, data: S
 def update_scheme(
     db: Session, user_id: uuid.UUID, course_id: uuid.UUID, scheme_id: uuid.UUID, data: SchemeWrite,
 ) -> GradingScheme | None:
+    """Replace a scheme's label and components, regrading the course if picked.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        course_id: The course.
+        scheme_id: The scheme.
+        data: The new label and components.
+
+    Returns:
+        The updated scheme, or None when the course or scheme is missing or another
+        user's.
+
+    Note:
+        Commits, with the course's new stored average when the scheme is its grade.
+    """
     course = get_user_course(db, user_id, course_id)
     if course is None:
         return None
@@ -141,6 +203,21 @@ def update_scheme(
 
 
 def delete_scheme(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, scheme_id: uuid.UUID) -> bool:
+    """Delete a scheme; if it was picked, the course's own weights count again.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        course_id: The course.
+        scheme_id: The scheme.
+
+    Returns:
+        True if deleted, False when the course or scheme is missing or another user's.
+
+    Note:
+        Commits, clearing `counting_scheme_id` and rewriting the average in the same
+        transaction.
+    """
     course = get_user_course(db, user_id, course_id)
     if course is None:
         return False
@@ -161,11 +238,20 @@ def delete_scheme(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, scheme_
 
 
 def set_counting(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, scheme_id: uuid.UUID | None) -> SchemeComparison | None:
-    """Make a scheme the course's grade, or (None) put its own weights back.
+    """Make a scheme the course's grade, or put the course's own weights back.
 
-    None when the course is not the caller's, or the scheme is not this
-    course's -- a scheme is only ever reached through its course. Recomputes the
-    stored average in the same commit, so every screen moves together.
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        course_id: The course.
+        scheme_id: The scheme to count; None for the course's own weights.
+
+    Returns:
+        The comparison after the change, or None when the course is not the caller's
+        or the scheme is not this course's.
+
+    Note:
+        Commits, with the recomputed stored average, so every screen moves together.
     """
     course = get_user_course(db, user_id, course_id)
     if course is None:

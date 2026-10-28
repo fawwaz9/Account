@@ -1,32 +1,11 @@
-"""Who a database session is acting for -- the identity row policies check.
+"""The acting user a database session runs as, and the few lookups that cross users.
 
-Phase 0 moves the per-user rule from application code into Postgres: every
-per-user table gets a row policy admitting only rows whose owner is the user
-named in the transaction-local setting ``app.user_id``. A query that forgets
-its ``user_id`` filter then returns that user's rows anyway, instead of
-everyone's. See ``app/_database/rls.py`` for the policies and
-``Ideas/overhaul/phase0.md`` item 2 for why.
-
-This module is the application half:
-
-* ``act_as(db, user_id)`` records the identity on the session. A listener puts
-  it into ``app.user_id`` at the start of **every** transaction, because
-  services commit mid-request and ``set_config(..., is_local => true)`` dies
-  with each transaction. Local rather than session-wide on purpose: production
-  runs behind Supabase's transaction pooler, where consecutive transactions can
-  land on different server connections, and a session-wide setting would leak
-  one request's identity into another's.
-
-* A handful of lookups that genuinely have to look across users -- signing in
-  by email, the "is this address taken" check, finding accounts due for purge.
-  On Postgres they go through ``SECURITY DEFINER`` functions that return an id
-  or a yes/no, never rows; the caller then acts as that user. On SQLite (local
-  development and the default test run) there are no policies, and the same
-  questions are asked with a plain query.
-
-Everything here is inert until the policies exist and the API connects as the
-restricted role: setting ``app.user_id`` on a database with no policies changes
-nothing, which is what lets this ship ahead of the switch.
+`act_as` records the user on the session, and a listener writes it into the
+transaction-local setting `app.user_id` at the start of every transaction; the row
+policies in `rls.py` read that setting through `account_current_user()`. The
+cross-user lookups (sign-in by email or Google id, the email-taken check, the purge
+and push scheduler queries) call `SECURITY DEFINER` functions on Postgres and run
+the same query directly on SQLite, which has no row security.
 """
 from datetime import datetime
 from uuid import UUID
@@ -39,17 +18,26 @@ from app._database.models import PushSubscriptionModel, ReminderModel, UserModel
 #: The transaction-local setting the row policies read.
 SETTING = "app.user_id"
 _INFO_KEY = "acting_user_id"
+"""Key under which `act_as` stores the acting user in `Session.info`."""
 
 
 def _is_postgres(db: Session) -> bool:
+    """Return True when the session is bound to a Postgres database."""
     return db.get_bind().dialect.name == "postgresql"
 
 
 def act_as(db: Session, user_id: UUID) -> None:
-    """From now on, this session acts for ``user_id``.
+    """Make the session act as a user for the current and every later transaction.
 
-    Takes effect for the transaction in progress, if there is one, and for every
-    transaction after it.
+    Args:
+        db: The session to identify.
+        user_id: The acting user; row policies admit only that user's rows.
+
+    Note:
+        The setting is transaction-local (`set_config(..., true)`) and re-applied by
+        `_carry_identity` at every transaction start, because services commit
+        mid-request
+        and the transaction pooler may hand each transaction a different connection.
     """
     db.info[_INFO_KEY] = user_id
     if db.in_transaction() and _is_postgres(db):
@@ -58,11 +46,20 @@ def act_as(db: Session, user_id: UUID) -> None:
 
 
 def acting_user(db: Session) -> UUID | None:
+    """Return the user the session acts as.
+
+    Args:
+        db: The session to inspect.
+
+    Returns:
+        The id passed to the last `act_as`, or None if it was never called.
+    """
     return db.info.get(_INFO_KEY)
 
 
 @event.listens_for(Session, "after_begin")
 def _carry_identity(session: Session, _transaction, connection) -> None:
+    """Write the acting user into `app.user_id` as each Postgres transaction begins."""
     user_id = session.info.get(_INFO_KEY)
     if user_id is not None and connection.dialect.name == "postgresql":
         connection.execute(text("SELECT set_config(:name, :value, true)"),
@@ -74,10 +71,16 @@ def _carry_identity(session: Session, _transaction, connection) -> None:
 # --------------------------------------------------------------------------
 
 def user_id_by_email(db: Session, email: str) -> UUID | None:
-    """The account registered to ``email``, compared without regard to case.
+    """Return the id of the account registered to an email address, ignoring case.
 
-    Exact equality, not ILIKE: in a LIKE pattern ``_`` and ``%`` are wildcards,
-    and email addresses contain underscores, so john_doe@ matched johnxdoe@.
+    Args:
+        db: Open database session; needs no acting user.
+        email: Address to look up, compared by exact case-insensitive equality, never as
+            a
+            pattern.
+
+    Returns:
+        The account's id, or None when no account has the address.
     """
     if _is_postgres(db):
         return db.execute(text("SELECT account_user_id_by_email(:email)"), {"email": email}).scalar()
@@ -89,13 +92,33 @@ def user_id_by_email(db: Session, email: str) -> UUID | None:
 
 
 def user_id_by_google_id(db: Session, google_id: str) -> UUID | None:
+    """Return the id of the account linked to a Google subject.
+
+    Args:
+        db: Open database session; needs no acting user.
+        google_id: Google's stable subject identifier for the person.
+
+    Returns:
+        The account's id, or None when no account is linked to it.
+    """
     if _is_postgres(db):
         return db.execute(text("SELECT account_user_id_by_google_id(:gid)"), {"gid": google_id}).scalar()
     return db.query(UserModel.id).filter(UserModel.google_id == google_id).scalar()
 
 
 def email_taken(db: Session, email: str, except_user_id: UUID | None = None) -> bool:
-    """Whether an account other than ``except_user_id`` already has ``email``."""
+    """Return whether another account already uses an email address, ignoring case.
+
+    Args:
+        db: Open database session; needs no acting user.
+        email: Address to check.
+        except_user_id: Account to leave out, so a user keeping their own address
+            passes;
+            None checks every account.
+
+    Returns:
+        True if any other account has the address.
+    """
     if _is_postgres(db):
         return bool(db.execute(
             text("SELECT account_email_taken(:email, :except_id)"),
@@ -108,7 +131,15 @@ def email_taken(db: Session, email: str, except_user_id: UUID | None = None) -> 
 
 
 def expired_user_ids(db: Session, cutoff: datetime) -> list[UUID]:
-    """Accounts marked for deletion on or before ``cutoff``."""
+    """Return the accounts whose deletion was requested on or before a cutoff.
+
+    Args:
+        db: Open database session; needs no acting user.
+        cutoff: Naive UTC time; accounts with `deleted_at` at or before it are returned.
+
+    Returns:
+        The ids of the accounts due for purging; empty when there are none.
+    """
     if _is_postgres(db):
         rows = db.execute(text("SELECT account_expired_user_ids(:cutoff)"), {"cutoff": cutoff}).scalars()
         return list(rows)
@@ -121,7 +152,12 @@ def expired_user_ids(db: Session, cutoff: datetime) -> list[UUID]:
 
 
 def release_push_endpoint(db: Session, endpoint: str) -> None:
-    """Forget ``endpoint`` for whichever account holds it. See rls.FUNCTION_SQL."""
+    """Delete the push subscription for an endpoint, whichever account holds it.
+
+    Args:
+        db: Open database session; the delete is not committed here.
+        endpoint: The browser's push endpoint URL; knowing it is the proof of ownership.
+    """
     if _is_postgres(db):
         db.execute(text("SELECT account_release_push_endpoint(:endpoint)"), {"endpoint": endpoint})
         return
@@ -131,7 +167,18 @@ def release_push_endpoint(db: Session, endpoint: str) -> None:
 
 
 def users_with_unpushed_reminders(db: Session, horizon: datetime) -> list[UUID]:
-    """Accounts with a device and a reminder at or before ``horizon`` not yet pushed."""
+    """Return the users with a device and an unpushed reminder due by a horizon.
+
+    Args:
+        db: Open database session; needs no acting user.
+        horizon: Latest naive `remind_at` to include. Because `remind_at` is local wall
+            time, callers pass a horizon wide enough for every time zone and recheck
+            each
+            user's own clock.
+
+    Returns:
+        Distinct user ids; empty when nobody has anything waiting.
+    """
     if _is_postgres(db):
         rows = db.execute(
             text("SELECT account_users_with_unpushed_reminders(:horizon)"), {"horizon": horizon}

@@ -1,21 +1,9 @@
-"""Reminders: the things that notify rather than wait.
+"""Service functions for reminders: things that notify at a moment rather than wait.
 
-A task sits on a list until it is dealt with. A reminder has no life before or
-after its moment -- being told is the point, and ticking it off is not -- which
-is why it is a table of its own rather than a flag on a task.
-
-**Where the delivery actually happens, and its limit.** There is no scheduler
-and no push infrastructure. The client asks what is due, and the server answers
-from the stored times. So a reminder fires when the app is open and not before,
-and the interface says so plainly rather than letting anything important be
-trusted to it. That is a real constraint, recorded here because the alternative
--- a service worker, VAPID keys and a process that outlives the request -- is a
-large amount of infrastructure for a locally-run app.
-
-**Time zones.** `remind_at` is naive *local wall time*, unlike `completed_at`
-which is naive UTC. Nine o'clock means nine o'clock where the student is, and
-must survive a clock change. Everything here therefore compares against local
-now, resolved through the timezone preference, and never against `utc_now()`.
+The open app asks what is due and this module answers from the stored times,
+stamping `fired_at` the first time each reminder is shown; pushing to devices is
+the Notifications scheduler's job, which stamps `pushed_at`. `remind_at` is naive
+local wall time, so every comparison is against the user's own local now.
 """
 
 import uuid
@@ -31,10 +19,28 @@ from app.shared.dates import local_now, zone_of
 
 
 def owned_user(db: Session, user_id: uuid.UUID) -> UserModel | None:
+    """Return the user row, or None when it does not exist.
+
+    Args:
+        db: Open database session.
+        user_id: Id to look up.
+
+    Returns:
+        The user row, or None.
+    """
     return db.query(UserModel).filter(UserModel.id == user_id).first()
 
 
 def course_codes(db: Session, user_id: uuid.UUID) -> dict[uuid.UUID, str]:
+    """Return the user's course ids mapped to their codes, for labelling reminders.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+
+    Returns:
+        Course id to code, for every course the user has.
+    """
     rows = (
         db.query(CourseModel.id, CourseModel.code)
         .filter(CourseModel.user_id == user_id)
@@ -44,6 +50,17 @@ def course_codes(db: Session, user_id: uuid.UUID) -> dict[uuid.UUID, str]:
 
 
 def as_schema(row: ReminderModel, codes: dict, now: datetime) -> Reminder:
+    """Build a reminder's response from its row, working out whether it is due.
+
+    Args:
+        row: The reminder row.
+        codes: The user's course ids mapped to codes.
+        now: The user's local now, naive.
+
+    Returns:
+        The reminder, with `due` True when `remind_at` has passed and it is not
+        dismissed.
+    """
     return Reminder(
         id=row.id,
         title=row.title,
@@ -65,6 +82,17 @@ def list_reminders(
     include_dismissed: bool = False,
     at: datetime | None = None,
 ):
+    """Return the user's reminders, earliest first.
+
+    Args:
+        db: Open database session.
+        user_id: Whose reminders.
+        include_dismissed: Also return dismissed reminders.
+        at: The moment to judge `due` against, aware or naive UTC; defaults to now.
+
+    Returns:
+        The reminders; None when the user does not exist.
+    """
     user = owned_user(db, user_id)
     if user is None:
         return None
@@ -80,12 +108,20 @@ def list_reminders(
 
 
 def due_reminders(db: Session, user_id: uuid.UUID, at: datetime | None = None):
-    """What should be on screen now, and marking that it has been.
+    """Return the reminders that should be on screen now, marking new ones as shown.
 
-    `fired_at` is set once and never re-set. A reminder surfaced on Monday and
-    still not dismissed on Wednesday is the same reminder, and re-stamping it
-    would make it read as new every time the page was opened -- which is how a
-    notification becomes something you learn to ignore.
+    `fired_at` is set the first time a reminder is returned and never again, so one
+    left undismissed does not read as new each time the app opens. Commits when it
+    stamps anything.
+
+    Args:
+        db: Open database session.
+        user_id: Whose reminders.
+        at: The moment to judge against; defaults to now.
+
+    Returns:
+        Undismissed reminders whose time has passed on the user's clock, earliest
+        first; None when the user does not exist.
     """
     user = owned_user(db, user_id)
     if user is None:
@@ -114,6 +150,16 @@ def due_reminders(db: Session, user_id: uuid.UUID, at: datetime | None = None):
 
 
 def owned_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
+    """Return the user's course with this id, or None.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+        course_id: The course to fetch.
+
+    Returns:
+        The course, or None when it is missing or another user's.
+    """
     return (
         db.query(CourseModel)
         .filter(CourseModel.id == course_id, CourseModel.user_id == user_id)
@@ -122,6 +168,21 @@ def owned_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
 
 
 def create_reminder(db: Session, user_id: uuid.UUID, data: ReminderCreate):
+    """Create a reminder for the user.
+
+    Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose reminder.
+        data: The reminder; its title is stripped.
+
+    Returns:
+        The new reminder; None when the user does not exist.
+
+    Raises:
+        ValueError: If `course_id` is not one of the user's courses.
+    """
     user = owned_user(db, user_id)
     if user is None:
         return None
@@ -145,6 +206,16 @@ def create_reminder(db: Session, user_id: uuid.UUID, data: ReminderCreate):
 
 
 def get_reminder(db: Session, user_id: uuid.UUID, reminder_id: uuid.UUID):
+    """Return the user's reminder row with this id, or None.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+        reminder_id: The reminder to fetch.
+
+    Returns:
+        The reminder row, or None when it is missing or another user's.
+    """
     return (
         db.query(ReminderModel)
         .filter(ReminderModel.id == reminder_id, ReminderModel.user_id == user_id)
@@ -155,6 +226,23 @@ def get_reminder(db: Session, user_id: uuid.UUID, reminder_id: uuid.UUID):
 def update_reminder(
     db: Session, user_id: uuid.UUID, reminder_id: uuid.UUID, data: ReminderUpdate
 ):
+    """Change the fields sent on one of the user's reminders.
+
+    Moving `remind_at` re-arms it: `fired_at`, `pushed_at` and `dismissed_at` are
+    cleared so it is shown and pushed again. Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose reminder.
+        reminder_id: The reminder.
+        data: The fields to change.
+
+    Returns:
+        The updated reminder; None when it is not the user's.
+
+    Raises:
+        ValueError: If a new `course_id` is not one of the user's courses.
+    """
     row = get_reminder(db, user_id, reminder_id)
     if row is None:
         return None
@@ -183,7 +271,18 @@ def update_reminder(
 
 
 def dismiss_reminder(db: Session, user_id: uuid.UUID, reminder_id: uuid.UUID):
-    """Acknowledge it. The row stays: what you were reminded of is a record."""
+    """Mark one of the user's reminders as dismissed; the row is kept as a record.
+
+    Dismissing twice keeps the first time. Commits when it changes anything.
+
+    Args:
+        db: Open database session.
+        user_id: Whose reminder.
+        reminder_id: The reminder.
+
+    Returns:
+        The reminder as it now stands; None when it is not the user's.
+    """
     row = get_reminder(db, user_id, reminder_id)
     if row is None:
         return None
@@ -198,6 +297,18 @@ def dismiss_reminder(db: Session, user_id: uuid.UUID, reminder_id: uuid.UUID):
 
 
 def delete_reminder(db: Session, user_id: uuid.UUID, reminder_id: uuid.UUID):
+    """Delete one of the user's reminders.
+
+    Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose reminder.
+        reminder_id: The reminder.
+
+    Returns:
+        A copy of the deleted reminder; None when it is not the user's.
+    """
     row = get_reminder(db, user_id, reminder_id)
     if row is None:
         return None

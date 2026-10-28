@@ -1,9 +1,4 @@
-"""Password hashing for the local (email + password) auth provider.
-
-bcrypt is used directly rather than through passlib: passlib's bcrypt
-backend is broken against bcrypt 4.x/5.x, and the surface needed here is
-two functions.
-"""
+"""Password hashing and checking for email-and-password accounts, using bcrypt."""
 
 from functools import lru_cache
 
@@ -18,6 +13,18 @@ MIN_PASSWORD_LENGTH = 8
 
 
 def hash_password(password: str) -> str:
+    """Return a bcrypt hash of a password, with a fresh salt.
+
+    Args:
+        password: The password; at most `MAX_PASSWORD_BYTES` bytes in UTF-8.
+
+    Returns:
+        The hash as text, for `users.password_hash`.
+
+    Raises:
+        ValueError: If the password exceeds `MAX_PASSWORD_BYTES` bytes, which bcrypt
+            refuses.
+    """
     encoded = password.encode("utf-8")
     if len(encoded) > MAX_PASSWORD_BYTES:
         raise ValueError(f"Password must be at most {MAX_PASSWORD_BYTES} bytes")
@@ -25,6 +32,16 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(password: str, password_hash: str) -> bool:
+    """Return whether a password matches a stored bcrypt hash.
+
+    Args:
+        password: The password as typed.
+        password_hash: The stored hash.
+
+    Returns:
+        True on a match; False on a mismatch, a malformed hash or an over-long
+        password.
+    """
     try:
         return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
     except ValueError:
@@ -34,14 +51,15 @@ def verify_password(password: str, password_hash: str) -> bool:
 
 @lru_cache(maxsize=1)
 def _placeholder_hash() -> str:
+    """Return a hash of a fixed placeholder, computed once, for timing equalisation."""
     return hash_password("timing-equalisation-placeholder")
 
 
 def burn_one_verification() -> None:
-    """Spend roughly one bcrypt verification's worth of time.
+    """Spend about one bcrypt verification's time, as a real check would.
 
-    Login calls this when no account matches so that an unregistered email
-    and a wrong password take comparable time, and the endpoint does not
-    leak which addresses have accounts through response timing.
+    Note:
+        Login calls this when no account matches, so response timing does not reveal
+        which addresses have accounts.
     """
     bcrypt.checkpw(b"timing-equalisation-placeholder", _placeholder_hash().encode("utf-8"))

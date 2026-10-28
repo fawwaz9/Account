@@ -1,12 +1,9 @@
-"""How long tasks really take, against what was estimated (Phase 1 D35, D36).
+"""Service functions for how long tasks really take against their estimates.
 
-The review loop "you estimated 2h, it took 3.5h" (account-vision.md §13.13).
-Two ways in, both landing in `tasks.actual_minutes`: the question asked when a
-task with an estimate is ticked off, and a timer kept on the server.
-
-The ratio is total actual over total estimated, not a mean of per-task ratios:
-a five-minute task that took fifteen is a 3x miss that cost ten minutes, and
-must not outweigh a five-hour one that ran an hour over.
+Actual time reaches `tasks.actual_minutes` two ways: the question asked when an
+estimated task is ticked off, and a timer kept on the server. The ratio is total
+actual over total estimated, never a mean of per-task ratios, so a small task
+missed badly cannot outweigh a long one.
 """
 
 import math
@@ -31,7 +28,16 @@ RATIO_WINDOW_DAYS = 90
 
 
 def elapsed_minutes(started: datetime, now: datetime) -> int | None:
-    """Whole minutes, rounded up; None when the timer cannot be trusted."""
+    """Return a timer's elapsed time in whole minutes, rounded up.
+
+    Args:
+        started: When the timer started, naive UTC.
+        now: The moment it stops, naive UTC.
+
+    Returns:
+        At least 1 minute; None when the span is negative or longer than
+        `TIMER_TRUST_HOURS`, which means the timer was forgotten.
+    """
     seconds = (now - started).total_seconds()
     if seconds < 0 or seconds > TIMER_TRUST_HOURS * 3600:
         return None
@@ -39,10 +45,18 @@ def elapsed_minutes(started: datetime, now: datetime) -> int | None:
 
 
 def stop_clock(task: TaskModel, now: datetime | None = None) -> tuple[int, bool]:
-    """Stop a running timer, adding what it measured. Returns (added, discarded).
+    """Stop a task's running timer and add what it measured to `actual_minutes`.
 
-    Called from `set_done` too, so ticking a task off with its timer running
-    keeps the time rather than leaving a clock running on a finished task.
+    Only changes the row; the caller commits. `set_done` calls it too, so ticking a
+    task off with its timer running keeps the time.
+
+    Args:
+        task: The task, whose timer may or may not be running.
+        now: The stopping moment, naive UTC; defaults to now.
+
+    Returns:
+        The minutes added and whether the timer was discarded as untrustworthy:
+        (0, False) when no timer was running, (0, True) when it was discarded.
     """
     if task.timer_started_at is None:
         return 0, False
@@ -55,6 +69,16 @@ def stop_clock(task: TaskModel, now: datetime | None = None) -> tuple[int, bool]
 
 
 def start_timer(task: TaskModel) -> None:
+    """Start a task's timer, leaving one that is already running alone.
+
+    Only changes the row; the caller commits.
+
+    Args:
+        task: The task to time.
+
+    Raises:
+        ValueError: If the task is already done.
+    """
     if task.done:
         raise ValueError("This task is finished; untick it to time it again")
     if task.timer_started_at is None:  # starting a running timer changes nothing
@@ -62,6 +86,21 @@ def start_timer(task: TaskModel) -> None:
 
 
 def estimate_ratio(db: Session, user_id: uuid.UUID, now: datetime | None = None) -> EstimateRatio:
+    """Return how the user's actual task times compare with their estimates.
+
+    Reads tasks completed in the last `RATIO_WINDOW_DAYS` days that carry both an
+    estimate and an actual time.
+
+    Args:
+        db: Open database session.
+        user_id: Whose tasks to read.
+        now: The moment to look back from, naive UTC; defaults to now.
+
+    Returns:
+        The ratio (None until `RATIO_MIN_TASKS` such tasks exist), the counts
+        and sums behind it, and whether the user asked for the workload forecast
+        to apply it.
+    """
     since = (now or utc_now()) - timedelta(days=RATIO_WINDOW_DAYS)
     rows = (
         db.query(TaskModel.estimated_minutes, TaskModel.actual_minutes)

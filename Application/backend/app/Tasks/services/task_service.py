@@ -1,8 +1,8 @@
-"""Tasks: what is outstanding, what is done, and what a week actually costs.
+"""Service functions for tasks: listing, editing, ticking off, timing and snoozing.
 
-A task with a due date is also a calendar item -- the calendar reads them
-through `list_tasks` with a window rather than through a table of its own, so
-there is one record of a deadline rather than two that can disagree.
+A task with a due date is also a calendar item; the calendar reads tasks through
+`list_tasks` with a window rather than keeping its own copy. Tasks from a
+current-term course below target carry a risk band and lead their date group.
 """
 
 import uuid
@@ -47,10 +47,29 @@ RISK_RANK = {"severe": 0, "moderate": 1, "mild": 2, None: 3}
 
 
 def user_exists(db: Session, user_id: uuid.UUID) -> bool:
+    """Return whether a user row with this id exists.
+
+    Args:
+        db: Open database session.
+        user_id: Id to look up.
+
+    Returns:
+        True when the user row exists.
+    """
     return db.query(UserModel).filter(UserModel.id == user_id).first() is not None
 
 
 def owned_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> CourseModel | None:
+    """Return the user's course with this id, or None.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+        course_id: The course to fetch.
+
+    Returns:
+        The course, or None when it is missing or another user's.
+    """
     return (
         db.query(CourseModel)
         .filter(CourseModel.id == course_id, CourseModel.user_id == user_id)
@@ -59,6 +78,15 @@ def owned_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> Cours
 
 
 def course_codes(db: Session, user_id: uuid.UUID) -> dict[uuid.UUID, str]:
+    """Return the user's course ids mapped to their codes, for labelling tasks.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+
+    Returns:
+        Course id to code, for every course the user has.
+    """
     rows = (
         db.query(CourseModel.id, CourseModel.code)
         .filter(CourseModel.user_id == user_id)
@@ -68,7 +96,14 @@ def course_codes(db: Session, user_id: uuid.UUID) -> dict[uuid.UUID, str]:
 
 
 def risk_band(gap: float) -> str:
-    """Which band a course sitting `gap` points below its target falls in."""
+    """Return the risk band for a course sitting `gap` points below its target.
+
+    Args:
+        gap: Percentage points below target; positive.
+
+    Returns:
+        "severe" above 10, "moderate" above 5, otherwise "mild".
+    """
     for threshold, band in RISK_BANDS:
         if gap > threshold:
             return band
@@ -76,15 +111,18 @@ def risk_band(gap: float) -> str:
 
 
 def course_risk(db: Session, user: UserModel) -> dict[uuid.UUID, str]:
-    """Courses the student is behind on, and by how much.
+    """Return the user's current-term courses that are below target, with their band.
 
-    Only the current term, which is the rule the dashboard already applies to
-    the same question: a past course below target is history rather than
-    something tonight's work can move. A course with no marks yet has no
-    standing to be behind on.
+    Courses outside the current term, and courses with nothing marked yet, are
+    never flagged.
 
-    One query, and it is the same one `course_codes` makes -- both are read per
-    task list, so widening it beats issuing a second.
+    Args:
+        db: Open database session.
+        user: The user, for their term and default target.
+
+    Returns:
+        Course id to "mild", "moderate" or "severe"; courses at or above target
+        are absent.
     """
     default_target = get_preferences(user).default_target_grade
     courses = db.query(CourseModel).filter(CourseModel.user_id == user.id).all()
@@ -110,12 +148,18 @@ def attach_course_code(
     codes: dict[uuid.UUID, str],
     risks: dict[uuid.UUID, str] | None = None,
 ) -> TaskModel:
-    """Label a task with its course code, and how far behind that course is.
+    """Label a task row with the derived fields its response carries.
 
-    School work is categorised by course code rather than by a tag the student
-    has to remember to type, so the code has to travel with the task. The risk
-    band travels the same way and for the same reason: the client would
-    otherwise need every course and the target rules to colour one row.
+    Sets `course_code`, `risk`, `snooze_count`, `last_snooze_reason` and
+    `shared_with` on the instance; nothing is written to the database.
+
+    Args:
+        task: The task row.
+        codes: Course ids mapped to codes.
+        risks: Course ids mapped to risk bands; None leaves `risk` unset (None).
+
+    Returns:
+        The same task row.
     """
     task.course_code = codes.get(task.course_id)
     task.risk = (risks or {}).get(task.course_id)
@@ -133,15 +177,16 @@ def attach_course_code(
 
 
 def sort_key(task: TaskModel):
-    """Most at risk first, then soonest; undated tasks last.
+    """Return a task's sort key: most at risk first, then soonest due, undated last.
 
-    Risk leads and the date ordering is untouched beneath it, so a task from a
-    course you are failing rises to the top of whichever group it is already in
-    rather than the page being reorganised around risk. Two tasks from equally
-    troubled courses still sort by when they are due.
+    Ties fall back to due time and creation time; risk only lifts a task within its
+    date ordering.
 
-    `date.max` rather than None so undated tasks sort after every dated one
-    instead of raising on the comparison.
+    Args:
+        task: A task row, with `risk` attached when known.
+
+    Returns:
+        A tuple that sorts ascending into list order.
     """
     return (
         RISK_RANK.get(getattr(task, "risk", None), 3),
@@ -162,10 +207,24 @@ def list_tasks(
     end: date | None = None,
     course_id: uuid.UUID | None = None,
 ):
-    """Outstanding tasks by default; `start`/`end` bound `due_date` inclusively.
+    """Return the user's tasks, most at risk and soonest due first.
 
-    A window excludes undated tasks, since the calendar asking for a week means
-    the week's deadlines rather than everything ever.
+    By default only open, unarchived, unsnoozed tasks are returned; a snooze whose
+    date has come is over. Snoozes are judged by the user's local today.
+
+    Args:
+        db: Open database session.
+        user_id: Whose tasks.
+        include_done: Also return ticked-off tasks.
+        include_archived: Also return archived tasks.
+        include_snoozed: Also return tasks hidden by a snooze.
+        start: Earliest due date to include; any bound excludes undated tasks.
+        end: Latest due date to include, inclusive.
+        course_id: Only tasks for this course.
+
+    Returns:
+        Task rows labelled by `attach_course_code`, risk included; None when the
+        user does not exist.
     """
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
     if user is None:
@@ -212,6 +271,18 @@ def list_tasks(
 
 
 def get_task(db: Session, user_id: uuid.UUID, task_id: uuid.UUID):
+    """Return one of the user's tasks, labelled, or None when it is not theirs.
+
+    The row carries course codes, snoozes and members but no risk band.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+        task_id: The task to fetch.
+
+    Returns:
+        The task row with its course code attached, or None.
+    """
     task = (
         db.query(TaskModel)
         .filter(TaskModel.id == task_id, TaskModel.user_id == user_id)
@@ -224,6 +295,21 @@ def get_task(db: Session, user_id: uuid.UUID, task_id: uuid.UUID):
 
 
 def create_task(db: Session, user_id: uuid.UUID, data: TaskCreate):
+    """Create a task for the user.
+
+    Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose task.
+        data: The task; its title is stripped.
+
+    Returns:
+        The new task row, labelled; None when the user does not exist.
+
+    Raises:
+        ValueError: If `course_id` is not one of the user's courses.
+    """
     if not user_exists(db, user_id):
         return None
 
@@ -252,6 +338,24 @@ def create_task(db: Session, user_id: uuid.UUID, data: TaskCreate):
 
 
 def update_task(db: Session, user_id: uuid.UUID, task_id: uuid.UUID, data: TaskUpdate):
+    """Change the fields sent on one of the user's tasks.
+
+    Sending `done` goes through `set_done`, so completion, the timer and archiving
+    move together. Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose task.
+        task_id: The task.
+        data: The fields to change.
+
+    Returns:
+        The updated task row, labelled; None when it is not the user's.
+
+    Raises:
+        ValueError: If a new `course_id` is not one of the user's courses, or the
+            task would be left with a due time and no due date.
+    """
     task = get_task(db, user_id, task_id)
     if task is None:
         return None
@@ -281,11 +385,15 @@ def update_task(db: Session, user_id: uuid.UUID, task_id: uuid.UUID, data: TaskU
 
 
 def set_done(task: TaskModel, done: bool) -> None:
-    """Check or uncheck a task, keeping `completed_at` in step.
+    """Tick a task off or reopen it, keeping `completed_at` and `archived` in step.
 
-    Completing also archives: a checked task's place is the record of the term,
-    not the list of what is left. Unchecking brings it back out, since the
-    common reason to uncheck is having checked the wrong row.
+    Completing stops a running timer (keeping its minutes), stamps `completed_at`
+    and archives the task; reopening clears both. Only changes the row; the caller
+    commits.
+
+    Args:
+        task: The task row.
+        done: True to complete, False to reopen.
     """
     task.done = done
     if done:
@@ -298,6 +406,21 @@ def set_done(task: TaskModel, done: bool) -> None:
 
 
 def start_task_timer(db: Session, user_id: uuid.UUID, task_id: uuid.UUID):
+    """Start the timer on one of the user's tasks.
+
+    Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose task.
+        task_id: The task.
+
+    Returns:
+        The task row, labelled; None when it is not the user's.
+
+    Raises:
+        ValueError: If the task is already done.
+    """
     task = get_task(db, user_id, task_id)
     if task is None:
         return None
@@ -308,6 +431,19 @@ def start_task_timer(db: Session, user_id: uuid.UUID, task_id: uuid.UUID):
 
 
 def stop_task_timer(db: Session, user_id: uuid.UUID, task_id: uuid.UUID) -> TimerStop | None:
+    """Stop the timer on one of the user's tasks and record what it measured.
+
+    Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose task.
+        task_id: The task.
+
+    Returns:
+        The task with the minutes added and whether the timer was discarded as
+        untrustworthy; None when the task is not the user's.
+    """
     task = get_task(db, user_id, task_id)
     if task is None:
         return None
@@ -324,12 +460,22 @@ def stop_task_timer(db: Session, user_id: uuid.UUID, task_id: uuid.UUID) -> Time
 def snooze_task(
     db: Session, user_id: uuid.UUID, task_id: uuid.UUID, data: SnoozeRequest
 ):
-    """Hide a task until a date, and record why.
+    """Hide one of the user's tasks until a date, and record why.
 
-    `due_date` is deliberately untouched. Moving it would hide the deferral
-    rather than record it, and would make every later question about lateness
-    measure against a date the student picked instead of the one they were
-    given -- which is exactly what the completion-timing figure depends on.
+    The due date never moves; each snooze is kept as history. Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose task.
+        task_id: The task.
+        data: The date to hide it until and an optional reason.
+
+    Returns:
+        The task row, labelled; None when it is not the user's.
+
+    Raises:
+        ValueError: If the date is not after the user's today, or the task is
+            already done.
     """
     task = get_task(db, user_id, task_id)
     if task is None:
@@ -355,10 +501,17 @@ def snooze_task(
 
 
 def wake_task(db: Session, user_id: uuid.UUID, task_id: uuid.UUID):
-    """Bring a snoozed task back now.
+    """Bring a snoozed task back now, keeping its snooze history.
 
-    The history stays. Undoing a snooze does not undo having made it, and the
-    pattern is what the history is for.
+    Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose task.
+        task_id: The task.
+
+    Returns:
+        The task row, labelled; None when it is not the user's.
     """
     task = get_task(db, user_id, task_id)
     if task is None:
@@ -371,7 +524,16 @@ def wake_task(db: Session, user_id: uuid.UUID, task_id: uuid.UUID):
 
 
 def snooze_history(db: Session, user_id: uuid.UUID, task_id: uuid.UUID):
-    """Every time this task was pushed back, oldest first."""
+    """Return every snooze of one of the user's tasks, oldest first.
+
+    Args:
+        db: Open database session.
+        user_id: Whose task.
+        task_id: The task.
+
+    Returns:
+        The snoozes; None when the task is not the user's.
+    """
     task = get_task(db, user_id, task_id)
     if task is None:
         return None
@@ -386,6 +548,18 @@ def snooze_history(db: Session, user_id: uuid.UUID, task_id: uuid.UUID):
 
 
 def delete_task(db: Session, user_id: uuid.UUID, task_id: uuid.UUID):
+    """Delete one of the user's tasks.
+
+    Its snoozes, members and invite links go with it. Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose task.
+        task_id: The task.
+
+    Returns:
+        A copy of the deleted task; None when it is not the user's.
+    """
     task = get_task(db, user_id, task_id)
     if task is None:
         return None

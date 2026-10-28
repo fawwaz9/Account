@@ -1,3 +1,9 @@
+"""Sign-in routes under `/api/auth`: Google, email registration, email login, password.
+
+Every attempt is written to the audit log, the email routes are rate limited per
+caller address, and each success returns a session token.
+"""
+
 from fastapi import APIRouter, HTTPException, Request, status
 
 from app._database.dependencies import DBSession
@@ -22,6 +28,25 @@ router = APIRouter()
 
 @router.post("/google", response_model=TokenResponse)
 def login_with_google(payload: GoogleAuthRequest, request: Request, db: DBSession):
+    """Sign in with a Google ID token, creating the account if the address is invited.
+
+    An existing account (matched by Google id, then by email) always signs in; a new
+    one needs the address on the sign-up allowlist.
+
+    Args:
+        payload: The Google ID token.
+        request: The request, for the caller's address.
+        db: Request-scoped database session.
+
+    Returns:
+        A session token.
+
+    Raises:
+        HTTPException: 401 when Google rejects the token or the email is unverified;
+            503 when Google cannot be reached to check it.
+        ValueError: Uncaught, so a 500, when a new account's address is not invited
+            or was taken meanwhile.
+    """
     client = client_of(request)
     try:
         user_data = verify_google_token(payload.id_token)
@@ -50,7 +75,21 @@ def login_with_google(payload: GoogleAuthRequest, request: Request, db: DBSessio
     responses=responses["auth_409"],
 )
 def register_with_email(payload: RegisterRequest, request: Request, db: DBSession):
-    """Create a local email + password account and sign the user straight in."""
+    """Create an email-and-password account and sign straight in.
+
+    Args:
+        payload: Name, email and password.
+        request: The request, for the caller's address.
+        db: Request-scoped database session.
+
+    Returns:
+        A session token, with status 201.
+
+    Raises:
+        HTTPException: 429 with `Retry-After` past the per-address registration limit
+            (every attempt counts); 400 when the address is not invited, already has an
+            account, or belongs to a Google account.
+    """
     client = client_of(request)
 
     # Checked before anything is read or written. An unbounded loop here is the
@@ -88,6 +127,23 @@ def register_with_email(payload: RegisterRequest, request: Request, db: DBSessio
     responses=responses["auth_401"],
 )
 def login_with_email(payload: LoginRequest, request: Request, db: DBSession):
+    """Sign in with an email and password.
+
+    Every failure gets the same 401 message, and a missing account costs the same time
+    as a wrong password, so the route never reveals which addresses have accounts.
+
+    Args:
+        payload: Email and password.
+        request: The request, for the caller's address.
+        db: Request-scoped database session.
+
+    Returns:
+        A session token.
+
+    Raises:
+        HTTPException: 429 with `Retry-After` when this account-and-address or this
+            address has failed too often; 401 for wrong credentials.
+    """
     client = client_of(request)
     key = account_key(payload.email, client)
 
@@ -126,20 +182,22 @@ def set_account_password(
     request: Request,
     db: DBSession,
 ):
-    """Add a first password, or change an existing one, for the signed-in user.
+    """Add a first password, or change the current one, for the signed-in user.
 
-    This is how a Google-only account gains password sign-in: prove who you
-    are with Google first, then set a password. Doing it from an
-    unauthenticated endpoint would let anyone who knows an address claim the
-    account.
+    Every other session is revoked, and a fresh token is returned for this one; the
+    client must store it or its next request is a 401.
 
-    Succeeding here invalidates every session outstanding at that moment, and
-    returns a replacement token for *this* one. So a stolen token elsewhere dies
-    immediately, while the person who just proved they know the old password is
-    not thrown out of the page they are standing on.
+    Args:
+        payload: The new password and, when one exists, the current one.
+        current_user: The signed-in user.
+        request: The request, for the caller's address.
+        db: Request-scoped database session.
 
-    That is why this returns a body where it used to return 204: the caller has to
-    store the new token, or its very next request is a 401.
+    Returns:
+        A replacement session token.
+
+    Raises:
+        HTTPException: 400 when the current password is missing or wrong.
     """
     client = client_of(request)
     try:

@@ -1,23 +1,9 @@
-"""Paycheques: what arrived, what was taken off, and what the hours said it should be.
+"""Service functions for paycheques: what arrived, what was deducted, and expected.
 
-The tuition payment in reverse, and deliberately the same shape. Gross pay and
-named deductions live on the cheque; only the **net** reaches the ledger, because
-a deduction is money that was earned and never entered the account, and writing
-it as income would invent a deposit that never happened.
-
-The net behaves like any other income: it splits across accounts by their income
-share, through the same `split_income` the deposit dialog uses. So a cheque is
-several ledger rows tied by one `group_id`, not one row -- which is why the
-cheque stores that group rather than a single transaction id.
-
-Reconciliation is per job kind, because the three ask different questions:
-
-* **hourly** -- hours times a rate is a real prediction, so a short cheque is
-  worth flagging.
-* **salaried** -- the period amount is the prediction. Hours are context for how
-  much the job is costing you, never evidence of underpayment.
-* **contract** -- you invoiced it, so there is nothing to predict. The only
-  check is whether it arrived.
+The tuition payment in reverse: gross pay and named deductions live on the
+cheque, and only the net reaches the ledger, split across accounts by income
+share as several rows tied by the cheque's `group_id`. The expectation a cheque
+is compared with depends on the job's kind and is frozen when it is recorded.
 """
 
 import uuid
@@ -49,10 +35,28 @@ from app.shared.money import money
 
 
 def net_of(gross: float, deductions) -> float:
+    """Return gross pay less the deductions' amounts, rounded to cents.
+
+    Args:
+        gross: Gross pay in dollars.
+        deductions: Entries with an `amount` in dollars.
+
+    Returns:
+        The net pay in dollars.
+    """
     return money(gross - sum(entry.amount for entry in deductions))
 
 
 def as_schema(db: Session, row: PaychequeModel) -> Paycheque:
+    """Build a cheque's response, with its job's name, net and variance.
+
+    Args:
+        db: Open database session.
+        row: The cheque row.
+
+    Returns:
+        The cheque; `variance` is None without a stored expectation.
+    """
     job = db.query(JobModel).filter(JobModel.id == row.job_id).first()
     deductions = [Deduction.model_validate(d) for d in row.deductions]
     net = net_of(row.gross_amount, deductions)
@@ -84,11 +88,21 @@ def expected_for(
     period_start: date | None,
     period_end: date | None,
 ) -> PaychequePreview | None:
-    """What the shifts in this period say the cheque should come to.
+    """Return what a job's shifts in a pay period say its cheque should come to.
 
-    Returns None when there is no period to measure over. A contract job returns
-    a preview with no figure: the hours are real and worth showing, but nothing
-    about them predicts an invoice.
+    Hourly jobs get their counted hours with BC overtime at each shift's rate;
+    salaried jobs their period amount; both add tips paid through payroll. Contract
+    jobs get the hours and no figure. Vacation pay is left out.
+
+    Args:
+        db: Open database session.
+        user_id: Whose shifts.
+        job: The job.
+        period_start: First day of the period; None means no period.
+        period_end: Last day of the period; None means no period.
+
+    Returns:
+        The preview; None when either end of the period is missing.
     """
     if period_start is None or period_end is None:
         return None
@@ -144,6 +158,18 @@ def preview_paycheque(
     period_start: date,
     period_end: date,
 ):
+    """Return what a cheque for one of the user's jobs and a period should come to.
+
+    Args:
+        db: Open database session.
+        user_id: Whose job.
+        job_id: The job.
+        period_start: First day of the period.
+        period_end: Last day of the period.
+
+    Returns:
+        The preview; None when the job is not the user's.
+    """
     job = owned_job(db, user_id, job_id)
     if job is None:
         return None
@@ -160,11 +186,28 @@ def deposit_rows(
     description: str,
     group_id: uuid.UUID,
 ) -> list[TransactionModel]:
-    """The ledger rows a net cheque becomes, unsaved.
+    """Build, unsaved, the income rows a cheque's net becomes.
 
-    Built here rather than through `record_deposit`, which commits on its own:
-    the rows and the cheque have to land in one transaction, or a failure
-    halfway leaves money in the ledger with nothing explaining it.
+    Built here rather than through `record_deposit`, which commits on its own, so
+    the rows and the cheque land in one transaction.
+
+    Args:
+        db: Open database session.
+        user_id: Whose ledger.
+        net: The cheque's net, in dollars.
+        allocations: Explicit amounts per account; empty or None splits by income
+            share among unarchived accounts.
+        occurred_on: The rows' date.
+        description: The rows' description.
+        group_id: The id tying the rows to the cheque.
+
+    Returns:
+        The rows, skipping zero allocations.
+
+    Raises:
+        ValueError: If nothing can be split (no shares and no allocations) or an
+            allocation names an account that is not one of the user's unarchived
+            accounts.
     """
     accounts = active_accounts(db, user_id)
     by_id = {account.id: account for account in accounts}
@@ -197,6 +240,16 @@ def deposit_rows(
 
 
 def list_paycheques(db: Session, user_id: uuid.UUID, job_id: uuid.UUID | None = None):
+    """Return the user's paycheques, latest first.
+
+    Args:
+        db: Open database session.
+        user_id: Whose cheques.
+        job_id: Only this job's cheques; None for all.
+
+    Returns:
+        The cheques; None when the user does not exist.
+    """
     if not user_exists(db, user_id):
         return None
 
@@ -209,6 +262,16 @@ def list_paycheques(db: Session, user_id: uuid.UUID, job_id: uuid.UUID | None = 
 
 
 def get_paycheque(db: Session, user_id: uuid.UUID, paycheque_id: uuid.UUID):
+    """Return one of the user's cheques, or None when it is not theirs.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+        paycheque_id: The cheque to fetch.
+
+    Returns:
+        The cheque as its API schema, or None when it is missing or another user's.
+    """
     row = (
         db.query(PaychequeModel)
         .filter(PaychequeModel.id == paycheque_id, PaychequeModel.user_id == user_id)
@@ -218,7 +281,22 @@ def get_paycheque(db: Session, user_id: uuid.UUID, paycheque_id: uuid.UUID):
 
 
 def record_paycheque(db: Session, user_id: uuid.UUID, data: PaychequeCreate):
-    """Write the cheque, its deductions, and the ledger rows for the net."""
+    """Record a cheque: the cheque, its deductions and the ledger rows for its net.
+
+    The expectation for its period is computed now and stored. One commit.
+
+    Args:
+        db: Open database session.
+        user_id: Whose cheque.
+        data: The cheque, its deductions and any allocations.
+
+    Returns:
+        The recorded cheque; None when the job is not the user's.
+
+    Raises:
+        ValueError: If the net cannot be split or an allocation names an account
+            that is not the user's.
+    """
     job = owned_job(db, user_id, data.job_id)
     if job is None:
         return None
@@ -263,7 +341,13 @@ def record_paycheque(db: Session, user_id: uuid.UUID, data: PaychequeCreate):
 
 
 def clear_deposit(db: Session, user_id: uuid.UUID, group_id: uuid.UUID | None) -> None:
-    """Remove the ledger rows a cheque wrote. Literal filter, one model."""
+    """Delete the ledger rows a cheque wrote; nothing for a None group.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+        group_id: The cheque's deposit group; None does nothing.
+    """
     if group_id is None:
         return
 
@@ -276,15 +360,24 @@ def clear_deposit(db: Session, user_id: uuid.UUID, group_id: uuid.UUID | None) -
 def update_paycheque(
     db: Session, user_id: uuid.UUID, paycheque_id: uuid.UUID, data: PaychequeUpdate
 ):
-    """Correct a cheque, moving its ledger rows with it.
+    """Correct one of the user's cheques, rewriting its ledger rows.
 
-    The deposit is rewritten rather than patched: the net may have changed, the
-    split may have changed, and reconciling row-by-row against a new allocation
-    list is more ways to be wrong than writing it again.
+    Whatever field changes, the old rows are deleted and the net is split again,
+    by the patch's allocations or else by today's income shares. Deductions sent
+    replace the old ones. `expected_gross` is never recomputed. One commit.
 
-    `expected_gross` is deliberately **not** recomputed. It is what the cheque
-    was checked against when it was entered, and re-deriving it here would let a
-    shift edited months later silently overturn a verdict already reached.
+    Args:
+        db: Open database session.
+        user_id: Whose cheque.
+        paycheque_id: The cheque.
+        data: The fields to change.
+
+    Returns:
+        The corrected cheque; None when it is not the user's.
+
+    Raises:
+        ValueError: If the period ends before it starts, the deductions reach the
+            gross, or the net cannot be split.
     """
     cheque = (
         db.query(PaychequeModel)
@@ -345,12 +438,17 @@ def update_paycheque(
 
 
 def delete_paycheque(db: Session, user_id: uuid.UUID, paycheque_id: uuid.UUID):
-    """Remove a cheque and the ledger rows it wrote.
+    """Delete a cheque and the ledger rows it wrote.
 
-    Both directions matter. Deleting the ledger rows removes the cheque too --
-    that half lives in the transaction service, the way tuition's does -- because
-    a cheque left behind would still answer "what did this job pay" for money
-    that is no longer recorded anywhere.
+    Its deductions go through the relationship's cascade. Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose cheque.
+        paycheque_id: The cheque.
+
+    Returns:
+        A copy of the deleted cheque; None when it is not the user's.
     """
     cheque = (
         db.query(PaychequeModel)

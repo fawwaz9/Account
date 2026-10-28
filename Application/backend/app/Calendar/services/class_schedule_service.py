@@ -1,12 +1,7 @@
-"""A course's timetable, as events.
+"""Service functions for a course's timetable, stored as repeating calendar events.
 
-The first consumer of the recurrence engine, and deliberately so: class times
-are the case where a repeat is obviously right, which makes them the place to
-prove the engine before recurring payments and repeating tasks depend on it too.
-
-There is no `classes` table. A lecture is an event with a `course_id` and a
-weekly rule, which is what it actually is -- and it means the calendar needs no
-second code path to draw one.
+There is no classes table: a lecture is an event with a `course_id`, a class
+kind and a weekly rule, so the calendar draws it with no second code path.
 """
 
 import uuid
@@ -35,7 +30,17 @@ MEETING_LABELS = {
 
 
 def get_class_schedule(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
-    """The course's existing timetable blocks, or None if no such course."""
+    """Return a course's class events (lectures, labs, discussions), by start time.
+
+    Args:
+        db: Open database session.
+        user_id: Whose course.
+        course_id: The course.
+
+    Returns:
+        The event rows with recurrence attached; None when the course is not the
+        user's.
+    """
     if owned_course(db, user_id, course_id) is None:
         return None
 
@@ -53,11 +58,18 @@ def get_class_schedule(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
 
 
 def term_window(course, data: ClassScheduleCreate) -> tuple[date, date]:
-    """When the timetable runs, preferring what the form said over the course.
+    """Return the dates a timetable runs, preferring the form's dates over the course's.
 
-    Courses already carry start and end dates, so in the ordinary case the form
-    needs no date fields at all -- which is the whole point of generating a
-    timetable from a course rather than asking for one.
+    Args:
+        course: The course row, whose start and end dates are the fallback.
+        data: The timetable form.
+
+    Returns:
+        The first and last dates, inclusive.
+
+    Raises:
+        ValueError: If neither the form nor the course gives both dates, or the
+            term ends before it starts.
     """
     starts_on = data.starts_on or course.start_date
     ends_on = data.ends_on or course.end_date
@@ -74,14 +86,28 @@ def term_window(course, data: ClassScheduleCreate) -> tuple[date, date]:
 
 
 def meeting_title(course, meeting: ClassMeeting) -> str:
+    """Return a class block's calendar title, such as "CPSC 221 Lab".
+
+    Args:
+        course: The course the timetable belongs to.
+        meeting: One meeting of the timetable.
+
+    Returns:
+        The course code followed by the meeting's kind label.
+    """
     return f"{course.code} {MEETING_LABELS.get(meeting.kind, 'Class')}"
 
 
 def check_anchors(data: ClassScheduleCreate, starts_on: date, ends_on: date | None) -> None:
-    """A first meeting outside the term is a typo, and would draw nothing.
+    """Refuse a non-weekly meeting whose first date falls outside the term.
 
-    Checked here rather than on the schema because only this function knows the
-    term's dates -- they come from the course when the form leaves them out.
+    Args:
+        data: The timetable form.
+        starts_on: The term's first date.
+        ends_on: The term's last date; None leaves the end unchecked.
+
+    Raises:
+        ValueError: If a `first_on` falls before the term starts or after it ends.
     """
     for meeting in data.meetings:
         if meeting.first_on is None or meeting.interval == 1:
@@ -98,13 +124,29 @@ def set_class_schedule(
     course_id: uuid.UUID,
     data: ClassScheduleCreate,
 ):
-    """Replace the course's timetable with the meetings given.
+    """Replace a course's timetable with the meetings given.
 
-    Replace rather than append: this is one form describing one timetable, and
-    submitting it a second time after fixing a room number must not leave the
-    old room on the calendar beside the new one. Only the course's own class
-    blocks are touched -- a midterm or a personal event attached to the same
-    course survives.
+    Deletes every existing lecture, lab and discussion event of the course and
+    writes one weekly event per meeting, ending on the term's last date; other
+    events of the course (an exam, a personal block) are untouched. Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose course.
+        course_id: The course.
+        data: The meetings and, optionally, the term dates.
+
+    Returns:
+        The new event rows with recurrence attached; None when the course is not
+        the user's.
+
+    Raises:
+        ValueError: If the term dates are missing or inverted, or a first meeting
+            falls outside the term.
+
+    Note:
+        Replacing deletes the old events outright, so dates cancelled on them
+        (`skipped_dates`) and any members are not carried over.
     """
     course = owned_course(db, user_id, course_id)
     if course is None:

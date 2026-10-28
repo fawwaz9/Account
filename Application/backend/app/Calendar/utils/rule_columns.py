@@ -1,15 +1,9 @@
-"""Reading and writing a repeat rule stored as columns.
+"""Map repeat-rule columns to the engine's `Rule` and the API's `Recurrence`.
 
-Three tables now carry the same five columns -- events, recurring transactions
-and recurring tasks -- because they all repeat and they all resolve through one
-engine. The conversion between those columns, the engine's `Rule`, and the API's
-`Recurrence` was written out twice before the third arrived; this is that
-conversion, once.
-
-Any model with `recur_freq`, `recur_interval`, `recur_byday`, `recur_until` and
-`recur_count` can be passed here. Deliberately duck-typed rather than a mixin or
-a shared base: the three models have nothing else in common, and a base class
-would imply they do.
+Events, standing payments, repeating tasks and jobs (their pay rule) all store a
+repeat in the same columns: `recur_freq`, `recur_interval`, `recur_byday`,
+`recur_until` and `recur_count`. The functions here are duck-typed and accept
+any row carrying them; the models share no base class.
 """
 
 from app.Calendar.schemas.event import Frequency, Recurrence, Weekday
@@ -17,7 +11,15 @@ from app.Calendar.utils.recurrence import Rule, format_byday, parse_byday
 
 
 def rule_of(row) -> Rule:
-    """The stored columns as the engine's rule."""
+    """Read a row's repeat columns as the engine's rule.
+
+    Args:
+        row: Any model row with the five `recur_*` columns.
+
+    Returns:
+        A `Rule`; an interval of 0 or None becomes 1, and unknown weekday codes are
+        dropped.
+    """
     return Rule(
         freq=row.recur_freq,
         interval=row.recur_interval or 1,
@@ -28,7 +30,19 @@ def rule_of(row) -> Rule:
 
 
 def recurrence_of(row) -> Recurrence | None:
-    """The stored columns as the API's nested object, or None for a one-off."""
+    """Read a row's repeat columns as the API's nested `Recurrence`.
+
+    Args:
+        row: Any model row with the five `recur_*` columns.
+
+    Returns:
+        The repeat for a response body, or None when `recur_freq` is empty (a
+        one-off).
+
+    Raises:
+        ValueError: If the columns do not form a valid `Recurrence`, such as an
+            unknown `recur_freq` (pydantic's ValidationError is a ValueError).
+    """
     if not row.recur_freq:
         return None
 
@@ -42,7 +56,15 @@ def recurrence_of(row) -> Recurrence | None:
 
 
 def apply_recurrence(row, recurrence: Recurrence | None) -> None:
-    """Write a recurrence onto the columns, or clear them back to a one-off."""
+    """Write a repeat onto a row's columns, or reset them to a one-off.
+
+    Only sets attributes on the row; the caller flushes or commits.
+
+    Args:
+        row: Any model row with the five `recur_*` columns.
+        recurrence: The validated repeat to store; None clears the rule (interval
+            back to 1, everything else to None).
+    """
     if recurrence is None:
         row.recur_freq = None
         row.recur_interval = 1

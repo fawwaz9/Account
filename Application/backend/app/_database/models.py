@@ -1,3 +1,13 @@
+"""SQLAlchemy models for every table the app stores, with their indexes.
+
+Each model's docstring opens with its owner, which is also its row-security kind in
+`rls.py`: the `users` root, a per-user row (`user_id`), a child of one owned table,
+shared-read or sealed. Columns added after a table first shipped are repeated in
+`migrations.ADDED_COLUMNS`, and `ensure_indexes` builds the indexes declared here on
+an existing database. `DateTime` columns hold naive UTC unless a column says
+otherwise; money is a float of dollars.
+"""
+
 import uuid
 from datetime import datetime, timezone
 from sqlalchemy import (
@@ -9,6 +19,7 @@ from sqlalchemy.types import Uuid
 from app._database.db import Base
 
 cascade = "all, delete-orphan"
+"""Relationship cascade for children that are deleted with their parent."""
 
 # ORDERING. Every foreign key has a relationship on one side or the other, even
 # where nothing reads it. The unit of work orders its deletes by relationships,
@@ -19,15 +30,44 @@ cascade = "all, delete-orphan"
 
 
 def utc_now() -> datetime:
-    """Now, in UTC, stored naive to match every DateTime column here.
+    """Return the current time in UTC as a naive datetime.
 
-    `datetime.utcnow()` does the same thing but is deprecated, and the
-    timezone-aware value on its own would land an offset in a naive column and
-    make two rows written the same way compare unequal.
+    Returns:
+        Now in UTC with `tzinfo` removed, matching the naive `DateTime` columns.
     """
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 class UserModel(Base):
+    """Root row: one account. Row security shows each user only their own row.
+
+    Deleting a user removes every table they own through the cascading relationships
+    declared here. Rows owned by other users that name this one (partnerships, task,
+    event and team memberships) are view-only here and go by `ON DELETE CASCADE`.
+
+    Attributes:
+        id: Primary key.
+        name: Display name; copied onto partnerships and memberships when they form.
+        email: Sign-in address, written lower-case; unique.
+        google_id: Google account subject; unique; null when not linked to Google.
+        password_hash: bcrypt hash; null for an account with no password.
+        auth_provider: How the account was first created: "google" or "local".
+        email_verified: True once an identity provider vouched for the address; local
+            signup leaves it False.
+        preferences: The `UserPreferences` JSON object. Assign a new dict to save a
+            change.
+        session_epoch: Counter every token carries; bumping it revokes all outstanding
+            sessions.
+        deleted_at: When deletion was requested; null for a live account. Sign-in still
+            works, and the startup purge removes the account once the grace period has
+            passed.
+        current_school_year: The school year the student is in now; null when unset.
+        current_semester: The term they are in now: "Fall", "Winter", "Spring" or
+            "Summer".
+        term_label: Free-text name for the current term; null when unset.
+        first_year_calendar_year: First-year anchor: the calendar year school year 1's
+            Fall began. Null leaves every term undated.
+        created_at: When the account was made; null for accounts older than the column.
+    """
     __tablename__ = "users"
 
     id = Column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -164,14 +204,57 @@ class UserModel(Base):
 
     @property
     def has_password(self) -> bool:
+        """Whether the account has a password it can sign in with."""
         return self.password_hash is not None
 
     @property
     def has_google(self) -> bool:
+        """Whether the account is linked to a Google identity."""
         return self.google_id is not None
 
 
 class CourseModel(Base):
+    """Per-user row: one course on the student's record.
+
+    Deleting a course cascades to its grades, category weights, events, tasks, term
+    reviews, grading schemes and prerequisite proposals. Unique per user and exact
+    `code`.
+
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        code: Course code as entered, such as "CPSC 210".
+        name: Course title.
+        semester: Term of the school year: "Fall", "Winter", "Spring" or "Summer".
+        year: School year the course belongs to (1-10), not a calendar year.
+        credits: Credit value; defaults to 3.
+        required: True for a degree requirement, False for an elective; splits credits
+            completed.
+        professor: Instructor's name; optional.
+        section: Section the student is in, such as "101"; Attention flags a current
+            course without one.
+        counting_scheme_id: The `grading_schemes` row picked as the grade; null uses the
+            course's own weights. No foreign key; `scheme_service` keeps it valid.
+        catalogue_course_id: Catalogue course chosen by hand; null matches by campus and
+            code on each read. No foreign key; a missing row reads as no choice.
+        catalogue_unlinked: True when the student said no catalogue course matches.
+        final_grade: Recorded final percentage; 0 means none recorded.
+        projected_before_final: Projected grade just before the final was marked or the
+            result entered; written once, by the server.
+        projected_on: The day `projected_before_final` was taken.
+        target_grade: Target percentage; null falls back to the account default.
+        average: Stored course average from marked work only, rewritten on every grade
+            write; 0.0 when nothing is marked.
+        start_date: First day of the course; optional.
+        end_date: Last day of the course; optional.
+        no_final: The course has no final exam, so a missing final grade is not flagged.
+        transfer_credit: Credit granted without taking the course: counts credits, never
+            an average.
+        archived: Still searchable and in the credit-weighted average, but not in
+            credits completed.
+        links: JSON list of {"title", "url"} in the student's order. Assign a new list
+            to save a change.
+    """
     __tablename__ = "courses"
 
     id = Column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -252,10 +335,20 @@ class CourseModel(Base):
 
     @property
     def category_weights(self) -> dict[str, float]:
+        """Map of each category name to its weight, from `category_weight_rows`."""
         return {cw.category: cw.weight for cw in self.category_weight_rows}
 
 
 class CourseCategoryWeightModel(Base):
+    """Child of `courses`: one grade category's weight in a course.
+
+    Attributes:
+        id: Integer primary key.
+        course_id: Parent course.
+        category: Category name, a `GradeCategory` value.
+        weight: Percentage of the course grade; a bonus category's weight sits outside
+            the 100.
+    """
     __tablename__ = "course_category_weights"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -266,6 +359,26 @@ class CourseCategoryWeightModel(Base):
     course = relationship("CourseModel", back_populates="category_weight_rows")
 
 class GradeModel(Base):
+    """Child of `courses`: one piece of assessed work.
+
+    Deleting a grade cascades to the task or calendar event its date raised.
+
+    Attributes:
+        id: Primary key.
+        course_id: Parent course.
+        name: Assessment name.
+        category: Category name, a `GradeCategory` value.
+        score: Points earned; null means unmarked, not zero.
+        max_score: Points possible.
+        excluded: Dropped: kept on the course but left out of every average.
+        weight: Copy of the category's weight, kept in step by `sync_grade_weights`.
+        due_date: When the work is due; a dated grade raises a task or a calendar block.
+        due_time: Time of day on `due_date`; null means end of day for a task and all
+            day for an event. Requires `due_date`.
+        duration_minutes: Length of the calendar block; needs `due_time`.
+        schedule_as: What the date raises: "task" (closes when the score lands) or
+            "event" (a calendar block).
+    """
     __tablename__ = "grades"
 
     id = Column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -304,11 +417,20 @@ class GradeModel(Base):
     events = relationship("EventModel", back_populates="grade", cascade=cascade)
 
 class AccountModel(Base):
-    """One pot money sits in.
+    """Per-user row: one account money sits in. Unique per user and name.
 
-    Seeded with the four from the project notes -- Spending, Savings,
-    Investments, Emergency -- but a row rather than an enum, so a fifth pot
-    later is data instead of a migration.
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        name: Account name.
+        kind: Account kind: "spending", "savings", "investment", "emergency", "debt" or
+            "other". Safe-to-spend counts spending accounts only.
+        income_share: Default share of a deposit, as a percentage; deposits split by
+            each account's part of the shares' total.
+        archived: Archived accounts keep their history but are no longer offered.
+        position: Display order.
+        counts_toward_net_worth: Counted account: False drops it from net worth and
+            every multi-account figure; read through `Finances/services/counted.py`.
     """
 
     __tablename__ = "accounts"
@@ -316,14 +438,14 @@ class AccountModel(Base):
     id = Column(Uuid, primary_key=True, default=uuid.uuid4)
     user_id = Column(Uuid, ForeignKey("users.id"), nullable=False)
     name = Column(String, nullable=False)
-    #: spending | savings | investment | emergency | other.
+    #: spending | savings | investment | emergency | debt | other.
     #:
-    #: Mostly styling and sensible defaults, with one exception that is worth
-    #: knowing about: safe-to-spend counts only "spending" accounts, because
-    #: savings and investments are money already decided against. That is the
-    #: single place this column drives behaviour. If per-account control is ever
-    #: wanted, add an explicit `counts_as_spendable` rather than loading more
-    #: meaning onto this -- `group_id` already shows where that ends up.
+    #: Mostly styling and sensible defaults, with exceptions worth knowing:
+    #: safe-to-spend and the forecast count only "spending" accounts, the year
+    #: plan counts spending, savings and emergency as liquid, only "investment"
+    #: takes market-value readings, and the last spending and savings accounts
+    #: are protected. Per-account control is `counts_toward_net_worth`; do not
+    #: load more meaning onto this -- `group_id` already shows where that ends up.
     kind = Column(String, nullable=False, default="spending")
     #: Share of incoming money this account takes by default, as a percentage.
     income_share = Column(Float, nullable=False, default=0.0)
@@ -351,11 +473,26 @@ class AccountModel(Base):
 
 
 class TransactionModel(Base):
-    """A single movement of money.
+    """Per-user row: money that entered or left one account.
 
-    `amount` is signed: positive is money into the account, negative is out. A
-    balance is then just the sum of its rows, and a transfer is two rows that
-    cancel each other -- no special case in the arithmetic.
+    A balance is the plain sum of an account's rows, and a transfer is two rows that
+    cancel out.
+
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        account_id: The account the money moved in.
+        kind: "income", "expense" or "transfer".
+        amount: Signed dollars: positive into the account, negative out of it.
+        description: Free text; optional.
+        occurred_on: Local date the money moved.
+        group_id: Ties a transfer's two rows, or a deposit's allocations, together; null
+            otherwise.
+        category_id: Spending category; expenses only, null otherwise.
+        recurring_id: The standing instruction that wrote this row; with `occurred_on`
+            it stops a payment being written twice.
+        course_id: Course the expense was for, such as a textbook; never set by tuition.
+        import_id: CSV import that wrote this row, so the import can be undone whole.
     """
 
     __tablename__ = "transactions"
@@ -398,9 +535,14 @@ class TransactionModel(Base):
 
 
 class SpendCategoryModel(Base):
-    """What money was spent on -- groceries, rent -- as opposed to which pot paid.
+    """Per-user row: a spending category, such as groceries. Unique per user and name.
 
-    User-defined rather than an enum, for the same reason accounts are.
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        name: Category name.
+        archived: Archived categories keep their history but are no longer offered.
+        position: Display order.
     """
 
     __tablename__ = "spend_categories"
@@ -415,7 +557,17 @@ class SpendCategoryModel(Base):
 
 
 class BudgetTargetModel(Base):
-    """What one account is allowed to spend in one month."""
+    """Per-user row: what one account plans to spend in one month.
+
+    Unique per user, account and month.
+
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        account_id: The account the plan is for.
+        month: First day of the month; normalised on the way in.
+        planned_amount: Planned spending in dollars.
+    """
 
     __tablename__ = "budget_targets"
 
@@ -430,23 +582,18 @@ class BudgetTargetModel(Base):
 
 
 class AccountCategoryLimitModel(Base):
-    """What one account is meant to spend on one category in a month.
+    """Per-user row: an account's standing monthly limit for one spending category.
 
-    Keyed on the **pair**, which is the whole point. An earlier attempt put the
-    limit on the category alone and showed it on a single account's page, so a
-    limit covering every account was judged against one account's share of the
-    spending -- and a category split across two accounts always looked safely
-    under budget. Here the limit and the spending it is measured against cover
-    the same money.
+    Keyed on the (account, category) pair so the limit and the spending it is measured
+    against cover the same money. A row of 0 is a real limit; no row means no limit.
+    Unique per user, account and category. See `Finances/utils/limits.py`.
 
-    Standing rather than per-month: one row says what this account means to
-    spend here every month, until changed. There is deliberately no month
-    column; if a single month ever needs to differ, that is a month column and a
-    resolution rule, not a redesign.
-
-    **A row of 0 is a real instruction** -- "nothing is meant to go here" --
-    which is why the absence of a row, and not a falsy amount, is what means
-    "no limit". See `Finances/utils/limits.py`.
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        account_id: The account spending against the limit.
+        category_id: The spending category limited.
+        limit_amount: Monthly ceiling in dollars.
     """
 
     __tablename__ = "account_category_limits"
@@ -461,23 +608,20 @@ class AccountCategoryLimitModel(Base):
 
 
 class AccountCategoryMonthLimitModel(Base):
-    """One month's override of an account's standing limit for a category.
+    """Per-user row: one month's override of an account's standing category limit.
 
-    Sparse on purpose: a row exists **only** for a month that differs from the
-    standing figure in `account_category_limits`. A category budgeted the same
-    all year has none, which is what lets changing the standing limit move every
-    month nobody overrode -- the thing "standing" has to mean to be worth having.
+    A row exists only for a month that differs from `account_category_limits`, so
+    changing the standing limit moves every month nobody overrode. Its presence, not its
+    value, makes it apply: 0 means nothing this month. Unique per user, account,
+    category and month.
 
-    A second table rather than a nullable `month` on the standing one. A unique
-    index cannot enforce "at most one standing row" when the distinguishing
-    column is NULL: both Postgres and SQLite treat NULLs as distinct, so
-    `UNIQUE (user, account, category, month)` would happily accept two standing
-    limits for the same pair. Partial indexes could express it, but they are
-    dialect-specific and `ensure_indexes` walks the metadata generically. Two
-    tables, each with a unique index that actually holds.
-
-    **Presence, not value, is what makes an override apply.** A row of 0 is a
-    real instruction -- "nothing this month" -- see `effective_category_limit`.
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        account_id: The account spending against the limit.
+        category_id: The spending category limited.
+        month: First day of the month overridden.
+        limit_amount: That month's ceiling in dollars.
     """
 
     __tablename__ = "account_category_month_limits"
@@ -494,36 +638,22 @@ class AccountCategoryMonthLimitModel(Base):
 
 
 class AccountMonthValueModel(Base):
-    """One month's reading of what an investment account is actually worth.
+    """Per-user row: one month's reading of what an investment account is worth.
 
-    An account's balance is the sum of its ledger -- what you put in -- so a
-    holding that has doubled and one that has halved read identically. A row here
-    closes that for one month, by recording how far the holding sits above or
-    below that plain value.
+    Stores how far market value sits above or below the ledger balance, a level that a
+    later deposit does not move. Readings do not sum: all-time gain is the latest row
+    (see `Finances/utils/returns.py`). Unique per user, account and month; rows stay but
+    go unread if the account stops being an investment.
 
-    **`difference_amount` is a level, not a month's gain, and the readings do not
-    sum.** All-time gain is the *latest* row, never the total of them; see
-    `Finances/utils/returns.py`. The column is deliberately not named
-    `gain_amount` for exactly that reason -- "gain" invites a `SUM()` over the
-    column, which would report a holding up $300 as up $600 and drift further with
-    every month recorded.
-
-    The level is stored rather than the market value, and that is not a
-    preference. The difference is contribution-neutral: a deposit raises plain
-    value and market value together, so it does not move. Store the market value
-    instead and the difference has to be derived against a dated ledger -- record
-    $10,543 on the 15th, deposit $1,000 on the 20th, and the month-end ledger is
-    $11,000, so the derived difference reads -$457 and a gain is reported as a
-    loss. This column survives that deposit; a market value does not.
-
-    One row per (user, account, month), the shape `account_category_month_limits`
-    above already uses, with `month` normalized to the first on the way in so a
-    month is one value rather than any of twenty-eight.
-
-    Rows are left alone when an account's kind changes away from `investment`.
-    They stop being read, because every path that reads them gates on kind, and
-    changing the kind back restores them -- where deleting recorded data on a
-    dropdown change could not be undone.
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        account_id: The investment account read.
+        month: First day of the month the reading is for.
+        difference_amount: Market value minus ledger balance in dollars; positive is a
+            gain.
+        market_value: The value as typed, shown back on the form; never used in
+            arithmetic.
     """
 
     __tablename__ = "account_month_values"
@@ -544,17 +674,35 @@ class AccountMonthValueModel(Base):
 
 
 class EventModel(Base):
-    """Something that happens on a date, optionally repeating.
+    """Per-user row: something on the calendar on a date, optionally repeating.
 
-    One table serves class times, midterms, finals and anything you put on the
-    calendar yourself, because they differ only by `kind` and by which course
-    they hang off. Recurring payments and repeating tasks are meant to land here
-    too rather than growing their own schedulers.
+    Class times, exams, shifts, blocks raised by dated grades and personal events share
+    this table. A repeat is stored as its recurrence rule and expanded on read, so an
+    occurrence has no row of its own. Deleting an event cascades to its members and
+    invites.
 
-    A repeat is stored as the rule that generates it -- never as rows. Writing
-    out a term of lectures would mean thirty-six rows to keep in step every time
-    a room changes, and no way to answer "does this repeat?" without counting
-    them. Occurrences are materialised on read, for the window asked for.
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        course_id: Course the event belongs to; null for a personal event.
+        grade_id: Dated grade that raised this block; null otherwise.
+        job_id: Job this shift belongs to; null for anything that is not a shift.
+        title: Event title.
+        kind: Card theme: "lecture", "lab", "discussion", "midterm", "final",
+            "deadline", "personal" or "shift".
+        location: Where it happens; optional.
+        notes: Free text; optional.
+        starts_on: Local date of the first (or only) occurrence.
+        start_time: Local start time; null for an all-day event.
+        end_time: Local end time; null for an all-day event.
+        recur_freq: "daily", "weekly" or "monthly"; null for a one-off.
+        recur_interval: Repeat every this many periods.
+        recur_byday: Weekly only: weekdays such as "MO,WE,FR"; empty means the weekday
+            of `starts_on`.
+        recur_until: Inclusive last date; never set with `recur_count`.
+        recur_count: Number of occurrences; never set with `recur_until`.
+        skipped_dates: JSON list of ISO dates the rule would produce but that were
+            cancelled. Assign a new list to save a change.
     """
 
     __tablename__ = "events"
@@ -608,10 +756,34 @@ class EventModel(Base):
 
 
 class TaskModel(Base):
-    """Something to do, with or without a date.
+    """Per-user row: something to do, with or without a due date.
 
-    Anything carrying a due date also renders on the calendar, so a task and an
-    event are two shapes of the same week rather than two separate apps.
+    Deleting a task cascades to its snoozes, members and invites.
+
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        course_id: Course the work belongs to; its code is the task's category.
+        grade_id: Dated grade that raised the task; the task closes when that grade is
+            marked.
+        recurring_id: Repeating task that materialised this occurrence; null for a
+            one-off.
+        occurrence_date: Date the rule produced, the occurrence's fixed identity;
+            `due_date` may move, this never does.
+        title: Task title.
+        notes: Free text; optional.
+        due_date: Local due date; null for an undated task.
+        due_time: Local due time; null means end of day.
+        estimated_minutes: Expected effort in minutes; summed into the week's load.
+        actual_minutes: Time it really took, in minutes; null means not given.
+        timer_started_at: When the running timer started; null when no timer runs.
+        tags: JSON list of free-text labels. Assign a new list to save a change.
+        priority: 1 (lowest) to 5 (highest); coursework starts from its grade category.
+        snoozed_until: Snooze: hidden until this local date; the due date does not move.
+        done: Whether the task is complete.
+        completed_at: When it was completed; null while open.
+        archived: Completed tasks archive rather than disappear.
+        created_at: When the task was created.
     """
 
     __tablename__ = "tasks"
@@ -679,17 +851,21 @@ class TaskModel(Base):
 
 
 class SinkingFundModel(Base):
-    """Money put aside a bit at a time for something that lands all at once.
+    """Per-user row: a sinking fund saving toward a target by a due date.
 
-    Tuition in January is not a surprise, but it behaves like one if nothing
-    reserves for it. This says what the thing costs and when it is due, and the
-    monthly figure falls out of the two.
+    The monthly contribution is derived on every read, never stored; only money actually
+    moved is stored, as `sinking_contributions`.
 
-    Nothing about the schedule is stored. The contribution is
-    (target - saved) / months remaining, recomputed on every read, because a
-    stored schedule goes stale the moment a month is missed or the target
-    changes -- and the recovery from either is the same division. What *is*
-    stored is what actually moved.
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        name: Fund name.
+        target_amount: Amount to have saved, in dollars.
+        due_on: Date the money is needed.
+        from_account_id: Account contributions are transferred out of.
+        to_account_id: Account contributions are transferred into.
+        archived: Archived funds keep their history but are no longer shown.
+        created_at: When the fund was created.
     """
 
     __tablename__ = "sinking_funds"
@@ -716,12 +892,17 @@ class SinkingFundModel(Base):
 
 
 class SinkingContributionModel(Base):
-    """One month's money actually set aside.
+    """Child of `sinking_funds`: one month's contribution, once the transfer happened.
 
-    A row exists only once the transfer has happened. A *planned* contribution
-    is derived and has no row, for the same reason a planned payment is not a
-    transaction: nothing has moved, and a balance that counted it would report
-    money as gone while it is still in the account.
+    A planned contribution has no row.
+
+    Attributes:
+        id: Primary key.
+        fund_id: Parent fund.
+        for_month: First day of the month the contribution covers.
+        amount: Dollars set aside.
+        group_id: `group_id` of the transfer's two ledger rows.
+        confirmed_at: When the contribution was recorded.
     """
 
     __tablename__ = "sinking_contributions"
@@ -740,20 +921,19 @@ class SinkingContributionModel(Base):
 
 
 class ReminderModel(Base):
-    """Something that notifies, as opposed to a task that waits.
+    """Per-user row: a reminder that notifies at a moment, unlike a task that waits.
 
-    A task sits on a list until you deal with it. A reminder is the other thing:
-    it has no life before or after the moment it fires, and ticking it off is
-    not the point -- being told is. Forcing one through a task made it a chore
-    that never quite closed, which is the same reason a sat exam is an event
-    rather than a task.
-
-    `remind_at` is stored as **naive local wall time**, deliberately unlike
-    `completed_at`, which is naive UTC. "Remind me at 09:00" means nine o'clock
-    where the student is standing, and it should still mean that after the
-    clocks change or after a flight. Storing UTC would silently move an existing
-    reminder by an hour every spring. The comparison is therefore against the
-    student's own local now, resolved through their timezone preference.
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        title: What to be reminded of.
+        notes: Free text; optional.
+        remind_at: When to fire, as naive local wall time in the user's zone (not UTC).
+        course_id: Course the reminder is about; optional.
+        fired_at: When the app first surfaced it; set once.
+        dismissed_at: When it was dismissed; dismissed reminders are kept.
+        created_at: When the reminder was created.
+        pushed_at: When the scheduler pushed it to the user's devices; null until then.
     """
 
     __tablename__ = "reminders"
@@ -783,16 +963,14 @@ class ReminderModel(Base):
 
 
 class TaskSnoozeModel(Base):
-    """One time a task was pushed back, and the reason given.
+    """Child of `tasks`: one snooze of a task and the reason given.
 
-    A row per snooze rather than two columns on the task, because the point is
-    the pattern: three snoozes all citing "waiting on lab partner" is the
-    finding, and the latest reason alone cannot say it. A term's worth of these
-    is readable; a term's worth of overwrites is not.
-
-    The task's `due_date` is deliberately untouched by any of this. Moving it
-    would make every later question about lateness measure against a date the
-    student chose rather than the one they were given.
+    Attributes:
+        id: Primary key.
+        task_id: Parent task.
+        snoozed_at: When the snooze was made.
+        until: Local date the task was hidden until.
+        reason: Free-text reason; optional.
     """
 
     __tablename__ = "task_snoozes"
@@ -810,24 +988,32 @@ class TaskSnoozeModel(Base):
 
 
 class RecurringTransactionModel(Base):
-    """A standing instruction: rent on the 1st, Spotify on the 14th.
+    """Per-user row: a standing instruction, such as rent on the 1st.
 
-    Stores the rule and a template, never the payments themselves. The same
-    recurrence engine that drives class times expands it -- written once, as the
-    project notes asked.
+    Stores the recurrence rule and a template. Each occurrence on or before today is
+    materialised once into a real transaction pointing back through
+    `transactions.recurring_id`; later occurrences stay projections.
 
-    Where this parts company with a calendar event is that its occurrences
-    cannot stay virtual. A balance is the sum of its rows, so a payment that has
-    actually happened has to *be* a row; and a payment that has not happened yet
-    must not be one, or the balance reports money that is still in the account
-    as gone. So an occurrence on or before today is materialised into a real
-    transaction, exactly once, and an occurrence after today stays a projection
-    that only the upcoming-commitments view reads.
-
-    Deliberately not hung off `group_id`. That column already means "transfer
-    pair" or "deposit split" depending on `kind`, and a third meaning is what
-    the two deposit bugs were made of. Generated rows point back here through
-    `transactions.recurring_id` instead, which means one thing only.
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        kind: "income", "expense", "transfer" or "deposit".
+        account_id: The account paid from or into, or a transfer's source; null for a
+            deposit, which splits by income share.
+        to_account_id: A transfer's destination; null otherwise.
+        amount: Dollars, always positive; the sign is applied when a payment is written.
+        description: Free text; optional.
+        category_id: Spending category; expenses only.
+        starts_on: First date of the rule.
+        recur_freq: "daily", "weekly" or "monthly".
+        recur_interval: Repeat every this many periods.
+        recur_byday: Weekly only: weekdays such as "MO,FR".
+        recur_until: Inclusive last date; never set with `recur_count`.
+        recur_count: Number of occurrences; never set with `recur_until`.
+        skipped_dates: JSON list of ISO dates cancelled from the rule. Assign a new list
+            to save a change.
+        active: False pauses the instruction without deleting it.
+        created_at: When the instruction was created.
     """
 
     __tablename__ = "recurring_transactions"
@@ -873,21 +1059,31 @@ class RecurringTransactionModel(Base):
 
 
 class RecurringTaskModel(Base):
-    """A chore that comes back: readings every Monday, laundry every fortnight.
+    """Per-user row: a repeating task and the template its occurrences copy.
 
-    The third consumer of the recurrence engine, and the one it was written for
-    alongside class times and recurring payments.
+    Occurrences are materialised as real tasks over a rolling window (14 days back to
+    60 ahead) so each can be ticked off on its own.
 
-    Like a standing payment and unlike a calendar event, its occurrences have to
-    be real rows: each one is ticked off separately, and this week's reading
-    being done says nothing about next week's. A virtual occurrence has nowhere
-    to keep that.
-
-    Unlike a standing payment, an occurrence in the near future is written too.
-    A task that has not happened yet costs nothing to have sitting there -- you
-    can see Monday's reading on Sunday and tick it early -- whereas a payment
-    that has not happened would be money wrongly gone from a balance. So this
-    materialises a rolling window ahead rather than only up to today.
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        course_id: Course each occurrence belongs to; optional.
+        title: Title stamped on each occurrence.
+        notes: Notes stamped on each occurrence.
+        due_time: Due time stamped on each occurrence; null means end of day.
+        estimated_minutes: Effort estimate stamped on each occurrence.
+        tags: JSON list of labels stamped on each occurrence.
+        priority: Priority (1-5) stamped on each occurrence.
+        starts_on: First date of the rule.
+        recur_freq: "daily", "weekly" or "monthly".
+        recur_interval: Repeat every this many periods.
+        recur_byday: Weekly only: weekdays such as "MO,WE".
+        recur_until: Inclusive last date; never set with `recur_count`.
+        recur_count: Number of occurrences; never set with `recur_until`.
+        skipped_dates: JSON list of ISO dates cancelled from the rule. Assign a new list
+            to save a change.
+        active: False pauses the rule without deleting it.
+        created_at: When the rule was created.
     """
 
     __tablename__ = "recurring_tasks"
@@ -928,17 +1124,23 @@ class RecurringTaskModel(Base):
 
 
 class TuitionPaymentModel(Base):
-    """What a tuition payment was for, beside the one ledger row that recorded it.
+    """Per-user row: what a tuition payment covered, beside its one ledger row.
 
-    The ledger answers "what left my account": one expense, fees folded in,
-    deductions already taken off. This answers "what was that payment made of",
-    which is a different question and the one Grades needs -- a course's share is
-    its credits times the per-credit rate, gross, because a scholarship reduces
-    what you pay and not what the course is worth.
+    A course's share of a term is its credits times `cost_per_credit`, gross of
+    deductions; only the net reaches the ledger. Deleting either this or its transaction
+    deletes the other, done by the tuition service.
 
-    The two views do not reconcile, deliberately. A term at $250/credit over 13
-    credits with $310 of fees and $1,500 of deductions is one $2,060 ledger line
-    and $3,250 spread across the course pages. Both are right.
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        transaction_id: The single expense row the payment wrote.
+        school_year: School year paid for, matching `courses.year`.
+        semester: Term paid for, matching `courses.semester`.
+        cost_per_credit: Per-credit rate in dollars; instalments enter part of the rate
+            each.
+        fees: Mandatory fees in dollars; in the ledger line, on no course page.
+        credits_counted: Credits the bill covered, stored as billed.
+        occurred_on: Date of the payment.
     """
 
     __tablename__ = "tuition_payments"
@@ -971,12 +1173,15 @@ class TuitionPaymentModel(Base):
 
 
 class TuitionDeductionModel(Base):
-    """Something that reduced a tuition bill without being income.
+    """Child of `tuition_payments`: a deduction from a tuition bill, such as a bursary.
 
-    A scholarship, a bursary, a deposit paid earlier. The money never entered the
-    account, so recording it as income would invent a deposit that never
-    happened -- but it did reduce the cheque, so it cannot simply be dropped
-    either. It lives here, named, and only the net reaches the ledger.
+    Never income: the money did not enter an account.
+
+    Attributes:
+        id: Primary key.
+        tuition_payment_id: Parent payment.
+        description: What the deduction was.
+        amount: Dollars, always positive.
     """
 
     __tablename__ = "tuition_deductions"
@@ -993,19 +1198,17 @@ class TuitionDeductionModel(Base):
 
 
 class TermBlackoutModel(Base):
-    """A stretch of term when classes do not run.
+    """Per-user row: a blackout, a stretch when classes do not run.
 
-    A reading break, a stat holiday, a strike. Set once and subtracted from every
-    recurring event that belongs to a course, because one reading break applies
-    to all six of your classes and entering it six times is how one of them ends
-    up wrong.
+    Cancels occurrences of course-linked events only; standing payments and repeating
+    tasks ignore it.
 
-    Scoped to course-linked events on purpose. The recurrence engine also drives
-    recurring transactions and repeating tasks, and neither cares: rent is still
-    due during reading break, and the bins still need taking out.
-
-    Stored as a range rather than a list of dates because a reading break is a
-    week and a stat holiday is a range of one, so one shape covers both.
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        label: Name, such as "Reading break".
+        starts_on: First day of the blackout.
+        ends_on: Last day, inclusive; equals `starts_on` for one day.
     """
 
     __tablename__ = "term_blackouts"
@@ -1019,22 +1222,40 @@ class TermBlackoutModel(Base):
 
 
 class JobModel(Base):
-    """A job the student works, and how it pays.
+    """Per-user row: a job the student works, and how it pays.
 
-    Three kinds, because they are genuinely different arrangements rather than
-    styling on one:
+    The pay schedule is either the shared recurrence rule or set days of the month
+    (`pay_month_days`, `pay_last_day`, `pay_nth_weekdays`); see
+    `Jobs/services/pay_schedule.py`. Nothing is materialised from it. Deleting a job
+    cascades to its shift records and paycheques.
 
-    * **hourly** -- pay is hours times a rate, so the hours are the pay.
-    * **salaried** -- a fixed amount each pay period however many hours it took.
-      Hours are still worth recording, but as a measure of what the job costs
-      you rather than of what it pays.
-    * **contract** -- you invoice, and the amount is whatever you billed. There
-      is nothing to predict from hours at all.
-
-    The pay schedule reuses the same five rule columns as class times, standing
-    payments and repeating tasks, so "every second Friday" needs no mechanism of
-    its own. Nothing is ever materialised from it: the rule answers "when is the
-    next cheque", and an actual cheque is only ever a row the student entered.
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        name: Job title.
+        employer: Employer name; optional.
+        kind: "hourly", "salaried" or "contract".
+        hourly_rate: Hourly jobs: dollars per hour; a shift record may override it.
+        period_amount: Salaried jobs: dollars per pay period.
+        started_on: First day of the job; optional.
+        ended_on: Last day; null while the job is current.
+        pay_starts_on: First pay date of the rule.
+        recur_freq: Pay rule frequency; null for no schedule, "monthly" when paid on set
+            days.
+        recur_interval: Pay every this many periods.
+        recur_byday: Weekly pay rules: weekdays such as "FR".
+        recur_until: Inclusive last pay date; never set with `recur_count`.
+        recur_count: Number of pay dates; never set with `recur_until`.
+        pay_month_days: Days of the month paid, such as "15,30"; a day a month lacks
+            pays on its last day.
+        pay_last_day: Also pays on the last day of every month.
+        pay_nth_weekdays: Nth weekdays paid, such as "-1FR" or "2TH,4TH"; never with
+            month days.
+        pay_weekend: A pay date on a weekend moves to the "previous" or "next" weekday,
+            or "keep"s.
+        archived: Archived jobs keep their history but are no longer offered.
+        position: Display order.
+        created_at: When the job was created.
     """
 
     __tablename__ = "jobs"
@@ -1085,18 +1306,27 @@ class JobModel(Base):
 
 
 class ShiftRecordModel(Base):
-    """What actually happened on one date of a shift.
+    """Per-user row: a shift record, what actually happened on one date of a shift.
 
-    A repeating shift is one event row expanded on read, exactly like a lecture,
-    so there is no row anywhere representing "this Friday" -- `(event_id,
-    on_date)` is the only thing that identifies one, which is what this is keyed
-    by.
+    Identified by `(event_id, on_date)`, since a repeating shift has no row per date.
+    A row exists only once there is something to say; an unconfirmed past shift counts
+    at its scheduled hours, flagged as assumed.
 
-    A record exists only once there is something to say about that date. An
-    ordinary shift worked exactly as scheduled has no row at all until it is
-    confirmed, and an unconfirmed past shift is counted at its scheduled hours
-    and reported as assumed rather than dropped -- a forgotten confirmation
-    should not make a busy fortnight read as an idle one.
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        event_id: The shift event this is one date of.
+        job_id: The shift's job, copied from the event for per-job sums.
+        on_date: The occurrence date.
+        worked_start: Actual start time; null means as scheduled.
+        worked_end: Actual end time; null means as scheduled.
+        confirmed: Whether the student confirmed the shift.
+        tip_amount: Tips in dollars, always positive.
+        tip_is_cash: True for cash in hand; False for tips paid inside the paycheque's
+            gross.
+        tip_transaction_id: Income row a cash tip wrote; null if none.
+        rate_override: Hourly rate for this date only; null uses the job's rate.
+        notes: Free text; optional.
     """
 
     __tablename__ = "shift_records"
@@ -1131,21 +1361,22 @@ class ShiftRecordModel(Base):
 
 
 class PaychequeModel(Base):
-    """A cheque that actually arrived, and the hours it was meant to cover.
+    """Per-user row: a paycheque that arrived: gross, deductions and the period covered.
 
-    The same shape as a tuition payment, in reverse. Gross pay and named
-    deductions live here; only the net reaches the ledger, because a deduction
-    is money that never entered the account and recording it as income would
-    invent a deposit that never happened.
+    Only the net reaches the ledger, as a deposit split across accounts by income share.
 
-    `group_id` rather than a single transaction, because the net splits across
-    accounts by income share and a deposit is already several rows tied together
-    by that column.
-
-    `expected_gross` is stored rather than recomputed for the same reason a
-    tuition payment stores `credits_counted`: it is what the cheque was checked
-    against at the time, and deriving it later would silently rewrite the
-    verdict when a shift is edited months afterwards.
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        job_id: The job that paid.
+        group_id: `group_id` of the deposit rows the net wrote; null if none.
+        occurred_on: Date the cheque arrived.
+        gross_amount: Gross pay in dollars.
+        period_start: First day of the work period covered; optional.
+        period_end: Last day of the work period covered; optional.
+        expected_gross: Gross predicted from shifts when the cheque was checked, stored
+            as it stood then.
+        notes: Free text; optional.
     """
 
     __tablename__ = "paycheques"
@@ -1175,10 +1406,13 @@ class PaychequeModel(Base):
 
 
 class PaychequeDeductionModel(Base):
-    """Something taken off a cheque before it arrived.
+    """Child of `paycheques`: a deduction taken off a cheque, such as income tax.
 
-    Income tax, EI, CPP, union dues. Real money that was earned and never
-    reached the account, which is why it is recorded here and not in the ledger.
+    Attributes:
+        id: Primary key.
+        paycheque_id: Parent paycheque.
+        description: What the deduction was.
+        amount: Dollars, always positive.
     """
 
     __tablename__ = "paycheque_deductions"
@@ -1342,17 +1576,20 @@ Index(
 
 
 class UsageEventModel(Base):
-    """One user, one day, one kind of use of one module: a counter, not a log.
+    """Per-user row: one day's count of one kind of use of one module.
 
-    Phase 0's analytics (Ideas/overhaul/phase0.md item 4). What the vision's
-    gates need -- weekly actives, the universe test (two rooms in a week),
-    per-module adoption, time to first value -- are all questions of *which
-    days* someone used *which rooms*, so that is all this keeps: no paths, no
-    content, no timestamps finer than the first and last of the day.
+    A counter, not a log: unique per user, day, kind and module. Read across users only
+    by `scripts/usage_report.py`, which prints aggregates.
 
-    Per user, like every other table, so it sits under the same row policy and
-    leaves with the account. Read across users only by
-    ``scripts/usage_report.py``, which prints aggregates and nothing else.
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        day: The user's local date.
+        kind: "visit", "prompted_visit" (a visit opened from a push) or "create".
+        module: Module name, such as "grades".
+        count: Times recorded that day.
+        first_at: First time recorded that day.
+        last_at: Last time recorded that day.
     """
 
     __tablename__ = "usage_events"
@@ -1381,16 +1618,19 @@ Index(
 
 
 class PushSubscriptionModel(Base):
-    """One browser on one device that agreed to receive push notifications.
+    """Per-user row: one browser that agreed to receive push notifications.
 
-    Phase 0 item 5. ``endpoint`` is the push service's address for that browser
-    and ``p256dh``/``auth`` are its keys; all three come from the browser's
-    PushManager, and the payload is encrypted to them so the push service
-    carries it without being able to read it.
+    `endpoint` identifies a browser, not an account, so it is unique across users and
+    moves to whoever turns notifications on there last.
 
-    The endpoint is unique across users: it identifies a browser, not an
-    account, so when a second person signs in on the same browser and turns
-    notifications on, the subscription moves to them (see push_service).
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        endpoint: The push service's URL for the browser; unique.
+        p256dh: The browser's public key the payload is encrypted to.
+        auth: The browser's authentication secret.
+        created_at: When the browser subscribed.
+        last_sent_at: When a push last went to it; null if never.
     """
 
     __tablename__ = "push_subscriptions"
@@ -1405,13 +1645,14 @@ class PushSubscriptionModel(Base):
 
 
 class SurveyResponseModel(Base):
-    """One person's answer to one in-app question. Phase 1 item 13.
+    """Per-user row: one answer to one in-app question. Unique per user and question.
 
-    The first question is the Sean Ellis test the Phase 1 exit gate is written
-    in -- "how would you feel if you could no longer use Account?" -- and its
-    answers are read only by the owner-run usage report, as counts. "dismissed"
-    is an answer too: asking again after "don't ask again" is how an app stops
-    being trusted.
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        question: Question key, such as "disappointment".
+        answer: Answer key: "very", "somewhat", "not" or "dismissed".
+        created_at: When it was answered.
     """
 
     __tablename__ = "survey_responses"
@@ -1433,11 +1674,15 @@ Index(
 
 
 class ImportModel(Base):
-    """One CSV import into one account. Phase 1 item 7.
+    """Per-user row: one CSV import into one account, so it can be undone whole.
 
-    Exists so an import can be undone as a unit: every row it wrote carries its
-    id in `transactions.import_id`. The counts are what was written at the time;
-    what is still there is read from the rows themselves.
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        account_id: The account imported into.
+        filename: File name as the browser gave it; optional.
+        row_count: Rows written at the time.
+        created_at: When the import ran.
     """
 
     __tablename__ = "imports"
@@ -1453,15 +1698,25 @@ class ImportModel(Base):
 
 
 class SyllabusParseModel(Base):
-    """One syllabus read by a language model, and what the person did with it.
+    """Per-user row: one syllabus read by a language model, and what became of it.
 
-    Phase 1 item 1. Kept for two reasons: the daily cap counts these, and the
-    no-change measure (account-vision.md §15) is read from them -- of the
-    fields the parse produced, how many the person changed before confirming.
+    Counts toward the daily parse cap and measures how many fields were changed before
+    confirming. The file, when kept, is the bucket object `object_name`.
 
-    The document itself lives in the syllabus bucket when one is configured
-    (Phase 1 D24), as the object `object_name` gives -- named after this row's
-    id, so the row is always enough to find, serve or delete it.
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        course_id: Course the parse built once applied; null before that or if deleted.
+        filename: Uploaded file name; optional.
+        provider: Model provider that answered.
+        model: Model name that answered.
+        result: The extraction as a `SyllabusExtract` JSON object.
+        created_at: When the parse ran.
+        applied_at: When the person confirmed it; null until then.
+        fields_total: Fields the parse produced; null until applied.
+        fields_changed: Fields the person changed before confirming; null until applied.
+        media_type: MIME type of the uploaded file, for serving it back.
+        file_kept: True once the file is stored in the bucket.
     """
 
     __tablename__ = "syllabus_parses"
@@ -1488,18 +1743,24 @@ class SyllabusParseModel(Base):
 
     @property
     def object_name(self) -> str:
+        """Bucket object name for the uploaded file: "syllabi/<id>"."""
         return f"syllabi/{self.id}"
 
 
 class GradingSchemeModel(Base):
-    """An alternative way a course can be graded. Phase 1 item 4 (vision §7).
+    """Child of `courses`: an alternative grading scheme for a course.
 
-    "Choose your scheme", section-dependent weightings, "final replaces the
-    midterm if higher": the course's own category weights stay its grade, and a
-    scheme is a second reading of the same marks, compared beside it. The rules
-    live with the weights, as a list of components, so a scheme is one row
-    owned by one course -- which is also what lets the row policy say whose it
-    is.
+    A second reading of the same marks, compared beside the course's own weights or
+    picked as its grade through `courses.counting_scheme_id`.
+
+    Attributes:
+        id: Primary key.
+        course_id: Parent course.
+        label: Scheme name.
+        components: JSON list, one per category: {"category", "weight", "drop_lowest",
+            "replace_with"}.
+        position: Display order.
+        created_at: When the scheme was created.
     """
 
     __tablename__ = "grading_schemes"
@@ -1514,11 +1775,18 @@ class GradingSchemeModel(Base):
 
 
 class SavedPlanModel(Base):
-    """A year plan as it stood when the student saved it (Phase 1 D37).
+    """Per-user row: a year plan as it stood when saved. Each save adds a row.
 
-    Each save is a new row, never overwritten: a finished month is compared with
-    the plan that was in force before it began, so replacing an old plan would
-    rewrite the comparison for every month it covered.
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        saved_at: When it was saved.
+        saved_on: The user's local date when saved; finished months compare with the
+            plan in force before they began.
+        starts_on: First day the plan covers.
+        ends_on: Last day the plan covers.
+        starting_balance: Liquid balance the plan started from, in dollars.
+        months: JSON list of {month, money_in, money_out, end_balance}.
     """
 
     __tablename__ = "saved_plans"
@@ -1537,16 +1805,20 @@ class SavedPlanModel(Base):
 
 
 class DegreeRequirementModel(Base):
-    """One requirement of your programme, entered once (Phase 1 item 5, D31).
+    """Per-user row: one requirement of the student's programme.
 
-    Two kinds. "courses": every item must be met, and an item may name
-    alternatives ("MATH 100 | MATH 180"). "credits": `credits_needed` from
-    courses matching any item, where an item is a code or a pattern
-    ("CPSC 3xx", "CPSC 300+", "300+", "CPSC"). Items are a JSON list: they are
-    always read and written whole, and nothing queries inside them.
-
-    A course counts toward one requirement unless the requirement `shares` --
-    breadth requirements usually overlap the major's.
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        name: Requirement name.
+        kind: "courses" (every item met) or "credits" (`credits_needed` from matching
+            courses).
+        items: JSON list of course codes, alternatives ("MATH 100 | MATH 180") or
+            patterns ("CPSC 3xx", "300+").
+        credits_needed: Credits required; set for "credits" requirements.
+        shares: True when a course may count here and toward another requirement too.
+        position: Display order.
+        created_at: When the requirement was created.
     """
 
     __tablename__ = "degree_requirements"
@@ -1563,14 +1835,20 @@ class DegreeRequirementModel(Base):
 
 
 class CourseEquivalenceModel(Base):
-    """Courses you took that count as others, many-to-many (Phase 1 item 5, D31).
+    """Per-user row: courses taken that count as other courses.
 
-    "COSC 111 + COSC 121 count as CPSC 110", or one course counting as three.
-    By code rather than by course row, so deleting and re-adding a course keeps
-    its mapping, and a mapping can be written before the course exists. Applies
-    once every source course is on your record -- done only when all of them
-    are -- and then stands in for them, so nothing counts twice. `credits` overrides the sources' total, for partial
-    credit.
+    Matched by code, so a mapping survives deleting and re-adding a course. Applies
+    once every source course is on the record, and replaces them so nothing counts
+    twice.
+
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        from_codes: JSON list of the codes taken.
+        counts_as: JSON list of the codes they count as.
+        credits: Credits granted; null uses the source courses' total.
+        note: Free text; optional.
+        created_at: When the mapping was created.
     """
 
     __tablename__ = "course_equivalences"
@@ -1595,21 +1873,30 @@ class CourseEquivalenceModel(Base):
 #: not the vision's organizations tree, until leagues need one.
 CAMPUSES = ("UBCV", "UBCO")
 PREREQUISITE_KINDS = ("prerequisite", "corequisite")
+"""Kinds of rule a catalogue prerequisite or a proposal may hold."""
 #: Where a catalogue fact came from. `ubc-calendar` only once UBC has agreed
 #: in writing (Phase 2 D2).
 CATALOGUE_SOURCES = ("reviewed-proposal", "ubc-calendar")
 
 
 def _one_of(column: str, values: tuple[str, ...]) -> str:
+    """Return a SQL `IN` check that `column` holds one of `values`."""
     return f"{column} IN ({', '.join(repr(v) for v in values)})"
 
 
 class CatalogueCourseModel(Base):
-    """A course as the school offers it, one row for everyone (Phase 2 item 2).
+    """Shared-read: a course as the university offers it, one row for everyone.
 
-    Keyed by campus, subject and number. `subject` is stored without a campus
-    suffix ("CPSC", not "CPSC_V"): the campus column says it, and
-    course_lookup.code_parts already drops the underscore when matching.
+    Written only by the owner-run review script. Unique per campus, subject and number.
+
+    Attributes:
+        id: Primary key.
+        campus: "UBCV" or "UBCO"; checked by the database.
+        subject: Subject code without a campus suffix, such as "CPSC".
+        number: Course number as text, such as "210".
+        title: Course title; optional.
+        credits: Credit value; optional.
+        created_at: When the row was added.
     """
 
     __tablename__ = "catalogue_courses"
@@ -1632,17 +1919,22 @@ class CatalogueCourseModel(Base):
 
 
 class CataloguePrerequisiteModel(Base):
-    """What a catalogue course requires, for one calendar session (Phase 2 item 2).
+    """Shared-read: what a catalogue course requires, for one calendar session.
 
-    `rule` is an AND/OR tree over course keys, "one of" groups and credit
-    thresholds; `note` holds what a tree cannot (year standing, "or permission
-    of the instructor"). One row per course, kind and session, because the
-    tree holds the whole condition.
+    Unique per course, kind and session. A check constraint lets only a
+    "ubc-calendar" row carry `source_text`, so wording from a student's syllabus never
+    becomes shared.
 
-    `source_text` is the calendar's own sentence, and only a `ubc-calendar` row
-    may carry one: a reviewed proposal comes from someone's syllabus, whose
-    wording stays with them (Phase 2 D6). The check constraint holds that, so a
-    review script that forgot would be refused by the database.
+    Attributes:
+        id: Primary key.
+        catalogue_course_id: The catalogue course; deleted with it.
+        kind: "prerequisite" or "corequisite".
+        session: Calendar session, such as "2026W" or "2026S".
+        rule: JSON AND/OR tree over course keys, "one of" groups and credit thresholds.
+        note: What the tree cannot say, such as year standing; optional.
+        source: "reviewed-proposal" or "ubc-calendar".
+        source_text: The calendar's own sentence; only on "ubc-calendar" rows.
+        reviewed_at: When the row was reviewed.
     """
 
     __tablename__ = "catalogue_prerequisites"
@@ -1680,17 +1972,28 @@ PROPOSAL_STATUSES = ("pending", "accepted", "rejected")
 
 
 class PrerequisiteProposalModel(Base):
-    """Your own prerequisite rule for one of your courses (Phase 2 item 4).
+    """Per-user row: the student's own prerequisite rule for one of their courses.
 
-    Per-user, and two things at once: it applies to you straight away -- your
-    version always wins for you (§13.19) -- and it is a proposal the owner's
-    review may turn into a shared catalogue row (item 6). Nobody else ever
-    reads it; the review reads counts, never names or ids.
+    Applies to its owner at once and is also a proposal the owner-run review may copy,
+    as a rule without its wording, into the shared catalogue. Unique per course and
+    kind.
 
-    `source_text` is the sentence from your own syllabus. It stays here, with
-    you: a shared row may carry the structured rule but never this wording
-    (D6). `session` is the calendar session the course was in ("2026W"), when
-    your first-year setting lets it be known.
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        course_id: The course the rule is for.
+        kind: "prerequisite" or "corequisite".
+        rule: JSON rule tree in the catalogue's shape.
+        note: What the tree cannot say; optional.
+        source: "syllabus" or "typed".
+        source_text: The sentence from the student's syllabus; never copied to a shared
+            row.
+        session: Calendar session the course was in, when the first-year anchor is set.
+        status: Review status: "pending", "accepted" or "rejected"; editing resets it to
+            pending.
+        created_at: When the proposal was created.
+        updated_at: When it last changed.
+        reviewed_at: When the review decided it; null while pending.
     """
 
     __tablename__ = "prerequisite_proposals"
@@ -1723,12 +2026,21 @@ INVITE_DAYS = 7
 
 
 class InviteModel(Base):
-    """A link you send someone yourself, to connect with you (Phase 2 B2, D16).
+    """Per-user row: an invite link the user sent to connect with someone.
 
-    Only a SHA-256 of the token is stored: the token itself is shown to you
-    once, in the link, so a copy of the database holds no live invites. Looked
-    up and accepted only through definer functions (rls.py), which answer with
-    the inviter's display name and nothing else.
+    Only the token's SHA-256 is stored. Read and accepted only through definer
+    functions, which reveal the inviter's display name and nothing more.
+
+    Attributes:
+        id: Primary key.
+        user_id: The inviter.
+        kind: What the invite is for; only "partner" today.
+        token_hash: SHA-256 of the link's token; unique.
+        created_at: When the link was made.
+        expires_at: When the link stops working, 7 days after creation.
+        used_at: When it was accepted; null while unused.
+        used_by: Who accepted; no foreign key, so it never blocks deleting that account.
+        revoked_at: When the inviter cancelled it; null otherwise.
     """
 
     __tablename__ = "invites"
@@ -1750,17 +2062,22 @@ class InviteModel(Base):
 
 
 class PartnershipModel(Base):
-    """Your side of an accountability partnership (Phase 2 item 10, D22).
+    """Per-user row: the user's side of an accountability partnership.
 
-    Two rows per partnership, one each, created together by the accept
-    function -- the only thing that can write a row for someone else. Your row
-    holds *your* figure (the share of this week's tasks you have done, and your
-    streak of good weeks), written only by you; your partner reads it through
-    a definer function that answers only while both rows point at each other.
-    Completion, never grades or money (vision §13.7).
+    The accept function writes both sides together. Each row holds its owner's own
+    figure, which the partner reads through `account_partner_figures` only while both
+    rows point at each other. Unique per (user, partner); never the user themselves.
 
-    `partner_name` is copied when the partnership starts (B3), so nobody ever
-    reads another person's user row.
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        partner_id: The partner; the row is deleted with the partner's account.
+        partner_name: Partner's display name, copied when the partnership began.
+        created_at: When the partnership began.
+        week_percent: Owner's share of this week's tasks done, 0-100; null when nothing
+            was due.
+        streak_weeks: Owner's run of good weeks before this one.
+        figure_on: Owner's local date when the figure was worked out.
     """
 
     __tablename__ = "partnerships"
@@ -1787,19 +2104,19 @@ MAX_TASK_MEMBERS = 8
 
 
 class TaskMemberModel(Base):
-    """Someone else on one of your tasks (Phase 2 item 9a, D23).
+    """Child of `tasks`; no direct write: someone else on one of the user's tasks.
 
-    A child of the task, with no user_id of its own, so the row policy makes it
-    the task owner's alone: only the owner sees who is on a task, or removes
-    them. Nobody writes one directly -- the API's role may not insert or update
-    this table -- so a row exists only because its member accepted a link,
-    through account_accept_task_invite.
+    Only the task's owner sees or removes the row. The API's role may not insert or
+    update it; `account_accept_task_invite` writes it for the person who accepted.
+    Unique per task and member.
 
-    What the member may then do with the task goes through definer functions
-    (rls.py), never through this row.
-
-    Both names are copied when the member joins (B3), so nobody reads another
-    person's user row to say who is on a task.
+    Attributes:
+        id: Primary key.
+        task_id: Parent task; deleted with it.
+        member_id: The member; deleted with the member's account.
+        member_name: Member's display name, copied on joining.
+        owner_name: Task owner's display name, copied on joining.
+        joined_at: When the member joined.
     """
 
     __tablename__ = "task_members"
@@ -1818,11 +2135,18 @@ class TaskMemberModel(Base):
 
 
 class TaskInviteModel(Base):
-    """The link that lets people join one of your tasks (Phase 2 item 9a, D23).
+    """Child of `tasks`: the link that lets people join one of the user's tasks.
 
-    A child of the task, so only its owner can make, see or cancel one. Usable
-    by several people, for a group chat; at most one live per task, since
-    making a new link cancels the old. Only a SHA-256 of the token is stored.
+    Usable by several people; making a new link cancels the old one. Only the token's
+    SHA-256 is stored.
+
+    Attributes:
+        id: Primary key.
+        task_id: Parent task; deleted with it.
+        token_hash: SHA-256 of the link's token; unique.
+        created_at: When the link was made.
+        expires_at: When the link stops working.
+        revoked_at: When it was cancelled; null otherwise.
     """
 
     __tablename__ = "task_invites"
@@ -1843,12 +2167,18 @@ MAX_EVENT_MEMBERS = 8
 
 
 class EventMemberModel(Base):
-    """Someone else on one of your events (Phase 2 item 9b, D24).
+    """Child of `events`; no direct write: someone else on one of the user's events.
 
-    The same shape as TaskMemberModel, for the same reasons: a child of the
-    event, so only its owner sees or removes it; never written by the API's
-    role, only by account_accept_event_invite for the person holding the link.
-    A member only sees the event and may leave -- they change nothing of it.
+    Only the event's owner sees or removes the row; `account_accept_event_invite`
+    writes it. A member only sees the event and may leave. Unique per event and member.
+
+    Attributes:
+        id: Primary key.
+        event_id: Parent event; deleted with it.
+        member_id: The member; deleted with the member's account.
+        member_name: Member's display name, copied on joining.
+        owner_name: Event owner's display name, copied on joining.
+        joined_at: When the member joined.
     """
 
     __tablename__ = "event_members"
@@ -1867,10 +2197,18 @@ class EventMemberModel(Base):
 
 
 class EventInviteModel(Base):
-    """The link that lets people join one of your events (Phase 2 item 9b, D24).
+    """Child of `events`: the link that lets people join one of the user's events.
 
-    Like TaskInviteModel: the owner's alone, several people per link, one live
-    per event, and only the token's SHA-256 stored.
+    Usable by several people; one live link per event. Only the token's SHA-256 is
+    stored.
+
+    Attributes:
+        id: Primary key.
+        event_id: Parent event; deleted with it.
+        token_hash: SHA-256 of the link's token; unique.
+        created_at: When the link was made.
+        expires_at: When the link stops working.
+        revoked_at: When it was cancelled; null otherwise.
     """
 
     __tablename__ = "event_invites"
@@ -1892,16 +2230,27 @@ COHORT_FLOOR = 5
 
 
 class TermReviewModel(Base):
-    """Your end-of-term answers about one finished course (Phase 2 item 13, D25).
+    """Per-user row: the student's end-of-term answers about one finished course.
 
-    Yours alone, under the ordinary row policy. **It holds no copy of your
-    grade** -- only whether you chose to add it to the course's distribution.
-    The recount reads the grade from the course itself when it runs, so a
-    withdrawal, or a corrected grade, takes effect at the next recount, and
-    there is one record of the grade rather than two that can disagree.
+    Holds no copy of the grade, only whether to add it to the course's distribution;
+    the recount reads the grade from the course when it runs. Unique per user and
+    course; the 1-5 ratings and the hours are checked by the database.
 
-    `course_key` and `term_code` are snapshots of what the counts are grouped
-    by ("UBCV CPSC 221", "2025W1"), taken when you answer.
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        course_id: The course reviewed.
+        course_key: Snapshot of the key counts are grouped by, such as "UBCV CPSC 221".
+        term_code: Snapshot of the term, such as "2025W1".
+        hours_per_week: Typical weekly hours, 0-80.
+        difficulty: Rating 1-5.
+        clarity: Rating 1-5.
+        would_take_again: Yes, no, or null for no answer.
+        contribute_grade: Opt-in to add the grade to the distribution; changeable at any
+            time.
+        skipped: The student declined the review; it is not asked again.
+        created_at: When the review was first saved.
+        updated_at: When it last changed.
     """
 
     __tablename__ = "term_reviews"
@@ -1932,15 +2281,20 @@ class TermReviewModel(Base):
 
 
 class GradeDistributionModel(Base):
-    """How many contributors' grades fell in each band, per course and term
-    (Phase 2 item 13, D25). **Sealed** (rls.SEALED_TABLES): the API's role can
-    neither read nor write it. Only account_recount_grade_distributions writes
-    it, rebuilding it whole, and only for a course-term with at least
-    COHORT_FLOOR contributors.
+    """Sealed: how many contributors' grades fell in each band, per course and term.
 
-    Counts and nothing else: no user id, no timestamp per contribution, no row
-    per contribution. Nothing reads it in Phase 2; the distributions are
-    Phase 3's.
+    The API's role can neither read nor write it. Only
+    `account_recount_grade_distributions` writes it, rebuilding it whole and skipping
+    any
+    course-term below `COHORT_FLOOR` contributions. Unique per course, term and bucket.
+
+    Attributes:
+        id: Primary key.
+        course_key: Course, such as "UBCV CPSC 221".
+        term_code: Term, such as "2025W1".
+        bucket: Band's lower bound: 0 for anything below 50, then 50, 55 ... 95.
+        contributors: Grades counted in the band.
+        computed_at: When the recount wrote it.
     """
 
     __tablename__ = "grade_distributions"
@@ -1963,11 +2317,17 @@ MAX_TEAM_MEMBERS = 30
 
 
 class TeamModel(Base):
-    """A team, owned by its captain (Phase 2 item 11, D26).
+    """Per-user row: a team on the Fitness page, owned by its captain.
 
-    The captain's own row under the ordinary policy. Members, the link and
-    the games all hang beneath it, so the captain alone sees or changes them
-    directly; everyone else on the team reaches it through definer functions.
+    Members, the link and the games hang beneath it; other players reach it only through
+    definer functions.
+
+    Attributes:
+        id: Primary key.
+        user_id: The captain.
+        name: Team name.
+        sport: Free text, such as "Ultimate"; optional.
+        created_at: When the team was created.
     """
 
     __tablename__ = "teams"
@@ -1985,9 +2345,19 @@ class TeamModel(Base):
 
 
 class TeamMemberModel(Base):
-    """Someone on a team (Phase 2 item 11, D26). The shape of TaskMemberModel:
-    the captain's alone, never written by the API's role, only by
-    account_accept_team_invite for the person holding the link."""
+    """Child of `teams`; no direct write: someone on a team.
+
+    Only the captain sees or removes the row; `account_accept_team_invite` writes it.
+    Unique per team and member.
+
+    Attributes:
+        id: Primary key.
+        team_id: Parent team; deleted with it.
+        member_id: The player; deleted with the player's account.
+        member_name: Player's display name, copied on joining.
+        owner_name: Captain's display name, copied on joining.
+        joined_at: When the player joined.
+    """
 
     __tablename__ = "team_members"
     __table_args__ = (UniqueConstraint("team_id", "member_id", name="uq_team_member"),)
@@ -2003,8 +2373,16 @@ class TeamMemberModel(Base):
 
 
 class TeamInviteModel(Base):
-    """A team's link (Phase 2 item 11, D26): many people, one live per team,
-    7 days, only the token's SHA-256 kept."""
+    """Child of `teams`: a team's join link; many may use it, one live per team.
+
+    Attributes:
+        id: Primary key.
+        team_id: Parent team; deleted with it.
+        token_hash: SHA-256 of the link's token; unique.
+        created_at: When the link was made.
+        expires_at: When the link stops working.
+        revoked_at: When it was cancelled; null otherwise.
+    """
 
     __tablename__ = "team_invites"
 
@@ -2019,16 +2397,31 @@ class TeamInviteModel(Base):
 
 
 class GameModel(Base):
-    """One game a team played (Phase 2 item 11, D26).
+    """Child of `teams`; no direct write: one game a team played.
 
-    A child of the team, so it is the captain's row -- but the API's role may
-    only read and delete it. Every write goes through a definer function, for
-    the captain as much as anyone, so "a score counts once someone else
-    confirms it" cannot be skipped by whoever owns the rows.
+    The API's role may only read and delete it; every write, the captain's included,
+    goes through a definer function, so a score counts only once someone else confirms
+    it. Players are kept as an id with no foreign key plus a copied name. Scores are
+    checked to 0-999.
 
-    Who recorded, confirmed or disputed it is kept as a copied name and an id
-    with no foreign key (like invites.used_by): a teammate's account going
-    does not rewrite the team's scoresheet.
+    Attributes:
+        id: Primary key.
+        team_id: Parent team; deleted with it.
+        played_on: Date of the game.
+        opponent: Opponent's name.
+        our_score: The team's score.
+        their_score: The opponent's score.
+        recorded_by: Id of the player who recorded it.
+        recorded_by_name: Their name, copied.
+        confirmed_by: Id of the player who confirmed it; null while unconfirmed.
+        confirmed_by_name: Their name, copied.
+        confirmed_at: When it was confirmed.
+        disputed_by: Id of the player disputing it; null when undisputed.
+        disputed_by_name: Their name, copied.
+        disputed_our: The disputer's version of our score; set only with `disputed_by`.
+        disputed_their: The disputer's version of their score; set only with
+            `disputed_by`.
+        created_at: When it was recorded.
     """
 
     __tablename__ = "games"
@@ -2067,16 +2460,34 @@ APPLICATION_STATUSES = (
     "applied", "screening", "interview", "offer", "accepted", "rejected", "no_reply", "withdrawn",
 )
 OFFER_PERIODS = ("hourly", "monthly", "yearly")
+"""Periods an offer's pay may be quoted per."""
 
 
 class JobApplicationModel(Base):
-    """One job or internship you applied to (Phase 3 item 1).
+    """Per-user row: one job or internship application.
 
-    `status` is the latest step, kept on the row so a list need not read every
-    history. The history itself is `application_steps`, and is the point
-    (D2): replies, days to a reply and the Sankey are all read from it.
+    `status` repeats the latest step so lists need not read every history; the history
+    in `application_steps` is what the statistics read. Status and offer period are
+    checked by the database.
 
-    The offer's pay (D5) is private to its owner, like every column here.
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        company: Employer name.
+        role: Job title applied for.
+        applied_on: Date applied; decides which seasons include it.
+        source: Where the posting was found; optional.
+        link: Posting URL; optional.
+        location: Job location; optional.
+        notes: Free text; optional.
+        status: Latest status: "applied", "screening", "interview", "offer", "accepted",
+            "rejected", "no_reply" or "withdrawn".
+        deadline: Application deadline, also shown on the calendar; optional.
+        follow_up_on: Date to follow up; optional.
+        offer_amount: Offered pay in dollars; optional.
+        offer_period: "hourly", "monthly" or "yearly"; null without an offer.
+        created_at: When the application was recorded.
+        updated_at: When it last changed.
     """
 
     __tablename__ = "job_applications"
@@ -2117,11 +2528,17 @@ class JobApplicationModel(Base):
 
 
 class ApplicationStepModel(Base):
-    """One change in an application's status, with the day it happened (D2).
+    """Child of `job_applications`: one change of status and the day it happened.
 
-    A child of the application, so it is its owner's row under the ordinary
-    child policy. The first step, "applied", is written with the application
-    and moves with its date; it cannot be removed on its own.
+    The first step, "applied", is written with the application and moves with its date.
+
+    Attributes:
+        id: Primary key.
+        application_id: Parent application; deleted with it.
+        status: The status reached, from the same list as `job_applications.status`.
+        on_date: Day it happened.
+        note: Free text; optional.
+        created_at: When the step was recorded.
     """
 
     __tablename__ = "application_steps"
@@ -2145,12 +2562,19 @@ class ApplicationStepModel(Base):
 
 
 class ApplicationSeasonModel(Base):
-    """A recruiting season you named (Phase 3 D7): month to month, inclusive.
+    """Per-user row: a named recruiting season, a month range used as a filter.
 
-    A filter, not a container: an application belongs to every season whose
-    months include the day it was applied for, so seasons may overlap and
-    nothing is ever filed by hand. Both ends are stored as the first of their
-    month; the end month counts whole.
+    An application belongs to every season whose months include its applied date, so
+    seasons may overlap.
+
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        name: Season name.
+        starts_month: First day of the first month.
+        ends_month: First day of the last month, which counts whole; never before
+            `starts_month`.
+        created_at: When the season was created.
     """
 
     __tablename__ = "application_seasons"

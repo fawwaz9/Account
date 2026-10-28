@@ -1,25 +1,10 @@
-"""Push notifications: devices, and delivering due reminders to them.
+"""Push notifications: the user's devices, and delivering due reminders to them.
 
-Phase 0 item 5. Until this, a reminder fired only while the app was open --
-"a promise the app does not keep", in the vision's words. Now a scheduler calls
-``dispatch_due_reminders`` every few minutes and each due reminder is pushed to
-the devices its owner turned notifications on for.
-
-**Isolation, as everywhere else.** The only cross-user step is finding *which*
-users have something waiting (``identity.users_with_unpushed_reminders``, an id
-list). Everything after it runs acting as one user at a time, so under row-level
-security a user's reminders can only ever be read, and sent, to that user's own
-devices. ``tests/test_push.py`` and ``tests/test_rls.py`` both check that a
-reminder never reaches another person's device.
-
-**Delivery rules**
-
-* A reminder is marked ``pushed_at`` once at least one device accepted it.
-  If none did because the network failed, it stays unpushed and the next run
-  tries again -- but only for twelve hours after its time, after which a
-  reminder is no longer worth an interruption.
-* A device the push service reports gone (404 or 410) is deleted: the browser
-  unsubscribed or the app was uninstalled, and it will never come back.
+A scheduler calls `dispatch_due_reminders` every few minutes. Its only cross-user
+step is the list of users with something waiting; everything after runs acting as
+one user at a time, so a reminder can only reach its owner's devices. A reminder is
+marked pushed once any device accepts it, retried until 12 hours past its time, and
+a device the push service reports gone (404 or 410) is deleted.
 """
 from __future__ import annotations
 
@@ -49,9 +34,22 @@ WIDEST_ZONE = timedelta(hours=14)
 
 #: (endpoint, headers, body) -> HTTP status, or None if it could not be sent.
 Sender = Callable[[str, dict, bytes], "int | None"]
+"""A push sender: (endpoint, headers, body) to an HTTP status, or None if unsent."""
 
 
 def default_sender(endpoint: str, headers: dict, body: bytes) -> int | None:
+    """POST one encrypted push; return the HTTP status, or None if unsent.
+
+    Waits up to 10 seconds; a failure is logged with the push service's host only.
+
+    Args:
+        endpoint: The device's push service URL.
+        headers: Encryption and VAPID headers.
+        body: The encrypted payload.
+
+    Returns:
+        The response status, or None when the request failed.
+    """
     import requests  # local: only the dispatch path needs it
 
     try:
@@ -62,17 +60,43 @@ def default_sender(endpoint: str, headers: dict, body: bytes) -> int | None:
 
 
 def vapid() -> Vapid | None:
+    """Return the server's VAPID identity, or None when push is not set up.
+
+    Returns:
+        The identity built from `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT`, or None.
+    """
     if not settings.VAPID_PRIVATE_KEY:
         return None
     return Vapid.from_settings(settings.VAPID_PRIVATE_KEY, settings.VAPID_SUBJECT)
 
 
 def devices(db: Session, user_id: uuid.UUID) -> int:
+    """Return how many browsers the user has turned notifications on for.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+
+    Returns:
+        The number of stored push subscriptions.
+    """
     return db.query(PushSubscriptionModel).filter(PushSubscriptionModel.user_id == user_id).count()
 
 
 def subscribe(db: Session, user_id: uuid.UUID, data: SubscriptionCreate) -> None:
-    """Turn notifications on for one browser, for this user."""
+    """Turn notifications on for one browser, for this user.
+
+    An endpoint the user already has gets its keys updated; one registered to anyone
+    else is released from them first, since the browser now belongs to this user.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        data: The browser's endpoint and keys.
+
+    Note:
+        Commits.
+    """
     own = (
         db.query(PushSubscriptionModel)
         .filter(PushSubscriptionModel.user_id == user_id, PushSubscriptionModel.endpoint == data.endpoint)
@@ -93,6 +117,16 @@ def subscribe(db: Session, user_id: uuid.UUID, data: SubscriptionCreate) -> None
 
 
 def unsubscribe(db: Session, user_id: uuid.UUID, endpoint: str) -> None:
+    """Turn notifications off for one of the user's browsers.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        endpoint: The browser's push endpoint; anyone else's is left alone.
+
+    Note:
+        Commits.
+    """
     db.query(PushSubscriptionModel).filter(
         PushSubscriptionModel.user_id == user_id, PushSubscriptionModel.endpoint == endpoint,
     ).delete(synchronize_session=False)
@@ -103,8 +137,25 @@ def deliver(
     db: Session, user_id: uuid.UUID, payload: dict, keys: Vapid, sender: Sender,
     endpoint: str | None = None,
 ) -> tuple[int, int]:
-    """Send ``payload`` to every device of ``user_id``, or to the one at
-    ``endpoint`` if it is theirs. Returns (accepted, removed)."""
+    """Send a payload to each of a user's devices, or to one of them.
+
+    Devices whose keys cannot be encrypted to, or that the push service reports gone,
+    are deleted; accepted deliveries stamp `last_sent_at`.
+
+    Args:
+        db: Session acting as the user.
+        user_id: Whose devices.
+        payload: The notification as a JSON-serialisable dict.
+        keys: The server's VAPID identity.
+        sender: Callable that POSTs one push and returns its status, or None.
+        endpoint: Limit delivery to this device, if it is the user's; None sends to all.
+
+    Returns:
+        (devices that accepted it, devices removed).
+
+    Note:
+        Commits.
+    """
     body = json.dumps(payload).encode()
     accepted = removed = 0
     query = db.query(PushSubscriptionModel).filter(PushSubscriptionModel.user_id == user_id)
@@ -136,10 +187,16 @@ def deliver(
 def send_test(
     db: Session, user_id: uuid.UUID, endpoint: str | None = None, sender: Sender | None = None,
 ) -> int | None:
-    """A test notification to the device that asked for it, given its endpoint.
+    """Send a test notification to the asking device, or to all of the user's.
 
-    Without one -- a frontend older than this -- every device of the user.
-    None when push is not set up.
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        endpoint: The asking device's endpoint; None sends to every device.
+        sender: Stand-in for the network in tests.
+
+    Returns:
+        How many devices accepted it, or None when push is not set up.
     """
     keys = vapid()
     if keys is None:
@@ -153,6 +210,7 @@ def send_test(
 
 
 def _payload(reminder: ReminderModel, course_code: str | None) -> dict:
+    """Return the notification for a reminder: its title, its course code, and a tag."""
     return {
         "title": reminder.title,
         "body": course_code or "Reminder",
@@ -163,7 +221,24 @@ def _payload(reminder: ReminderModel, course_code: str | None) -> dict:
 
 
 def dispatch_due_reminders(db: Session, sender: Sender | None = None, at: datetime | None = None) -> dict:
-    """Push every due, unpushed reminder to its owner's devices. Idempotent."""
+    """Push every due, unpushed reminder to its owner's devices.
+
+    `remind_at` is local wall time, so candidates are found up to 14 hours ahead of UTC
+    and each user's own clock then decides what is due; reminders more than 12 hours
+    past their time are no longer pushed.
+
+    Args:
+        db: A session of its own; it is made to act as each user in turn.
+        sender: Stand-in for the network in tests.
+        at: The moment to dispatch for, for tests; defaults to now.
+
+    Returns:
+        {"users", "pushed", "removed"}: users with something due, reminders delivered,
+        and devices deleted; all 0 when push is not set up.
+
+    Note:
+        Idempotent: a reminder is pushed at most once; commits once per user.
+    """
     keys = vapid()
     if keys is None:
         return {"users": 0, "pushed": 0, "removed": 0}

@@ -1,12 +1,10 @@
-"""Additive schema fixes for databases created before a column existed.
+"""Additive, idempotent schema upgrades for databases older than the current models.
 
-``Base.metadata.create_all`` only ever creates missing *tables* — it will not
-alter one that already exists. An existing ``data/app.db`` therefore keeps the
-old shape and every query touching a new column fails with
-``no such column``.
-
-Until this project adopts Alembic, new nullable columns are added here. Each
-step must be idempotent, since this runs on every startup.
+`create_all` only creates missing tables, so a column or index added to an existing
+table needs this module: `ensure_schema` adds the columns in `ADDED_COLUMNS` (with
+any one-off `BACKFILLS`), and `ensure_indexes` builds every declared index the
+database lacks. `schema.py` runs both; production applies them only through the
+owner's schema step, never on deploy.
 """
 
 from sqlalchemy import inspect, text
@@ -147,6 +145,17 @@ BACKFILLS: dict[tuple[str, str], str] = {
 
 
 def ensure_schema() -> None:
+    """Add every column in `ADDED_COLUMNS` that an existing table is missing.
+
+    Tables that do not exist yet are skipped, since `create_all` builds them whole. A
+    table's missing columns and their backfills are added in one transaction on the
+    application engine.
+
+    Note:
+        Additive only: nothing is altered or dropped, so running it again is harmless.
+        Several older entries use SQLite-only DDL (an integer default on a boolean,
+        `DATETIME`, `CHAR(32)` for a UUID) and have only ever run on SQLite.
+    """
     inspector = inspect(engine)
     existing_tables = set(inspector.get_table_names())
 
@@ -171,18 +180,15 @@ def ensure_schema() -> None:
 
 
 def ensure_indexes(bind=None) -> None:
-    """Create any index declared on a model that the database does not have.
+    """Create every index declared on a model that the database does not have yet.
 
-    ``create_all`` builds indexes only for tables it creates, so an existing
-    database never gains one added later. This walks the same metadata the
-    models declare, which is why there is no second list of index DDL to keep
-    in step with models.py.
+    Args:
+        bind: Engine or connection to build on; defaults to the application engine.
 
-    A unique index can fail here, and that is the point: it means rows already
-    violate it, and inventing a resolution automatically would be worse than
-    saying so. The name of the failing index says which rule was broken.
-
-    `bind` defaults to the application engine; the tests pass their own.
+    Raises:
+        sqlalchemy.exc.IntegrityError: If existing rows violate a new unique index; the
+            index's name says which rule they break, and nothing is resolved
+            automatically.
     """
     target = bind if bind is not None else engine
     for table in Base.metadata.sorted_tables:

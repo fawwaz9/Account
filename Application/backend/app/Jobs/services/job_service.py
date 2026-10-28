@@ -1,25 +1,10 @@
-"""Jobs, and the shifts they are worked in.
+"""Service functions for jobs, their shifts, and what was recorded about each shift.
 
-A shift is an event with a `job_id` and a rule, exactly as a lecture is an event
-with a `course_id` and a rule. That is not a shortcut: a shift genuinely is a
-block of time on a clock, and giving it a table of its own would mean teaching
-the calendar, the free-block finder and the week-load figure about a second kind
-of timed thing -- the way tasks already have to be merged in separately.
-
-Making it an event buys four behaviours with no code at all:
-
-* the recurrence engine expands "every Tuesday and Thursday" on read,
-* `free_blocks` already subtracts any timed occurrence, so work reduces study
-  time without knowing what work is,
-* `crunch` scores an unrecognised kind zero, so a shift is correctly absent from
-  a radar that measures academic pressure rather than commitment,
-* term blackouts skip only course-linked events, so a reading break already
-  cannot cancel a shift you are still expected to turn up for.
-
-What an event cannot hold is what actually happened on one of those dates, since
-a repeating shift is one row expanded on read and there is nothing anywhere that
-represents "this Friday". That is what `shift_records` is for, keyed by
-`(event_id, on_date)`.
+A shift is a calendar event with a `job_id` and, for a pattern, a weekly rule, so
+the recurrence engine, free time, the week's load and blackout scoping all
+handle it with no code of their own. What happened on one date of a shift is a
+`shift_records` row keyed by (event_id, on_date). A confirmed cash tip is filed
+as one income row in the account chosen for cash tips, or held when none is.
 """
 
 import uuid
@@ -64,13 +49,33 @@ PAY_LOOKAHEAD_DAYS = 366
 
 
 def minutes_between(start: time, end: time) -> int:
-    """Whole minutes from one clock time to another on the same day."""
+    """Return the whole minutes from one clock time to a later one on the same day.
+
+    Never negative: an end at or before the start gives 0.
+
+    Args:
+        start: Clock time the shift starts.
+        end: Clock time the shift ends.
+
+    Returns:
+        Minutes from `start` to `end`, at least 0.
+    """
     started = start.hour * 60 + start.minute
     ended = end.hour * 60 + end.minute
     return max(0, ended - started)
 
 
 def owned_job(db: Session, user_id: uuid.UUID, job_id: uuid.UUID) -> JobModel | None:
+    """Return the user's job with this id, or None.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+        job_id: The job to fetch.
+
+    Returns:
+        The job row, or None when it is missing or another user's.
+    """
     return (
         db.query(JobModel)
         .filter(JobModel.id == job_id, JobModel.user_id == user_id)
@@ -79,18 +84,34 @@ def owned_job(db: Session, user_id: uuid.UUID, job_id: uuid.UUID) -> JobModel | 
 
 
 def next_pay_on(job: JobModel, on_day: date) -> date | None:
-    """The next date this job pays, or None without a schedule.
+    """Return the next date a job pays, on or after a day.
 
-    Read from the schedule rather than stored, like every other repeat in the
-    app (`pay_schedule.pay_dates`, which knows both kinds of schedule). Safe to
-    spend measures to the day before it, so a payday the weekend rule moves to
-    Friday must read as Friday here.
+    Read from the schedule (`pay_schedule.pay_dates`), looking up to
+    `PAY_LOOKAHEAD_DAYS` ahead; a set date moved off a weekend reads as the day it
+    is actually paid.
+
+    Args:
+        job: The job row.
+        on_day: The day to look from, inclusive.
+
+    Returns:
+        The date; None without a schedule, or when the schedule produces nothing
+        within a year.
     """
     ahead = pay_dates(job, on_day, on_day + timedelta(days=PAY_LOOKAHEAD_DAYS))
     return ahead[0] if ahead else None
 
 
 def as_schema(job: JobModel, on_day: date) -> Job:
+    """Build a job's response, with its next pay date as of a day.
+
+    Args:
+        job: The job row.
+        on_day: The user's today.
+
+    Returns:
+        The job; `pay_schedule` is None when it pays on set days of the month.
+    """
     return Job(
         id=job.id,
         name=job.name,
@@ -114,6 +135,16 @@ def as_schema(job: JobModel, on_day: date) -> Job:
 
 
 def list_jobs(db: Session, user_id: uuid.UUID, include_archived: bool = False):
+    """Return the user's jobs: current ones first, then by the user's order and name.
+
+    Args:
+        db: Open database session.
+        user_id: Whose jobs.
+        include_archived: Also return archived jobs.
+
+    Returns:
+        The jobs; None when the user does not exist.
+    """
     if not user_exists(db, user_id):
         return None
 
@@ -132,11 +163,33 @@ def list_jobs(db: Session, user_id: uuid.UUID, include_archived: bool = False):
 
 
 def get_job(db: Session, user_id: uuid.UUID, job_id: uuid.UUID):
+    """Return one of the user's jobs, or None when it is not theirs.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+        job_id: The job to fetch.
+
+    Returns:
+        The job as its API schema, or None when it is missing or another user's.
+    """
     job = owned_job(db, user_id, job_id)
     return None if job is None else as_schema(job, user_today(db, user_id))
 
 
 def create_job(db: Session, user_id: uuid.UUID, data: JobCreate):
+    """Create a job for the user, placed last in their order.
+
+    Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose job.
+        data: The job and its pay schedule; the name is stripped.
+
+    Returns:
+        The new job; None when the user does not exist.
+    """
     if not user_exists(db, user_id):
         return None
 
@@ -171,11 +224,17 @@ def create_job(db: Session, user_id: uuid.UUID, data: JobCreate):
 
 
 def check_pay_fields(job: JobModel) -> None:
-    """The same cross-field rules the create schema enforces, after an edit.
+    """Apply the create-time pay rules to a job after an edit, clearing unused fields.
 
-    They cannot live on `JobUpdate`: a patch changing only `kind` has no way to
-    see the rate already stored, so a parse-time check would reject an edit that
-    is perfectly valid against the row.
+    An hourly job keeps only its rate, a salaried one only its period amount, and a
+    contract job neither. Only changes the row.
+
+    Args:
+        job: The job row, already patched.
+
+    Raises:
+        ValueError: If an hourly job has no rate or a salaried job no period
+            amount.
     """
     if job.kind == JobKind.HOURLY.value:
         if job.hourly_rate is None:
@@ -191,6 +250,25 @@ def check_pay_fields(job: JobModel) -> None:
 
 
 def update_job(db: Session, user_id: uuid.UUID, job_id: uuid.UUID, data: JobUpdate):
+    """Change the fields sent on one of the user's jobs.
+
+    A pay schedule or set days left out of the patch keep what is stored, and an
+    explicit null clears it; the pay fields are then checked against the kind.
+    Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose job.
+        job_id: The job.
+        data: The fields to change.
+
+    Returns:
+        The updated job; None when it is not the user's.
+
+    Raises:
+        ValueError: If both kinds of pay schedule would be set, the job would end
+            before it starts, or the kind's pay field is missing.
+    """
     job = owned_job(db, user_id, job_id)
     if job is None:
         return None
@@ -231,11 +309,19 @@ def update_job(db: Session, user_id: uuid.UUID, job_id: uuid.UUID, data: JobUpda
 
 
 def delete_job(db: Session, user_id: uuid.UUID, job_id: uuid.UUID):
-    """Remove a job, its shift blocks and everything recorded against it.
+    """Delete a job, its shifts, their records and its paycheques.
 
-    Ending a job is `ended_on`; archiving it is `archived`. This is for a job
-    entered by mistake, so it takes the calendar blocks with it -- leaving them
-    would put shifts on the calendar for an employer that no longer exists.
+    Meant for a job entered by mistake; ending or archiving keeps the history.
+    Ledger rows already written (cash tips, cheque deposits) stay. Shift records
+    are deleted before the shift events, which a bulk delete removes. Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose job.
+        job_id: The job.
+
+    Returns:
+        A copy of the deleted job; None when it is not the user's.
     """
     job = owned_job(db, user_id, job_id)
     if job is None:
@@ -262,7 +348,20 @@ def delete_job(db: Session, user_id: uuid.UUID, job_id: uuid.UUID):
 
 
 def shift_window(job: JobModel, data: ShiftScheduleCreate) -> tuple[date, date]:
-    """When the pattern runs, preferring the form over the job's own dates."""
+    """Return the dates a shift pattern runs, preferring the form's over the job's.
+
+    Args:
+        job: The job row, whose start and end dates are the fallback.
+        data: The pattern form.
+
+    Returns:
+        The first date and the last date, which may be None for an open-ended
+        pattern.
+
+    Raises:
+        ValueError: If no start date is given or stored, or the pattern ends
+            before it starts.
+    """
     starts_on = data.starts_on or job.started_on
     ends_on = data.ends_on or job.ended_on
 
@@ -277,14 +376,26 @@ def shift_window(job: JobModel, data: ShiftScheduleCreate) -> tuple[date, date]:
 def set_shift_schedule(
     db: Session, user_id: uuid.UUID, job_id: uuid.UUID, data: ShiftScheduleCreate
 ):
-    """Replace this job's recurring shifts with the pattern given.
+    """Replace a job's weekly shift pattern with the blocks given.
 
-    Replace rather than append, matching how a course timetable behaves:
-    submitting the form twice after fixing a time must leave one schedule rather
-    than two overlapping copies.
+    Deletes the job's repeating shift events (one-off shifts are kept) and writes a
+    weekly event per block. Commits.
 
-    Only this job's own blocks are touched. A one-off shift added straight to
-    the calendar for a different job, or a personal event, survives.
+    Args:
+        db: Open database session.
+        user_id: Whose job.
+        job_id: The job.
+        data: The weekly blocks and, optionally, the dates.
+
+    Returns:
+        The new events' ids; None when the job is not the user's.
+
+    Raises:
+        ValueError: If the dates are missing or inverted.
+
+    Note:
+        The old events are deleted directly; a confirmed shift record still
+        pointing at one makes the delete fail its foreign key.
     """
     job = owned_job(db, user_id, job_id)
     if job is None:
@@ -337,14 +448,18 @@ def set_shift_schedule(
 
 
 def add_shift(db: Session, user_id: uuid.UUID, job_id: uuid.UUID, data: ShiftCreate):
-    """One shift on one date, with no rule behind it.
+    """Add one shift on one date for a job, as an event with no repeat rule.
 
-    The ordinary case for student work, which is rarely the same hours every
-    week. A pattern is the exception, and lives in `set_shift_schedule`.
+    Commits.
 
-    Written as an event with no recurrence, so the calendar, the free-block
-    finder and the earnings figures all see it without knowing it was entered by
-    hand rather than generated.
+    Args:
+        db: Open database session.
+        user_id: Whose job.
+        job_id: The job.
+        data: The date, times and location.
+
+    Returns:
+        The new event's id; None when the job is not the user's.
     """
     job = owned_job(db, user_id, job_id)
     if job is None:
@@ -375,14 +490,22 @@ def add_shift(db: Session, user_id: uuid.UUID, job_id: uuid.UUID, data: ShiftCre
 
 
 def remove_shift(db: Session, user_id: uuid.UUID, event_id: uuid.UUID):
-    """Delete a shift and anything recorded about it.
+    """Delete a one-off shift and everything recorded about it.
 
-    Only a one-off. A date generated by a pattern has no row of its own to
-    delete -- cancelling one of those is a skipped date on the rule, which is
-    what the calendar already offers. Deleting one that was never confirmed
-    is the ordinary case; deleting a confirmed one is for a mistake -- the
-    wrong job, the wrong date -- and takes its record, including any cash tip
-    already in the ledger, with it.
+    Any cash tip it filed is removed from the ledger too (every row of an older
+    split tip's group). Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose shift.
+        event_id: The shift event.
+
+    Returns:
+        The event id; None when it is not one of the user's shifts.
+
+    Raises:
+        ValueError: If the shift comes from a repeating pattern, whose dates are
+            cancelled by skipping instead.
     """
     event = (
         db.query(EventModel)
@@ -460,7 +583,17 @@ def remove_shift(db: Session, user_id: uuid.UUID, event_id: uuid.UUID):
 def records_by_date(
     db: Session, user_id: uuid.UUID, start: date, end: date
 ) -> dict[tuple[uuid.UUID, date], ShiftRecordModel]:
-    """Everything recorded about a shift date in the window, keyed as it is identified."""
+    """Return the user's shift records in a window, keyed by (event_id, on_date).
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+        start: First day of the window, inclusive.
+        end: Last day of the window, inclusive.
+
+    Returns:
+        Shift record by (event id, date); dates with no record are absent.
+    """
     rows = (
         db.query(ShiftRecordModel)
         .filter(
@@ -480,11 +613,25 @@ def list_shifts(
     end: date,
     on_day: date | None = None,
 ) -> list[ShiftOccurrence] | None:
-    """Every shift date in the window, with what is known about each.
+    """Return every shift date in a window, with what is known about each.
 
-    Built on `list_occurrences` rather than a query of its own, so a shift is
-    expanded by the same engine that expands a lecture and cannot disagree with
-    what the calendar draws.
+    Expanded by the calendar's own `list_occurrences`, so it agrees with what the
+    calendar draws. A shift on or before `on_day` that is unconfirmed counts at its
+    scheduled hours and is flagged `assumed`.
+
+    Args:
+        db: Open database session.
+        user_id: Whose shifts.
+        start: First date, inclusive.
+        end: Last date, inclusive.
+        on_day: The day that decides which shifts are past; defaults to the
+            user's today.
+
+    Returns:
+        The shifts by date and start time; None when the user does not exist.
+
+    Raises:
+        ValueError: If the window is inverted or longer than the calendar allows.
     """
     expanded = list_occurrences(db, user_id, start, end)
     if expanded is None:
@@ -550,11 +697,20 @@ def confirm_shift(
     on_date: date,
     data: ShiftRecordUpsert,
 ):
-    """Record what happened on one date of a shift, creating the row or updating it.
+    """Record what happened on one date of a shift, creating or replacing its record.
 
-    Upsert rather than insert, because `(event_id, on_date)` identifies the
-    date and confirming the same Friday twice must not leave two answers to
-    what was worked.
+    The record is keyed by (event_id, on_date), so recording the same date twice
+    updates one row. A changed cash tip is re-filed in the ledger. Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose shift.
+        event_id: The shift event.
+        on_date: The date of the occurrence.
+        data: Worked times, confirmation, tip, rate override and notes.
+
+    Returns:
+        The record; None when the event is not one of the user's shifts.
     """
     event = (
         db.query(EventModel)
@@ -610,11 +766,17 @@ def confirm_shift(
 
 
 def cash_tip_account(db: Session, user_id: uuid.UUID) -> AccountModel | None:
-    """The account cash tips are filed into, or None when there is nowhere to.
+    """Return the active account cash tips are filed into, or None when there is none.
 
-    None when nothing is chosen, and equally when the chosen account has been
-    archived or no longer exists -- so every caller treats all three the same
-    way, by holding the tip, with no special case for any of them.
+    None covers no choice, a stored id that does not parse, and a chosen account that
+    is archived or gone; callers hold the tip in every case.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+
+    Returns:
+        The chosen account if it exists and is not archived, else None.
     """
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
     raw = (user.preferences or {}).get("cash_tip_account_id") if user else None
@@ -638,10 +800,18 @@ def cash_tip_account(db: Session, user_id: uuid.UUID) -> AccountModel | None:
 def file_cash_tip(
     db: Session, user_id: uuid.UUID, record: ShiftRecordModel, account: AccountModel
 ) -> TransactionModel:
-    """Write one income row for a cash tip into `account`, and point the record at it.
+    """Write one income row for a shift's cash tip and point the record at it.
 
-    One row, not a split: a cash tip is in one place -- a pocket, a tin, a cash
-    account -- and splitting it by income share claimed it had reached the bank.
+    One row in one account, never split by income share. Flushes only.
+
+    Args:
+        db: Open database session.
+        user_id: Whose ledger.
+        record: The shift record holding the tip.
+        account: The account to file it in.
+
+    Returns:
+        The new income row.
     """
     job = db.query(JobModel).filter(JobModel.id == record.job_id).first()
     row = TransactionModel(
@@ -666,18 +836,18 @@ def sync_cash_tip(
     record: ShiftRecordModel,
     previous_tip: tuple[float, bool],
 ) -> None:
-    """Keep a shift's cash tip and the ledger in step.
+    """Keep a shift record's cash tip and its ledger row in step.
 
-    Cash is money already in hand, so it is the one part of a shift that reaches
-    the budget without waiting for a cheque. A tip paid through payroll does not:
-    it arrives inside the cheque's gross, and writing a row for it here as well
-    would count it twice.
+    A tip already filed and unchanged is left where it landed. Otherwise any rows the
+    old tip wrote are deleted and, for a cash tip above 0, a new one is filed, or
+    held when no cash-tip account is available. On-cheque tips never write a row.
+    Flushes only.
 
-    It goes into the one account chosen for cash tips (`cash_tip_account`). With
-    none chosen -- or the chosen one archived or gone -- the tip is HELD: recorded
-    on the shift, absent from the budget, and `tip_in_ledger` false, which the
-    Jobs page marks so the student knows to choose one. Choosing then files every
-    held tip (`set_cash_tip_account`).
+    Args:
+        db: Open database session.
+        user_id: Whose ledger.
+        record: The shift record, already updated.
+        previous_tip: The record's (amount, is_cash) before the update.
     """
     wants_row = record.tip_amount > 0 and record.tip_is_cash
     unchanged = (round(previous_tip[0], 2), previous_tip[1]) == (
@@ -737,15 +907,20 @@ def sync_cash_tip(
 def set_cash_tip_account(
     db: Session, user_id: uuid.UUID, account_id: uuid.UUID | None
 ) -> int | None:
-    """Choose where cash tips go, and file every tip that was waiting for it.
+    """Choose where cash tips go, and file every held tip into it.
 
-    Returns how many held tips were filed, or None when `account_id` is not one
-    of this user's active accounts -- in which case nothing at all is written.
-    Clearing (None) files nothing; later tips are held.
+    Saved in the user's preferences. Tips already in the ledger stay where they
+    landed; clearing the choice files nothing and holds later tips. Commits.
 
-    Held tips were never in the budget, so filing them is not moving past money.
-    Tips already in the budget stay where they landed: changing the account
-    affects tips from now on.
+    Args:
+        db: Open database session.
+        user_id: Whose setting.
+        account_id: One of the user's active accounts; None clears the choice.
+
+    Returns:
+        How many held tips were filed; None when the user does not exist or the
+        account is not one of the user's active accounts, in which case nothing
+        is written.
     """
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
     if user is None:

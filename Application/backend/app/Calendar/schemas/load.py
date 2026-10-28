@@ -1,8 +1,8 @@
-"""What a week actually costs, and where it has room.
+"""Response bodies for the week's load: free time, hours committed, and term crunch.
 
-Three readings of one window: the gaps between commitments, the hours those
-commitments and their deadlines come to, and how the term's weight is spread
-across its weeks.
+Three readings of one window, computed by `load_service` from stored events and
+tasks: the gaps between commitments, the hours they add up to, and how exams and
+deadlines spread across the weeks of a term.
 """
 
 from datetime import date, time
@@ -11,7 +11,14 @@ from pydantic import BaseModel, Field
 
 
 class FreeBlock(BaseModel):
-    """A gap long enough to be worth putting something in."""
+    """A gap in one day's commitments long enough to be worth offering.
+
+    Attributes:
+        on_date: The day of the gap.
+        starts_at: Local start of the gap, clipped to the study window and to now.
+        ends_at: Local end of the gap.
+        minutes: Length of the gap in minutes; at least the user's minimum.
+    """
 
     on_date: date
     starts_at: time
@@ -20,12 +27,25 @@ class FreeBlock(BaseModel):
 
 
 class WeekLoad(BaseModel):
-    """What the window comes to, in hours rather than in item counts.
+    """What a window costs in hours, with booked and estimated time kept apart.
 
-    Booked and estimated are kept apart on purpose. Booked time is not optional
-    -- a lecture happens whether or not you are ready -- while estimated time is
-    a guess you wrote down. One number combining them would hide which half is
-    which, and hide that the estimate is missing entirely on most tasks.
+    Booked time (timed events) happens regardless; estimated time is the student's
+    guess against tasks due. They are never combined into one figure.
+
+    Attributes:
+        starts_on: First day of the window.
+        ends_on: Last day of the window, inclusive.
+        booked_minutes: Minutes of every timed event in the window, shifts included.
+        work_minutes: The part of `booked_minutes` that is shifts.
+        class_minutes: The part that is lectures, labs and discussions.
+        estimated_minutes: Estimates on tasks due in the window, scaled by
+            `estimate_ratio` when it is applied.
+        typed_estimated_minutes: The same estimates as typed, before scaling.
+        estimate_ratio: Actual-to-estimated ratio applied to the estimates; None
+            when the student has not turned it on or there is too little history.
+        task_count: Tasks due in the window.
+        unestimated_tasks: Of those, how many have no estimate.
+        event_count: Event occurrences in the window, all-day ones included.
     """
 
     starts_on: date
@@ -54,7 +74,16 @@ class WeekLoad(BaseModel):
 
 
 class CrunchWeek(BaseModel):
-    """One week of the term, and how heavily it lands."""
+    """One Monday-to-Sunday week of a term, and how heavily it lands.
+
+    Attributes:
+        starts_on: The week's Monday.
+        weight: Finals count 5, midterms 3, deadline events and due tasks 1 each.
+        exams: Midterms and finals in the week.
+        deadlines: Deadline events in the week.
+        tasks: Tasks due in the week.
+        is_current: True for the week holding the user's today.
+    """
 
     starts_on: date
     #: Weighted by kind: a final outweighs a midterm outweighs a deadline.
@@ -67,6 +96,14 @@ class CrunchWeek(BaseModel):
 
 
 class CrunchStrip(BaseModel):
+    """Every week of a window with its crunch, empty weeks included.
+
+    Attributes:
+        weeks: One entry per week, earliest first.
+        peak: The heaviest week's weight, so bars scale to the worst week; 0 when
+            the window is empty.
+    """
+
     weeks: list[CrunchWeek] = Field(default_factory=list)
     #: The heaviest week's weight, so a bar height is a share of the worst week
     #: rather than of an arbitrary ceiling.

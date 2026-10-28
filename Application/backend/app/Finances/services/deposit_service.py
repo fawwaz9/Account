@@ -1,3 +1,10 @@
+"""Service functions for deposits: income split across accounts by income share.
+
+A deposit is one income row per receiving account, tied by one `group_id`. The
+split divides by each account's share of the total shares, with the rounding
+remainder on the largest share. `paycheque_service` reuses `split_income`.
+"""
+
 import uuid
 from datetime import date
 
@@ -10,6 +17,15 @@ from app.Finances.services.transaction_service import as_schema
 
 
 def active_accounts(db: Session, user_id: uuid.UUID) -> list[AccountModel]:
+    """Return the user's unarchived accounts in their display order.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+
+    Returns:
+        Unarchived accounts ordered by `position`, then name.
+    """
     accounts = (
         db.query(AccountModel)
         .filter(AccountModel.user_id == user_id, AccountModel.archived.is_(False))
@@ -20,11 +36,15 @@ def active_accounts(db: Session, user_id: uuid.UUID) -> list[AccountModel]:
 
 
 def split_income(amount: float, accounts: list[AccountModel]) -> list[DepositAllocation]:
-    """Divide an amount by each account's income share.
+    """Divide an amount across accounts by their income shares, to the cent.
 
-    Rounding to cents leaves a remainder that has to go somewhere, or a
-    deposit fails to equal the sum of its own parts. It lands on the largest
-    share, where a cent is least noticeable.
+    Args:
+        amount: The deposit, in dollars.
+        accounts: Candidate accounts; only those with a share above 0 take part.
+
+    Returns:
+        One allocation per sharing account, summing to `amount`, with the rounding
+        remainder on the largest share; empty when no account has a share.
     """
     sharing = [account for account in accounts if account.income_share > 0]
     if not sharing:
@@ -50,6 +70,16 @@ def split_income(amount: float, accounts: list[AccountModel]) -> list[DepositAll
 
 
 def preview_deposit(db: Session, user_id: uuid.UUID, amount: float):
+    """Return how a deposit would split across the user's accounts, writing nothing.
+
+    Args:
+        db: Open database session.
+        user_id: Whose accounts.
+        amount: The deposit, in dollars.
+
+    Returns:
+        The split; `needs_shares` is True when no account has a share.
+    """
     accounts = active_accounts(db, user_id)
     allocations = split_income(amount, accounts)
     return DepositPreview(
@@ -60,7 +90,24 @@ def preview_deposit(db: Session, user_id: uuid.UUID, amount: float):
 
 
 def record_deposit(db: Session, user_id: uuid.UUID, data: DepositCreate):
-    """One income row per account, committed together under a shared group_id."""
+    """Write a deposit as one income row per receiving account, in one commit.
+
+    Uses the given allocations, or splits by income share; zero allocations write
+    no row.
+
+    Args:
+        db: Open database session.
+        user_id: Whose ledger.
+        data: The deposit and any explicit allocations.
+
+    Returns:
+        The rows written; None when an allocation names an account that is not
+        one of the user's unarchived accounts.
+
+    Raises:
+        ValueError: If no allocations are given and no account has an income
+            share.
+    """
     accounts = active_accounts(db, user_id)
     by_id = {account.id: account for account in accounts}
 

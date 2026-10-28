@@ -1,9 +1,8 @@
-"""Turning one typed line into a real task.
+"""Service functions for quick capture: one typed line turned into a task.
 
-Two steps, deliberately separate. `app.shared.tokenizer` reads the text and
-knows nothing about this account; this module takes what it found and matches it
-against courses that actually exist. Keeping them apart is what lets the parser
-be tested without fixtures and reused by the omnibox later.
+`app.shared.tokenizer` reads the text knowing nothing about the account; this
+module matches what it found against the user's real courses. The preview and
+the capture read the line the same way, so what is created is what was shown.
 """
 
 import uuid
@@ -18,7 +17,19 @@ from app.shared.tokenizer import parse
 from app.shared.dates import user_today
 
 def build_preview(db: Session, user_id: uuid.UUID, text: str) -> QuickCapturePreview | None:
-    """Read one line and say what it would create."""
+    """Read one typed line and say what task it would create, writing nothing.
+
+    A course code that matches none (or several) of the user's courses is put back
+    into the title rather than dropped; a duration outside 1-2400 minutes is ignored.
+
+    Args:
+        db: Open database session.
+        user_id: Whose courses to match, and whose today dates are read against.
+        text: The typed line.
+
+    Returns:
+        The preview; None when the user does not exist.
+    """
     if not user_exists(db, user_id):
         return None
 
@@ -56,11 +67,21 @@ def build_preview(db: Session, user_id: uuid.UUID, text: str) -> QuickCapturePre
 
 
 def capture(db: Session, user_id: uuid.UUID, text: str):
-    """Create the task one line describes.
+    """Create the task one typed line describes, from the same preview the client saw.
 
-    Goes through the same preview the client showed, so what is created is
-    exactly what was on screen -- two readings of the same text could otherwise
-    drift apart between the keystroke and the submit.
+    Commits.
+
+    Args:
+        db: Open database session.
+        user_id: Whose task.
+        text: The typed line.
+
+    Returns:
+        The new task row and the preview it came from; (None, None) when the user
+        does not exist.
+
+    Raises:
+        ValueError: If nothing is left of the line to make a title from.
     """
     preview = build_preview(db, user_id, text)
     if preview is None:

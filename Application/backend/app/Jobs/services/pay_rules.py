@@ -1,20 +1,10 @@
-"""British Columbia's pay rules, as arithmetic over shifts. Pure: no session.
+"""British Columbia's pay rules as pure arithmetic over shifts; no session.
 
-Phase 1 item 11 (account-vision.md §13.11). Hourly student workers are
-underpaid routinely and rarely notice, and the two most commonly missed items
-are overtime and vacation pay. These are the rules the check applies, and every
-figure it produces names the one it came from.
-
-* **Overtime** -- Employment Standards Act s.40. Time and a half for hours over
-  8 in a day, up to 12; double time over 12 in a day; time and a half for
-  hours over 40 in a week, not counting hours already paid as daily overtime.
-  A week is seven days beginning on Sunday.
-* **Vacation pay** -- s.58. 4% of gross wages, 6% after five years with the
-  same employer. Tips are not wages for this.
-
-Deliberately not here: statutory holiday pay (s.44-45). Its eligibility test
-reaches outside the pay period and a wrong "you're short" costs as much trust
-as a missed one, so the check says it is not checked rather than guessing.
+Overtime follows the Employment Standards Act s.40: time and a half past 8 hours
+in a day up to 12, double time past 12, and time and a half past 40 regular
+hours in a Sunday-to-Saturday week. Vacation pay follows s.58: 4% of gross
+wages, 6% after five years with the employer. Statutory holiday pay is
+deliberately not modelled. `paycheck_service` and `paycheque_service` use these.
 """
 
 from dataclasses import dataclass
@@ -42,7 +32,15 @@ RULE = {
 
 @dataclass(frozen=True)
 class Worked:
-    """One shift's time: when, how long, at what rate."""
+    """One shift's time, as the pay rules take it.
+
+    Attributes:
+        on_date: The day it was worked.
+        minutes: Minutes counted for it.
+        rate: Hourly rate in dollars, before any multiplier.
+        starts_at: Local start time, which orders shifts within a day; None sorts
+            first.
+    """
 
     on_date: date
     minutes: int
@@ -52,7 +50,14 @@ class Worked:
 
 @dataclass(frozen=True)
 class Portion:
-    """Some of a shift's minutes, all paid the same way."""
+    """Some of a shift's minutes, all paid under one rule.
+
+    Attributes:
+        on_date: The day worked.
+        kind: "regular", "daily_overtime", "double_time" or "weekly_overtime".
+        minutes: Minutes paid this way.
+        rate: The base hourly rate, before the multiplier.
+    """
 
     on_date: date
     kind: str
@@ -61,21 +66,34 @@ class Portion:
 
     @property
     def amount(self) -> float:
+        """Dollars these minutes earn: hours times rate times the rule's multiplier."""
         return self.minutes / 60 * self.rate * MULTIPLIER[self.kind]
 
 
 def week_start(day: date) -> date:
-    """The Sunday a day's week begins on."""
+    """Return the Sunday that begins the overtime week a day falls in.
+
+    Args:
+        day: Any date.
+
+    Returns:
+        The Sunday on or before `day`.
+    """
     return day - timedelta(days=(day.weekday() + 1) % 7)
 
 
 def split(shifts: list[Worked]) -> list[Portion]:
-    """Divide every shift's minutes into regular, daily overtime, double time
-    and weekly overtime.
+    """Divide shifts' minutes into regular, daily overtime, double and weekly overtime.
 
-    Daily first, over the day's shifts in the order they were worked. Then the
-    weekly cap over what is still regular, taking the *latest* regular minutes
-    in the week as the overtime, since those are the hours past forty.
+    Daily rules apply first, over each day's shifts in the order worked. The weekly
+    cap then applies to what is still regular, taking the latest regular minutes in
+    a week past 40 hours as weekly overtime.
+
+    Args:
+        shifts: The shifts, in any order.
+
+    Returns:
+        The portions, each with its own rule and rate; empty for no shifts.
     """
     ordered = sorted(shifts, key=lambda s: (s.on_date, s.starts_at or time.min))
     daily: list[Portion] = []
@@ -109,7 +127,15 @@ def split(shifts: list[Worked]) -> list[Portion]:
 
 
 def vacation_percent(started_on: date | None, on_day: date) -> float:
-    """4%, or 6% once employment with this employer reaches five years (s.58)."""
+    """Return the vacation-pay rate that applies on a day.
+
+    Args:
+        started_on: When employment began; None is taken as under five years.
+        on_day: The day to judge on, such as the pay period's end.
+
+    Returns:
+        6.0 once five years have passed since `started_on`, otherwise 4.0.
+    """
     if started_on is None:
         return 4.0
     try:

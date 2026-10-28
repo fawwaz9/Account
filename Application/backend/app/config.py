@@ -1,3 +1,10 @@
+"""Typed application settings, read once at import from the environment and the `.env`.
+
+`settings` is the instance the app imports. Real environment variables win over
+`Application/.env`, which is how the containers are configured, and a missing
+required value or a short `JWT_SECRET` stops the app at import.
+"""
+
 from pathlib import Path
 
 from pydantic import Field
@@ -24,6 +31,32 @@ ENV_FILE = APPLICATION_DIR / ".env"
 
 
 class Settings(BaseSettings):
+    """Every setting the app reads through pydantic, validated when it is instantiated.
+
+    Attributes:
+        GOOGLE_CLIENT_ID: OAuth client id that Google ID tokens must be issued for;
+            required.
+        JWT_SECRET: HMAC key that signs session tokens; required, at least 32
+            characters.
+        JWT_EXPIRE_MINUTES: Session token lifetime in minutes; 7 days by default.
+        VAPID_PRIVATE_KEY: Web Push signing key; unset turns push notifications off.
+        VAPID_SUBJECT: Contact URL or `mailto:` address that push services see.
+        CRON_SECRET: Shared secret for the scheduler endpoints, at least 32 characters;
+            unset, they are unavailable.
+        LLM_PROVIDER: Syllabus model provider: "openai", "gemini" or "anthropic"; unset
+            turns syllabus reading off.
+        LLM_MODEL_EXTRACT: The provider's model name used for syllabus extraction.
+        LLM_API_KEY: The provider's API key.
+        LLM_PARSES_PER_DAY: Syllabus parses allowed per person per day, 1-200.
+        SYLLABUS_BUCKET: Private Cloud Storage bucket for uploaded syllabi; unset keeps
+            the extraction but not the file.
+        TRUSTED_PROXY_HOPS: Proxies counted in from the right of `X-Forwarded-For`, 0-3;
+            0 ignores the header.
+
+    Raises:
+        pydantic.ValidationError: On instantiation, if a required value is missing or a
+            value is out of range.
+    """
     GOOGLE_CLIENT_ID: str
     #: Docker Compose substitutes an empty string for an unset variable, and an
     #: empty HMAC key signs tokens anyone can forge. Refuse to start instead.
@@ -66,3 +99,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+"""The process-wide settings, validated when this module is first imported."""

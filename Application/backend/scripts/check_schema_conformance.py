@@ -1,25 +1,15 @@
-"""Does the database already have every table and column this code selects?
-
-The deploy order is schema -> API -> main because new code against a missing
-column is a 500. Production runs with RUN_SCHEMA_ON_STARTUP=0, so deploying an
-image never changes the database: the schema step is a person's to remember.
-This is what makes forgetting it impossible. The deploy workflow runs it before
-building anything, and a missing column stops the deploy with the fix printed.
-
-It asks the database, not the repository. The old gate was "did anything under
-app/_database/ change since the last deploy", which is a proxy -- it fired on a
-deleted design note that needed no schema step, and it cannot see a column added
-to models.py with no ADDED_COLUMNS entry. This compares the models' metadata, the
-same metadata create_all builds from, with what the database actually has.
-
-Reads only. Writes nothing, creates nothing, needs no table privileges: the
-Postgres inspector reads pg_catalog, which is not privilege-filtered, so a
-CONNECT-only role is enough.
+"""Deploy gate: check the database has every table, column and function the code needs.
 
     SCHEMA_CHECK_URL=postgresql://... python scripts/check_schema_conformance.py
 
-Exits 0 when every table and column is present, 1 when anything is missing, and
-2 when the check could not have meant anything (see the two floors below).
+Production never applies schema on startup, so the deploy workflow runs this first:
+it compares the models' metadata, and the names in `rls.FUNCTIONS`, with what the
+database actually has, and prints the schema step to run when something is missing.
+Read-only, through the system catalogues, so a CONNECT-only role is enough.
+
+Exits 0 when everything is present, 1 when anything is missing, and 2 when the
+check could not mean anything: no URL, too few tables in the models or the
+database, or no connection.
 """
 
 from __future__ import annotations
@@ -47,6 +37,7 @@ from app._database import models  # noqa: E402,F401 - populates Base.metadata
 from app._database import rls  # noqa: E402
 
 VARIABLE = "SCHEMA_CHECK_URL"
+"""The environment variable holding the database URL to check."""
 
 #: Fewer tables than this in the models means the import above stopped populating
 #: the metadata. Zero tables would mean zero comparisons, and a check that makes no
@@ -61,11 +52,14 @@ MIN_LIVE_TABLES = 20
 
 
 def rls_state(engine) -> dict | None:
-    """Which isolation functions exist, and how far row security is switched on.
+    """Return which functions exist and how far row security is switched on.
 
-    None on SQLite, which has neither and is only ever this script's own test
-    fixture. pg_proc, pg_class and pg_roles are readable without privileges,
-    like the inspector's catalogue, so the CONNECT-only role is enough.
+    Args:
+        engine: Engine for the database checked.
+
+    Returns:
+        The function names in schema `public`, how many tables have row security on,
+        and whether the app role exists; None on SQLite.
     """
     if engine.dialect.name != "postgresql":
         return None
@@ -85,6 +79,16 @@ def rls_state(engine) -> dict | None:
 
 
 def main() -> int:
+    """Run the gate against `SCHEMA_CHECK_URL` and print the report.
+
+    Tables in the database that no model builds, and the row-security state, are
+    reported but never fail the gate.
+
+    Returns:
+        0 when every table, column and definer function is present; 1 when any is
+        missing, with the fix printed; 2 when the URL is unset, the models or the
+        database show too few tables, or the connection fails.
+    """
     # Line-buffered, so in a CI log the report reads in order rather than every
     # stderr line arriving before the stdout it follows.
     sys.stdout.reconfigure(line_buffering=True)

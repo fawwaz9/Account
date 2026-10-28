@@ -1,8 +1,8 @@
-"""One account's month, composed server-side.
+"""Service functions for one account's month, composed server-side for its page.
 
-Kept apart from `account_service` because it answers a different question: that
-module is about the pots themselves, this one is about what moved through one
-of them.
+Kept apart from `account_service`, which is about the accounts themselves; this
+is about what moved through one of them. The money-in and money-out rule here
+must match the budget page's, or the two pages report different numbers.
 """
 import uuid
 from datetime import date, timedelta
@@ -38,11 +38,14 @@ from app.Finances.schemas.transaction import TransactionKind
 
 
 def is_money_out(kind: str, amount: float) -> bool:
-    """Money that has left the account.
+    """Return whether a row is money leaving its account.
 
-    Deliberately the same rule the planned-spend bars use: an expense, or the
-    outgoing leg of a transfer. If these two ever disagree the account page and
-    the budget page will report different numbers for the same month.
+    Args:
+        kind: The row's kind.
+        amount: The row's signed amount.
+
+    Returns:
+        True for an expense, or a transfer with a negative amount.
     """
     return kind == TransactionKind.EXPENSE.value or (
         kind == TransactionKind.TRANSFER.value and amount < 0
@@ -50,17 +53,31 @@ def is_money_out(kind: str, amount: float) -> bool:
 
 
 def is_money_in(kind: str, amount: float) -> bool:
-    """The mirror of `is_money_out`: income, or the receiving leg of a transfer."""
+    """Return whether a row is money arriving: income or an incoming transfer leg.
+
+    Args:
+        kind: The row's kind.
+        amount: The row's signed amount.
+
+    Returns:
+        True for income, or a transfer with a positive amount.
+    """
     return kind == TransactionKind.INCOME.value or (
         kind == TransactionKind.TRANSFER.value and amount > 0
     )
 
 
 def running_balance(db: Session, account_id: uuid.UUID) -> list[BalancePoint]:
-    """The account's balance after each day it moved, from the very first row.
+    """Return an account's balance after each day it moved, from its first row.
 
-    Grouped in SQL and accumulated here, so a long history costs one query and
-    one pass rather than a row per point.
+    Grouped by day in SQL and accumulated here, so a long history is one query.
+
+    Args:
+        db: Open database session.
+        account_id: The account; the caller has already checked it is the user's.
+
+    Returns:
+        One point per day with movement, oldest first.
     """
     rows = (
         db.query(TransactionModel.occurred_on, func.sum(TransactionModel.amount))
@@ -84,6 +101,22 @@ def get_account_activity(
     account_id: uuid.UUID,
     month: date,
 ) -> AccountActivity | None:
+    """Return everything one account's page shows for a month.
+
+    Money in and out follow `is_money_in` and `is_money_out`; category spending is
+    expenses only, with every category this account limits listed even when nothing
+    was spent. An investment account also gets its reading for the month and its
+    all-time return.
+
+    Args:
+        db: Open database session.
+        user_id: Whose account.
+        account_id: The account.
+        month: Any day of the month to show.
+
+    Returns:
+        The month's activity; None when the account is not the user's.
+    """
     account = (
         db.query(AccountModel)
         .filter(AccountModel.id == account_id, AccountModel.user_id == user_id)

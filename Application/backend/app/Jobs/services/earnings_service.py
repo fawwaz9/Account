@@ -1,14 +1,8 @@
-"""What the jobs came to: hours, money, and the gap between the two.
+"""Service functions for what the user's jobs came to: hours, money, and the gap.
 
-One service answering four questions off one window, in the same shape as
-`load_service`: they are the same question asked differently, and splitting them
-across four services would mean four passes over the same shifts.
-
-The distinction that runs through all of it is **earned** against **paid**.
+Four questions answered off the same shifts, in the shape of `load_service`.
 Earned comes from the shifts and is a prediction; paid comes from cheques that
-actually arrived. Collapsing them into one figure would hide exactly the thing
-this page exists to show -- that a fortnight of work has not been paid for yet,
-or was paid short.
+arrived; the two are reported side by side and never added together.
 """
 
 import uuid
@@ -40,18 +34,19 @@ from app.shared.money import money
 
 
 def earned_from_shifts(job: JobModel, shifts) -> tuple[float, float]:
-    """What a job's shifts in a window earned, and the cash tips beside them.
+    """Return what a job's shifts earned, and the cash tips beside them.
 
-    Hourly multiplies out. Salaried returns nothing here: its pay comes from
-    pay periods rather than hours, and dividing a salary by hours worked would
-    make a long week read as a pay cut. Contract returns nothing for the same
-    reason it predicts nothing -- you invoiced it.
+    An hourly job earns counted hours times each shift's rate (its override, else
+    the job's) plus tips paid through payroll. Salaried and contract jobs earn
+    nothing from hours here: a salary comes from pay periods, and a contract from
+    whatever was invoiced.
 
-    The `kind` check is defensive rather than load-bearing: `check_pay_fields`
-    already clears `hourly_rate` on anything that is not hourly, so the
-    multiplication would come to zero anyway. It is kept because relying on that
-    means this function is only correct as long as another one stays correct,
-    and because it is what stops on-cheque tips being added to a salary.
+    Args:
+        job: The job.
+        shifts: That job's shift occurrences.
+
+    Returns:
+        (earned, cash tips) in dollars, rounded to cents.
     """
     cash_tips = money(sum(s.tip_amount for s in shifts if s.tip_is_cash))
 
@@ -69,6 +64,17 @@ def earned_from_shifts(job: JobModel, shifts) -> tuple[float, float]:
 
 
 def cheques_in(db: Session, user_id: uuid.UUID, start: date, end: date):
+    """Return the user's paycheques dated within a window, inclusive.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+        start: First day of the window, inclusive.
+        end: Last day of the window, inclusive.
+
+    Returns:
+        Paycheque rows whose `occurred_on` is in the window.
+    """
     return (
         db.query(PaychequeModel)
         .filter(
@@ -81,6 +87,15 @@ def cheques_in(db: Session, user_id: uuid.UUID, start: date, end: date):
 
 
 def deducted_from(db: Session, cheques) -> float:
+    """Return the total deducted across some cheques, in one query; 0 for none.
+
+    Args:
+        db: Open database session.
+        cheques: Paycheque rows; may be empty.
+
+    Returns:
+        Total deductions in dollars, rounded to cents.
+    """
     if not cheques:
         return 0.0
 
@@ -101,12 +116,20 @@ def window_earnings(
     end: date,
     anchor: date,
 ) -> EarningsWindow:
-    """One window, every job, hours and money side by side.
+    """Return one window's hours and money, across every job and per job.
 
-    `anchor` is passed down rather than left to default, so whether a shift
-    counts as past is judged against the day being reported on. Without it the
-    figures move with the wall clock, which also makes them impossible to test
-    at a fixed date.
+    Args:
+        db: Open database session.
+        user_id: Whose jobs.
+        jobs: The user's jobs.
+        label: The window's name.
+        start: First date, inclusive.
+        end: Last date, inclusive.
+        anchor: The day being reported on, which decides which shifts are past.
+
+    Returns:
+        The window, with every job that had a shift, a predicted amount or a
+        cheque in it; a job paid in the window counts even with no shifts there.
     """
     shifts = list_shifts(db, user_id, start, end, on_day=anchor) or []
     by_job: dict[uuid.UUID, list] = {}
@@ -170,10 +193,17 @@ def window_earnings(
 
 
 def periods_in(job: JobModel, start: date, end: date) -> int:
-    """How many of a salaried job's pay dates fall inside the window.
+    """Return how many of a salaried job's pay dates fall inside a window.
 
-    Zero without a pay rule, which is honest: a salaried job whose schedule
-    nobody entered has no way to say what a fortnight of it was worth.
+    Zero when the job has no pay schedule.
+
+    Args:
+        job: A salaried job.
+        start: First day of the window, inclusive.
+        end: Last day of the window, inclusive.
+
+    Returns:
+        The number of pay dates in the window.
     """
     return len(pay_dates(job, start, end))
 
@@ -181,11 +211,21 @@ def periods_in(job: JobModel, start: date, end: date) -> int:
 def effective_rate(
     db: Session, user_id: uuid.UUID, since: date, until: date, anchor: date
 ) -> EffectiveRate:
-    """What an hour actually paid, after everything taken off.
+    """Return what an hour of work actually paid over a window, after deductions.
 
-    Measured over the periods cheques actually covered, not over every hour
-    worked: hours not yet paid for would otherwise drag the rate down and read
-    as a pay cut rather than as a cheque still to come.
+    Only cheques that state their pay period count, measured against the shift
+    minutes inside those periods, so hours not yet paid for do not drag it down.
+
+    Args:
+        db: Open database session.
+        user_id: Whose cheques.
+        since: First cheque date to count, inclusive.
+        until: Last cheque date to count, inclusive.
+        anchor: The day being reported on.
+
+    Returns:
+        Net and gross pay per hour and the deduction percentage; all None (and
+        0 minutes) when no qualifying cheque or no minutes exist.
     """
     cheques = [
         cheque
@@ -218,7 +258,20 @@ def effective_rate(
 
 
 def upcoming_pay(db: Session, user_id: uuid.UUID, jobs: list[JobModel], anchor: date):
-    """Work no cheque has covered yet, and when one is next due."""
+    """Return each current job's unpaid work and its next payday.
+
+    Unpaid work runs from the day after the latest cheque's period ends (or from
+    the job's start) up to `anchor`. Jobs with an end date are skipped.
+
+    Args:
+        db: Open database session.
+        user_id: Whose jobs.
+        jobs: The jobs to report on.
+        anchor: The day being reported on.
+
+    Returns:
+        One entry per current job; an estimate in dollars only for hourly jobs.
+    """
     rows: list[UpcomingPay] = []
 
     for job in jobs:
@@ -263,7 +316,17 @@ def upcoming_pay(db: Session, user_id: uuid.UUID, jobs: list[JobModel], anchor: 
 
 
 def hours_against_classes(db: Session, user_id: uuid.UUID, anchor: date):
-    """Paid work beside timetabled hours for the current week."""
+    """Return paid work beside class time for the Monday-to-Sunday week of a day.
+
+    Args:
+        db: Open database session.
+        user_id: Whose calendar.
+        anchor: Any day of the week.
+
+    Returns:
+        The week's shift, class and estimated task minutes; None when the user
+        does not exist.
+    """
     start = week_of(anchor)
     end = start + timedelta(days=6)
     load = week_load(db, user_id, start, end)
@@ -280,7 +343,18 @@ def hours_against_classes(db: Session, user_id: uuid.UUID, anchor: date):
 
 
 def earnings_summary(db: Session, user_id: uuid.UUID, on_day: date | None = None):
-    """The whole jobs page, from one pass."""
+    """Return everything the jobs page reports, as of a day.
+
+    Args:
+        db: Open database session.
+        user_id: Whose jobs.
+        on_day: The day to report on; defaults to the user's today.
+
+    Returns:
+        The past week, the month to date, the term to date (None when the term
+        has no dates or has not begun), the year's effective rate, unpaid work and
+        this week's hours; None when the user does not exist.
+    """
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
     if user is None:
         return None
