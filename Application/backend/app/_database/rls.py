@@ -74,6 +74,8 @@ FUNCTIONS = (
     "account_leave_shared_event",
     # Phase 2 item 13 (D25): the daily recount into the sealed table.
     "account_recount_grade_distributions",
+    # Phase 3 item 3 (D11): the counts' one door, through the floor.
+    "account_grade_distribution",
     # Phase 2 item 11 (D26): teams and games.
     "account_on_team",
     "account_team_invite_preview",
@@ -420,6 +422,33 @@ BEGIN
     RETURN written;
 END $$;
 
+-- Phase 3 item 3 (D11): a course's counts, to anyone signed in. Only terms at
+-- the floor (5, models.COHORT_FLOOR, checked again here) whose asking window
+-- has closed, 180 days after the term ends (models.COUNTED_AFTER_DAYS), so no
+-- band moves in step with one person's answer. A term code is "2025W1": Fall
+-- ends Dec 31, Winter (W2) Apr 30 the next year, Spring (S1) Jun 30, Summer
+-- (S2) Aug 31. A code of any other shape is never shown.
+CREATE OR REPLACE FUNCTION account_grade_distribution(p_course_key text)
+    RETURNS TABLE(term_code text, bucket integer, contributors integer)
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ WITH closed AS (
+              SELECT d.term_code
+              FROM grade_distributions d
+              WHERE d.course_key = p_course_key
+                AND d.term_code ~ '^[0-9]{4}(W1|W2|S1|S2)$'
+              GROUP BY d.term_code
+              HAVING sum(d.contributors) >= 5
+                 AND (CASE substr(d.term_code, 5)
+                          WHEN 'W1' THEN make_date(left(d.term_code, 4)::integer, 12, 31)
+                          WHEN 'W2' THEN make_date(left(d.term_code, 4)::integer + 1, 4, 30)
+                          WHEN 'S1' THEN make_date(left(d.term_code, 4)::integer, 6, 30)
+                          ELSE make_date(left(d.term_code, 4)::integer, 8, 31)
+                      END) + 180 < (now() AT TIME ZONE 'utc')::date)
+          SELECT d.term_code::text, d.bucket, d.contributors
+          FROM grade_distributions d JOIN closed USING (term_code)
+          WHERE account_current_user() IS NOT NULL AND d.course_key = p_course_key
+          ORDER BY d.term_code DESC, d.bucket $$;
+
 -- Phase 2 item 11 (D26): teams. "On the team" means the captain or a member,
 -- of a captain whose account is not being deleted. Every game write goes
 -- through these, the captain's included.
@@ -613,6 +642,7 @@ REVOKE ALL ON FUNCTION account_accept_event_invite(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_shared_events() FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_leave_shared_event(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_recount_grade_distributions() FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_grade_distribution(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_on_team(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_team_invite_preview(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_accept_team_invite(text) FROM PUBLIC;
@@ -902,6 +932,7 @@ def grant_statements() -> list[str]:
         "GRANT EXECUTE ON FUNCTION account_shared_events() TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_leave_shared_event(uuid) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_recount_grade_distributions() TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_grade_distribution(text) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_on_team(uuid) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_team_invite_preview(text) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_accept_team_invite(text) TO " + APP_ROLE,

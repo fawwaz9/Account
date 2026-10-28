@@ -2228,6 +2228,12 @@ class EventInviteModel(Base):
 #: account_recount_grade_distributions; a test holds the two together.
 COHORT_FLOOR = 5
 
+#: Phase 3 D11. A term's answers reach a shown figure only this many days after
+#: the term ends, when its asking window (term_review_service.ASK_UNTIL_DAYS)
+#: has closed, so no figure moves in step with one person's answer. Written into
+#: the read functions too; a test holds them together.
+COUNTED_AFTER_DAYS = 180
+
 
 class TermReviewModel(Base):
     """Per-user row: the student's end-of-term answers about one finished course.

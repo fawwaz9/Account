@@ -29,6 +29,8 @@ export const endpoints = {
     /** A course's prerequisites, yours and the catalogue's, met or not. */
     prerequisites: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/prerequisites`,
     checkPrerequisite: (userId: string) => `grades/${userId}/prerequisites/check`,
+    /** What past classes' shared answers say about a course, above each floor. */
+    classFigures: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/class-figures`,
   },
   calendar: {
     /** Occurrences in a window; takes ?start= and ?end=. */

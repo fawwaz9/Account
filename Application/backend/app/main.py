@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from app.api.routes import (
-    applications, calendar, degree, finances, grades, intake, jobs, omnibox, partners, push, recurring, shared_events,
+    applications, calendar, class_figures, degree, finances, grades, intake, jobs, omnibox, partners, push, recurring, shared_events,
     shared_tasks, survey, tasks, teams, term_reviews, usage, users, auth,
 )
 from app._database.db import Base, SessionLocal, engine
@@ -157,6 +157,8 @@ app.add_middleware(
 app.include_router(grades.router, prefix="/api/grades", tags=["Grades"])
 # End-of-term reviews (Phase 2 item 13): about finished courses, so under grades.
 app.include_router(term_reviews.router, prefix="/api/grades", tags=["Term reviews"])
+# Phase 3 items 3 and 5: other students' answers, through each floor (D11).
+app.include_router(class_figures.router, prefix="/api/grades", tags=["Class figures"])
 app.include_router(users.router, prefix="/api/users", tags=["Users"])
 app.include_router(calendar.router, prefix="/api/calendar", tags=["Calendar"])
 # Same prefix as calendar: a shared event is an event (Phase 2 item 9b).

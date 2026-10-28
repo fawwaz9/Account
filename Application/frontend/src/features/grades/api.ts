@@ -2,6 +2,7 @@ import { get, post, patch, put, del } from "../../services/apiClient";
 import { endpoints } from "../../services/endpoints";
 import { CheapestPath,
   CatalogueChoice,
+  ClassFigures,
   CatalogueCourse,
   CatalogueLink,
   PrerequisiteKindName,
@@ -223,4 +224,9 @@ export async function checkPrerequisiteText(userId: string, text: string) {
 export async function previewPrerequisites(userId: string, code: string, year: number, semester: string) {
   const query = new URLSearchParams({ code, year: String(year), semester });
   return get<PrerequisitePreview>(`grades/${userId}/prerequisites/preview?${query}`);
+}
+
+/** What past classes' shared answers say about a course, through each figure's floor. */
+export async function fetchClassFigures(userId: string, courseId: string) {
+  return get<ClassFigures>(endpoints.grades.classFigures(userId, courseId));
 }

@@ -478,6 +478,7 @@ DEFINER_SIGNATURES = (
     "account_shared_events()",
     "account_leave_shared_event(uuid)",
     "account_recount_grade_distributions()",
+    "account_grade_distribution(text)",
     "account_on_team(uuid)",
     "account_team_invite_preview(text)",
     "account_accept_team_invite(text)",
@@ -532,6 +533,7 @@ def test_only_the_app_role_can_call_the_cross_user_functions(owner_engine):
             "SELECT * FROM account_shared_events()",
             "SELECT account_leave_shared_event(gen_random_uuid())",
             "SELECT account_recount_grade_distributions()",
+            "SELECT * FROM account_grade_distribution('x')",
             "SELECT account_on_team(gen_random_uuid())",
             "SELECT * FROM account_team_invite_preview('x')",
             "SELECT account_accept_team_invite('x')",
@@ -1027,6 +1029,34 @@ def test_the_recount_writes_counts_only_at_or_above_the_floor(worlds, app_sessio
                                      "WHERE table_name = 'grade_distributions'")).scalars())
     assert columns == {"id", "course_key", "term_code", "bucket", "contributors", "computed_at"}, \
         "the counts table holds no user id and nothing per contribution"
+
+
+def _seal(owner, key, term, bands):
+    """Rows straight into the sealed counts, as the owner, as a recount would."""
+    for bucket, n in bands.items():
+        owner.execute(text("INSERT INTO grade_distributions (id, course_key, term_code, bucket, contributors, "
+                           "computed_at) VALUES (gen_random_uuid(), :k, :t, :b, :n, now())"),
+                      {"k": key, "t": term, "b": bucket, "n": n})
+    owner.commit()
+
+
+def test_the_app_role_reads_a_courses_counts_only_through_the_floor_and_the_wait(worlds, app_session):
+    """Phase 3 item 3 (D11): the sealed table's one door. Closed terms at the
+    floor only, and only for the key asked about."""
+    from datetime import date
+    owner = worlds[0]
+    year = date.today().year
+    _seal(owner, "UBCV CPSC 110", f"{year - 2}W1", {70: 2, 80: 3})   # closed, at the floor
+    _seal(owner, "UBCV CPSC 110", f"{year - 2}W2", {80: 4})          # closed, one short
+    _seal(owner, "UBCV CPSC 110", f"{year}W1", {90: 9})              # still being answered
+    _seal(owner, "UBCV CPSC 121", f"{year - 2}W1", {60: 9})          # another course
+    act_as(app_session, worlds[1].id)
+    rows = app_session.execute(text("SELECT * FROM account_grade_distribution('UBCV CPSC 110')")).all()
+    assert [tuple(r) for r in rows] == [(f"{year - 2}W1", 70, 2), (f"{year - 2}W1", 80, 3)]
+    app_session.rollback()
+    app_session.info.clear()
+    assert app_session.execute(text("SELECT * FROM account_grade_distribution('UBCV CPSC 110')")).all() == [], \
+        "with no identity the door answers nothing"
 
 
 def test_with_no_identity_the_recount_still_reveals_nothing(worlds, app_session):

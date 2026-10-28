@@ -1107,3 +1107,89 @@
   display: grid;
   gap: 6px;
 }
+
+/* ===== How past classes did (Phase 3 item 3) =====
+   Other students' shared grades for the course, one finished term at a time.
+   Full width under the insights row: it is read beside the course's own
+   figures, not instead of them. Bars are scaled to the term's largest band. */
+
+.classFigures {
+  margin: 0 0 24px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.classFiguresHead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.classFiguresLabel {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.classFiguresTerm {
+  margin-left: auto;
+  width: auto;
+}
+
+.classFiguresWait,
+.classFiguresSummary {
+  margin: 0 0 8px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.classFiguresBands {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.classFiguresBands li {
+  display: grid;
+  grid-template-columns: 72px 1fr 88px;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 0;
+  font-size: 0.82rem;
+}
+
+.classFiguresBandLabel {
+  color: var(--muted);
+}
+
+.classFiguresTrack {
+  height: 10px;
+  border-radius: 5px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.classFiguresBar {
+  display: block;
+  height: 100%;
+  border-radius: 5px;
+  background: var(--muted);
+}
+
+.classFiguresYours .classFiguresBar {
+  background: var(--gold);
+}
+
+.classFiguresYours .classFiguresBandLabel {
+  color: var(--gold);
+}
+
+.classFiguresMark {
+  color: var(--muted);
+  font-size: 0.72rem;
+}

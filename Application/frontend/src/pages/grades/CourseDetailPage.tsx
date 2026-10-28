@@ -19,6 +19,7 @@ import DeleteConfirmModal from "../../features/grades/components/DeleteConfirmMo
 import RequiredFinalModal from "../../features/grades/components/RequiredFinalModal";
 import RequiredFinalPanel from "../../features/grades/components/RequiredFinalPanel";
 import GradingSchemes from "../../features/grades/components/GradingSchemes";
+import ClassFigures from "../../features/grades/components/ClassFigures";
 import ProjectionReview from "../../features/grades/components/ProjectionReview";
 import KeptSyllabi from "../../features/intake/KeptSyllabi";
 import SyllabusAddModal from "../../features/intake/SyllabusAddModal";
@@ -336,6 +337,10 @@ export default function CourseDetailPage() {
           <CheapestPath userId={user.id} courseId={courseId} nonce={reloadNonce} />
         </div>
       )}
+
+      {/* Other students' shared grades for this course (Phase 3 item 3), under
+          the course's own figures. Nothing for a code that isn't a course. */}
+      {user && courseId && <ClassFigures userId={user.id} courseId={courseId} nonce={reloadNonce} />}
 
       {user && course && (
         <GradingSchemes

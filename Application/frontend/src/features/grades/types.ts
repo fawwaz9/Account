@@ -551,3 +551,31 @@ export interface PrerequisitePreview {
   catalogue: CatalogueCourse | null;
   kinds: PrerequisiteKind[];
 }
+
+/** One 5-point band of a term's grade counts; 0 means below 50. */
+export interface GradeCountBand {
+  bucket: number;
+  contributors: number;
+}
+
+/** One finished term's grade counts for a course, shown only above the floor. */
+export interface TermDistribution {
+  term_code: string;
+  /** "Fall 2025". */
+  term_label: string;
+  contributors: number;
+  median_bucket: number;
+  bands: GradeCountBand[];
+}
+
+/** What other students' shared answers say about one of your courses. */
+export interface ClassFigures {
+  /** Null when the course's code isn't a course code, so nothing can be shown. */
+  course_key: string | null;
+  /** People a figure needs before it is shown. */
+  floor: number;
+  /** Newest term first; empty until one reaches the floor. */
+  distributions: TermDistribution[];
+  your_grade: number | null;
+  your_bucket: number | null;
+}
