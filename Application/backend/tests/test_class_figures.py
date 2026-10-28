@@ -78,9 +78,12 @@ def test_a_term_counts_only_once_its_asking_window_has_closed():
 
 def test_the_wait_is_the_asking_window_and_the_database_says_the_same():
     assert COUNTED_AFTER_DAYS == ASK_UNTIL_DAYS
-    read = rls.FUNCTION_SQL[rls.FUNCTION_SQL.index("FUNCTION account_grade_distribution"):]
-    read = read[:read.index("$$;")]
-    assert re.search(r"\+ (\d+) <", read).group(1) == str(COUNTED_AFTER_DAYS)
+    def body(name):
+        found = rls.FUNCTION_SQL[rls.FUNCTION_SQL.index(f"FUNCTION {name}("):]
+        return found[:found.index("$$;")]
+    assert re.search(r"\+ (\d+) <", body("account_term_counted")).group(1) == str(COUNTED_AFTER_DAYS)
+    read = body("account_grade_distribution")
+    assert "account_term_counted(d.term_code)" in read
     assert re.search(r"HAVING sum\(d.contributors\) >= (\d+)", read).group(1) == str(COHORT_FLOOR)
 
 

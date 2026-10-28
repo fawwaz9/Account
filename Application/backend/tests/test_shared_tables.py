@@ -155,7 +155,7 @@ def test_the_grade_counts_are_sealed():
 
 
 def test_a_per_user_table_cannot_be_sealed_by_naming_it(monkeypatch):
-    monkeypatch.setattr(rls, "SEALED_TABLES", frozenset({"accounts", "grade_distributions"}))
+    monkeypatch.setattr(rls, "SEALED_TABLES", rls.SEALED_TABLES | {"accounts"})
     with pytest.raises(ValueError, match="has an owner"):
         rls.policy_statements()
 

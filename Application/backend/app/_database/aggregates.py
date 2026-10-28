@@ -5,14 +5,18 @@ every read here calls the one `SECURITY DEFINER` function that answers for its
 table, and that function applies the floor itself. SQLite has no row security, so
 there each read is a plain query applying the same rules; the tests run both.
 """
+import statistics
+import uuid
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app._database.models import COHORT_FLOOR, COUNTED_AFTER_DAYS, GradeDistributionModel
+from app._database.models import (
+    COHORT_FLOOR, COUNTED_AFTER_DAYS, CourseIntelModel, GradeDistributionModel, TermReviewModel, UserModel, utc_now,
+)
 
 #: Month and day each term code's term ends, and the years to add to the code's
 #: year: "2025W2" (Winter) ends on Apr 30, 2026.
@@ -93,3 +97,128 @@ def grade_distribution(db: Session, course_key: str, today: date) -> list[Band]:
             continue
         out += [Band(term, r.bucket, r.contributors) for r in sorted(rows, key=lambda r: r.bucket)]
     return out
+
+
+def _utc_today() -> date:
+    """Return today's date in UTC, the clock the Postgres functions read."""
+    return datetime.now(timezone.utc).date()
+
+
+@dataclass(frozen=True)
+class CourseIntel:
+    """What term reviews say about a course; each figure None below the floor.
+
+    Attributes:
+        hours_answers: People who gave weekly hours.
+        hours_median: Their median weekly hours.
+        difficulty_answers: People who rated difficulty.
+        difficulty_mean: Mean difficulty, 1-5.
+        clarity_answers: People who rated instructor clarity.
+        clarity_mean: Mean clarity, 1-5.
+        again_answers: People who said whether they'd take it again.
+        again_share: Percentage of them who said yes.
+    """
+    hours_answers: int | None
+    hours_median: float | None
+    difficulty_answers: int | None
+    difficulty_mean: float | None
+    clarity_answers: int | None
+    clarity_mean: float | None
+    again_answers: int | None
+    again_share: float | None
+
+
+def _at_floor(answers: int | None, value):
+    """Return `value` when `answers` reaches the floor, else None."""
+    return value if answers is not None and answers >= COHORT_FLOOR else None
+
+
+def recount_course_intel(db: Session, today: date | None = None) -> int:
+    """Rebuild the course figures from scratch from every counted term review.
+
+    One answer per person per course (their latest counted term's), from live
+    accounts and reviews not skipped; a figure below the floor is written as null, and
+    a course with none at the floor gets no row.
+
+    Args:
+        db: Open session; needs no acting user.
+        today: Day to judge counted terms by, on SQLite only; None means today in UTC.
+
+    Returns:
+        The number of course rows written.
+
+    Note:
+        Deletes every existing row before writing, and commits.
+    """
+    if _is_postgres(db):
+        written = db.execute(text("SELECT account_recount_course_intel()")).scalar()
+        db.commit()
+        return int(written or 0)
+    today = today or _utc_today()
+    db.query(CourseIntelModel).delete(synchronize_session=False)
+    latest: dict[tuple[uuid.UUID, str], TermReviewModel] = {}
+    rows = (
+        db.query(TermReviewModel)
+        .join(UserModel, UserModel.id == TermReviewModel.user_id)
+        .filter(TermReviewModel.skipped.is_(False), UserModel.deleted_at.is_(None),
+                TermReviewModel.course_key.isnot(None))
+        .all()
+    )
+    for review in rows:
+        if not term_closed(review.term_code, today):
+            continue
+        key = (review.user_id, review.course_key)
+        if key not in latest or review.term_code > latest[key].term_code:
+            latest[key] = review
+    by_course: dict[str, list[TermReviewModel]] = defaultdict(list)
+    for (_, course_key), review in latest.items():
+        by_course[course_key].append(review)
+    written = 0
+    now = utc_now()
+    for course_key, reviews in by_course.items():
+        hours = [r.hours_per_week for r in reviews if r.hours_per_week is not None]
+        difficulty = [r.difficulty for r in reviews if r.difficulty is not None]
+        clarity = [r.clarity for r in reviews if r.clarity is not None]
+        again = [r.would_take_again for r in reviews if r.would_take_again is not None]
+        if max(len(hours), len(difficulty), len(clarity), len(again)) < COHORT_FLOOR:
+            continue
+        db.add(CourseIntelModel(
+            course_key=course_key,
+            hours_answers=_at_floor(len(hours), len(hours)),
+            hours_median=_at_floor(len(hours), float(statistics.median(hours)) if hours else None),
+            difficulty_answers=_at_floor(len(difficulty), len(difficulty)),
+            difficulty_mean=_at_floor(len(difficulty), statistics.fmean(difficulty) if difficulty else None),
+            clarity_answers=_at_floor(len(clarity), len(clarity)),
+            clarity_mean=_at_floor(len(clarity), statistics.fmean(clarity) if clarity else None),
+            again_answers=_at_floor(len(again), len(again)),
+            again_share=_at_floor(len(again), 100.0 * sum(again) / len(again) if again else None),
+            computed_at=now,
+        ))
+        written += 1
+    db.commit()
+    return written
+
+
+def course_intel(db: Session, course_key: str) -> CourseIntel | None:
+    """Return what term reviews say about a course, each figure through the floor.
+
+    Args:
+        db: Open session; on Postgres it must act as a signed-in user.
+        course_key: The course, such as "UBCV CPSC 221".
+
+    Returns:
+        The figures, or None when the course has no row.
+    """
+    if _is_postgres(db):
+        row = db.execute(text("SELECT * FROM account_course_intel(:k)"), {"k": course_key}).first()
+        return None if row is None else CourseIntel(*row)
+    row = db.query(CourseIntelModel).filter(CourseIntelModel.course_key == course_key).first()
+    if row is None:
+        return None
+    return CourseIntel(
+        _at_floor(row.hours_answers, row.hours_answers), _at_floor(row.hours_answers, row.hours_median),
+        _at_floor(row.difficulty_answers, row.difficulty_answers),
+        _at_floor(row.difficulty_answers, row.difficulty_mean),
+        _at_floor(row.clarity_answers, row.clarity_answers), _at_floor(row.clarity_answers, row.clarity_mean),
+        _at_floor(row.again_answers, row.again_answers), _at_floor(row.again_answers, row.again_share),
+    )

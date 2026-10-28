@@ -34,7 +34,7 @@ SHARED_READ_TABLES = frozenset({"catalogue_courses", "catalogue_prerequisites"})
 #: security with no policy, and every grant revoked, the app role's included.
 #: Only a definer function, running as the owner, writes them. By name, like
 #: the shared list, and refused if the table has an owner.
-SEALED_TABLES = frozenset({"grade_distributions"})
+SEALED_TABLES = frozenset({"grade_distributions", "course_intel"})
 
 #: Who may read a shared row: anyone the API has identified. Not ``true``, so an
 #: un-identified query still sees nothing -- the same fail-closed rule as every
@@ -76,6 +76,9 @@ FUNCTIONS = (
     "account_recount_grade_distributions",
     # Phase 3 item 3 (D11): the counts' one door, through the floor.
     "account_grade_distribution",
+    # Phase 3 item 5 (D11): what term reviews say, rebuilt daily, read through the floor.
+    "account_recount_course_intel",
+    "account_course_intel",
     # Phase 2 item 11 (D26): teams and games.
     "account_on_team",
     "account_team_invite_preview",
@@ -422,32 +425,102 @@ BEGIN
     RETURN written;
 END $$;
 
--- Phase 3 item 3 (D11): a course's counts, to anyone signed in. Only terms at
--- the floor (5, models.COHORT_FLOOR, checked again here) whose asking window
--- has closed, 180 days after the term ends (models.COUNTED_AFTER_DAYS), so no
--- band moves in step with one person's answer. A term code is "2025W1": Fall
--- ends Dec 31, Winter (W2) Apr 30 the next year, Spring (S1) Jun 30, Summer
--- (S2) Aug 31. A code of any other shape is never shown.
+-- Phase 3 D11: whether a term's answers may reach a shown figure yet. A term
+-- code is "2025W1": Fall ends Dec 31, Winter (W2) Apr 30 the next year, Spring
+-- (S1) Jun 30, Summer (S2) Aug 31. Counted 180 days after it ends
+-- (models.COUNTED_AFTER_DAYS), when its asking window has closed, so no figure
+-- moves in step with one person's answer. A code of any other shape never is.
+-- Not a definer: it reads nothing, and only the functions below call it.
+CREATE OR REPLACE FUNCTION account_term_counted(p_term_code text) RETURNS boolean
+    LANGUAGE sql STABLE SET search_path = public, pg_temp
+    AS $$ SELECT CASE WHEN p_term_code ~ '^[0-9]{4}(W1|W2|S1|S2)$' THEN
+              (CASE substr(p_term_code, 5)
+                   WHEN 'W1' THEN make_date(left(p_term_code, 4)::integer, 12, 31)
+                   WHEN 'W2' THEN make_date(left(p_term_code, 4)::integer + 1, 4, 30)
+                   WHEN 'S1' THEN make_date(left(p_term_code, 4)::integer, 6, 30)
+                   ELSE make_date(left(p_term_code, 4)::integer, 8, 31)
+               END) + 180 < (now() AT TIME ZONE 'utc')::date
+          ELSE false END $$;
+
+-- Phase 3 item 3 (D11): a course's counts, to anyone signed in. Only counted
+-- terms (account_term_counted) at the floor (5, models.COHORT_FLOOR, checked
+-- again here).
 CREATE OR REPLACE FUNCTION account_grade_distribution(p_course_key text)
     RETURNS TABLE(term_code text, bucket integer, contributors integer)
     LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
-    AS $$ WITH closed AS (
+    AS $$ WITH counted AS (
               SELECT d.term_code
               FROM grade_distributions d
-              WHERE d.course_key = p_course_key
-                AND d.term_code ~ '^[0-9]{4}(W1|W2|S1|S2)$'
+              WHERE d.course_key = p_course_key AND account_term_counted(d.term_code)
               GROUP BY d.term_code
-              HAVING sum(d.contributors) >= 5
-                 AND (CASE substr(d.term_code, 5)
-                          WHEN 'W1' THEN make_date(left(d.term_code, 4)::integer, 12, 31)
-                          WHEN 'W2' THEN make_date(left(d.term_code, 4)::integer + 1, 4, 30)
-                          WHEN 'S1' THEN make_date(left(d.term_code, 4)::integer, 6, 30)
-                          ELSE make_date(left(d.term_code, 4)::integer, 8, 31)
-                      END) + 180 < (now() AT TIME ZONE 'utc')::date)
+              HAVING sum(d.contributors) >= 5)
           SELECT d.term_code::text, d.bucket, d.contributors
-          FROM grade_distributions d JOIN closed USING (term_code)
+          FROM grade_distributions d JOIN counted USING (term_code)
           WHERE account_current_user() IS NOT NULL AND d.course_key = p_course_key
           ORDER BY d.term_code DESC, d.bucket $$;
+
+-- Phase 3 item 5 (D11): what term reviews say about each course, rebuilt whole.
+-- One answer per person per course (their latest counted term's), from live
+-- accounts and reviews not skipped. A figure with fewer than 5 answers
+-- (models.COHORT_FLOOR) is written as null, and a course with none at the
+-- floor gets no row. Returns how many rows it wrote, never their contents.
+CREATE OR REPLACE FUNCTION account_recount_course_intel() RETURNS integer
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$
+DECLARE
+    written integer;
+BEGIN
+    DELETE FROM course_intel;
+    WITH answered AS (
+        SELECT DISTINCT ON (r.user_id, r.course_key)
+               r.course_key, r.hours_per_week, r.difficulty, r.clarity, r.would_take_again
+        FROM term_reviews r JOIN users u ON u.id = r.user_id
+        WHERE NOT r.skipped AND u.deleted_at IS NULL AND r.course_key IS NOT NULL
+          AND account_term_counted(r.term_code)
+        ORDER BY r.user_id, r.course_key, r.term_code DESC
+    ), figures AS (
+        SELECT course_key,
+               count(hours_per_week) AS hours_n,
+               percentile_cont(0.5) WITHIN GROUP (ORDER BY hours_per_week) AS hours_median,
+               count(difficulty) AS difficulty_n, avg(difficulty)::double precision AS difficulty_mean,
+               count(clarity) AS clarity_n, avg(clarity)::double precision AS clarity_mean,
+               count(would_take_again) AS again_n,
+               (100.0 * count(*) FILTER (WHERE would_take_again)
+                    / NULLIF(count(would_take_again), 0))::double precision AS again_share
+        FROM answered GROUP BY course_key
+    )
+    INSERT INTO course_intel (id, course_key, hours_answers, hours_median, difficulty_answers, difficulty_mean,
+                              clarity_answers, clarity_mean, again_answers, again_share, computed_at)
+        SELECT gen_random_uuid(), course_key,
+               CASE WHEN hours_n >= 5 THEN hours_n END, CASE WHEN hours_n >= 5 THEN hours_median END,
+               CASE WHEN difficulty_n >= 5 THEN difficulty_n END,
+               CASE WHEN difficulty_n >= 5 THEN difficulty_mean END,
+               CASE WHEN clarity_n >= 5 THEN clarity_n END, CASE WHEN clarity_n >= 5 THEN clarity_mean END,
+               CASE WHEN again_n >= 5 THEN again_n END, CASE WHEN again_n >= 5 THEN again_share END,
+               now() AT TIME ZONE 'utc'
+        FROM figures
+        WHERE greatest(hours_n, difficulty_n, clarity_n, again_n) >= 5;
+    GET DIAGNOSTICS written = ROW_COUNT;
+    RETURN written;
+END $$;
+
+-- A course's figures, to anyone signed in, each only at the floor (checked
+-- again here, so a row written by an older recount can't show less).
+CREATE OR REPLACE FUNCTION account_course_intel(p_course_key text)
+    RETURNS TABLE(hours_answers integer, hours_median double precision, difficulty_answers integer,
+                  difficulty_mean double precision, clarity_answers integer, clarity_mean double precision,
+                  again_answers integer, again_share double precision)
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ SELECT CASE WHEN i.hours_answers >= 5 THEN i.hours_answers END,
+                 CASE WHEN i.hours_answers >= 5 THEN i.hours_median END,
+                 CASE WHEN i.difficulty_answers >= 5 THEN i.difficulty_answers END,
+                 CASE WHEN i.difficulty_answers >= 5 THEN i.difficulty_mean END,
+                 CASE WHEN i.clarity_answers >= 5 THEN i.clarity_answers END,
+                 CASE WHEN i.clarity_answers >= 5 THEN i.clarity_mean END,
+                 CASE WHEN i.again_answers >= 5 THEN i.again_answers END,
+                 CASE WHEN i.again_answers >= 5 THEN i.again_share END
+          FROM course_intel i
+          WHERE account_current_user() IS NOT NULL AND i.course_key = p_course_key $$;
 
 -- Phase 2 item 11 (D26): teams. "On the team" means the captain or a member,
 -- of a captain whose account is not being deleted. Every game write goes
@@ -643,6 +716,9 @@ REVOKE ALL ON FUNCTION account_shared_events() FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_leave_shared_event(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_recount_grade_distributions() FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_grade_distribution(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_term_counted(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_recount_course_intel() FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_course_intel(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_on_team(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_team_invite_preview(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_accept_team_invite(text) FROM PUBLIC;
@@ -933,6 +1009,8 @@ def grant_statements() -> list[str]:
         "GRANT EXECUTE ON FUNCTION account_leave_shared_event(uuid) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_recount_grade_distributions() TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_grade_distribution(text) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_recount_course_intel() TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_course_intel(text) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_on_team(uuid) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_team_invite_preview(text) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_accept_team_invite(text) TO " + APP_ROLE,

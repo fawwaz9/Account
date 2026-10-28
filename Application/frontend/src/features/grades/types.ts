@@ -568,6 +568,21 @@ export interface TermDistribution {
   bands: GradeCountBand[];
 }
 
+/** What past students' term reviews say about a course; each figure null below the floor. */
+export interface CourseIntel {
+  hours_answers: number | null;
+  hours_median: number | null;
+  difficulty_answers: number | null;
+  /** Out of 5. */
+  difficulty_mean: number | null;
+  clarity_answers: number | null;
+  /** Out of 5. */
+  clarity_mean: number | null;
+  again_answers: number | null;
+  /** Whole percentage who would take it again. */
+  again_share: number | null;
+}
+
 /** What other students' shared answers say about one of your courses. */
 export interface ClassFigures {
   /** Null when the course's code isn't a course code, so nothing can be shown. */
@@ -578,4 +593,6 @@ export interface ClassFigures {
   distributions: TermDistribution[];
   your_grade: number | null;
   your_bucket: number | null;
+  /** Null while no review figure has reached the floor. */
+  intel: CourseIntel | null;
 }

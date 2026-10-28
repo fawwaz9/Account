@@ -32,6 +32,30 @@ class TermDistribution(BaseModel):
     bands: list[GradeBandOut]
 
 
+class CourseIntelOut(BaseModel):
+    """What past students' term reviews say about a course; each figure None below the floor.
+
+    Attributes:
+        hours_answers: People who gave their weekly hours.
+        hours_median: Their median hours a week, to one decimal.
+        difficulty_answers: People who rated difficulty.
+        difficulty_mean: Mean difficulty out of 5, to one decimal.
+        clarity_answers: People who rated the instructor's clarity.
+        clarity_mean: Mean clarity out of 5, to one decimal.
+        again_answers: People who said whether they would take it again.
+        again_share: Whole percentage of them who said yes.
+    """
+
+    hours_answers: int | None
+    hours_median: float | None
+    difficulty_answers: int | None
+    difficulty_mean: float | None
+    clarity_answers: int | None
+    clarity_mean: float | None
+    again_answers: int | None
+    again_share: int | None
+
+
 class ClassFigures(BaseModel):
     """What other students' shared answers say about one of the caller's courses.
 
@@ -44,6 +68,8 @@ class ClassFigures(BaseModel):
         your_grade: The caller's own result in this course (final, else running
             average); None with nothing marked.
         your_bucket: The band `your_grade` falls in; None without one.
+        intel: What past students' reviews say; None while no figure has reached the
+            floor.
     """
 
     course_key: str | None
@@ -51,3 +77,4 @@ class ClassFigures(BaseModel):
     distributions: list[TermDistribution]
     your_grade: float | None
     your_bucket: int | None
+    intel: CourseIntelOut | None = None

@@ -7,10 +7,10 @@ vi.mock("../api", () => ({
   fetchClassFigures: (...a: unknown[]) => api.fetchClassFigures(...a),
 }));
 
-import ClassFigures, { bandLabel, filledBands } from "./ClassFigures";
-import { ClassFigures as Figures, TermDistribution } from "../types";
+import ClassFigures, { bandLabel, filledBands, intelLines } from "./ClassFigures";
+import { ClassFigures as Figures, CourseIntel, TermDistribution } from "../types";
 
-/** Phase 3 item 3: past classes' shared grades on the course page (D11). */
+/** Phase 3 items 3 and 5: past students' shared grades and reviews on the course page (D11). */
 
 const fall: TermDistribution = {
   term_code: "2024W1", term_label: "Fall 2024", contributors: 7, median_bucket: 80,
@@ -22,7 +22,10 @@ const winter: TermDistribution = {
 };
 
 function figures(over: Partial<Figures> = {}): Figures {
-  return { course_key: "CPSC 221", floor: 5, distributions: [fall, winter], your_grade: 74.25, your_bucket: 70, ...over };
+  return {
+    course_key: "CPSC 221", floor: 5, distributions: [fall, winter], your_grade: 74.25, your_bucket: 70, intel: null,
+    ...over,
+  };
 }
 
 function show() {
@@ -48,7 +51,37 @@ describe("bandLabel and filledBands", () => {
   });
 });
 
+const intel: CourseIntel = {
+  hours_answers: 12, hours_median: 9, difficulty_answers: 11, difficulty_mean: 3.6,
+  clarity_answers: null, clarity_mean: null, again_answers: 6, again_share: 70,
+};
+
+describe("intelLines", () => {
+  it("reads each figure above the floor, with how many gave it, and skips the rest", () => {
+    expect(intelLines(intel)).toEqual([
+      { label: "Hours a week", value: "about 9", from: 12 },
+      { label: "Difficulty", value: "3.6 / 5", from: 11 },
+      { label: "Would take it again", value: "70%", from: 6 },
+    ]);
+  });
+});
+
 describe("ClassFigures", () => {
+  it("shows what past students' reviews say above the grades", async () => {
+    api.fetchClassFigures.mockResolvedValue(figures({ intel }));
+    show();
+    expect(await screen.findByText("Hours a week")).toBeTruthy();
+    expect(screen.getByText("Would take it again").nextSibling?.textContent).toBe("70% (6)");
+    expect(screen.queryByText("Instructor clarity")).toBeNull();
+    expect(screen.getByRole("list", { name: "Grades in Fall 2024" })).toBeTruthy();
+  });
+
+  it("with reviews but no grades yet, says only the grades are waiting", async () => {
+    api.fetchClassFigures.mockResolvedValue(figures({ intel, distributions: [] }));
+    show();
+    expect(await screen.findByText("Grades shown once 5 students in a finished term have shared theirs.")).toBeTruthy();
+  });
+
   it("shows the newest term's bands, its median and where you sit", async () => {
     api.fetchClassFigures.mockResolvedValue(figures());
     show();

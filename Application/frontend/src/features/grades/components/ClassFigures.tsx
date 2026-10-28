@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { fetchClassFigures } from "../api";
-import { ClassFigures as Figures, TermDistribution } from "../types";
+import { ClassFigures as Figures, CourseIntel, TermDistribution } from "../types";
 import HelpTip from "../../../shared/components/HelpTip";
 
 /** The course to read, and a counter the page bumps to refetch. */
@@ -32,9 +32,27 @@ export function filledBands(term: TermDistribution): { bucket: number; contribut
   return out;
 }
 
+/** What past students' reviews say, as label and reading pairs; only figures above the floor. */
+export function intelLines(intel: CourseIntel): { label: string; value: string; from: number }[] {
+  const lines: { label: string; value: string; from: number }[] = [];
+  if (intel.hours_median !== null && intel.hours_answers !== null) {
+    lines.push({ label: "Hours a week", value: `about ${intel.hours_median}`, from: intel.hours_answers });
+  }
+  if (intel.difficulty_mean !== null && intel.difficulty_answers !== null) {
+    lines.push({ label: "Difficulty", value: `${intel.difficulty_mean} / 5`, from: intel.difficulty_answers });
+  }
+  if (intel.clarity_mean !== null && intel.clarity_answers !== null) {
+    lines.push({ label: "Instructor clarity", value: `${intel.clarity_mean} / 5`, from: intel.clarity_answers });
+  }
+  if (intel.again_share !== null && intel.again_answers !== null) {
+    lines.push({ label: "Would take it again", value: `${intel.again_share}%`, from: intel.again_answers });
+  }
+  return lines;
+}
+
 /**
- * "How past classes did": each finished term's grade bands from students who shared, with the
- * median and your own band marked; a one-line wait below the floor, nothing for an uncountable course.
+ * "From past students": what their term reviews say, then each finished term's grade bands with
+ * the median and your band marked; a one-line wait below the floor, nothing for an uncountable course.
  */
 export default function ClassFigures({ userId, courseId, nonce }: ClassFiguresProps) {
   const [figures, setFigures] = useState<Figures | null>(null);
@@ -60,13 +78,13 @@ export default function ClassFigures({ userId, courseId, nonce }: ClassFiguresPr
   const term = terms.find((t) => t.term_code === termCode) ?? terms[0];
 
   return (
-    <section className="classFigures" aria-label="How past classes did">
+    <section className="classFigures" aria-label="From past students">
       <div className="classFiguresHead">
-        <span className="classFiguresLabel">How past classes did</span>
-        <HelpTip label="About class figures">
-          Grades students chose to share at the end of a term, counted with no names. A term is shown
-          once {figures.floor} students have shared and its sharing window has closed, so the
-          figures never move with one person&rsquo;s answer.
+        <span className="classFiguresLabel">From past students</span>
+        <HelpTip label="About these figures">
+          What students said in their end-of-term reviews, and the grades they chose to share, counted
+          with no names. Each figure is shown once {figures.floor} students have given it and their
+          term&rsquo;s review window has closed, so nothing moves with one person&rsquo;s answer.
         </HelpTip>
         {terms.length > 1 && (
           <select
@@ -82,9 +100,23 @@ export default function ClassFigures({ userId, courseId, nonce }: ClassFiguresPr
         )}
       </div>
 
+      {figures.intel && (
+        <dl className="classFiguresIntel">
+          {intelLines(figures.intel).map((line) => (
+            <div key={line.label}>
+              <dt>{line.label}</dt>
+              <dd>
+                {line.value} <span className="classFiguresMark">({line.from})</span>
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+
       {!term ? (
         <p className="classFiguresWait">
-          Shown once {figures.floor} students in a finished term have shared their grade.
+          {figures.intel ? "Grades shown" : "Shown"} once {figures.floor} students in a finished term
+          have shared {figures.intel ? "theirs" : "their grade"}.
         </p>
       ) : (
         <TermBands term={term} yourBucket={figures.your_bucket} yourGrade={figures.your_grade} />

@@ -16,7 +16,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.main
-from app._database import distributions, rls
+from app._database import distributions, recounts, rls
 from app._database.db import get_db
 from app._database.identity import act_as
 from app._database.models import COHORT_FLOOR, CourseModel, GradeDistributionModel, TermReviewModel, utc_now
@@ -308,4 +308,5 @@ def test_the_recount_door_is_for_the_scheduler_alone(db, monkeypatch):
     finally:
         app.main.app.dependency_overrides.clear()
     assert (unconfigured.status_code, wrong.status_code, right.status_code) == (404, 403, 200)
-    assert set(right.json()) == {"rows"}
+    assert set(right.json()) == {key for key, _ in recounts.RECOUNTS}
+    assert all(isinstance(n, int) for n in right.json().values()), "how many, never what"

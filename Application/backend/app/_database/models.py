@@ -2317,6 +2317,45 @@ class GradeDistributionModel(Base):
     computed_at = Column(DateTime, nullable=False, default=utc_now)
 
 
+class CourseIntelModel(Base):
+    """Sealed: what term reviews say about a course, pooled across its closed terms.
+
+    The API's role can neither read nor write it. Only `account_recount_course_intel`
+    writes it, rebuilding it whole from each person's latest review of the course in
+    a term whose asking window has closed (`COUNTED_AFTER_DAYS`). A figure with fewer
+    than `COHORT_FLOOR` answers is written as null, and a course with no figure at
+    the floor gets no row. Unique per course.
+
+    Attributes:
+        id: Primary key.
+        course_key: Course, such as "UBCV CPSC 221".
+        hours_answers: How many people gave their weekly hours; null below the floor.
+        hours_median: Their median weekly hours; null below the floor.
+        difficulty_answers: How many rated difficulty; null below the floor.
+        difficulty_mean: Mean difficulty, 1-5; null below the floor.
+        clarity_answers: How many rated instructor clarity; null below the floor.
+        clarity_mean: Mean clarity, 1-5; null below the floor.
+        again_answers: How many said whether they'd take it again; null below the floor.
+        again_share: Percentage of those who said yes, 0-100; null below the floor.
+        computed_at: When the recount wrote it.
+    """
+
+    __tablename__ = "course_intel"
+    __table_args__ = (UniqueConstraint("course_key", name="uq_course_intel"),)
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    course_key = Column(String, nullable=False)
+    hours_answers = Column(Integer, nullable=True)
+    hours_median = Column(Float, nullable=True)
+    difficulty_answers = Column(Integer, nullable=True)
+    difficulty_mean = Column(Float, nullable=True)
+    clarity_answers = Column(Integer, nullable=True)
+    clarity_mean = Column(Float, nullable=True)
+    again_answers = Column(Integer, nullable=True)
+    again_share = Column(Float, nullable=True)
+    computed_at = Column(DateTime, nullable=False, default=utc_now)
+
+
 #: How many people besides the captain a team can hold (Phase 2 D26). Written
 #: into account_accept_team_invite too; a test holds the two together.
 MAX_TEAM_MEMBERS = 30

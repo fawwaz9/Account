@@ -479,6 +479,8 @@ DEFINER_SIGNATURES = (
     "account_leave_shared_event(uuid)",
     "account_recount_grade_distributions()",
     "account_grade_distribution(text)",
+    "account_recount_course_intel()",
+    "account_course_intel(text)",
     "account_on_team(uuid)",
     "account_team_invite_preview(text)",
     "account_accept_team_invite(text)",
@@ -534,6 +536,9 @@ def test_only_the_app_role_can_call_the_cross_user_functions(owner_engine):
             "SELECT account_leave_shared_event(gen_random_uuid())",
             "SELECT account_recount_grade_distributions()",
             "SELECT * FROM account_grade_distribution('x')",
+            "SELECT account_recount_course_intel()",
+            "SELECT * FROM account_course_intel('x')",
+            "SELECT account_term_counted('2020W1')",
             "SELECT account_on_team(gen_random_uuid())",
             "SELECT * FROM account_team_invite_preview('x')",
             "SELECT account_accept_team_invite('x')",
@@ -1057,6 +1062,46 @@ def test_the_app_role_reads_a_courses_counts_only_through_the_floor_and_the_wait
     app_session.info.clear()
     assert app_session.execute(text("SELECT * FROM account_grade_distribution('UBCV CPSC 110')")).all() == [], \
         "with no identity the door answers nothing"
+
+
+@pytest.mark.parametrize("table", sorted(rls.SEALED_TABLES))
+@pytest.mark.parametrize("statement", ["SELECT * FROM {t}", "UPDATE {t} SET id = id", "DELETE FROM {t}",
+                                       "TRUNCATE {t}"])
+def test_no_sealed_table_can_be_read_or_written_by_the_app_role(worlds, app_session, table, statement):
+    """Phase 3 D11: every aggregate is sealed, whatever it holds."""
+    act_as(app_session, worlds[1].id)
+    with pytest.raises(ProgrammingError, match="permission denied"):
+        app_session.execute(text(statement.format(t=table)))
+
+
+def test_the_course_figures_are_rebuilt_at_the_floor_and_read_only_through_it(worlds, app_session):
+    """Phase 3 item 5: the recount, run as the app role, writes a course only at
+    5 answers; the door answers it to a signed-in caller, and nothing without one."""
+    from datetime import date
+    from app._database.models import CourseModel, TermReviewModel
+    owner = worlds[0]
+    counted = f"{date.today().year - 2}W1"
+    for key, n in (("UBCV CPSC 110", 5), ("UBCV CPSC 121", 4)):
+        for i in range(n):
+            person = make_user(owner, f"rls-intel-{key[-3:]}-{i}@example.com")
+            course = CourseModel(id=uuid.uuid4(), user_id=person.id, code=key[5:], name="x", semester="Fall",
+                                 year=2, credits=4.0)
+            owner.add(course)
+            owner.flush()
+            owner.add(TermReviewModel(id=uuid.uuid4(), user_id=person.id, course_id=course.id, course_key=key,
+                                      term_code=counted, hours_per_week=6 + i, difficulty=3, clarity=4,
+                                      would_take_again=True))
+    owner.commit()
+    act_as(app_session, worlds[1].id)
+    assert app_session.execute(text("SELECT account_recount_course_intel()")).scalar() == 1
+    app_session.commit()
+    act_as(app_session, worlds[1].id)
+    row = app_session.execute(text("SELECT * FROM account_course_intel('UBCV CPSC 110')")).one()
+    assert (row.hours_answers, row.hours_median, row.again_share) == (5, 8.0, 100.0)
+    assert app_session.execute(text("SELECT * FROM account_course_intel('UBCV CPSC 121')")).all() == []
+    app_session.rollback()
+    app_session.info.clear()
+    assert app_session.execute(text("SELECT * FROM account_course_intel('UBCV CPSC 110')")).all() == []
 
 
 def test_with_no_identity_the_recount_still_reveals_nothing(worlds, app_session):

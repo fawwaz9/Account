@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app._database import aggregates
 from app._database.distributions import bucket_of
 from app._database.models import COHORT_FLOOR, CourseModel
-from app.Grades.schemas.class_figures import ClassFigures, GradeBandOut, TermDistribution
+from app.Grades.schemas.class_figures import ClassFigures, CourseIntelOut, GradeBandOut, TermDistribution
 from app.Grades.services.term_review_service import course_key_of
 from app.Grades.utils.terms import course_result_grade
 
@@ -53,6 +53,33 @@ def median_bucket(bands: list[aggregates.Band]) -> int:
     return bands[-1].bucket
 
 
+def _rounded(value: float | None, places: int = 1):
+    """Return a figure rounded for showing, or None."""
+    return None if value is None else round(value, places)
+
+
+def intel_out(intel: aggregates.CourseIntel | None) -> CourseIntelOut | None:
+    """Return the course figures as sent, or None when none has reached the floor.
+
+    Args:
+        intel: The figures as read through the floor.
+
+    Returns:
+        Hours and ratings to one decimal and the yes share as a whole percentage;
+        None when there is no row or every figure is below the floor.
+    """
+    if intel is None or all(n is None for n in (intel.hours_answers, intel.difficulty_answers,
+                                                 intel.clarity_answers, intel.again_answers)):
+        return None
+    return CourseIntelOut(
+        hours_answers=intel.hours_answers, hours_median=_rounded(intel.hours_median),
+        difficulty_answers=intel.difficulty_answers, difficulty_mean=_rounded(intel.difficulty_mean),
+        clarity_answers=intel.clarity_answers, clarity_mean=_rounded(intel.clarity_mean),
+        again_answers=intel.again_answers,
+        again_share=None if intel.again_share is None else round(intel.again_share),
+    )
+
+
 def _utc_today():
     """Return today's date in UTC, the clock the Postgres read functions use."""
     return datetime.now(timezone.utc).date()
@@ -76,7 +103,9 @@ def class_figures(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> Clas
     grade = course_result_grade(course)
     key = None if course.transfer_credit else course_key_of(db, course)
     distributions = []
+    intel = None
     if key is not None:
+        intel = intel_out(aggregates.course_intel(db, key))
         by_term: dict[str, list[aggregates.Band]] = {}
         for band in aggregates.grade_distribution(db, key, _utc_today()):
             by_term.setdefault(band.term_code, []).append(band)
@@ -94,4 +123,5 @@ def class_figures(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> Clas
         distributions=distributions,
         your_grade=grade,
         your_bucket=bucket_of(grade) if grade is not None else None,
+        intel=intel,
     )

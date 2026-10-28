@@ -9,7 +9,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Header, HTTPException
 
-from app._database import distributions
+from app._database import recounts
 from app._database.dependencies import DBSession
 from app.Auth.services.access import VerifiedUserId
 from app.config import settings
@@ -122,7 +122,7 @@ def delete_term_review(user_id: VerifiedUserId, course_id: UUID, db: DBSession):
 
 @internal.post("/distributions/recount")
 def recount(db: DBSession, x_cron_secret: str | None = Header(default=None)):
-    """Rebuild the sealed grade distributions; for the daily scheduler only.
+    """Rebuild every sealed aggregate; for the daily scheduler only.
 
     Args:
         db: Request-scoped database session; no acting user is needed.
@@ -130,7 +130,8 @@ def recount(db: DBSession, x_cron_secret: str | None = Header(default=None)):
             `CRON_SECRET`.
 
     Returns:
-        `{"rows": n}`, how many band rows were written, never their contents.
+        How many rows each rebuild wrote, keyed by aggregate (`rows` is the grade
+        counts'), never their contents.
 
     Raises:
         HTTPException: 404 when `CRON_SECRET` is not configured; 403 when the header is
@@ -140,4 +141,4 @@ def recount(db: DBSession, x_cron_secret: str | None = Header(default=None)):
         raise HTTPException(status_code=404, detail="Not Found")
     if not x_cron_secret or not hmac.compare_digest(x_cron_secret, settings.CRON_SECRET):
         raise HTTPException(status_code=403, detail="Not authorized")
-    return {"rows": distributions.recount(db)}
+    return recounts.run_all(db)

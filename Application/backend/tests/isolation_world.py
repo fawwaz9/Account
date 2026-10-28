@@ -62,6 +62,7 @@ from app._database.models import (
     EventInviteModel,
     EventMemberModel,
     GradeDistributionModel,
+    CourseIntelModel,
     TermReviewModel,
     GameModel,
     JobApplicationModel,
@@ -416,6 +417,7 @@ CATALOGUE_IDS = {
     "catalogue_courses": uuid.uuid5(uuid.NAMESPACE_URL, "account-test/catalogue_courses"),
     "catalogue_prerequisites": uuid.uuid5(uuid.NAMESPACE_URL, "account-test/catalogue_prerequisites"),
     "grade_distributions": uuid.uuid5(uuid.NAMESPACE_URL, "account-test/grade_distributions"),
+    "course_intel": uuid.uuid5(uuid.NAMESPACE_URL, "account-test/course_intel"),
 }
 
 
@@ -442,9 +444,15 @@ def seed_catalogue(db) -> dict[str, uuid.UUID]:
     sealed = GradeDistributionModel(id=CATALOGUE_IDS["grade_distributions"], course_key="UBCV CPSC 221",
                                     term_code="2025W1", bucket=80, contributors=7)
     db.add(sealed)
+    # Phase 3 item 5: what reviews say about the same course, sealed the same way.
+    intel = CourseIntelModel(id=CATALOGUE_IDS["course_intel"], course_key="UBCV CPSC 221", hours_answers=6,
+                             hours_median=9.0, difficulty_answers=6, difficulty_mean=3.5, clarity_answers=6,
+                             clarity_mean=4.0, again_answers=6, again_share=50.0)
+    db.add(intel)
     # Read before the commit: after it, touching an attribute refreshes the row
     # and leaves a transaction open holding a lock that blocks rls.install.
-    ids = {"catalogue_courses": course.id, "catalogue_prerequisites": rule.id, "grade_distributions": sealed.id}
+    ids = {"catalogue_courses": course.id, "catalogue_prerequisites": rule.id, "grade_distributions": sealed.id,
+           "course_intel": intel.id}
     db.commit()
     missing = (SHARED_READ_TABLES | SEALED_TABLES) - set(ids)
     assert not missing, f"the catalogue seed has nothing in: {sorted(missing)}"

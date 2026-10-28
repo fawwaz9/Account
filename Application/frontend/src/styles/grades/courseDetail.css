@@ -1193,3 +1193,22 @@
   color: var(--muted);
   font-size: 0.72rem;
 }
+
+/* What past students' reviews say (Phase 3 item 5): label over reading,
+   side by side, wrapping on a narrow screen. */
+.classFiguresIntel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px 16px;
+  margin: 0 0 12px;
+}
+
+.classFiguresIntel dt {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.classFiguresIntel dd {
+  margin: 0;
+  font-size: 0.92rem;
+}
