@@ -10,6 +10,7 @@ import {
 } from "../features/teams/api";
 import { useApiRefresh } from "../shared/hooks/useApiRefresh";
 import ActivityCard from "../features/fitness/ActivityCard";
+import ClubsSection from "../features/clubs/ClubsSection";
 import CampusBoardCard from "../features/fitness/CampusBoardCard";
 import DirectoryCard from "../features/fitness/DirectoryCard";
 import TeamBoard from "../features/fitness/TeamBoard";
@@ -121,6 +122,9 @@ export default function FitnessPage() {
         <DirectoryCard userId={user.id} />
         <GymBuddy userId={user.id} />
       </div>
+
+      {/* Phase 3 item 10. */}
+      <ClubsSection userId={user.id} />
     </div>
   );
 }

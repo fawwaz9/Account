@@ -284,6 +284,19 @@ export default function CalendarPage() {
                 <Link to="/jobs/applications" className="calButton calButtonPrimary">Open in Applications</Link>
               </div>
             </div>
+          ) : selected.club ? (
+            // Phase 3 item 10: a club's event. Its owner changes it, so this
+            // only says where it's from.
+            <div className="calForm">
+              <p>
+                From <strong>{selected.club.name}</strong>
+                {selected.location && <>, at {selected.location}</>}.
+              </p>
+              <div className="calFormActions">
+                <button type="button" className="calButton" onClick={() => setSelected(null)}>Close</button>
+                <Link to="/fitness" className="calButton calButtonPrimary">Open the club</Link>
+              </div>
+            </div>
           ) : selected.shared && user ? (
             <SharedOccurrenceCard
               userId={user.id}

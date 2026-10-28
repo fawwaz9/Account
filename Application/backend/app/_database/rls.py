@@ -102,6 +102,16 @@ FUNCTIONS = (
     "account_request_to_join",
     "account_team_requests",
     "account_answer_join_request",
+    # Phase 3 item 10: clubs, joined by link, with posts, polls and events.
+    "account_on_club",
+    "account_club_invite_preview",
+    "account_accept_club_invite",
+    "account_my_clubs",
+    "account_club_posts",
+    "account_club_polls",
+    "account_vote_club_poll",
+    "account_club_events",
+    "account_leave_club",
     # Phase 2 item 11 (D26): teams and games.
     "account_on_team",
     "account_team_invite_preview",
@@ -121,7 +131,10 @@ FUNCTIONS = (
 #: function, for the person holding the link -- so not even the task's owner
 #: can put somebody on a task, and nobody can rewrite a copied name.
 #: Phase 3 item 9 adds requests to join a team: written only by account_request_to_join.
-NO_DIRECT_WRITE_TABLES = frozenset({"task_members", "event_members", "team_members", "games", "team_join_requests"})
+#: Phase 3 item 10 adds club memberships and poll votes, written only by their functions.
+NO_DIRECT_WRITE_TABLES = frozenset({
+    "task_members", "event_members", "team_members", "games", "team_join_requests", "club_members", "club_votes",
+})
 
 FUNCTION_SQL = """
 CREATE OR REPLACE FUNCTION account_current_user() RETURNS uuid
@@ -1080,6 +1093,127 @@ BEGIN
     RETURN 'accepted';
 END $$;
 
+-- Phase 3 item 10: clubs. "In the club" means its owner or a member, while the
+-- owner's account is not being deleted. Members reach a club only through these.
+CREATE OR REPLACE FUNCTION account_on_club(p_club uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ SELECT account_current_user() IS NOT NULL AND EXISTS (
+              SELECT 1 FROM clubs c JOIN users u ON u.id = c.user_id
+              WHERE c.id = p_club AND u.deleted_at IS NULL
+                AND (c.user_id = account_current_user()
+                     OR EXISTS (SELECT 1 FROM club_members m
+                                WHERE m.club_id = c.id AND m.member_id = account_current_user()))) $$;
+
+CREATE OR REPLACE FUNCTION account_club_invite_preview(p_token_hash text)
+    RETURNS TABLE(owner_name text, club_name text)
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ SELECT u.name::text, c.name::text
+          FROM club_invites i JOIN clubs c ON c.id = i.club_id JOIN users u ON u.id = c.user_id
+          WHERE account_current_user() IS NOT NULL
+            AND i.token_hash = p_token_hash AND i.revoked_at IS NULL
+            AND i.expires_at > (now() AT TIME ZONE 'utc') AND u.deleted_at IS NULL $$;
+
+-- The only writer of club_members. 200 is models.MAX_CLUB_MEMBERS.
+CREATE OR REPLACE FUNCTION account_accept_club_invite(p_token_hash text) RETURNS text
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$
+DECLARE
+    me uuid := account_current_user();
+    inv club_invites%ROWTYPE;
+    cl clubs%ROWTYPE;
+    my_name text;
+    their_name text;
+BEGIN
+    IF me IS NULL THEN RETURN 'invalid'; END IF;
+    SELECT * INTO inv FROM club_invites
+        WHERE token_hash = p_token_hash AND revoked_at IS NULL AND expires_at > (now() AT TIME ZONE 'utc');
+    IF NOT FOUND THEN RETURN 'invalid'; END IF;
+    SELECT * INTO cl FROM clubs WHERE id = inv.club_id FOR UPDATE;
+    IF NOT FOUND THEN RETURN 'invalid'; END IF;
+    IF cl.user_id = me THEN RETURN 'own'; END IF;
+    SELECT name INTO my_name FROM users WHERE id = me AND deleted_at IS NULL;
+    SELECT name INTO their_name FROM users WHERE id = cl.user_id AND deleted_at IS NULL;
+    IF my_name IS NULL OR their_name IS NULL THEN RETURN 'invalid'; END IF;
+    IF EXISTS (SELECT 1 FROM club_members WHERE club_id = cl.id AND member_id = me) THEN RETURN 'already'; END IF;
+    IF (SELECT count(*) FROM club_members WHERE club_id = cl.id) >= 200 THEN RETURN 'full'; END IF;
+    INSERT INTO club_members (id, club_id, member_id, member_name, owner_name, joined_at)
+        VALUES (gen_random_uuid(), cl.id, me, my_name, their_name, now() AT TIME ZONE 'utc')
+        ON CONFLICT (club_id, member_id) DO NOTHING;
+    RETURN 'accepted';
+END $$;
+
+-- The clubs the caller is in as a member (an owner reads their own).
+CREATE OR REPLACE FUNCTION account_my_clubs()
+    RETURNS TABLE(club_id uuid, club_name text, about text, owner_name text, members integer)
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ SELECT c.id, c.name::text, c.about::text, m.owner_name::text,
+                 (1 + (SELECT count(*) FROM club_members o WHERE o.club_id = c.id))::integer
+          FROM club_members m JOIN clubs c ON c.id = m.club_id JOIN users u ON u.id = c.user_id
+          WHERE m.member_id = account_current_user() AND u.deleted_at IS NULL
+          ORDER BY lower(c.name) $$;
+
+CREATE OR REPLACE FUNCTION account_club_posts(p_club uuid)
+    RETURNS TABLE(post_id uuid, body text, created_at timestamp)
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ SELECT p.id, p.body::text, p.created_at FROM club_posts p
+          WHERE p.club_id = p_club AND account_on_club(p_club)
+          ORDER BY p.created_at DESC $$;
+
+-- Each poll with every choice's count and the caller's own vote; never who
+-- voted for what.
+CREATE OR REPLACE FUNCTION account_club_polls(p_club uuid)
+    RETURNS TABLE(poll_id uuid, question text, options json, closes_on date, counts integer[], my_vote integer)
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ SELECT p.id, p.question::text, p.options::json, p.closes_on,
+                 ARRAY(SELECT (SELECT count(*) FROM club_votes v WHERE v.poll_id = p.id AND v.option = i)::integer
+                       FROM generate_series(0, json_array_length(p.options::json) - 1) AS i ORDER BY i),
+                 (SELECT v.option FROM club_votes v WHERE v.poll_id = p.id AND v.user_id = account_current_user())
+          FROM club_polls p
+          WHERE p.club_id = p_club AND account_on_club(p_club)
+          ORDER BY p.created_at DESC $$;
+
+-- One vote per person in the club, changeable, while the poll is open (its
+-- closing day counts, in UTC). The only writer of club_votes.
+CREATE OR REPLACE FUNCTION account_vote_club_poll(p_poll uuid, p_option integer) RETURNS boolean
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$
+DECLARE
+    me uuid := account_current_user();
+    pl club_polls%ROWTYPE;
+BEGIN
+    IF me IS NULL THEN RETURN false; END IF;
+    SELECT * INTO pl FROM club_polls WHERE id = p_poll;
+    IF NOT FOUND OR NOT account_on_club(pl.club_id) THEN RETURN false; END IF;
+    IF pl.closes_on IS NOT NULL AND pl.closes_on < (now() AT TIME ZONE 'utc')::date THEN RETURN false; END IF;
+    IF p_option IS NULL OR p_option < 0 OR p_option >= json_array_length(pl.options::json) THEN RETURN false; END IF;
+    INSERT INTO club_votes (id, user_id, poll_id, option, created_at)
+        VALUES (gen_random_uuid(), me, p_poll, p_option, now() AT TIME ZONE 'utc')
+        ON CONFLICT (user_id, poll_id) DO UPDATE SET option = EXCLUDED.option, created_at = EXCLUDED.created_at;
+    RETURN true;
+END $$;
+
+-- Events of the clubs the caller is a member of, in a window of at most 400
+-- days, for their calendar (an owner reads their own club's events).
+CREATE OR REPLACE FUNCTION account_club_events(p_from date, p_to date)
+    RETURNS TABLE(event_id uuid, club_id uuid, club_name text, title text, on_date date, start_time time,
+                  end_time time, location text)
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ SELECT e.id, c.id, c.name::text, e.title::text, e.on_date, e.start_time, e.end_time, e.location::text
+          FROM club_events e
+          JOIN clubs c ON c.id = e.club_id
+          JOIN club_members m ON m.club_id = c.id AND m.member_id = account_current_user()
+          JOIN users u ON u.id = c.user_id AND u.deleted_at IS NULL
+          WHERE e.on_date BETWEEN p_from AND p_to AND p_to - p_from BETWEEN 0 AND 400
+          ORDER BY e.on_date, e.start_time NULLS FIRST $$;
+
+CREATE OR REPLACE FUNCTION account_leave_club(p_club uuid) RETURNS boolean
+    LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ WITH gone AS (
+              DELETE FROM club_members
+              WHERE club_id = p_club AND member_id = account_current_user()
+              RETURNING 1)
+          SELECT count(*) > 0 FROM gone $$;
+
 -- Definer functions run with their owner's rights, so nobody but the API
 -- needs to be able to call them.
 REVOKE ALL ON FUNCTION account_user_id_by_email(text) FROM PUBLIC;
@@ -1135,6 +1269,15 @@ REVOKE ALL ON FUNCTION account_team_directory() FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_request_to_join(uuid, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_team_requests(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_answer_join_request(uuid, boolean) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_on_club(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_club_invite_preview(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_accept_club_invite(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_my_clubs() FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_club_posts(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_club_polls(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_vote_club_poll(uuid, integer) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_club_events(date, date) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_leave_club(uuid) FROM PUBLIC;
 
 -- PUBLIC is not the only way in. Supabase's default privileges grant every new
 -- function to anon and authenticated by name, and its Data API lets anon call
@@ -1441,6 +1584,15 @@ def grant_statements() -> list[str]:
         "GRANT EXECUTE ON FUNCTION account_request_to_join(uuid, text) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_team_requests(uuid) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_answer_join_request(uuid, boolean) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_on_club(uuid) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_club_invite_preview(text) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_accept_club_invite(text) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_my_clubs() TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_club_posts(uuid) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_club_polls(uuid) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_vote_club_poll(uuid, integer) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_club_events(date, date) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_leave_club(uuid) TO " + APP_ROLE,
     ]
 
 

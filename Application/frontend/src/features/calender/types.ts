@@ -88,6 +88,8 @@ export interface EventOccurrence {
   shared?: { owner_name: string; member_names: string[]; what: "event" | "task" };
   /** A job application's deadline or follow-up: an all-day pointer back to the tracker. */
   application?: { id: string; what: "deadline" | "follow_up"; company: string; role: string };
+  /** A club's event (Phase 3 item 10): the club's to change, so a pointer to it. */
+  club?: { id: string; name: string };
 }
 
 /** Request body for creating an event. */

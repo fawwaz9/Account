@@ -63,6 +63,13 @@ from app._database.models import (
     EventMemberModel,
     GradeDistributionModel,
     CourseIntelModel,
+    ClubEventModel,
+    ClubInviteModel,
+    ClubMemberModel,
+    ClubModel,
+    ClubPollModel,
+    ClubPostModel,
+    ClubVoteModel,
     CampusBoardModel,
     TeamJoinRequestModel,
     ActivityModel,
@@ -368,6 +375,18 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
     # Phase 3 item 6: a run, with the marker in its note.
     add(ActivityModel(id=new_id(), user_id=user_id, on_date=WORLD_DAY, kind="run", minutes=30, met=9.8, weight=1.0,
                       points=49, formula_version=1, source="manual", note=f"{marker} run note"))
+    # Phase 3 item 10: a club this user owns, with a post, a poll they voted in,
+    # an event and a live link whose token is "<marker> club invite token".
+    club = add(ClubModel(id=new_id(), user_id=user_id, name=f"{marker} club", about=f"{marker} about"))
+    add(ClubPostModel(id=new_id(), club_id=club.id, body=f"{marker} announcement"))
+    poll = add(ClubPollModel(id=new_id(), club_id=club.id, question=f"{marker} question?",
+                             options=[f"{marker} yes", f"{marker} no"]))
+    add(ClubVoteModel(id=new_id(), user_id=user_id, poll_id=poll.id, option=0))
+    add(ClubEventModel(id=new_id(), club_id=club.id, title=f"{marker} social", on_date=WORLD_DAY + timedelta(days=3),
+                       start_time=time(18, 0), location=f"{marker} hall"))
+    add(ClubInviteModel(id=new_id(), club_id=club.id,
+                        token_hash=hashlib.sha256(f"{marker} club invite token".encode()).hexdigest(),
+                        expires_at=datetime.combine(day + timedelta(days=5), time(12, 0))))
     _ = (event, transaction, recurring_task)
 
     db.commit()
@@ -380,7 +399,9 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
 
 #: Tables whose rows need two people, seeded by seed_pair rather than by one
 #: user's world (Phase 2 items 10, 9a, 9b and 11).
-PAIRED_TABLES = frozenset({"partnerships", "task_members", "event_members", "team_members", "team_join_requests"})
+PAIRED_TABLES = frozenset({
+    "partnerships", "task_members", "event_members", "team_members", "team_join_requests", "club_members",
+})
 
 
 def seed_pair(db, a_id, b_id, mark_a: str, mark_b: str) -> tuple[dict, dict]:
@@ -447,11 +468,20 @@ def seed_pair(db, a_id, b_id, mark_a: str, mark_b: str) -> tuple[dict, dict]:
     b_request = TeamJoinRequestModel(id=uuid.uuid4(), user_id=b_id, team_id=third_team.id, team_name="third team",
                                      message=f"{mark_b} request")
     db.add_all([a_request, b_request])
+    # Phase 3 item 10, the teams' way round: B is in A's club, and the third
+    # person in B's.
+    a_club = db.query(ClubModel).filter_by(user_id=a_id, name=f"{mark_a} club").one()
+    b_club = db.query(ClubModel).filter_by(user_id=b_id, name=f"{mark_b} club").one()
+    a_clubber = ClubMemberModel(id=uuid.uuid4(), club_id=a_club.id, member_id=b_id, member_name=f"{mark_a} clubber",
+                                owner_name=f"{mark_a} owner")
+    b_clubber = ClubMemberModel(id=uuid.uuid4(), club_id=b_club.id, member_id=third.id,
+                                member_name=f"{mark_b} clubber", owner_name=f"{mark_b} owner")
+    db.add_all([a_clubber, b_clubber])
     db.flush()
     ids = ({"partnerships": a_row.id, "task_members": a_member.id, "event_members": a_attendee.id,
-            "team_members": a_player.id, "team_join_requests": a_request.id},
+            "team_members": a_player.id, "team_join_requests": a_request.id, "club_members": a_clubber.id},
            {"partnerships": b_row.id, "task_members": b_member.id, "event_members": b_attendee.id,
-            "team_members": b_player.id, "team_join_requests": b_request.id})
+            "team_members": b_player.id, "team_join_requests": b_request.id, "club_members": b_clubber.id})
     db.commit()
     return ids
 

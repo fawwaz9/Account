@@ -5,6 +5,7 @@ import { fetchTasks } from "../../tasks/api";
 import { fetchSharedTasks, SharedTask } from "../../tasks/sharing";
 import { fetchSharedEvents, SharedEvent } from "../sharing";
 import { fetchApplications } from "../../jobs/applications/api";
+import { CalendarClubEvent, fetchClubEvents } from "../../clubs/api";
 import { Application } from "../../jobs/applications/types";
 import { Task } from "../../tasks/types";
 import { useAuth } from "../../../app/auth/AuthContext";
@@ -94,7 +95,7 @@ export function useCalender() {
     setError(null);
 
     try {
-      const [nextOccurrences, nextTasks, sharedEvents, sharedTasks, applications] = await Promise.all([
+      const [nextOccurrences, nextTasks, sharedEvents, sharedTasks, applications, clubEvents] = await Promise.all([
         fetchAgenda(userId, windowStart, windowEnd),
         fetchTasks(userId, { start: windowStart, end: windowEnd }),
         // Phase 2 item 9b. A failure here leaves your own calendar as it was
@@ -104,6 +105,8 @@ export function useCalender() {
         // Phase 3 item 1 (D4), likewise: the tracker failing leaves the
         // calendar as it was.
         fetchApplications(userId).catch(() => [] as Application[]),
+        // Phase 3 item 10, likewise for clubs.
+        fetchClubEvents(userId, windowStart, windowEnd).catch(() => [] as CalendarClubEvent[]),
       ]);
       if (ticket !== latestRequest.current) return;
       setOccurrences([
@@ -113,6 +116,7 @@ export function useCalender() {
           .filter((task) => task.due_date && task.due_date >= windowStart && task.due_date <= windowEnd)
           .map(sharedTaskOccurrence),
         ...applicationOccurrences(applications, windowStart, windowEnd),
+        ...clubEvents.map(clubOccurrence),
       ]);
       setTasks(nextTasks);
     } catch (err) {
@@ -193,6 +197,16 @@ export function sharedTaskOccurrence(task: SharedTask): EventOccurrence {
     kind: "deadline", start_time: null, end_time: null, location: null, notes: task.notes,
     course_id: null, course_code: null, job_id: null, repeats: false, grade_id: null,
     shared: { owner_name: task.owner_name, member_names: task.member_names, what: "task" },
+  };
+}
+
+/** A club's event as a calendar item, titled with its club; the club's to change. */
+export function clubOccurrence(event: CalendarClubEvent): EventOccurrence {
+  return {
+    event_id: `club-${event.event_id}`, on_date: event.on_date, title: `${event.club_name}: ${event.title}`,
+    kind: "personal", start_time: event.start_time, end_time: event.end_time, location: event.location,
+    notes: null, course_id: null, course_code: null, job_id: null, repeats: false, grade_id: null,
+    club: { id: event.club_id, name: event.club_name },
   };
 }
 

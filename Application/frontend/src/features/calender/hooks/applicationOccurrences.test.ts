@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applicationOccurrences } from "./useCalender";
+import { applicationOccurrences, clubOccurrence } from "./useCalender";
 import { Application } from "../../jobs/applications/types";
 
 /** D4: an application's deadline and follow-up, as all-day items on the calendar. */
@@ -40,5 +40,17 @@ describe("application dates on the calendar", () => {
   it("gives each date its own id, so the two never collide", () => {
     const ids = applicationOccurrences([application()], "2026-10-01", "2026-10-31").map((item) => item.event_id);
     expect(new Set(ids).size).toBe(2);
+  });
+});
+
+describe("clubOccurrence (Phase 3 item 10)", () => {
+  it("titles a club's event with its club and marks it the club's", () => {
+    const item = clubOccurrence({
+      event_id: "e1", club_id: "c1", club_name: "Chess Club", title: "Social", on_date: "2026-11-02",
+      start_time: "18:00:00", end_time: null, location: "SUB",
+    });
+    expect([item.event_id, item.title, item.start_time, item.location]).toEqual(
+      ["club-e1", "Chess Club: Social", "18:00:00", "SUB"]);
+    expect(item.club).toEqual({ id: "c1", name: "Chess Club" });
   });
 });

@@ -109,6 +109,9 @@ PATH_SOURCES = {
     ("/api/calendar/", "member_id"): "event_members",
     # A team's membership row (Phase 2 item 11).
     ("/api/teams/", "member_id"): "team_members",
+    # Phase 3 item 10: a club's membership row, and a club's event.
+    ("/api/clubs/", "member_id"): "club_members",
+    ("/api/clubs/", "event_id"): "club_events",
     ("/api/finances/", "rule_id"): "recurring_transactions",
     ("/api/jobs/", "event_id"): "events_shift",
     "account_id": "accounts",
@@ -148,6 +151,9 @@ PATH_SOURCES = {
     "activity_id": "activities",
     # Phase 3 item 9: a request to join a team.
     "request_id": "team_join_requests",
+    "club_id": "clubs",
+    "post_id": "club_posts",
+    "poll_id": "club_polls",
     # A membership row's own id (Phase 2 item 9a), as the owner removes it.
     "member_id": "task_members",
 }
@@ -271,6 +277,10 @@ BODY_PATCHES: dict[tuple[str, str], list[dict]] = {
     ("POST", "/api/calendar/{user_id}/shared-events/invites/accept"): [{"token": "zzownera event invite token"}],
     ("POST", "/api/teams/{user_id}/invites/preview"): [{"token": "zzownera team invite token"}],
     ("POST", "/api/teams/{user_id}/invites/accept"): [{"token": "zzownera team invite token"}],
+    # Phase 3 item 10: A's own club link, and a valid poll.
+    ("POST", "/api/clubs/{user_id}/invites/preview"): [{"token": "zzownera club invite token"}],
+    ("POST", "/api/clubs/{user_id}/invites/accept"): [{"token": "zzownera club invite token"}],
+    ("POST", "/api/clubs/{user_id}/{club_id}/polls"): [{"options": ["zzownera yes", "zzownera no"]}],
     ("POST", "/api/finances/{user_id}/subscriptions/confirm"): [
         {"instruction.kind": "expense", "instruction.to_account_id": None},
         {"instruction.kind": "transfer", "instruction.category_id": None},

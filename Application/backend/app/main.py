@@ -14,8 +14,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from app.api.routes import (
-    applications, calendar, class_figures, degree, finances, fitness, grades, intake, jobs, omnibox, outlines, partners,
-    push, recurring, shared_events, shared_tasks, survey, tasks, teams, term_reviews, usage, users, auth,
+    applications, calendar, class_figures, clubs, degree, finances, fitness, grades, intake, jobs, omnibox, outlines,
+    partners, push, recurring, shared_events, shared_tasks, survey, tasks, teams, term_reviews, usage, users, auth,
 )
 from app._database.db import Base, SessionLocal, engine
 from app._database import models
@@ -190,3 +190,5 @@ app.include_router(partners.router, prefix="/api/partners", tags=["Partners"])
 app.include_router(teams.router, prefix="/api/teams", tags=["Teams"])
 # Phase 3 items 6-8 and 13: activity, goals, boards and gym buddies.
 app.include_router(fitness.router, prefix="/api/fitness", tags=["Fitness"])
+# Phase 3 item 10: clubs, with members by link, posts, polls and events.
+app.include_router(clubs.router, prefix="/api/clubs", tags=["Clubs"])

@@ -334,3 +334,83 @@
 .directoryMine {
   margin-top: 12px;
 }
+
+/* Clubs (Phase 3 item 10): the list beside the chosen club, as for teams. */
+.clubsSection {
+  margin-top: 28px;
+}
+
+.clubsGrid {
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 760px) {
+  .clubsGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.clubsList ul {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.clubView h3,
+.clubBlock h4 {
+  margin: 0;
+}
+
+.clubBlock {
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.clubForm {
+  display: grid;
+  gap: 8px;
+}
+
+.clubEventForm {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.clubList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.clubList li {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.clubChoices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.clubChoices button[aria-pressed="true"] {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.clubConfirm {
+  display: flex;
+  gap: 6px;
+}

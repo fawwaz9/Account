@@ -183,6 +183,8 @@ class UserModel(Base):
     gym_buddy = relationship("GymBuddyModel", cascade=cascade, uselist=False)
     activities = relationship("ActivityModel", cascade=cascade)
     join_requests = relationship("TeamJoinRequestModel", cascade=cascade, overlaps="join_requests")
+    clubs = relationship("ClubModel", cascade=cascade)
+    club_votes = relationship("ClubVoteModel", cascade=cascade, overlaps="votes")
     application_seasons = relationship("ApplicationSeasonModel", cascade=cascade)
     partnerships = relationship(
         "PartnershipModel", cascade=cascade, foreign_keys="PartnershipModel.user_id"
@@ -207,6 +209,10 @@ class UserModel(Base):
     #: Teams this user plays on (Phase 2 item 11), for the same reason.
     team_memberships = relationship(
         "TeamMemberModel", foreign_keys="TeamMemberModel.member_id", viewonly=True,
+    )
+    #: Clubs this user is in (Phase 3 item 10), for the same reason.
+    club_memberships = relationship(
+        "ClubMemberModel", foreign_keys="ClubMemberModel.member_id", viewonly=True,
     )
 
     @property
@@ -2683,6 +2689,188 @@ class ActivityModel(Base):
     formula_version = Column(Integer, nullable=False)
     source = Column(String, nullable=False, default="manual")
     note = Column(String, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+
+
+#: Phase 3 item 10. How many people besides its owner a club can hold. Written
+#: into account_accept_club_invite too; a test holds the two together.
+MAX_CLUB_MEMBERS = 200
+#: How many choices a club poll offers, at least and at most.
+POLL_OPTIONS = (2, 6)
+
+
+class ClubModel(Base):
+    """Per-user row: a club, owned by the student who made it (Phase 3 item 10).
+
+    Members join by link, as for teams; announcements, polls and events hang beneath
+    it. Only the owner posts, runs polls and adds events. Members reach it only
+    through definer functions.
+
+    Attributes:
+        id: Primary key.
+        user_id: The owner.
+        name: The club's name, 1-80 characters.
+        about: A line about it, up to 300 characters; optional.
+        created_at: When it was made.
+    """
+
+    __tablename__ = "clubs"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    about = Column(String, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+
+    members = relationship("ClubMemberModel", back_populates="club", cascade="all, delete-orphan")
+    invites = relationship("ClubInviteModel", cascade="all, delete-orphan")
+    posts = relationship("ClubPostModel", cascade="all, delete-orphan")
+    polls = relationship("ClubPollModel", cascade="all, delete-orphan")
+    events = relationship("ClubEventModel", cascade="all, delete-orphan")
+
+
+class ClubMemberModel(Base):
+    """Child of `clubs`; no direct write: someone in a club.
+
+    Only the owner sees or removes the row; `account_accept_club_invite` writes it,
+    copying both names. Unique per club and member.
+
+    Attributes:
+        id: Primary key.
+        club_id: The club.
+        member_id: The member.
+        member_name: The member's name when they joined.
+        owner_name: The owner's name when they joined.
+        joined_at: When they joined.
+    """
+
+    __tablename__ = "club_members"
+    __table_args__ = (UniqueConstraint("club_id", "member_id", name="uq_club_member"),)
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    club_id = Column(Uuid, ForeignKey("clubs.id", ondelete="CASCADE"), nullable=False, index=True)
+    member_id = Column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    member_name = Column(String, nullable=False)
+    owner_name = Column(String, nullable=False)
+    joined_at = Column(DateTime, nullable=False, default=utc_now)
+
+    club = relationship("ClubModel", back_populates="members")
+
+
+class ClubInviteModel(Base):
+    """Child of `clubs`: a join link, by the SHA-256 of its token, valid `INVITE_DAYS`.
+
+    Attributes:
+        id: Primary key.
+        club_id: The club.
+        token_hash: SHA-256 hex digest of the link's token; unique.
+        created_at: When it was made.
+        expires_at: When it stops working.
+        revoked_at: When the owner cancelled it; null while live.
+    """
+
+    __tablename__ = "club_invites"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    club_id = Column(Uuid, ForeignKey("clubs.id", ondelete="CASCADE"), nullable=False, index=True)
+    token_hash = Column(String, nullable=False, unique=True)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+    expires_at = Column(DateTime, nullable=False)
+    revoked_at = Column(DateTime, nullable=True)
+
+
+class ClubPostModel(Base):
+    """Child of `clubs`: an announcement from the owner to every member.
+
+    Attributes:
+        id: Primary key.
+        club_id: The club.
+        body: The announcement, 1-1000 characters.
+        created_at: When it was posted.
+    """
+
+    __tablename__ = "club_posts"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    club_id = Column(Uuid, ForeignKey("clubs.id", ondelete="CASCADE"), nullable=False, index=True)
+    body = Column(String, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+
+
+class ClubPollModel(Base):
+    """Child of `clubs`: a question with 2-6 choices; one vote per person.
+
+    Members see each choice's count and their own vote, never who voted for what.
+
+    Attributes:
+        id: Primary key.
+        club_id: The club.
+        question: The question, 1-200 characters.
+        options: JSON list of the choices, 2-6 strings.
+        closes_on: The last day votes count; null for no end.
+        created_at: When it was asked.
+    """
+
+    __tablename__ = "club_polls"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    club_id = Column(Uuid, ForeignKey("clubs.id", ondelete="CASCADE"), nullable=False, index=True)
+    question = Column(String, nullable=False)
+    options = Column(JSON, nullable=False)
+    closes_on = Column(Date, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+
+    votes = relationship("ClubVoteModel", cascade="all, delete-orphan", passive_deletes=True)
+
+
+class ClubVoteModel(Base):
+    """Per-user row, no direct write: one person's vote in a club poll.
+
+    Only `account_vote_club_poll` writes it, for someone in the club while the poll is
+    open; voting again changes it. The row goes with the poll. Unique per person and
+    poll.
+
+    Attributes:
+        id: Primary key.
+        user_id: The voter.
+        poll_id: The poll.
+        option: The chosen choice's position, from 0.
+        created_at: When they voted (or last changed it).
+    """
+
+    __tablename__ = "club_votes"
+    __table_args__ = (UniqueConstraint("user_id", "poll_id", name="uq_club_vote"),)
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    poll_id = Column(Uuid, ForeignKey("club_polls.id", ondelete="CASCADE"), nullable=False, index=True)
+    option = Column(Integer, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+
+
+class ClubEventModel(Base):
+    """Child of `clubs`: a club event, on every member's calendar.
+
+    Attributes:
+        id: Primary key.
+        club_id: The club.
+        title: What it is, 1-80 characters.
+        on_date: The day.
+        start_time: When it starts; null for all day.
+        end_time: When it ends; null when open-ended or all day.
+        location: Where, up to 80 characters; optional.
+        created_at: When it was added.
+    """
+
+    __tablename__ = "club_events"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    club_id = Column(Uuid, ForeignKey("clubs.id", ondelete="CASCADE"), nullable=False, index=True)
+    title = Column(String, nullable=False)
+    on_date = Column(Date, nullable=False)
+    start_time = Column(Time, nullable=True)
+    end_time = Column(Time, nullable=True)
+    location = Column(String, nullable=True)
     created_at = Column(DateTime, nullable=False, default=utc_now)
 
 

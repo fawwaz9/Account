@@ -7,6 +7,7 @@ import { TASK_LINK_PREFIX, TaskAcceptStatus, acceptTaskInvite, previewTaskInvite
 import { EVENT_LINK_PREFIX, EventAcceptStatus, acceptEventInvite, previewEventInvite } from "../features/calender/sharing";
 import { shortDate } from "../shared/utils/dateUtils";
 import { TEAM_LINK_PREFIX, TeamAcceptStatus, acceptTeamInvite, previewTeamInvite } from "../features/teams/api";
+import { CLUB_LINK_PREFIX, ClubAcceptStatus, acceptClubInvite, previewClubInvite } from "../features/clubs/api";
 
 /** Why a partner invite was refused, by status, phrased as what to do. */
 const REFUSED: Record<Exclude<AcceptStatus, "accepted">, string> = {
@@ -39,15 +40,24 @@ const TEAM_REFUSED: Record<Exclude<TeamAcceptStatus, "accepted">, string> = {
   full: "That team already has as many players as it can hold.",
 };
 
-/** What an invite link is for. */
-type Kind = "partner" | "task" | "event" | "team";
+/** Why a club link was refused, by status (Phase 3 item 10). */
+const CLUB_REFUSED: Record<Exclude<ClubAcceptStatus, "accepted">, string> = {
+  invalid: "That link has expired or been cancelled. Ask for a new one.",
+  own: "That's a link to your own club. Send it to the people you'd like in it.",
+  already: "You're already in that club.",
+  full: "That club already has as many members as it can hold.",
+};
 
-/** Kind and token from the fragment: a task, event or team prefix, else a partner token. */
+/** What an invite link is for. */
+type Kind = "partner" | "task" | "event" | "team" | "club";
+
+/** Kind and token from the fragment: a task, event, team or club prefix, else a partner token. */
 function parse(hash: string): { kind: Kind; token: string } {
   const raw = decodeURIComponent(hash.replace(/^#/, ""));
   if (raw.startsWith(TASK_LINK_PREFIX)) return { kind: "task", token: raw.slice(TASK_LINK_PREFIX.length) };
   if (raw.startsWith(EVENT_LINK_PREFIX)) return { kind: "event", token: raw.slice(EVENT_LINK_PREFIX.length) };
   if (raw.startsWith(TEAM_LINK_PREFIX)) return { kind: "team", token: raw.slice(TEAM_LINK_PREFIX.length) };
+  if (raw.startsWith(CLUB_LINK_PREFIX)) return { kind: "club", token: raw.slice(CLUB_LINK_PREFIX.length) };
   return { kind: "partner", token: raw };
 }
 
@@ -65,7 +75,9 @@ export default function InvitePage() {
   const [eventDay, setEventDay] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const invalid = { task: TASK_REFUSED, event: EVENT_REFUSED, team: TEAM_REFUSED, partner: REFUSED }[kind].invalid;
+  const invalid = {
+    task: TASK_REFUSED, event: EVENT_REFUSED, team: TEAM_REFUSED, club: CLUB_REFUSED, partner: REFUSED,
+  }[kind].invalid;
 
   useEffect(() => {
     if (!user) return;
@@ -82,6 +94,10 @@ export default function InvitePage() {
     } else if (kind === "team") {
       look = previewTeamInvite(user.id, token).then((found) => {
         if (!cancelled) { setInviter(found.captain_name); setTaskTitle(found.team_name); setEventDay(found.sport); }
+      });
+    } else if (kind === "club") {
+      look = previewClubInvite(user.id, token).then((found) => {
+        if (!cancelled) { setInviter(found.owner_name); setTaskTitle(found.club_name); }
       });
     } else if (kind === "event") {
       look = previewEventInvite(user.id, token).then((found) => {
@@ -112,6 +128,13 @@ export default function InvitePage() {
           return;
         }
         setProblem(TEAM_REFUSED[status]);
+      } else if (kind === "club") {
+        const { status } = await acceptClubInvite(user.id, token);
+        if (status === "accepted") {
+          navigate("/fitness", { replace: true });
+          return;
+        }
+        setProblem(CLUB_REFUSED[status]);
       } else if (kind === "event") {
         const { status } = await acceptEventInvite(user.id, token);
         if (status === "accepted") {
@@ -147,6 +170,22 @@ export default function InvitePage() {
         <div className="catalogueActions">
           <button type="button" className="calButton calButtonPrimary" onClick={() => void accept()} disabled={busy}>
             Join the team
+          </button>
+          <Link to="/fitness" className="calButton">No thanks</Link>
+        </div>
+      </>
+    );
+  } else if (inviter && kind === "club") {
+    offer = (
+      <>
+        <p>
+          <strong>{inviter}</strong> would like you in <strong>{taskTitle}</strong>. You&rsquo;d see its
+          announcements, polls and events, and its events would appear on your calendar. Your vote in a poll
+          is counted with no name. {inviter} can take you out, and you can leave at any time.
+        </p>
+        <div className="catalogueActions">
+          <button type="button" className="calButton calButtonPrimary" onClick={() => void accept()} disabled={busy}>
+            Join the club
           </button>
           <Link to="/fitness" className="calButton">No thanks</Link>
         </div>

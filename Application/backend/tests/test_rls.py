@@ -511,6 +511,15 @@ DEFINER_SIGNATURES = (
     "account_request_to_join(uuid, text)",
     "account_team_requests(uuid)",
     "account_answer_join_request(uuid, boolean)",
+    "account_on_club(uuid)",
+    "account_club_invite_preview(text)",
+    "account_accept_club_invite(text)",
+    "account_my_clubs()",
+    "account_club_posts(uuid)",
+    "account_club_polls(uuid)",
+    "account_vote_club_poll(uuid, integer)",
+    "account_club_events(date, date)",
+    "account_leave_club(uuid)",
 )
 
 
@@ -586,6 +595,15 @@ def test_only_the_app_role_can_call_the_cross_user_functions(owner_engine):
             "SELECT account_request_to_join(gen_random_uuid(), NULL)",
             "SELECT * FROM account_team_requests(gen_random_uuid())",
             "SELECT account_answer_join_request(gen_random_uuid(), true)",
+            "SELECT account_on_club(gen_random_uuid())",
+            "SELECT * FROM account_club_invite_preview('x')",
+            "SELECT account_accept_club_invite('x')",
+            "SELECT * FROM account_my_clubs()",
+            "SELECT * FROM account_club_posts(gen_random_uuid())",
+            "SELECT * FROM account_club_polls(gen_random_uuid())",
+            "SELECT account_vote_club_poll(gen_random_uuid(), 0)",
+            "SELECT * FROM account_club_events(current_date, current_date)",
+            "SELECT account_leave_club(gen_random_uuid())",
         ):
             with outsider.connect() as conn:
                 with pytest.raises(ProgrammingError, match="permission denied"):
@@ -1435,5 +1453,73 @@ def test_the_directory_and_requests_go_through_the_functions(worlds, app_session
     app_session.info.clear()
     assert app_session.execute(text("SELECT * FROM account_team_directory()")).all() == []
     assert app_session.execute(text("SELECT account_request_to_join(:t, NULL)"), {"t": listed[1].id}).scalar() \
+        == "invalid"
+
+
+# --------------------------------------------------------------------------
+# Clubs (Phase 3 item 10): memberships and votes are written only by the
+# functions, and a member reaches the club only through them.
+# --------------------------------------------------------------------------
+
+def _a_club(worlds):
+    """A's club, which B is in (isolation_world.seed_pair)."""
+    owner, _, _, world_a, _ = worlds
+    return owner.execute(text("SELECT club_id FROM club_members WHERE id = :m"),
+                         {"m": world_a["club_members"]}).scalar()
+
+
+@pytest.mark.parametrize("statement", [
+    "INSERT INTO club_members (id, club_id, member_id, member_name, owner_name, joined_at) "
+    "VALUES (gen_random_uuid(), :c, :someone, 'planted', 'A', now())",
+    "UPDATE club_members SET member_name = 'renamed'",
+    "INSERT INTO club_votes (id, user_id, poll_id, option, created_at) "
+    "SELECT gen_random_uuid(), :someone, id, 0, now() FROM club_polls WHERE club_id = :c",
+    "UPDATE club_votes SET option = 1",
+])
+def test_not_even_the_owner_writes_a_club_membership_or_a_vote_directly(worlds, app_session, statement):
+    owner, a, b, _, _ = worlds
+    act_as(app_session, a.id)
+    with pytest.raises(ProgrammingError, match="permission denied"):
+        app_session.execute(text(statement), {"c": _a_club(worlds), "someone": a.id})
+
+
+def test_a_member_reaches_the_club_only_through_the_functions(worlds, app_session):
+    owner, a, b, _, _ = worlds
+    club = _a_club(worlds)
+    act_as(app_session, b.id)
+    assert app_session.execute(text("SELECT count(*) FROM clubs WHERE id = :c"), {"c": club}).scalar() == 0
+    assert app_session.execute(text("SELECT count(*) FROM club_posts WHERE club_id = :c"), {"c": club}).scalar() == 0
+    posts = app_session.execute(text("SELECT body FROM account_club_posts(:c)"), {"c": club}).scalars().all()
+    assert posts == ["zzownera announcement"]
+    [poll] = app_session.execute(text("SELECT * FROM account_club_polls(:c)"), {"c": club}).all()
+    assert (list(poll.counts), poll.my_vote) == ([1, 0], None), "A's vote counted, not named"
+    assert app_session.execute(text("SELECT account_vote_club_poll(:p, 1)"), {"p": poll.poll_id}).scalar() is True
+    app_session.commit()
+    act_as(app_session, b.id)
+    [poll] = app_session.execute(text("SELECT * FROM account_club_polls(:c)"), {"c": club}).all()
+    assert (list(poll.counts), poll.my_vote) == ([1, 1], 1)
+    events = app_session.execute(text("SELECT title FROM account_club_events(current_date, current_date + 30)"))
+    assert events.scalars().all() == ["zzownera social"]
+
+
+def test_a_stranger_reaches_no_club(worlds, app_session):
+    owner, a, b, _, world_b = worlds
+    stranger = make_user(owner, "rls-club-stranger@example.com")
+    club = _a_club(worlds)
+    act_as(app_session, stranger.id)
+    assert app_session.execute(text("SELECT * FROM account_club_posts(:c)"), {"c": club}).all() == []
+    assert app_session.execute(text("SELECT * FROM account_club_polls(:c)"), {"c": club}).all() == []
+    assert app_session.execute(text("SELECT * FROM account_my_clubs()")).all() == []
+    poll = owner.execute(text("SELECT id FROM club_polls WHERE club_id = :c"), {"c": club}).scalar()
+    assert app_session.execute(text("SELECT account_vote_club_poll(:p, 0)"), {"p": poll}).scalar() is False
+    assert app_session.execute(text("SELECT account_leave_club(:c)"), {"c": club}).scalar() is False
+
+
+def test_with_no_identity_the_club_functions_do_nothing(worlds, app_session):
+    club = _a_club(worlds)
+    app_session.info.clear()
+    assert app_session.execute(text("SELECT * FROM account_club_posts(:c)"), {"c": club}).all() == []
+    assert app_session.execute(text("SELECT * FROM account_my_clubs()")).all() == []
+    assert app_session.execute(text("SELECT account_accept_club_invite('zzownera club invite token')")).scalar() \
         == "invalid"
 

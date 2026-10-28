@@ -19,6 +19,13 @@ vi.mock("../features/teams/api", async () => {
 });
 vi.mock("../app/auth/AuthContext", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
 // The cards beyond teams (Phase 3) have tests of their own; here they stay quiet.
+const clubInvite = vi.hoisted(() => ({ previewClubInvite: vi.fn(), acceptClubInvite: vi.fn() }));
+vi.mock("../features/clubs/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../features/clubs/api")>()),
+  fetchClubs: () => Promise.reject(new Error("not under test")),
+  previewClubInvite: (...a: unknown[]) => clubInvite.previewClubInvite(...a),
+  acceptClubInvite: (...a: unknown[]) => clubInvite.acceptClubInvite(...a),
+}));
 vi.mock("../features/fitness/api", () => ({
   fetchGymBuddies: () => Promise.reject(new Error("not under test")),
   saveGymBuddy: vi.fn(),
@@ -179,5 +186,37 @@ describe("InvitePage, for a team", () => {
     fireEvent.click(screen.getByRole("button", { name: "Join the team" }));
     expect(await screen.findByText("fitness page")).toBeTruthy();
     expect(api.acceptTeamInvite).toHaveBeenCalledWith("u1", "tok_abcdefghijklmnopqrstuv");
+  });
+});
+
+describe("InvitePage, for a club (Phase 3 item 10)", () => {
+  it("names the owner and the club, and asks before joining", async () => {
+    clubInvite.previewClubInvite.mockResolvedValue({ owner_name: "Sam", club_name: "Chess Club" });
+    clubInvite.acceptClubInvite.mockResolvedValue({ status: "accepted" });
+    render(
+      <MemoryRouter initialEntries={["/invite#club:tok_abcdefghijklmnopqrstuv"]}>
+        <Routes>
+          <Route path="/invite" element={<InvitePage />} />
+          <Route path="/fitness" element={<p>fitness page</p>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText("Chess Club")).toBeTruthy();
+    expect(clubInvite.acceptClubInvite).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Join the club" }));
+    expect(await screen.findByText("fitness page")).toBeTruthy();
+    expect(clubInvite.acceptClubInvite).toHaveBeenCalledWith("u1", "tok_abcdefghijklmnopqrstuv");
+  });
+
+  it("says why a club link was refused", async () => {
+    clubInvite.previewClubInvite.mockResolvedValue({ owner_name: "Sam", club_name: "Chess Club" });
+    clubInvite.acceptClubInvite.mockResolvedValue({ status: "full" });
+    render(
+      <MemoryRouter initialEntries={["/invite#club:tok_abcdefghijklmnopqrstuv"]}>
+        <Routes><Route path="/invite" element={<InvitePage />} /></Routes>
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Join the club" }));
+    expect(await screen.findByText(/as many members as it can hold/)).toBeTruthy();
   });
 });
