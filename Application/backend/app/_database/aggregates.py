@@ -17,8 +17,9 @@ from sqlalchemy.orm import Session
 
 from app._database.models import (
     COHORT_FLOOR, COUNTED_AFTER_DAYS, OFFICE_HOUR_WINDOW_DAYS, WORK_HOURS_PER_YEAR, CourseIntelModel,
-    GradeDistributionModel, JobApplicationModel, JobModel, OfficeHourCheckinModel, OfficeHourSlotModel,
-    SalaryFigureModel, SalaryShareModel, TermReviewModel, UserModel, utc_now,
+    GradeDistributionModel, JobApplicationModel, JobModel, MERCHANT_FLOOR, MerchantCategoryModel,
+    OfficeHourCheckinModel, OfficeHourSlotModel, SalaryFigureModel, SalaryShareModel, SpendCategoryModel,
+    TermReviewModel, TransactionModel, UserModel, utc_now,
 )
 
 #: Month and day each term code's term ends, and the years to add to the code's
@@ -492,3 +493,98 @@ def salary_figures(db: Session) -> list[SalaryFigure]:
     rows = db.query(SalaryFigureModel).filter(SalaryFigureModel.people >= COHORT_FLOOR).all()
     return [SalaryFigure(r.employer, r.people, r.median, r.p25, r.p75)
             for r in sorted(rows, key=lambda r: r.employer.lower())]
+
+
+#: Words that make a description a transfer or a payment, never a merchant.
+NOT_MERCHANTS = re.compile(
+    r"\b(transfer|etransfer|interac|payment|deposit|withdrawal|atm|cheque|refund|payroll|paypal|venmo)\b")
+#: A person's vote for a merchant is the category holding this share of their
+#: expenses there (categorize_service.MAP_AGREEMENT; a test holds them together).
+PERSONAL_AGREEMENT = 0.8
+#: A merchant is shared only when its category holds this share of the votes.
+SHARED_AGREEMENT = 0.75
+
+
+def recount_merchant_categories(db: Session) -> int:
+    """Rebuild the shared merchant map from scratch from everyone's categorised expenses.
+
+    One vote per person per merchant: the unarchived category name holding 80% of
+    their expenses there, from live accounts that haven't switched sharing off.
+    Transfers and payments are never merchants, nor keys under 3 letters. A merchant
+    is written at `MERCHANT_FLOOR` people holding 75% of the votes.
+
+    Args:
+        db: Open session; needs no acting user.
+
+    Returns:
+        The number of merchant rows written.
+
+    Note:
+        Deletes every existing row before writing, and commits.
+    """
+    if _is_postgres(db):
+        written = db.execute(text("SELECT account_recount_merchant_categories()")).scalar()
+        db.commit()
+        return int(written or 0)
+    # The normaliser lives with the forecast, which every other reader uses;
+    # imported here, not above, to keep this module free of service imports.
+    from app.Finances.services.forecast_service import merchant_key
+
+    db.query(MerchantCategoryModel).delete(synchronize_session=False)
+    rows = (
+        db.query(TransactionModel.user_id, TransactionModel.description, SpendCategoryModel.name, UserModel.preferences)
+        .join(SpendCategoryModel, (SpendCategoryModel.id == TransactionModel.category_id)
+              & (SpendCategoryModel.user_id == TransactionModel.user_id))
+        .join(UserModel, UserModel.id == TransactionModel.user_id)
+        .filter(TransactionModel.kind == "expense", SpendCategoryModel.archived.is_(False),
+                UserModel.deleted_at.is_(None))
+        .all()
+    )
+    chosen: dict[tuple, Counter] = defaultdict(Counter)
+    for user_id, description, category, preferences in rows:
+        if (preferences or {}).get("share_merchant_categories") is False:
+            continue
+        key = merchant_key(description)
+        if len(key) < 3 or NOT_MERCHANTS.search(key):
+            continue
+        chosen[(user_id, key)][category.lower()] += 1
+    votes: dict[str, Counter] = defaultdict(Counter)
+    for (_, key), counts in chosen.items():
+        top = max(counts.values())
+        name = min(name for name, n in counts.items() if n == top)
+        if top >= PERSONAL_AGREEMENT * sum(counts.values()):
+            votes[key][name] += 1
+    written = 0
+    now = utc_now()
+    for key, tally in votes.items():
+        voters = sum(tally.values())
+        for name, people in tally.items():
+            if people >= MERCHANT_FLOOR and people >= SHARED_AGREEMENT * voters:
+                db.add(MerchantCategoryModel(merchant_key=key, category_name=name, people=people, computed_at=now))
+                written += 1
+    db.commit()
+    return written
+
+
+def merchant_categories(db: Session, keys: list[str]) -> dict[str, str]:
+    """Return the agreed category name for each merchant key asked about, at the floor.
+
+    Args:
+        db: Open session; on Postgres it must act as a signed-in user.
+        keys: Merchant keys, as `forecast_service.merchant_key` gives them.
+
+    Returns:
+        Merchant key to lower-case category name, for the keys the map holds.
+    """
+    wanted = sorted({key for key in keys if key})
+    if not wanted:
+        return {}
+    if _is_postgres(db):
+        rows = db.execute(text("SELECT * FROM account_merchant_categories(:keys)"), {"keys": wanted}).all()
+        return {row.merchant_key: row.category_name for row in rows}
+    rows = (
+        db.query(MerchantCategoryModel)
+        .filter(MerchantCategoryModel.merchant_key.in_(wanted), MerchantCategoryModel.people >= MERCHANT_FLOOR)
+        .all()
+    )
+    return {row.merchant_key: row.category_name for row in rows}

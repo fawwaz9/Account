@@ -42,6 +42,8 @@ export interface CurrentUser {
     event_colors?: Partial<Record<EventKind, string>>;
     /** Account cash tips are filed to; null or absent holds them on the shift. */
     cash_tip_account_id?: string | null;
+    /** Count your categories toward the shared merchant map; absent means on. */
+    share_merchant_categories?: boolean;
     [key: string]: unknown;
   };
 }

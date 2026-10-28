@@ -1,11 +1,13 @@
-"""Suggest a spending category for an expense from the user's own habits.
+"""Suggest a spending category for an expense, from the user's own habits first.
 
-Three layers, cheapest first, each consulted only when the one before has
-nothing confident to say: the user's own merchant map (every expense they have
-categorised), a short hand-kept list of Canadian merchants matched to the
-user's own category names, and naive Bayes over the user's history. Below the
-confidence bar nothing is suggested. Nothing here reads another user's rows;
-CSV import and the omnibox use it.
+Four layers, each consulted only when the one before has nothing confident to
+say: the user's own merchant map (every expense they have categorised), the
+shared merchant map (Phase 3 item 4: what 3 or more people agree a merchant is),
+a short hand-kept list of Canadian merchants, and naive Bayes over the user's
+history. The shared map and the list only ever name one of the user's own
+categories, by name. Below the confidence bar nothing is suggested. Nothing here
+reads another user's rows: the shared map is read through its floor. CSV import
+and the omnibox use it.
 """
 
 import math
@@ -16,10 +18,11 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
+from app._database import aggregates
 from app._database.models import SpendCategoryModel, TransactionModel
 from app.Finances.services.forecast_service import merchant_key
 
-LEARNED, RULE, BAYES = "learned", "rule", "bayes"
+LEARNED, SHARED, RULE, BAYES = "learned", "shared", "rule", "bayes"
 
 #: A merchant you have split between categories is only suggested when one of
 #: them holds this share of your past choices.
@@ -94,7 +97,7 @@ class Suggestion:
 
     Attributes:
         category_id: The suggested category; None to ask.
-        source: "learned", "rule" or "bayes"; None with no suggestion.
+        source: "learned", "shared", "rule" or "bayes"; None with no suggestion.
     """
 
     category_id: uuid.UUID | None
@@ -176,6 +179,27 @@ class Categorizer:
             self.word_counts[category_id].update(_words(key))
         self.vocabulary = {word for counts in self.word_counts.values() for word in counts}
         self.trained = sum(self.class_rows.values())
+        self._db = db
+        #: Merchant key to the shared map's category name, or None once asked.
+        self._shared: dict[str, str | None] = {}
+
+    def prefetch(self, descriptions) -> None:
+        """Read the shared map for many descriptions in one call, before suggesting.
+
+        Args:
+            descriptions: The descriptions about to be suggested for.
+        """
+        keys = {merchant_key(d) for d in descriptions} - set(self._shared) - {""}
+        found = aggregates.merchant_categories(self._db, list(keys))
+        for key in keys:
+            self._shared[key] = found.get(key)
+
+    def _shared_target(self, key: str) -> uuid.UUID | None:
+        """Return the user's category the shared map names for a merchant key, or None."""
+        if key not in self._shared:
+            self.prefetch([key])
+        name = self._shared.get(key)
+        return self.by_name.get(name) if name else None
 
     def suggest(self, description: str | None) -> Suggestion:
         """Suggest a category for an expense description.
@@ -185,8 +209,9 @@ class Categorizer:
 
         Returns:
             The user's own past choice when one category holds at least 80% of it,
-            else a curated rule's category, else a Bayes guess at 75% confidence or
-            more, else no suggestion.
+            else the shared map's category if the user has one by that name, else a
+            curated rule's category, else a Bayes guess at 75% confidence or more,
+            else no suggestion.
         """
         key = merchant_key(description)
         if not key:
@@ -197,6 +222,10 @@ class Categorizer:
             category_id, hits = seen.most_common(1)[0]
             if hits / sum(seen.values()) >= MAP_AGREEMENT:
                 return Suggestion(category_id, LEARNED)
+
+        shared = self._shared_target(key)
+        if shared is not None:
+            return Suggestion(shared, SHARED)
 
         ruled = _rule_target(key, self.by_name)
         if ruled is not None:

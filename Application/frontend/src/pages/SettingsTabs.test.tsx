@@ -528,6 +528,18 @@ describe("blocked periods", () => {
 });
 
 describe("the financial tab", () => {
+  it("saves the merchant-map switch on its own, on each tick (Phase 3 item 4)", async () => {
+    render(<SettingsPage />);
+    fireEvent.click(screen.getByRole("tab", { name: "Financial" }));
+    const box = screen.getByRole("checkbox", { name: /Help categorise others/ }) as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    fireEvent.click(box);
+    await waitFor(() => expect(updatePreferences).toHaveBeenCalled());
+    expect(updatePreferences.mock.calls[0][1]).toEqual({ share_merchant_categories: false });
+    await waitFor(() => expect(refreshUser).toHaveBeenCalled());
+    expect(box.checked).toBe(false);
+  });
+
   it("offers both dialogs once its data has loaded", async () => {
     render(<SettingsPage />);
     fireEvent.click(screen.getByRole("tab", { name: "Financial" }));

@@ -135,6 +135,9 @@ export default function SettingsPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [tipAccount, setTipAccount] = useState<string>(user?.preferences?.cash_tip_account_id ?? "");
   const [savingTip, setSavingTip] = useState(false);
+  // Phase 3 item 4: on unless switched off; saved on each tick.
+  const [sharingMerchants, setSharingMerchants] = useState(user?.preferences?.share_merchant_categories !== false);
+  const [merchantError, setMerchantError] = useState<string | null>(null);
   const [tipMessage, setTipMessage] = useState<string | null>(null);
   const [tipError, setTipError] = useState<string | null>(null);
   // Which accounts count (D39): the one being saved, and what happened.
@@ -325,6 +328,19 @@ export default function SettingsPage() {
       setCountError(err instanceof Error ? err.message : "Could not save that");
     } finally {
       setCountingId(null);
+    }
+  }
+
+  async function handleShareMerchants(next: boolean) {
+    if (!user) return;
+    setSharingMerchants(next);
+    setMerchantError(null);
+    try {
+      await updatePreferences(user.id, { share_merchant_categories: next });
+      await refreshUser();
+    } catch (err) {
+      setSharingMerchants(!next);
+      setMerchantError(err instanceof Error ? err.message : "Could not save that");
     }
   }
 
@@ -933,6 +949,26 @@ export default function SettingsPage() {
               )}
               {tipError && <p className="loginError">{tipError}</p>}
               {tipMessage && <p className="loginSuccess" role="status">{tipMessage}</p>}
+            </div>
+
+            <div className="loginField">
+              <span className="labelWithTip">
+                <label className="settingsToggle">
+                  <input
+                    type="checkbox"
+                    checked={sharingMerchants}
+                    onChange={(event) => void handleShareMerchants(event.target.checked)}
+                  />
+                  Help categorise others&rsquo; imports
+                </label>
+                <HelpTip label="About the shared merchant map">
+                  Counts the category you usually file each shop under, with no name, so a new
+                  student&rsquo;s first import comes back sorted. A shop is shared only once 3 people agree,
+                  only ever as a category name, and never a transfer or payment. Your own choices always
+                  win for you. Off takes yours out at the next daily count.
+                </HelpTip>
+              </span>
+              {merchantError && <p className="loginError" role="alert">{merchantError}</p>}
             </div>
           </div>
         </div>

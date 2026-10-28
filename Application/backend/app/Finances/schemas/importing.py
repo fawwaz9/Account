@@ -79,7 +79,7 @@ class ImportRow(BaseModel):
         duplicate_of: The existing transaction a duplicate matches.
         reason: Why a row is a duplicate or an error.
         category_id: A suggested category for an expense; None to ask.
-        category_source: Where the suggestion came from: "learned", "rule" or
+        category_source: Where the suggestion came from: "learned", "shared", "rule" or
             "bayes".
     """
 

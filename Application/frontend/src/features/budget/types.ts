@@ -722,7 +722,7 @@ export interface ImportRow {
   /** Suggested expense category, or null to ask. */
   category_id: string | null;
   /** Where the suggestion came from. */
-  category_source: "learned" | "rule" | "bayes" | null;
+  category_source: "learned" | "shared" | "rule" | "bayes" | null;
 }
 
 /** A CSV import before it is committed. */

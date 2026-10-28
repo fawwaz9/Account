@@ -441,6 +441,8 @@ def preview(
     parsed = read_rows(rows, used)
     mark_duplicates(db, user_id, account_id, parsed)
     categorizer = Categorizer(db, user_id)
+    # One read of the shared map for the whole file, not one per row.
+    categorizer.prefetch(row.description for row in parsed if row.status != ERROR)
     for row in parsed:
         if row.status != ERROR and row.amount is not None and row.amount < 0:
             suggestion = categorizer.suggest(row.description)

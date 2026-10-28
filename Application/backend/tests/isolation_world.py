@@ -63,6 +63,7 @@ from app._database.models import (
     EventMemberModel,
     GradeDistributionModel,
     CourseIntelModel,
+    MerchantCategoryModel,
     SalaryFigureModel,
     SalaryShareModel,
     OfficeHourCheckinModel,
@@ -431,6 +432,7 @@ CATALOGUE_IDS = {
     "course_intel": uuid.uuid5(uuid.NAMESPACE_URL, "account-test/course_intel"),
     "office_hour_slots": uuid.uuid5(uuid.NAMESPACE_URL, "account-test/office_hour_slots"),
     "salary_figures": uuid.uuid5(uuid.NAMESPACE_URL, "account-test/salary_figures"),
+    "merchant_categories": uuid.uuid5(uuid.NAMESPACE_URL, "account-test/merchant_categories"),
 }
 
 
@@ -470,10 +472,15 @@ def seed_catalogue(db) -> dict[str, uuid.UUID]:
     pay = SalaryFigureModel(id=CATALOGUE_IDS["salary_figures"], employer_key="shopify", employer="Shopify", people=5,
                             median=30.0, p25=28.0, p75=32.0)
     db.add(pay)
+    # Phase 3 item 4: a merchant most people file as coffee.
+    merchant = MerchantCategoryModel(id=CATALOGUE_IDS["merchant_categories"], merchant_key="blenz",
+                                     category_name="coffee", people=3)
+    db.add(merchant)
     # Read before the commit: after it, touching an attribute refreshes the row
     # and leaves a transaction open holding a lock that blocks rls.install.
     ids = {"catalogue_courses": course.id, "catalogue_prerequisites": rule.id, "grade_distributions": sealed.id,
-           "course_intel": intel.id, "office_hour_slots": slot.id, "salary_figures": pay.id}
+           "course_intel": intel.id, "office_hour_slots": slot.id, "salary_figures": pay.id,
+           "merchant_categories": merchant.id}
     db.commit()
     missing = (SHARED_READ_TABLES | SEALED_TABLES) - set(ids)
     assert not missing, f"the catalogue seed has nothing in: {sorted(missing)}"

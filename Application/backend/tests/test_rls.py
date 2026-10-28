@@ -485,6 +485,8 @@ DEFINER_SIGNATURES = (
     "account_office_hours(text)",
     "account_recount_salaries()",
     "account_salary_figures()",
+    "account_recount_merchant_categories()",
+    "account_merchant_categories(text[])",
     "account_on_team(uuid)",
     "account_team_invite_preview(text)",
     "account_accept_team_invite(text)",
@@ -548,6 +550,9 @@ def test_only_the_app_role_can_call_the_cross_user_functions(owner_engine):
             "SELECT account_employer_key('x')",
             "SELECT account_recount_salaries()",
             "SELECT * FROM account_salary_figures()",
+            "SELECT account_merchant_key('x')",
+            "SELECT account_recount_merchant_categories()",
+            "SELECT * FROM account_merchant_categories(ARRAY['x'])",
             "SELECT account_on_team(gen_random_uuid())",
             "SELECT * FROM account_team_invite_preview('x')",
             "SELECT account_accept_team_invite('x')",
@@ -1169,6 +1174,36 @@ def test_salaries_are_counted_from_other_peoples_offers_and_read_only_through_th
     app_session.rollback()
     app_session.info.clear()
     assert app_session.execute(text("SELECT * FROM account_salary_figures()")).all() == []
+
+
+def test_the_merchant_map_is_built_from_everyones_choices_and_answers_names_only(worlds, app_session):
+    """Phase 3 item 4: the recount, as the app role, reads every live account's
+    categorised expenses; the door answers a name at 3 people, never a count, and
+    nothing without an identity."""
+    from datetime import date as day
+    from app._database.models import AccountModel, SpendCategoryModel, TransactionModel
+    owner = worlds[0]
+    for merchant, n in (("BLENZ #12", 3), ("JJ BEAN #4", 2)):
+        for i in range(n):
+            person = make_user(owner, f"rls-merchant-{merchant[:3]}-{i}@example.com")
+            account = AccountModel(id=uuid.uuid4(), user_id=person.id, name="Chequing", kind="spending",
+                                   income_share=100.0)
+            category = SpendCategoryModel(id=uuid.uuid4(), user_id=person.id, name="Coffee")
+            owner.add_all([account, category])
+            owner.flush()
+            owner.add(TransactionModel(id=uuid.uuid4(), user_id=person.id, account_id=account.id, kind="expense",
+                                       amount=-4.0, description=merchant, occurred_on=day(2026, 10, 1),
+                                       category_id=category.id))
+    owner.commit()
+    act_as(app_session, worlds[1].id)
+    assert app_session.execute(text("SELECT account_recount_merchant_categories()")).scalar() == 1
+    app_session.commit()
+    act_as(app_session, worlds[1].id)
+    rows = app_session.execute(text("SELECT * FROM account_merchant_categories(ARRAY['blenz', 'jj bean'])")).all()
+    assert [tuple(r) for r in rows] == [("blenz", "coffee")]
+    app_session.rollback()
+    app_session.info.clear()
+    assert app_session.execute(text("SELECT * FROM account_merchant_categories(ARRAY['blenz'])")).all() == []
 
 
 def test_with_no_identity_the_recount_still_reveals_nothing(worlds, app_session):

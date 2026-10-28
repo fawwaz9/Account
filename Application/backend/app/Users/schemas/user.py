@@ -131,6 +131,8 @@ class UserPreferences(BaseModel):
         use_estimate_ratio: Scale the workload forecast by how long tasks really take.
         exam_buffer_hours: A shift ending less than this many hours before an exam is
             flagged, 0-48.
+        share_merchant_categories: Whether the user's confident category per merchant
+            is counted, with no name, toward the shared merchant map (Phase 3 item 4).
     """
     timezone: str = Field(default="America/Regina", description="IANA timezone")
     currency: str = Field(default="CAD", min_length=3, max_length=3)
@@ -170,6 +172,9 @@ class UserPreferences(BaseModel):
     #: Phase 2 item 14: a shift ending less than this many hours before an
     #: exam is flagged as crowding it. 0 flags only real overlaps.
     exam_buffer_hours: int = Field(default=12, ge=0, le=48)
+    #: Phase 3 item 4 (D11): on unless switched off. Off takes the user's votes
+    #: out at the next recount; reading the map is never gated by it.
+    share_merchant_categories: bool = True
 
     @field_validator("event_colors")
     @classmethod
@@ -251,6 +256,8 @@ class UserPreferencesPatch(BaseModel):
         event_colors: The whole colour map; replaces the stored one when sent.
         use_estimate_ratio: Scale the workload forecast by real task durations.
         exam_buffer_hours: Hours before an exam a shift may not end within, 0-48.
+        share_merchant_categories: Count the user's merchant categories toward the
+            shared map.
     """
 
     timezone: str | None = None
@@ -270,6 +277,7 @@ class UserPreferencesPatch(BaseModel):
     event_colors: dict[EventKind, str] | None = None
     use_estimate_ratio: bool | None = None
     exam_buffer_hours: int | None = Field(default=None, ge=0, le=48)
+    share_merchant_categories: bool | None = None
 
     # Both validators pass `None` straight through. An explicit null means "no
     # opinion" here, and running the check on it would reject the one value that

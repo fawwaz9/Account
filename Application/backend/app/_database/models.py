@@ -2502,6 +2502,41 @@ class SalaryFigureModel(Base):
     computed_at = Column(DateTime, nullable=False, default=utc_now)
 
 
+#: Phase 3 item 4 (D11, yours). A merchant's category is shared once this many
+#: people agree on it: it describes the merchant, not the people. Written into
+#: the recount and read functions too; a test holds them together.
+MERCHANT_FLOOR = 3
+
+
+class MerchantCategoryModel(Base):
+    """Sealed: the category most people file a merchant under, by category name.
+
+    The API's role can neither read nor write it. Only
+    `account_recount_merchant_categories` writes it, from each person's confident
+    choice per merchant (one category holding 80% of their expenses there), counting
+    people who haven't switched sharing off and never a transfer or payment. A
+    merchant is written only when `MERCHANT_FLOOR` people agree and that name holds
+    75% of the votes. The read answers a category name, never a count. Unique per
+    merchant.
+
+    Attributes:
+        id: Primary key.
+        merchant_key: The merchant as `forecast_service.merchant_key` normalises it.
+        category_name: The agreed category name, lower case.
+        people: How many people chose it; read only to check the floor again.
+        computed_at: When the recount wrote it.
+    """
+
+    __tablename__ = "merchant_categories"
+    __table_args__ = (UniqueConstraint("merchant_key", name="uq_merchant_category"),)
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    merchant_key = Column(String, nullable=False)
+    category_name = Column(String, nullable=False)
+    people = Column(Integer, nullable=False)
+    computed_at = Column(DateTime, nullable=False, default=utc_now)
+
+
 #: How many people besides the captain a team can hold (Phase 2 D26). Written
 #: into account_accept_team_invite too; a test holds the two together.
 MAX_TEAM_MEMBERS = 30

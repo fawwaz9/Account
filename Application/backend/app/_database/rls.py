@@ -34,7 +34,9 @@ SHARED_READ_TABLES = frozenset({"catalogue_courses", "catalogue_prerequisites"})
 #: security with no policy, and every grant revoked, the app role's included.
 #: Only a definer function, running as the owner, writes them. By name, like
 #: the shared list, and refused if the table has an owner.
-SEALED_TABLES = frozenset({"grade_distributions", "course_intel", "office_hour_slots", "salary_figures"})
+SEALED_TABLES = frozenset({
+    "grade_distributions", "course_intel", "office_hour_slots", "salary_figures", "merchant_categories",
+})
 
 #: Who may read a shared row: anyone the API has identified. Not ``true``, so an
 #: un-identified query still sees nothing -- the same fail-closed rule as every
@@ -85,6 +87,9 @@ FUNCTIONS = (
     # Phase 3 item 12 (D11, D12): shared offers, verified, published in batches of 5.
     "account_recount_salaries",
     "account_salary_figures",
+    # Phase 3 item 4 (D11): a merchant's category, once 3 people agree.
+    "account_recount_merchant_categories",
+    "account_merchant_categories",
     # Phase 2 item 11 (D26): teams and games.
     "account_on_team",
     "account_team_invite_preview",
@@ -643,6 +648,66 @@ CREATE OR REPLACE FUNCTION account_salary_figures()
           WHERE account_current_user() IS NOT NULL AND f.people >= 5
           ORDER BY lower(f.employer) $$;
 
+-- Phase 3 item 4: a transaction's description as a merchant key, the twin of
+-- forecast_service.merchant_key: lower case, digits, # and * as spaces, single
+-- spaces, and spaces, dashes, dots and commas trimmed. Not a definer.
+CREATE OR REPLACE FUNCTION account_merchant_key(p_description text) RETURNS text
+    LANGUAGE sql IMMUTABLE SET search_path = public, pg_temp
+    AS $$ SELECT btrim(regexp_replace(regexp_replace(lower(coalesce(p_description, '')), '[0-9#*]+', ' ', 'g'),
+                                     '[[:space:]]+', ' ', 'g'), ' -.,') $$;
+
+-- Phase 3 item 4 (D11): the category most people file each merchant under,
+-- rebuilt whole. One vote per person per merchant: the unarchived category
+-- holding 80% of their expenses there (categorize_service.MAP_AGREEMENT), from
+-- live accounts that haven't switched sharing off. Transfers, payments and the
+-- like are never merchants (aggregates.NOT_MERCHANTS), nor keys under 3
+-- letters. Written only at 3 people (models.MERCHANT_FLOOR) holding 75% of the
+-- votes, so a contested merchant stays out. Returns how many rows it wrote.
+CREATE OR REPLACE FUNCTION account_recount_merchant_categories() RETURNS integer
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$
+DECLARE
+    written integer;
+BEGIN
+    DELETE FROM merchant_categories;
+    WITH chosen AS (
+        SELECT t.user_id, account_merchant_key(t.description) AS merchant_key, lower(c.name) AS category_name,
+               count(*) AS n
+        FROM transactions t
+        JOIN spend_categories c ON c.id = t.category_id AND c.user_id = t.user_id AND NOT c.archived
+        JOIN users u ON u.id = t.user_id
+        WHERE t.kind = 'expense' AND u.deleted_at IS NULL
+          AND coalesce((u.preferences ->> 'share_merchant_categories')::boolean, true)
+        GROUP BY t.user_id, account_merchant_key(t.description), lower(c.name)
+    ), votes AS (
+        SELECT DISTINCT ON (user_id, merchant_key) user_id, merchant_key, category_name, n,
+               sum(n) OVER (PARTITION BY user_id, merchant_key) AS total
+        FROM chosen
+        WHERE length(merchant_key) >= 3
+          AND merchant_key !~ '[[:<:]](transfer|etransfer|interac|payment|deposit|withdrawal|atm|cheque|refund|payroll|paypal|venmo)[[:>:]]'
+        ORDER BY user_id, merchant_key, n DESC, category_name
+    ), tallied AS (
+        SELECT merchant_key, category_name, count(*) AS people,
+               sum(count(*)) OVER (PARTITION BY merchant_key) AS voters
+        FROM votes WHERE n >= 0.8 * total
+        GROUP BY merchant_key, category_name
+    )
+    INSERT INTO merchant_categories (id, merchant_key, category_name, people, computed_at)
+        SELECT gen_random_uuid(), merchant_key, category_name, people, now() AT TIME ZONE 'utc'
+        FROM tallied WHERE people >= 3 AND people >= 0.75 * voters;
+    GET DIAGNOSTICS written = ROW_COUNT;
+    RETURN written;
+END $$;
+
+-- The agreed category name for each merchant key asked about, to anyone signed
+-- in, at the floor (checked again). Never a count.
+CREATE OR REPLACE FUNCTION account_merchant_categories(p_keys text[])
+    RETURNS TABLE(merchant_key text, category_name text)
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ SELECT m.merchant_key::text, m.category_name::text
+          FROM merchant_categories m
+          WHERE account_current_user() IS NOT NULL AND m.people >= 3 AND m.merchant_key = ANY(p_keys) $$;
+
 -- Phase 2 item 11 (D26): teams. "On the team" means the captain or a member,
 -- of a captain whose account is not being deleted. Every game write goes
 -- through these, the captain's included.
@@ -845,6 +910,9 @@ REVOKE ALL ON FUNCTION account_office_hours(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_employer_key(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_recount_salaries() FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_salary_figures() FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_merchant_key(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_recount_merchant_categories() FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_merchant_categories(text[]) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_on_team(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_team_invite_preview(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_accept_team_invite(text) FROM PUBLIC;
@@ -1141,6 +1209,8 @@ def grant_statements() -> list[str]:
         "GRANT EXECUTE ON FUNCTION account_office_hours(text) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_recount_salaries() TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_salary_figures() TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_recount_merchant_categories() TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_merchant_categories(text[]) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_on_team(uuid) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_team_invite_preview(text) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_accept_team_invite(text) TO " + APP_ROLE,
