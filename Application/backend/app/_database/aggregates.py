@@ -5,9 +5,10 @@ every read here calls the one `SECURITY DEFINER` function that answers for its
 table, and that function applies the floor itself. SQLite has no row security, so
 there each read is a plain query applying the same rules; the tests run both.
 """
+import re
 import statistics
 import uuid
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 
@@ -15,8 +16,9 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app._database.models import (
-    COHORT_FLOOR, COUNTED_AFTER_DAYS, OFFICE_HOUR_WINDOW_DAYS, CourseIntelModel, GradeDistributionModel,
-    OfficeHourCheckinModel, OfficeHourSlotModel, TermReviewModel, UserModel, utc_now,
+    COHORT_FLOOR, COUNTED_AFTER_DAYS, OFFICE_HOUR_WINDOW_DAYS, WORK_HOURS_PER_YEAR, CourseIntelModel,
+    GradeDistributionModel, JobApplicationModel, JobModel, OfficeHourCheckinModel, OfficeHourSlotModel,
+    SalaryFigureModel, SalaryShareModel, TermReviewModel, UserModel, utc_now,
 )
 
 #: Month and day each term code's term ends, and the years to add to the code's
@@ -314,3 +316,179 @@ def office_hours(db: Session, course_key: str) -> list[Slot]:
         .all()
     )
     return [Slot(r.weekday, r.hour, r.people, r.none_votes, r.short_votes, r.long_votes) for r in rows]
+
+
+#: Company-form words dropped from the end of an employer's name.
+_EMPLOYER_SUFFIX = re.compile(r"( (inc|ltd|llc|corp|corporation|co|company|limited))+$")
+#: An offer is verified by an own job within this fraction of its pay.
+OWN_JOB_TOLERANCE = 0.05
+#: Offers within this fraction of each other agree.
+AGREEMENT_TOLERANCE = 0.10
+
+
+def employer_key(name: str | None) -> str:
+    """Return an employer's name normalised, so "Shopify Inc." and "shopify" match.
+
+    The twin of the SQL `account_employer_key`.
+
+    Args:
+        name: The name as typed.
+
+    Returns:
+        Lower case, "&" as "and", other punctuation as spaces, single spaces, and a
+        trailing company form (Inc, Ltd, Corp ...) dropped; "" for no name.
+    """
+    text_ = (name or "").lower().replace("&", " and ")
+    text_ = re.sub(r"[^a-z0-9 ]", " ", text_)
+    text_ = re.sub(r" +", " ", text_).strip()
+    return _EMPLOYER_SUFFIX.sub("", text_)
+
+
+def hourly_equivalent(amount: float, period: str) -> float:
+    """Return an offer's pay per hour: monthly as 12 months, yearly over 2080 hours.
+
+    Args:
+        amount: The offer in dollars.
+        period: "hourly", "monthly" or "yearly".
+
+    Returns:
+        Dollars per hour.
+    """
+    if period == "hourly":
+        return amount
+    if period == "monthly":
+        return amount * 12 / WORK_HOURS_PER_YEAR
+    return amount / WORK_HOURS_PER_YEAR
+
+
+def percentile(values: list[float], fraction: float) -> float:
+    """Return a percentile by linear interpolation, as Postgres's percentile_cont does.
+
+    Args:
+        values: At least one value.
+        fraction: 0 to 1.
+
+    Returns:
+        The value `fraction` of the way through the sorted values.
+    """
+    ordered = sorted(values)
+    position = fraction * (len(ordered) - 1)
+    low = int(position)
+    high = min(low + 1, len(ordered) - 1)
+    return ordered[low] + (ordered[high] - ordered[low]) * (position - low)
+
+
+@dataclass(frozen=True)
+class SalaryFigure:
+    """Typical hourly pay at one employer, from verified shared offers.
+
+    Attributes:
+        employer: The name as most people wrote it.
+        people: Offers counted, a multiple of 5.
+        median: Median dollars per hour.
+        p25: Bottom of the middle half.
+        p75: Top of the middle half.
+    """
+    employer: str
+    people: int
+    median: float
+    p25: float
+    p75: float
+
+
+def recount_salaries(db: Session) -> int:
+    """Rebuild the salary figures from scratch from every shared offer.
+
+    Each person's latest shared offer per employer, live accounts only, read from the
+    application now. An offer counts only once verified (an own hourly job there
+    within 5%, or 5 people's offers within 10% of it), and only whole batches of 5
+    verified offers, oldest share first.
+
+    Args:
+        db: Open session; needs no acting user.
+
+    Returns:
+        The number of employer rows written.
+
+    Note:
+        Deletes every existing row before writing, and commits.
+    """
+    if _is_postgres(db):
+        written = db.execute(text("SELECT account_recount_salaries()")).scalar()
+        db.commit()
+        return int(written or 0)
+    db.query(SalaryFigureModel).delete(synchronize_session=False)
+    rows = (
+        db.query(SalaryShareModel, JobApplicationModel)
+        .join(JobApplicationModel, (JobApplicationModel.id == SalaryShareModel.application_id)
+              & (JobApplicationModel.user_id == SalaryShareModel.user_id))
+        .join(UserModel, UserModel.id == SalaryShareModel.user_id)
+        .filter(UserModel.deleted_at.is_(None), JobApplicationModel.offer_amount > 0,
+                JobApplicationModel.offer_period.isnot(None))
+        .all()
+    )
+    latest: dict[tuple, tuple] = {}
+    for share, application in rows:
+        key = employer_key(application.company)
+        if not key:
+            continue
+        found = latest.get((share.user_id, key))
+        if found is None or share.shared_at > found[0].shared_at:
+            latest[(share.user_id, key)] = (share, application)
+    shared = [
+        {"user_id": user_id, "key": key, "employer": application.company.strip(), "shared_at": share.shared_at,
+         "hourly": hourly_equivalent(application.offer_amount, application.offer_period)}
+        for (user_id, key), (share, application) in latest.items()
+    ]
+    by_employer: dict[str, list[dict]] = defaultdict(list)
+    for offer in shared:
+        by_employer[offer["key"]].append(offer)
+    written = 0
+    now = utc_now()
+    for key, offers in by_employer.items():
+        verified = []
+        for offer in offers:
+            agreeing = sum(1 for other in offers
+                           if abs(other["hourly"] - offer["hourly"]) <= AGREEMENT_TOLERANCE * offer["hourly"])
+            if agreeing >= COHORT_FLOOR or _own_job_matches(db, offer):
+                verified.append(offer)
+        verified.sort(key=lambda o: (o["shared_at"], o["hourly"]))
+        batch = verified[: len(verified) // COHORT_FLOOR * COHORT_FLOOR]
+        if len(batch) < COHORT_FLOOR:
+            continue
+        hourly = [o["hourly"] for o in batch]
+        names = Counter(o["employer"] for o in batch)
+        most = max(names.values())
+        db.add(SalaryFigureModel(
+            employer_key=key, employer=min(name for name, n in names.items() if n == most), people=len(batch),
+            median=percentile(hourly, 0.5), p25=percentile(hourly, 0.25), p75=percentile(hourly, 0.75),
+            computed_at=now,
+        ))
+        written += 1
+    db.commit()
+    return written
+
+
+def _own_job_matches(db: Session, offer: dict) -> bool:
+    """Return whether the offer's owner has an hourly job there paying within 5% of it."""
+    for job in db.query(JobModel).filter(JobModel.user_id == offer["user_id"], JobModel.kind == "hourly"):
+        if (employer_key(job.employer) == offer["key"] and job.hourly_rate is not None
+                and abs(job.hourly_rate - offer["hourly"]) <= OWN_JOB_TOLERANCE * offer["hourly"]):
+            return True
+    return False
+
+
+def salary_figures(db: Session) -> list[SalaryFigure]:
+    """Return every employer's salary figures at the floor, by name.
+
+    Args:
+        db: Open session; on Postgres it must act as a signed-in user.
+
+    Returns:
+        The figures; empty while no employer has reached the floor.
+    """
+    if _is_postgres(db):
+        return [SalaryFigure(*row) for row in db.execute(text("SELECT * FROM account_salary_figures()")).all()]
+    rows = db.query(SalaryFigureModel).filter(SalaryFigureModel.people >= COHORT_FLOOR).all()
+    return [SalaryFigure(r.employer, r.people, r.median, r.p25, r.p75)
+            for r in sorted(rows, key=lambda r: r.employer.lower())]

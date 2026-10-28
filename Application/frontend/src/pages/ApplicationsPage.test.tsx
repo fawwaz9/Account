@@ -13,6 +13,7 @@ vi.mock("../features/jobs/applications/api", () => ({
   fetchApplications, fetchApplicationStats, addStep, fetchSeasons,
   createSeason: vi.fn(), updateSeason: vi.fn(), deleteSeason: vi.fn(),
   createApplication: vi.fn(), updateApplication: vi.fn(), deleteApplication: vi.fn(), deleteStep: vi.fn(),
+  setSalaryShare: vi.fn(), fetchSalaries: () => Promise.resolve([]),
 }));
 vi.mock("../app/auth/AuthContext", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
 vi.mock("../shared/utils/dateUtils", async (importOriginal) => ({
@@ -26,7 +27,7 @@ function application(over: Partial<Application>): Application {
   return {
     id: "a1", company: "Shopify", role: "Backend intern", applied_on: "2026-08-01", source: null, link: null,
     location: null, notes: null, status: "applied", deadline: null, follow_up_on: null, offer_amount: null,
-    offer_period: null, steps: [], last_step_on: "2026-08-01", quiet: false, created_at: null, updated_at: null,
+    offer_period: null, steps: [], last_step_on: "2026-08-01", quiet: false, salary_shared: false, created_at: null, updated_at: null,
     ...over,
   };
 }

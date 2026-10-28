@@ -483,6 +483,8 @@ DEFINER_SIGNATURES = (
     "account_course_intel(text)",
     "account_recount_office_hours()",
     "account_office_hours(text)",
+    "account_recount_salaries()",
+    "account_salary_figures()",
     "account_on_team(uuid)",
     "account_team_invite_preview(text)",
     "account_accept_team_invite(text)",
@@ -543,6 +545,9 @@ def test_only_the_app_role_can_call_the_cross_user_functions(owner_engine):
             "SELECT account_term_counted('2020W1')",
             "SELECT account_recount_office_hours()",
             "SELECT * FROM account_office_hours('x')",
+            "SELECT account_employer_key('x')",
+            "SELECT account_recount_salaries()",
+            "SELECT * FROM account_salary_figures()",
             "SELECT account_on_team(gen_random_uuid())",
             "SELECT * FROM account_team_invite_preview('x')",
             "SELECT account_accept_team_invite('x')",
@@ -1133,6 +1138,37 @@ def test_office_hour_slots_are_counted_at_the_floor_and_read_only_through_it(wor
     app_session.rollback()
     app_session.info.clear()
     assert app_session.execute(text("SELECT * FROM account_office_hours('UBCV CPSC 110')")).all() == []
+
+
+def test_salaries_are_counted_from_other_peoples_offers_and_read_only_through_the_floor(worlds, app_session):
+    """Phase 3 item 12: the recount, as the app role, reads everyone's shared
+    offers and their own jobs; the door answers employers at 5, and nothing
+    without an identity. The app role still can't read another's share."""
+    from datetime import date as day
+    from app._database.models import ApplicationStepModel, JobApplicationModel, SalaryShareModel
+    owner = worlds[0]
+    for company, n in (("Shopify", 5), ("Wealthsimple", 4)):
+        for i in range(n):
+            person = make_user(owner, f"rls-pay-{company}-{i}@example.com")
+            row = JobApplicationModel(id=uuid.uuid4(), user_id=person.id, company=company, role="Intern",
+                                      applied_on=day(2026, 9, 1), status="offer", offer_amount=30.0,
+                                      offer_period="hourly")
+            owner.add(row)
+            owner.flush()
+            owner.add(ApplicationStepModel(id=uuid.uuid4(), application_id=row.id, status="applied",
+                                           on_date=day(2026, 9, 1)))
+            owner.add(SalaryShareModel(user_id=person.id, application_id=row.id))
+    owner.commit()
+    act_as(app_session, worlds[1].id)
+    assert app_session.execute(text("SELECT count(*) FROM salary_shares")).scalar() == 1, "only B's own"
+    assert app_session.execute(text("SELECT account_recount_salaries()")).scalar() == 1
+    app_session.commit()
+    act_as(app_session, worlds[1].id)
+    rows = app_session.execute(text("SELECT * FROM account_salary_figures()")).all()
+    assert [tuple(r) for r in rows] == [("Shopify", 5, 30.0, 30.0, 30.0)]
+    app_session.rollback()
+    app_session.info.clear()
+    assert app_session.execute(text("SELECT * FROM account_salary_figures()")).all() == []
 
 
 def test_with_no_identity_the_recount_still_reveals_nothing(worlds, app_session):

@@ -3,6 +3,7 @@ import { useAuth } from "../app/auth/AuthContext";
 import JobsTabs from "../features/jobs/components/JobsTabs";
 import ApplicationModal from "../features/jobs/applications/ApplicationModal";
 import ApplicationSankey from "../features/jobs/applications/ApplicationSankey";
+import CoopPay from "../features/jobs/applications/CoopPay";
 import SeasonsModal from "../features/jobs/applications/SeasonsModal";
 import { addStep, fetchApplications, fetchApplicationStats, fetchSeasons } from "../features/jobs/applications/api";
 import { Application, ApplicationStats, Season, STATUS_LABELS } from "../features/jobs/applications/types";
@@ -307,6 +308,9 @@ export default function ApplicationsPage() {
           </div>
         </Modal>
       )}
+
+      {/* Phase 3 item 12: shared pay from everyone's offers, whatever the season. */}
+      {userId && <CoopPay userId={userId} />}
 
       <SeasonsModal
         open={managing}

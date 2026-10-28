@@ -198,6 +198,8 @@ class Application(BaseModel):
         last_step_on: The date of the latest step.
         quiet: True when still waiting on the employer (applied, screening or
             interview) and nothing has happened for 30 days.
+        salary_shared: Whether the offer's pay is shared, with no name, toward the
+            employer's typical pay (Phase 3 item 12).
         created_at: When it was recorded, naive UTC.
         updated_at: When it last changed, naive UTC.
     """
@@ -220,8 +222,37 @@ class Application(BaseModel):
     last_step_on: date
     #: Quiet for 30 days while still waiting on them: "no reply yet?" (D3).
     quiet: bool
+    salary_shared: bool = False
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+class SalaryShareIn(BaseModel):
+    """Request body for sharing, or no longer sharing, an offer's pay.
+
+    Attributes:
+        share: True to count it, with no name; False to take it back.
+    """
+
+    share: bool
+
+
+class SalaryFigure(BaseModel):
+    """Typical hourly pay at one employer, from at least 5 verified shared offers.
+
+    Attributes:
+        employer: The employer's name as most people wrote it.
+        people: How many offers it is read from, a multiple of 5.
+        median: Median dollars per hour.
+        p25: Bottom of the middle half, dollars per hour.
+        p75: Top of the middle half, dollars per hour.
+    """
+
+    employer: str
+    people: int
+    median: float
+    p25: float
+    p75: float
 
 
 class Flow(BaseModel):

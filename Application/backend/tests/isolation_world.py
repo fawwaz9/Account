@@ -63,6 +63,8 @@ from app._database.models import (
     EventMemberModel,
     GradeDistributionModel,
     CourseIntelModel,
+    SalaryFigureModel,
+    SalaryShareModel,
     OfficeHourCheckinModel,
     OfficeHourSlotModel,
     TermReviewModel,
@@ -338,6 +340,8 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
     ids["application_steps_applied"] = first_step.id
     add(ApplicationStepModel(id=new_id(), application_id=application.id, status="interview", on_date=WORLD_DAY,
                              note=f"{marker} step note"))
+    # Phase 3 item 12: the application's offer pay, shared.
+    add(SalaryShareModel(id=new_id(), user_id=user_id, application_id=application.id))
     # Phase 3 D7: a season covering the world's month, named with the marker.
     add(ApplicationSeasonModel(id=new_id(), user_id=user_id, name=f"{marker} season",
                                starts_month=WORLD_MONTH, ends_month=WORLD_MONTH))
@@ -426,6 +430,7 @@ CATALOGUE_IDS = {
     "grade_distributions": uuid.uuid5(uuid.NAMESPACE_URL, "account-test/grade_distributions"),
     "course_intel": uuid.uuid5(uuid.NAMESPACE_URL, "account-test/course_intel"),
     "office_hour_slots": uuid.uuid5(uuid.NAMESPACE_URL, "account-test/office_hour_slots"),
+    "salary_figures": uuid.uuid5(uuid.NAMESPACE_URL, "account-test/salary_figures"),
 }
 
 
@@ -461,10 +466,14 @@ def seed_catalogue(db) -> dict[str, uuid.UUID]:
     slot = OfficeHourSlotModel(id=CATALOGUE_IDS["office_hour_slots"], course_key="UBCV CPSC 221", weekday=1, hour=14,
                                people=6, none_votes=1, short_votes=1, long_votes=4)
     db.add(slot)
+    # Phase 3 item 12: an employer's typical pay.
+    pay = SalaryFigureModel(id=CATALOGUE_IDS["salary_figures"], employer_key="shopify", employer="Shopify", people=5,
+                            median=30.0, p25=28.0, p75=32.0)
+    db.add(pay)
     # Read before the commit: after it, touching an attribute refreshes the row
     # and leaves a transaction open holding a lock that blocks rls.install.
     ids = {"catalogue_courses": course.id, "catalogue_prerequisites": rule.id, "grade_distributions": sealed.id,
-           "course_intel": intel.id, "office_hour_slots": slot.id}
+           "course_intel": intel.id, "office_hour_slots": slot.id, "salary_figures": pay.id}
     db.commit()
     missing = (SHARED_READ_TABLES | SEALED_TABLES) - set(ids)
     assert not missing, f"the catalogue seed has nothing in: {sorted(missing)}"

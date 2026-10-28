@@ -1,8 +1,10 @@
 """Job application routes, under /api/jobs/{user_id}/applications.
 
 Single-user: another person's application or season answers 404, the same as a
-missing one. The literal `/stats` and `/seasons` paths are declared above
-`/{application_id}`, which would otherwise parse them as ids.
+missing one, except the co-op pay figures (Phase 3 item 12), which are shared
+aggregates read through their floor. The literal `/stats`, `/seasons` and
+`/salaries` paths are declared above `/{application_id}`, which would otherwise
+parse them as ids.
 """
 from uuid import UUID
 
@@ -11,7 +13,8 @@ from fastapi import APIRouter, HTTPException
 from app._database.dependencies import DBSession
 from app.Auth.services.access import VerifiedUserId
 from app.Jobs.schemas.application import (
-    Application, ApplicationIn, ApplicationStats, ApplicationUpdate, Season, SeasonIn, StepIn,
+    Application, ApplicationIn, ApplicationStats, ApplicationUpdate, SalaryFigure, SalaryShareIn, Season, SeasonIn,
+    StepIn,
 )
 from app.Jobs.services import application_service as service
 from app.shared.errors import error_user, responses
@@ -183,6 +186,23 @@ def delete_season(user_id: VerifiedUserId, season_id: UUID, db: DBSession):
     return {"deleted": True}
 
 
+@router.get("/{user_id}/applications/salaries", response_model=list[SalaryFigure])
+def list_salaries(user_id: VerifiedUserId, db: DBSession):
+    """List typical co-op pay per employer, from offers students chose to share.
+
+    Each employer appears once 5 verified offers have been shared, counted in whole
+    batches of 5, with no names (Phase 3 item 12, D11, D12).
+
+    Args:
+        user_id: The verified caller's id.
+        db: Request-scoped database session.
+
+    Returns:
+        Each employer's median and middle half in dollars per hour, by name.
+    """
+    return service.salary_figures(db)
+
+
 @router.patch("/{user_id}/applications/{application_id}", response_model=Application, responses=APP_404)
 def update_application(user_id: VerifiedUserId, application_id: UUID, body: ApplicationUpdate, db: DBSession):
     """Change the fields sent on one of the caller's applications.
@@ -279,4 +299,31 @@ def delete_step(user_id: VerifiedUserId, application_id: UUID, step_id: UUID, db
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if found is None:
         raise HTTPException(status_code=404, detail="Step not found")
+    return found
+
+
+@router.put("/{user_id}/applications/{application_id}/salary-share", response_model=Application,
+            responses=APP_404)
+def set_salary_share(user_id: VerifiedUserId, application_id: UUID, body: SalaryShareIn, db: DBSession):
+    """Share an offer's pay, with no name, toward its employer's typical pay; or take it back.
+
+    Args:
+        user_id: The verified caller's id.
+        application_id: The application.
+        body: Whether to share it.
+        db: Request-scoped database session.
+
+    Returns:
+        The application, with `salary_shared` as now set.
+
+    Raises:
+        HTTPException: 400 when sharing an application with no offer pay recorded;
+            404 if the application is missing or not the caller's.
+    """
+    try:
+        found = service.set_salary_share(db, user_id, application_id, body.share)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if found is None:
+        raise HTTPException(status_code=404, detail=NOT_FOUND)
     return found

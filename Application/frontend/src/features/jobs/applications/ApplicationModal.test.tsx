@@ -7,7 +7,7 @@ import { Application } from "./types";
 
 const api = vi.hoisted(() => ({
   createApplication: vi.fn(), updateApplication: vi.fn(), deleteApplication: vi.fn(),
-  addStep: vi.fn(), deleteStep: vi.fn(),
+  addStep: vi.fn(), deleteStep: vi.fn(), setSalaryShare: vi.fn(),
 }));
 vi.mock("./api", () => api);
 vi.mock("../../../app/auth/AuthContext", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
@@ -19,7 +19,7 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); });
 const EXISTING: Application = {
   id: "a1", company: "Shopify", role: "Backend intern", applied_on: "2026-09-01", source: null, link: null,
   location: null, notes: null, status: "interview", deadline: null, follow_up_on: null, offer_amount: null,
-  offer_period: null, last_step_on: "2026-09-10", quiet: false, created_at: null, updated_at: null,
+  offer_period: null, last_step_on: "2026-09-10", quiet: false, salary_shared: false, created_at: null, updated_at: null,
   steps: [
     { id: "s1", status: "applied", on_date: "2026-09-01", note: null },
     { id: "s2", status: "interview", on_date: "2026-09-10", note: "first round" },
@@ -100,5 +100,24 @@ describe("an existing application", () => {
   it("does not ask for pay before there is an offer", () => {
     show(EXISTING);
     expect(screen.queryByLabelText("Pay offered (only you see this)")).toBeNull();
+  });
+
+  it("shares a saved offer's pay only by ticking, and can take it back", async () => {
+    const offer = { ...EXISTING, status: "offer" as const, offer_amount: 30, offer_period: "hourly" as const };
+    api.setSalaryShare.mockResolvedValue({ ...offer, salary_shared: true });
+    show(offer);
+    const box = screen.getByRole("checkbox", { name: /Share this offer’s pay anonymously/ }) as HTMLInputElement;
+    expect(box.checked).toBe(false);
+    fireEvent.click(box);
+    await waitFor(() => expect(api.setSalaryShare).toHaveBeenCalledWith("u1", "a1", true));
+    await waitFor(() => expect(box.checked).toBe(true));
+    api.setSalaryShare.mockResolvedValue({ ...offer, salary_shared: false });
+    fireEvent.click(box);
+    await waitFor(() => expect(api.setSalaryShare).toHaveBeenLastCalledWith("u1", "a1", false));
+  });
+
+  it("offers no sharing without saved pay", () => {
+    show({ ...EXISTING, status: "offer" });
+    expect(screen.queryByRole("checkbox", { name: /Share this offer/ })).toBeNull();
   });
 });

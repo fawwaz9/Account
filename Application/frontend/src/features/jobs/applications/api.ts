@@ -1,5 +1,7 @@
 import { del, get, patch, post, put } from "../../../services/apiClient";
-import { Application, ApplicationInput, ApplicationStats, Season, SeasonInput, StepInput } from "./types";
+import {
+  Application, ApplicationInput, ApplicationStats, SalaryFigure, Season, SeasonInput, StepInput,
+} from "./types";
 
 /** Base path of the user's applications. */
 const base = (userId: string) => `jobs/${userId}/applications`;
@@ -60,4 +62,14 @@ export function addStep(userId: string, id: string, data: StepInput) {
 /** Remove one step from an application's history. */
 export function deleteStep(userId: string, id: string, stepId: string) {
   return del<Application>(`${base(userId)}/${id}/steps/${stepId}`);
+}
+
+/** Share an offer's pay with no name toward its employer's typical pay, or take it back. */
+export function setSalaryShare(userId: string, id: string, share: boolean) {
+  return put<Application>(`${base(userId)}/${id}/salary-share`, { share });
+}
+
+/** Typical co-op pay per employer, from verified shared offers above the floor. */
+export function fetchSalaries(userId: string) {
+  return get<SalaryFigure[]>(`${base(userId)}/salaries`);
 }

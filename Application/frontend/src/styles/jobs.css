@@ -919,3 +919,44 @@
   font-size: 0.82rem;
   color: var(--muted);
 }
+
+/* Co-op pay (Phase 3 item 12): one employer per row, its median beside it. */
+.coopPayList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.coopPayList li {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.coopPayEmployer {
+  font-weight: 600;
+}
+
+/* Sharing an offer's pay: a checkbox with its terms beneath. */
+.appShareToggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 4px 0 10px;
+  font-size: 0.9rem;
+}
+
+.appShareToggle input {
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
+.appShareNote {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}

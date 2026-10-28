@@ -8,7 +8,7 @@ function application(over: Partial<Application> = {}): Application {
   return {
     id: "a1", company: "Shopify", role: "Backend intern", applied_on: "2026-10-01", source: null, link: null,
     location: null, notes: null, status: "applied", deadline: "2026-10-14", follow_up_on: "2026-10-20",
-    offer_amount: null, offer_period: null, steps: [], last_step_on: "2026-10-01", quiet: false,
+    offer_amount: null, offer_period: null, steps: [], last_step_on: "2026-10-01", quiet: false, salary_shared: false,
     created_at: null, updated_at: null, ...over,
   };
 }

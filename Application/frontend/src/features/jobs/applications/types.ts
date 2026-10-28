@@ -57,6 +57,8 @@ export interface Application {
   last_step_on: string;
   /** Waiting on them with no new step for 30 days: time to ask "no reply yet?". */
   quiet: boolean;
+  /** The offer's pay is shared, with no name, toward the employer's typical pay. */
+  salary_shared: boolean;
   /** When recorded, naive UTC. */
   created_at: string | null;
   updated_at: string | null;
@@ -123,4 +125,18 @@ export interface SeasonInput {
   name: string;
   starts: string;
   ends: string;
+}
+
+/** Typical hourly pay at one employer, from at least 5 verified shared offers. */
+export interface SalaryFigure {
+  /** The name as most people wrote it. */
+  employer: string;
+  /** Offers counted, a multiple of 5. */
+  people: number;
+  /** Dollars per hour. */
+  median: number;
+  /** Bottom of the middle half. */
+  p25: number;
+  /** Top of the middle half. */
+  p75: number;
 }

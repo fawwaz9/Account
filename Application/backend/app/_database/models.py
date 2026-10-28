@@ -178,6 +178,7 @@ class UserModel(Base):
                                         overlaps="course,office_hour_checkins")
     teams = relationship("TeamModel", cascade=cascade)
     job_applications = relationship("JobApplicationModel", cascade=cascade)
+    salary_shares = relationship("SalaryShareModel", cascade=cascade, overlaps="application,salary_share")
     application_seasons = relationship("ApplicationSeasonModel", cascade=cascade)
     partnerships = relationship(
         "PartnershipModel", cascade=cascade, foreign_keys="PartnershipModel.user_id"
@@ -2437,6 +2438,70 @@ class OfficeHourSlotModel(Base):
     computed_at = Column(DateTime, nullable=False, default=utc_now)
 
 
+#: Phase 3 item 12. Hours in a working year, for an offer's hourly equivalent:
+#: 40 a week for 52 weeks. A monthly offer is 12 months of it.
+WORK_HOURS_PER_YEAR = 2080
+
+
+class SalaryShareModel(Base):
+    """Per-user row: the student's consent to count one offer's pay, with no name.
+
+    Holds no amount: the daily recount reads the offer from the application when it
+    runs, so a corrected offer counts as corrected and a withdrawn consent (the row
+    deleted) is gone at the next recount. One per application.
+
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        application_id: The application whose offer is shared.
+        shared_at: When the student chose to share it; the order batches are filled in.
+    """
+
+    __tablename__ = "salary_shares"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    #: A unique index rather than a constraint, so it also serves the foreign key.
+    application_id = Column(Uuid, ForeignKey("job_applications.id"), nullable=False, unique=True, index=True)
+    shared_at = Column(DateTime, nullable=False, default=utc_now)
+
+    application = relationship("JobApplicationModel", back_populates="salary_share", overlaps="salary_shares")
+
+
+class SalaryFigureModel(Base):
+    """Sealed: typical hourly pay at one employer, from verified shared offers.
+
+    The API's role can neither read nor write it. Only `account_recount_salaries`
+    writes it, rebuilding it whole from each person's latest shared offer per
+    employer. An offer counts only once verified: it matches the person's own
+    recorded job there within 5%, or 5 people's offers there agree within 10%. Only
+    whole batches of 5 verified offers, oldest first, are counted, so one new share
+    never shows as a change. Unique per employer.
+
+    Attributes:
+        id: Primary key.
+        employer_key: The employer's name normalised (`aggregates.employer_key`).
+        employer: The employer's name as most people wrote it.
+        people: Offers counted, a multiple of 5.
+        median: Median hourly pay in dollars.
+        p25: The 25th percentile, the bottom of the middle half.
+        p75: The 75th percentile, the top of the middle half.
+        computed_at: When the recount wrote it.
+    """
+
+    __tablename__ = "salary_figures"
+    __table_args__ = (UniqueConstraint("employer_key", name="uq_salary_figure_employer"),)
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    employer_key = Column(String, nullable=False)
+    employer = Column(String, nullable=False)
+    people = Column(Integer, nullable=False)
+    median = Column(Float, nullable=False)
+    p25 = Column(Float, nullable=False)
+    p75 = Column(Float, nullable=False)
+    computed_at = Column(DateTime, nullable=False, default=utc_now)
+
+
 #: How many people besides the captain a team can hold (Phase 2 D26). Written
 #: into account_accept_team_invite too; a test holds the two together.
 MAX_TEAM_MEMBERS = 30
@@ -2651,6 +2716,8 @@ class JobApplicationModel(Base):
         "ApplicationStepModel", back_populates="application", cascade=cascade,
         order_by="(ApplicationStepModel.on_date, ApplicationStepModel.created_at)",
     )
+    salary_share = relationship("SalaryShareModel", back_populates="application", cascade=cascade, uselist=False,
+                                overlaps="salary_shares")
 
 
 class ApplicationStepModel(Base):

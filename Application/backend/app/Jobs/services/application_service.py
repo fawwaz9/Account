@@ -12,9 +12,13 @@ from datetime import date
 
 from sqlalchemy.orm import Session, selectinload
 
-from app._database.models import ApplicationSeasonModel, ApplicationStepModel, JobApplicationModel, utc_now
+from app._database import aggregates
+from app._database.models import (
+    ApplicationSeasonModel, ApplicationStepModel, JobApplicationModel, SalaryShareModel, utc_now,
+)
 from app.Jobs.schemas.application import (
-    Application, ApplicationIn, ApplicationStats, ApplicationUpdate, Flow, Season, SeasonIn, Step, StepIn,
+    Application, ApplicationIn, ApplicationStats, ApplicationUpdate, Flow, SalaryFigure, Season, SeasonIn, Step,
+    StepIn,
 )
 from app.shared.dates import user_for, user_today
 
@@ -33,7 +37,7 @@ def _own(db: Session, user_id: uuid.UUID, application_id: uuid.UUID) -> JobAppli
     """Return the caller's application with its steps loaded, or None."""
     return (
         db.query(JobApplicationModel)
-        .options(selectinload(JobApplicationModel.steps))
+        .options(selectinload(JobApplicationModel.steps), selectinload(JobApplicationModel.salary_share))
         .filter(JobApplicationModel.id == application_id, JobApplicationModel.user_id == user_id)
         .first()
     )
@@ -71,6 +75,7 @@ def as_schema(row: JobApplicationModel, today: date) -> Application:
         steps=[Step(id=step.id, status=step.status, on_date=step.on_date, note=step.note) for step in steps],
         last_step_on=last,
         quiet=row.status in WAITING_ON_THEM and (today - last).days >= QUIET_DAYS,
+        salary_shared=row.salary_share is not None,
         created_at=row.created_at, updated_at=row.updated_at,
     )
 
@@ -82,7 +87,7 @@ def _all(db: Session, user_id: uuid.UUID, season: ApplicationSeasonModel | None 
     """
     query = (
         db.query(JobApplicationModel)
-        .options(selectinload(JobApplicationModel.steps))
+        .options(selectinload(JobApplicationModel.steps), selectinload(JobApplicationModel.salary_share))
         .filter(JobApplicationModel.user_id == user_id)
     )
     if season is not None:
@@ -517,3 +522,53 @@ def delete_season(db: Session, user_id: uuid.UUID, season_id: uuid.UUID) -> bool
     db.delete(row)
     db.commit()
     return True
+
+
+def set_salary_share(db: Session, user_id: uuid.UUID, application_id: uuid.UUID, share: bool) -> Application | None:
+    """Share an offer's pay toward its employer's typical pay, or take it back.
+
+    Nothing is copied: the daily recount reads the offer from the application, so a
+    corrected offer counts as corrected, and a taken-back one is gone at the next
+    recount (Phase 3 item 12, D12).
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        application_id: The application.
+        share: True to share, False to take it back; repeating either changes nothing.
+
+    Returns:
+        The application; None when it is missing or another user's.
+
+    Raises:
+        ValueError: If sharing an application with no offer pay recorded.
+
+    Note:
+        Commits.
+    """
+    row = _own(db, user_id, application_id)
+    if row is None:
+        return None
+    if share and row.salary_share is None:
+        if not row.offer_amount or not row.offer_period:
+            raise ValueError("Only an offer with its pay recorded can be shared.")
+        row.salary_share = SalaryShareModel(user_id=user_id)
+    elif not share and row.salary_share is not None:
+        db.delete(row.salary_share)
+        row.salary_share = None
+    db.commit()
+    db.refresh(row)
+    return as_schema(row, user_today(db, user_id))
+
+
+def salary_figures(db: Session) -> list[SalaryFigure]:
+    """Return every employer's typical hourly pay, at the floor.
+
+    Args:
+        db: Request-scoped database session, acting as the caller.
+
+    Returns:
+        Each employer with at least 5 verified shared offers, by name.
+    """
+    return [SalaryFigure(employer=f.employer, people=f.people, median=round(f.median, 2), p25=round(f.p25, 2),
+                         p75=round(f.p75, 2)) for f in aggregates.salary_figures(db)]

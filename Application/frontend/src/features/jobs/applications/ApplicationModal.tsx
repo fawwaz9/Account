@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import Modal from "../../../shared/components/Modal";
 import DeleteConfirmModal from "../../grades/components/DeleteConfirmModal";
-import { addStep, createApplication, deleteApplication, deleteStep, updateApplication } from "./api";
+import { addStep, createApplication, deleteApplication, deleteStep, setSalaryShare, updateApplication } from "./api";
 import {
   Application, ApplicationInput, ApplicationStatus, OfferPeriod, STATUS_LABELS, STEP_STATUSES, Step,
 } from "./types";
@@ -174,6 +174,24 @@ export default function ApplicationModal({ open, application, onClose, onSaved }
                 </select>
               </label>
             </div>
+          )}
+
+          {/* Phase 3 item 12: only an offer saved with its pay can be shared. */}
+          {current && current.offer_amount !== null && current.offer_period !== null && (
+            <label className="appShareToggle">
+              <input type="checkbox" checked={current.salary_shared} disabled={busy}
+                onChange={(e) => {
+                  const share = e.target.checked;
+                  if (user) void run(() => setSalaryShare(user.id, current.id, share));
+                }} />
+              <span>
+                Share this offer&rsquo;s pay anonymously
+                <span className="appShareNote">
+                  Counted with no name toward {current.company}&rsquo;s typical pay once 5 verified offers there
+                  are shared. Take it back any time.
+                </span>
+              </span>
+            </label>
           )}
 
           {error && <p className="calError">{error}</p>}

@@ -34,7 +34,7 @@ SHARED_READ_TABLES = frozenset({"catalogue_courses", "catalogue_prerequisites"})
 #: security with no policy, and every grant revoked, the app role's included.
 #: Only a definer function, running as the owner, writes them. By name, like
 #: the shared list, and refused if the table has an owner.
-SEALED_TABLES = frozenset({"grade_distributions", "course_intel", "office_hour_slots"})
+SEALED_TABLES = frozenset({"grade_distributions", "course_intel", "office_hour_slots", "salary_figures"})
 
 #: Who may read a shared row: anyone the API has identified. Not ``true``, so an
 #: un-identified query still sees nothing -- the same fail-closed rule as every
@@ -82,6 +82,9 @@ FUNCTIONS = (
     # Phase 3 item 11 (D11): office-hour check-ins, counted per slot above the floor.
     "account_recount_office_hours",
     "account_office_hours",
+    # Phase 3 item 12 (D11, D12): shared offers, verified, published in batches of 5.
+    "account_recount_salaries",
+    "account_salary_figures",
     # Phase 2 item 11 (D26): teams and games.
     "account_on_team",
     "account_team_invite_preview",
@@ -564,6 +567,82 @@ CREATE OR REPLACE FUNCTION account_office_hours(p_course_key text)
           WHERE account_current_user() IS NOT NULL AND s.course_key = p_course_key AND s.people >= 5
           ORDER BY s.weekday, s.hour $$;
 
+-- Phase 3 item 12: an employer's name normalised, so "Shopify Inc." and
+-- "shopify" are one employer. aggregates.employer_key is its twin. Not a
+-- definer: it reads nothing.
+CREATE OR REPLACE FUNCTION account_employer_key(p_name text) RETURNS text
+    LANGUAGE sql IMMUTABLE SET search_path = public, pg_temp
+    AS $$ SELECT regexp_replace(
+              btrim(regexp_replace(
+                  regexp_replace(replace(lower(coalesce(p_name, '')), '&', ' and '), '[^a-z0-9 ]', ' ', 'g'),
+                  ' +', ' ', 'g')),
+              '( (inc|ltd|llc|corp|corporation|co|company|limited))+$', '') $$;
+
+-- Phase 3 item 12 (D11, D12): typical hourly pay per employer, rebuilt whole.
+-- Each person's latest shared offer per employer, live accounts only, read
+-- from the application now (hourly, or monthly x 12 or yearly over 2080 hours,
+-- models.WORK_HOURS_PER_YEAR). An offer counts only once verified: it matches
+-- the person's own hourly job at that employer within 5%, or 5 people's offers
+-- there are within 10% of it. Only whole batches of 5 verified offers, oldest
+-- share first, are counted, so one new share never shows as a change; no
+-- employer below 5 (models.COHORT_FLOOR). Returns how many rows it wrote.
+CREATE OR REPLACE FUNCTION account_recount_salaries() RETURNS integer
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$
+DECLARE
+    written integer;
+BEGIN
+    DELETE FROM salary_figures;
+    WITH shared AS (
+        SELECT DISTINCT ON (s.user_id, account_employer_key(a.company))
+               s.user_id, account_employer_key(a.company) AS employer_key, btrim(a.company) AS employer,
+               (CASE a.offer_period WHEN 'hourly' THEN a.offer_amount
+                                    WHEN 'monthly' THEN a.offer_amount * 12 / 2080
+                                    ELSE a.offer_amount / 2080 END)::double precision AS hourly,
+               s.shared_at
+        FROM salary_shares s
+        JOIN job_applications a ON a.id = s.application_id AND a.user_id = s.user_id
+        JOIN users u ON u.id = s.user_id
+        WHERE u.deleted_at IS NULL AND a.offer_amount > 0 AND a.offer_period IS NOT NULL
+          AND account_employer_key(a.company) <> ''
+        ORDER BY s.user_id, account_employer_key(a.company), s.shared_at DESC
+    ), checked AS (
+        SELECT sh.employer_key, sh.employer, sh.hourly, sh.shared_at,
+               EXISTS (SELECT 1 FROM jobs j
+                       WHERE j.user_id = sh.user_id AND j.kind = 'hourly'
+                         AND account_employer_key(j.employer) = sh.employer_key
+                         AND j.hourly_rate BETWEEN sh.hourly * 0.95 AND sh.hourly * 1.05) AS own_job,
+               (SELECT count(*) FROM shared o
+                WHERE o.employer_key = sh.employer_key AND abs(o.hourly - sh.hourly) <= 0.10 * sh.hourly) AS agreeing
+        FROM shared sh
+    ), verified AS (
+        SELECT employer_key, employer, hourly,
+               row_number() OVER (PARTITION BY employer_key ORDER BY shared_at, hourly) AS n,
+               count(*) OVER (PARTITION BY employer_key) AS total
+        FROM checked WHERE own_job OR agreeing >= 5
+    )
+    INSERT INTO salary_figures (id, employer_key, employer, people, median, p25, p75, computed_at)
+        SELECT gen_random_uuid(), employer_key, mode() WITHIN GROUP (ORDER BY employer), count(*),
+               percentile_cont(0.5) WITHIN GROUP (ORDER BY hourly),
+               percentile_cont(0.25) WITHIN GROUP (ORDER BY hourly),
+               percentile_cont(0.75) WITHIN GROUP (ORDER BY hourly),
+               now() AT TIME ZONE 'utc'
+        FROM verified WHERE n <= (total / 5) * 5
+        GROUP BY employer_key HAVING count(*) >= 5;
+    GET DIAGNOSTICS written = ROW_COUNT;
+    RETURN written;
+END $$;
+
+-- Every employer's figures, to anyone signed in, at the floor (checked again).
+CREATE OR REPLACE FUNCTION account_salary_figures()
+    RETURNS TABLE(employer text, people integer, median double precision, p25 double precision,
+                  p75 double precision)
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ SELECT f.employer::text, f.people, f.median, f.p25, f.p75
+          FROM salary_figures f
+          WHERE account_current_user() IS NOT NULL AND f.people >= 5
+          ORDER BY lower(f.employer) $$;
+
 -- Phase 2 item 11 (D26): teams. "On the team" means the captain or a member,
 -- of a captain whose account is not being deleted. Every game write goes
 -- through these, the captain's included.
@@ -763,6 +842,9 @@ REVOKE ALL ON FUNCTION account_recount_course_intel() FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_course_intel(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_recount_office_hours() FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_office_hours(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_employer_key(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_recount_salaries() FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_salary_figures() FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_on_team(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_team_invite_preview(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_accept_team_invite(text) FROM PUBLIC;
@@ -1057,6 +1139,8 @@ def grant_statements() -> list[str]:
         "GRANT EXECUTE ON FUNCTION account_course_intel(text) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_recount_office_hours() TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_office_hours(text) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_recount_salaries() TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_salary_figures() TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_on_team(uuid) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_team_invite_preview(text) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_accept_team_invite(text) TO " + APP_ROLE,
