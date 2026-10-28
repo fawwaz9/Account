@@ -420,6 +420,13 @@ and in several cases data from all three rooms, which only exists once Phase 3 h
 - **Grade scenarios, course-drop simulator, next-term planner** (§13.6). The simulator
   pattern on engines that already exist. Course-drop carries real disclaimers — full-time
   status affects loans, housing and immigration standing.
+- **Cumulative average and CGPA including this term** *(added by the owner, 2026-10-28)*.
+  The official pair counts only courses with a final grade, so marks entered during a
+  term never move it, which reads as broken. Show a second, clearly labelled pair beside
+  it that also counts each current course at its running average (not a projected
+  finish; the owner's call) and credits. The
+  official pair stays as it is, counting finished courses only. Needs no history, so
+  it can ship as soon as the phase opens.
 - **Deadline spending guard** (§13.5). Crunch detection → personal spike prediction →
   pre-allocation → report card. Silent until two crunch weeks of history exist.
 - **What-if simulator** (money), **self-employed support** (§13.12).
@@ -2175,6 +2182,7 @@ build high-impact × high-feasibility first. Cost detail lives in §15; decision
 | BYOAI briefing API (MCP) | High | Med-High | Serve the deterministic digest to the user's own Claude/ChatGPT. Zero AI cost; a distribution play. |
 | Term simulator | Med | Very high | Compose the three rooms' engines over one 168-hour budget. Work hours output **time fit only**; grade bands come solely from directly-set study hours (§13.5, §13.19). |
 | Grade scenarios / course-drop / next-term planner | High | High | The simulator pattern on existing engines; course-drop carries full-time-status and immigration disclaimers. |
+| Cumulative average and CGPA including this term | High | Med | A second, labelled pair beside the official one, counting each current course at its running average and credits; the official pair stays finished courses only. Computed on read, no schema change. Needs no history, so it can ship as soon as the phase opens. Added by the owner 2026-10-28. |
 | Cross-room correlations (non-financial) | High | Med | Exertion vs completion and similar; the §13.3 silo keeps all financial data out. Impossible before P3's exertion data. |
 | Deadline spending guard | Med | High | Crunch detection → personal spike prediction → pre-allocate → report card. Silent until 2 crunch weeks exist. |
 | What-if simulator (money) | High | High | Sliders on work, spending, wage, one-time buys → baseline vs scenario balance and runway curves. |

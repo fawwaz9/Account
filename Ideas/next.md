@@ -231,6 +231,24 @@ are the size of each job rather than an impression of it.
         Syllabus paste: drop the text in, get categories, weights and due dates proposed for review.
         Make syllabus parser the main when adding courses but add a button to do it manually.
         When editing courses the manual is the default but syllabus parser will be available under the manual grid.
+        Cumulative average and CGPA including this term. Phase 4 of the overhaul
+          (added 2026-10-28; see account-vision.md, Phase 4).
+          WHY: the official pair counts only courses with a final grade
+          (calculate_cumulative_average and calculate_cgpa in
+          Grades/services/dash_services.py), so marks entered during a term
+          never move it. Only the Semester Average does, and the page reads as
+          broken. Working as designed: the official 88.38 / 4.05 matched the
+          source spreadsheet at import.
+          SHAPE: two more fields on the grades dashboard, computed on read and
+          shown beside the official pair under a label that says "including
+          this term". A current course with no final counts at its running
+          average and its credits; an unmarked course is skipped; a course with
+          a final uses the final, as now. Hidden when it would equal the
+          official pair, and the CGPA half follows the GPA-scale setting. No
+          schema change, but a backend deploy, so it waits for the owner's
+          go-ahead.
+          SETTLED (owner, 2026-10-28): the running average, the same figure
+          the Semester Average uses. Not the projected finish.
         Drop the users.term_label column.
           Since term dates and the term heading both derive from the first-year
           anchor (shipped.md, 2026-09-17), term_label is only a fallback for a
