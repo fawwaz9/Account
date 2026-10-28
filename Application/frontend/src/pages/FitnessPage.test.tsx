@@ -23,6 +23,11 @@ vi.mock("../features/fitness/api", () => ({
   fetchGymBuddies: () => Promise.reject(new Error("not under test")),
   saveGymBuddy: vi.fn(),
   fetchExertion: () => Promise.reject(new Error("not under test")),
+  fetchCampusBoard: () => Promise.reject(new Error("not under test")),
+  fetchDirectory: () => Promise.reject(new Error("not under test")),
+  fetchMyJoinRequests: () => Promise.resolve([]),
+  fetchTeamBoard: () => Promise.reject(new Error("not under test")),
+  fetchTeamJoinRequests: () => Promise.resolve([]),
 }));
 
 import FitnessPage from "./FitnessPage";

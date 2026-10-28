@@ -504,6 +504,13 @@ DEFINER_SIGNATURES = (
     "account_delete_team_game(uuid)",
     "account_leave_team(uuid)",
     "account_gym_buddies()",
+    "account_team_board(uuid, date, date)",
+    "account_recount_campus_board()",
+    "account_campus_board()",
+    "account_team_directory()",
+    "account_request_to_join(uuid, text)",
+    "account_team_requests(uuid)",
+    "account_answer_join_request(uuid, boolean)",
 )
 
 
@@ -571,6 +578,14 @@ def test_only_the_app_role_can_call_the_cross_user_functions(owner_engine):
             "SELECT account_delete_team_game(gen_random_uuid())",
             "SELECT account_leave_team(gen_random_uuid())",
             "SELECT * FROM account_gym_buddies()",
+            "SELECT * FROM account_team_board(gen_random_uuid(), current_date, current_date)",
+            "SELECT account_listed_team_ids()",
+            "SELECT account_recount_campus_board()",
+            "SELECT * FROM account_campus_board()",
+            "SELECT * FROM account_team_directory()",
+            "SELECT account_request_to_join(gen_random_uuid(), NULL)",
+            "SELECT * FROM account_team_requests(gen_random_uuid())",
+            "SELECT account_answer_join_request(gen_random_uuid(), true)",
         ):
             with outsider.connect() as conn:
                 with pytest.raises(ProgrammingError, match="permission denied"):
@@ -1367,4 +1382,58 @@ def test_a_gym_buddy_is_seen_only_by_a_connection_through_the_function(worlds, a
     app_session.rollback()
     app_session.info.clear()
     assert app_session.execute(text("SELECT * FROM account_gym_buddies()")).all() == []
+
+
+# --------------------------------------------------------------------------
+# Boards and the directory (Phase 3 items 8-9, D13): requests to join are
+# written only by the function, and every cross-user read goes through one.
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize("statement", [
+    "INSERT INTO team_join_requests (id, user_id, team_id, team_name, status, created_at) "
+    "VALUES (gen_random_uuid(), :me, :t, 'planted', 'pending', now())",
+    "UPDATE team_join_requests SET status = 'accepted'",
+])
+def test_nobody_writes_a_request_to_join_directly(worlds, app_session, statement):
+    owner, a, _, world_a, _ = worlds
+    team_id = owner.execute(text("SELECT team_id FROM team_join_requests WHERE id = :r"),
+                            {"r": world_a["team_join_requests"]}).scalar()
+    act_as(app_session, a.id)
+    with pytest.raises(ProgrammingError, match="permission denied"):
+        app_session.execute(text(statement), {"me": a.id, "t": team_id})
+
+
+def test_the_directory_and_requests_go_through_the_functions(worlds, app_session):
+    from app._database.models import TeamModel
+    owner, a, b, _, _ = worlds
+    captains = [make_user(owner, f"rls-captain-{i}@example.com") for i in range(5)]
+    listed = [TeamModel(id=uuid.uuid4(), user_id=c.id, name=f"Listed {i}", listed=True)
+              for i, c in enumerate(captains)]
+    owner.add_all(listed)
+    owner.commit()
+    act_as(app_session, a.id)
+    names = [r.name for r in app_session.execute(text("SELECT name FROM account_team_directory()")).all()]
+    assert names == [f"Listed {i}" for i in range(5)]
+    assert app_session.execute(text("SELECT account_request_to_join(:t, 'hi')"),
+                               {"t": listed[0].id}).scalar() == "sent"
+    app_session.commit()
+    request_id = owner.execute(text("SELECT id FROM team_join_requests WHERE team_id = :t"),
+                               {"t": listed[0].id}).scalar()
+    act_as(app_session, b.id)
+    assert app_session.execute(text("SELECT * FROM account_team_requests(:t)"), {"t": listed[0].id}).all() == []
+    assert app_session.execute(text("SELECT account_answer_join_request(:r, true)"),
+                               {"r": request_id}).scalar() == "invalid"
+    app_session.commit()
+    act_as(app_session, captains[0].id)
+    [row] = app_session.execute(text("SELECT * FROM account_team_requests(:t)"), {"t": listed[0].id}).all()
+    assert row.message == "hi"
+    assert app_session.execute(text("SELECT account_answer_join_request(:r, true)"),
+                               {"r": request_id}).scalar() == "accepted"
+    app_session.commit()
+    assert owner.execute(text("SELECT count(*) FROM team_members WHERE team_id = :t AND member_id = :m"),
+                         {"t": listed[0].id, "m": a.id}).scalar() == 1
+    app_session.info.clear()
+    assert app_session.execute(text("SELECT * FROM account_team_directory()")).all() == []
+    assert app_session.execute(text("SELECT account_request_to_join(:t, NULL)"), {"t": listed[1].id}).scalar() \
+        == "invalid"
 

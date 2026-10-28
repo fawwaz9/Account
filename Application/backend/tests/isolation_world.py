@@ -63,6 +63,8 @@ from app._database.models import (
     EventMemberModel,
     GradeDistributionModel,
     CourseIntelModel,
+    CampusBoardModel,
+    TeamJoinRequestModel,
     ActivityModel,
     GymBuddyModel,
     OutlineOfferModel,
@@ -378,7 +380,7 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
 
 #: Tables whose rows need two people, seeded by seed_pair rather than by one
 #: user's world (Phase 2 items 10, 9a, 9b and 11).
-PAIRED_TABLES = frozenset({"partnerships", "task_members", "event_members", "team_members"})
+PAIRED_TABLES = frozenset({"partnerships", "task_members", "event_members", "team_members", "team_join_requests"})
 
 
 def seed_pair(db, a_id, b_id, mark_a: str, mark_b: str) -> tuple[dict, dict]:
@@ -433,11 +435,23 @@ def seed_pair(db, a_id, b_id, mark_a: str, mark_b: str) -> tuple[dict, dict]:
     # shared with A here and the walk can tell a leak from a share. Showing a
     # looking connection is tested in tests/test_gym_buddy.py.
     db.query(GymBuddyModel).filter_by(user_id=b_id).update({"looking": False})
+    # Phase 3 item 9: each of A and B has asked to join the third person's team,
+    # so a request of B's exists for A to fail to withdraw or answer, and neither
+    # can answer the other's: only that team's captain can.
+    third_team = TeamModel(id=uuid.uuid5(uuid.NAMESPACE_URL, f"account-isolation-world/{mark_b}/third-team"),
+                           user_id=third.id, name="third team")
+    db.add(third_team)
+    db.flush()
+    a_request = TeamJoinRequestModel(id=uuid.uuid4(), user_id=a_id, team_id=third_team.id, team_name="third team",
+                                     message=f"{mark_a} request")
+    b_request = TeamJoinRequestModel(id=uuid.uuid4(), user_id=b_id, team_id=third_team.id, team_name="third team",
+                                     message=f"{mark_b} request")
+    db.add_all([a_request, b_request])
     db.flush()
     ids = ({"partnerships": a_row.id, "task_members": a_member.id, "event_members": a_attendee.id,
-            "team_members": a_player.id},
+            "team_members": a_player.id, "team_join_requests": a_request.id},
            {"partnerships": b_row.id, "task_members": b_member.id, "event_members": b_attendee.id,
-            "team_members": b_player.id})
+            "team_members": b_player.id, "team_join_requests": b_request.id})
     db.commit()
     return ids
 
@@ -453,6 +467,7 @@ CATALOGUE_IDS = {
     "salary_figures": uuid.uuid5(uuid.NAMESPACE_URL, "account-test/salary_figures"),
     "merchant_categories": uuid.uuid5(uuid.NAMESPACE_URL, "account-test/merchant_categories"),
     "shared_outlines": uuid.uuid5(uuid.NAMESPACE_URL, "account-test/shared_outlines"),
+    "campus_board": uuid.uuid5(uuid.NAMESPACE_URL, "account-test/campus_board"),
 }
 
 
@@ -500,11 +515,16 @@ def seed_catalogue(db) -> dict[str, uuid.UUID]:
     outline = SharedOutlineModel(id=CATALOGUE_IDS["shared_outlines"], course_key="UBCV CPSC 221", term_code="2026W1",
                                  outline={"weights": {"Assignment": 40.0, "Final": 60.0}, "assessments": []})
     db.add(outline)
+    # Phase 3 item 8: a listed team on this week's campus board.
+    board = CampusBoardModel(id=CATALOGUE_IDS["campus_board"], week_start=date(2026, 9, 14), team_name="Board team",
+                             sport="Ultimate", points=120)
+    db.add(board)
     # Read before the commit: after it, touching an attribute refreshes the row
     # and leaves a transaction open holding a lock that blocks rls.install.
     ids = {"catalogue_courses": course.id, "catalogue_prerequisites": rule.id, "grade_distributions": sealed.id,
            "course_intel": intel.id, "office_hour_slots": slot.id, "salary_figures": pay.id,
-           "merchant_categories": merchant.id, "shared_outlines": outline.id}
+           "merchant_categories": merchant.id, "shared_outlines": outline.id,
+           "campus_board": board.id}
     db.commit()
     missing = (SHARED_READ_TABLES | SEALED_TABLES) - set(ids)
     assert not missing, f"the catalogue seed has nothing in: {sorted(missing)}"

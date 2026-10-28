@@ -51,6 +51,17 @@ export interface TeamDetail extends TeamSummary {
   members: { id: string; name: string; joined_at: string }[] | null;
   /** The open invite link, captain's view only. */
   link: { expires_at: string } | null;
+  /** How it's listed on campus, captain's view only (Phase 3 items 8-9). */
+  listing?: TeamListing | null;
+}
+
+/** How a team is listed on campus: the directory and the campus board. */
+export interface TeamListing {
+  listed: boolean;
+  level: "casual" | "intermediate" | "competitive" | null;
+  area: string | null;
+  looking_for_players: boolean;
+  blurb: string | null;
 }
 
 /** Body to record or correct a game. */
@@ -74,6 +85,9 @@ export const createTeam = (userId: string, name: string, sport: string | null) =
 /** Rename a team; captain only. */
 export const renameTeam = (userId: string, teamId: string, name: string) =>
   patch<TeamDetail>(`teams/${userId}/${teamId}`, { name });
+/** Change how a team is listed on campus; captain only. */
+export const updateTeamListing = (userId: string, teamId: string, listing: Partial<TeamListing>) =>
+  patch<TeamDetail>(`teams/${userId}/${teamId}`, listing);
 /** Delete a team with its games, members and link. */
 export const removeTeam = (userId: string, teamId: string) => del<{ deleted: boolean }>(`teams/${userId}/${teamId}`);
 /** Create the team's invite link. */

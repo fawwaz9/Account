@@ -102,7 +102,9 @@ def test_memberships_are_read_and_deleted_never_written_by_the_app_role(table):
 def test_a_read_and_delete_table_keeps_its_owner_policy(table):
     policies = [s for s in _for(rls.policy_statements(), table) if s.startswith("CREATE POLICY")]
     assert len(policies) == 1 and f"FOR ALL TO {rls.APP_ROLE}" in policies[0]
-    assert "p.user_id = account_current_user()" in policies[0]
+    # The owner's own rule: a child table's parent (memberships, games), or the
+    # row's own user_id for a per-user one (requests to join, Phase 3 item 9).
+    assert f"USING ({rls.owner_predicate(Base.metadata.tables[table])})" in policies[0]
 
 
 def test_a_misspelt_read_and_delete_name_raises(monkeypatch):

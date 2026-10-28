@@ -15,8 +15,8 @@ from sqlalchemy.orm import Session
 from app._database import teams
 from app._database.models import INVITE_DAYS, TeamInviteModel, TeamMemberModel, TeamModel, utc_now
 from app.Teams.schemas.team import (
-    DisputeIn, GameIn, GameOut, Link, Member, NewLink, Record, TeamDetail, TeamIn, TeamInvitePreview, TeamSummary,
-    TeamUpdate,
+    DisputeIn, GameIn, GameOut, Link, Member, NewLink, Record, TeamDetail, TeamIn, TeamInvitePreview, TeamListing,
+    TeamSummary, TeamUpdate,
 )
 from app.shared.dates import user_for
 
@@ -125,12 +125,15 @@ def detail(db: Session, user_id: uuid.UUID, team_id: uuid.UUID) -> TeamDetail | 
     if summary is None:
         return None
     games = [GameOut(**g.__dict__) for g in teams.games(db, user_id, team_id)]
-    members = link = None
+    members = link = listing = None
     if summary.is_captain:
+        team = db.get(TeamModel, team_id)
+        listing = TeamListing(listed=team.listed, level=team.level, area=team.area,
+                              looking_for_players=team.looking_for_players, blurb=team.blurb)
         members = [Member(id=m.id, name=m.member_name, joined_at=m.joined_at) for m in _roster(db, team_id)]
         live = _live_links(db, team_id).order_by(TeamInviteModel.created_at.desc()).first()
         link = Link(expires_at=live.expires_at) if live else None
-    return TeamDetail(**summary.model_dump(), games=games, members=members, link=link)
+    return TeamDetail(**summary.model_dump(), games=games, members=members, link=link, listing=listing)
 
 
 # ---------------------------------------------------------------- the captain --
@@ -158,13 +161,13 @@ def create(db: Session, user_id: uuid.UUID, data: TeamIn) -> TeamDetail | None:
 
 
 def update(db: Session, user_id: uuid.UUID, team_id: uuid.UUID, data: TeamUpdate) -> TeamDetail | None:
-    """Rename a team or change its sport; captain only.
+    """Change a team's name, sport or campus listing; captain only.
 
     Args:
         db: Request-scoped database session.
         user_id: The verified caller's id.
         team_id: The team.
-        data: The fields to change; a blank sport is stored as None.
+        data: The fields to change; a blank sport, area or blurb is stored as None.
 
     Returns:
         The team's detail, or None when the caller is not its captain.
@@ -180,6 +183,15 @@ def update(db: Session, user_id: uuid.UUID, team_id: uuid.UUID, data: TeamUpdate
         team.name = fields["name"]
     if "sport" in fields:
         team.sport = (fields["sport"] or "").strip() or None
+    # Phase 3 items 8-9 (D13): the listing, off until the captain turns it on.
+    for flag in ("listed", "looking_for_players"):
+        if fields.get(flag) is not None:
+            setattr(team, flag, fields[flag])
+    if "level" in fields:
+        team.level = fields["level"]
+    for text_field in ("area", "blurb"):
+        if text_field in fields:
+            setattr(team, text_field, (fields[text_field] or "").strip() or None)
     db.commit()
     return detail(db, user_id, team_id)
 

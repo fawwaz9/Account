@@ -17,7 +17,8 @@ from sqlalchemy.orm import Session
 
 from app._database.models import (
     COHORT_FLOOR, COUNTED_AFTER_DAYS, OFFICE_HOUR_WINDOW_DAYS, WORK_HOURS_PER_YEAR, CourseIntelModel,
-    GradeDistributionModel, JobApplicationModel, JobModel, MERCHANT_FLOOR, MerchantCategoryModel,
+    DIRECTORY_FLOOR, ActivityModel, CampusBoardModel, GradeDistributionModel, JobApplicationModel, JobModel,
+    MERCHANT_FLOOR, MerchantCategoryModel, TeamMemberModel, TeamModel,
     OfficeHourCheckinModel, OfficeHourSlotModel, SalaryFigureModel, SalaryShareModel, SpendCategoryModel,
     TermReviewModel, TransactionModel, UserModel, utc_now,
 )
@@ -588,3 +589,86 @@ def merchant_categories(db: Session, keys: list[str]) -> dict[str, str]:
         .all()
     )
     return {row.merchant_key: row.category_name for row in rows}
+
+
+@dataclass(frozen=True)
+class BoardTeam:
+    """A listed team on this week's campus board.
+
+    Attributes:
+        week_start: The week's Monday (UTC).
+        team_name: The team's name.
+        sport: Its sport, or None.
+        points: Its opted-in players' points that week.
+    """
+    week_start: date
+    team_name: str
+    sport: str | None
+    points: int
+
+
+def recount_campus_board(db: Session, today: date | None = None) -> int:
+    """Rebuild this week's campus board: listed teams by opted-in players' points.
+
+    Nothing is written until `DIRECTORY_FLOOR` teams with live captains are listed.
+
+    Args:
+        db: Open session; needs no acting user.
+        today: The day whose Monday-to-Sunday week to count, on SQLite only; None means
+            today in UTC.
+
+    Returns:
+        The number of team rows written.
+
+    Note:
+        Deletes every existing row before writing, and commits.
+    """
+    if _is_postgres(db):
+        written = db.execute(text("SELECT account_recount_campus_board()")).scalar()
+        db.commit()
+        return int(written or 0)
+    today = today or _utc_today()
+    week = today - timedelta(days=today.weekday())
+    db.query(CampusBoardModel).delete(synchronize_session=False)
+    listed = []
+    for team in db.query(TeamModel).filter(TeamModel.listed.is_(True)):
+        captain = db.get(UserModel, team.user_id)
+        if captain is not None and captain.deleted_at is None:
+            listed.append(team)
+    if len(listed) < DIRECTORY_FLOOR:
+        db.commit()
+        return 0
+    now = utc_now()
+    for team in listed:
+        people = {team.user_id} | {m.member_id for m in db.query(TeamMemberModel).filter_by(team_id=team.id)}
+        points = 0
+        for person in people:
+            user = db.get(UserModel, person)
+            opted = user is not None and (user.preferences or {}).get("leaderboard_opt_in") is True
+            if not opted or user.deleted_at is not None:
+                continue
+            points += sum(a.points for a in db.query(ActivityModel).filter(
+                ActivityModel.user_id == person, ActivityModel.on_date >= week,
+                ActivityModel.on_date <= week + timedelta(days=6)))
+        db.add(CampusBoardModel(week_start=week, team_name=team.name, sport=team.sport, points=points,
+                                computed_at=now))
+    db.commit()
+    return len(listed)
+
+
+def campus_board(db: Session) -> list[BoardTeam]:
+    """Return the campus board, only once it holds `DIRECTORY_FLOOR` teams.
+
+    Args:
+        db: Open session; on Postgres it must act as a signed-in user.
+
+    Returns:
+        Teams by points, most first; empty below the floor.
+    """
+    if _is_postgres(db):
+        return [BoardTeam(*row) for row in db.execute(text("SELECT * FROM account_campus_board()")).all()]
+    rows = db.query(CampusBoardModel).all()
+    if len(rows) < DIRECTORY_FLOOR:
+        return []
+    return [BoardTeam(r.week_start, r.team_name, r.sport, r.points)
+            for r in sorted(rows, key=lambda r: (-r.points, r.team_name))]

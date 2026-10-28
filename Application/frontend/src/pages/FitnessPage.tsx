@@ -10,6 +10,11 @@ import {
 } from "../features/teams/api";
 import { useApiRefresh } from "../shared/hooks/useApiRefresh";
 import ActivityCard from "../features/fitness/ActivityCard";
+import CampusBoardCard from "../features/fitness/CampusBoardCard";
+import DirectoryCard from "../features/fitness/DirectoryCard";
+import TeamBoard from "../features/fitness/TeamBoard";
+import TeamListingForm from "../features/fitness/TeamListingForm";
+import TeamRequests from "../features/fitness/TeamRequests";
 import GymBuddy from "../features/fitness/GymBuddy";
 import "../styles/teams.css";
 
@@ -112,6 +117,8 @@ export default function FitnessPage() {
       {/* Phase 3: beyond the teams themselves. */}
       <div className="fitnessMore">
         <ActivityCard userId={user.id} />
+        <CampusBoardCard userId={user.id} />
+        <DirectoryCard userId={user.id} />
         <GymBuddy userId={user.id} />
       </div>
     </div>
@@ -205,8 +212,16 @@ function TeamView({ userId, teamId, onGone, onChanged }: ViewProps) {
         </ul>
       )}
 
+      {/* Phase 3 item 8: this week's points, for teammates who opted in. */}
+      <TeamBoard userId={userId} teamId={teamId} />
+
       {team.is_captain ? (
         <>
+          <TeamRequests userId={userId} teamId={teamId} onChanged={() => { void load(); void onChanged(); }} />
+          {team.listing && (
+            <TeamListingForm key={JSON.stringify(team.listing)} userId={userId} teamId={teamId} listing={team.listing}
+                             onSaved={() => void load()} />
+          )}
           <SharingSection
             noun="team"
             load={sharing}

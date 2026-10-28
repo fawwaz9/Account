@@ -4,6 +4,7 @@ Member and link schemas are the shared-task ones, re-exported as `Member`, `Link
 and `NewLink`.
 """
 from datetime import date, datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
@@ -44,14 +45,25 @@ class TeamIn(BaseModel):
 
 
 class TeamUpdate(BaseModel):
-    """Request body for renaming a team or changing its sport; omitted fields stay.
+    """Request body for changing a team's name, sport or listing; omitted fields stay.
 
     Attributes:
         name: New name, 1-60 characters; stripped, not blank.
         sport: New sport, at most 30 characters; stored as sent.
+        listed: List the team on campus: the directory and the campus board (Phase 3
+            items 8-9, D13).
+        level: "casual", "intermediate" or "competitive"; null clears it.
+        area: Where it plays, at most 60 characters; blank clears it.
+        looking_for_players: Show it as wanting players.
+        blurb: A line for the directory, at most 200 characters; blank clears it.
     """
     name: str | None = Field(default=None, min_length=1, max_length=60)
     sport: str | None = Field(default=None, max_length=30)
+    listed: bool | None = None
+    level: Literal["casual", "intermediate", "competitive"] | None = None
+    area: str | None = Field(default=None, max_length=60)
+    looking_for_players: bool | None = None
+    blurb: str | None = Field(default=None, max_length=200)
 
     @model_validator(mode="after")
     def clean(self):
@@ -143,6 +155,23 @@ class GameOut(BaseModel):
     disputed_their: int | None = None
 
 
+class TeamListing(BaseModel):
+    """How a team is listed on campus, as its captain set it (Phase 3 items 8-9).
+
+    Attributes:
+        listed: Whether it's in the directory and on the campus board.
+        level: "casual", "intermediate" or "competitive", or None.
+        area: Where it plays, or None.
+        looking_for_players: Whether it shows as wanting players.
+        blurb: Its line for the directory, or None.
+    """
+    listed: bool = False
+    level: str | None = None
+    area: str | None = None
+    looking_for_players: bool = False
+    blurb: str | None = None
+
+
 class TeamDetail(TeamSummary):
     """A team with its games, plus the captain's management view.
 
@@ -151,11 +180,13 @@ class TeamDetail(TeamSummary):
         members: Members the captain may remove; None for anyone else.
         link: The team's live join link; None for anyone but the captain, or when none
             is live.
+        listing: How it's listed on campus; None for anyone but the captain.
     """
     games: list[GameOut]
     #: The captain's view only: who to take off, and the open link.
     members: list[Member] | None = None
     link: Link | None = None
+    listing: TeamListing | None = None
 
 
 class GameIn(BaseModel):

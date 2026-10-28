@@ -84,6 +84,8 @@ def _build(with_b: bool):
     world_a["task_members"] = uuid.uuid5(uuid.NAMESPACE_URL, "account-ni/no-task-member")
     world_a["event_members"] = uuid.uuid5(uuid.NAMESPACE_URL, "account-ni/no-event-member")
     world_a["team_members"] = uuid.uuid5(uuid.NAMESPACE_URL, "account-ni/no-team-member")
+    # Nor has A asked to join anyone's team (Phase 3 item 9; DOMAIN_404).
+    world_a["team_join_requests"] = uuid.uuid5(uuid.NAMESPACE_URL, "account-ni/no-join-request")
     # Shared rows belong to nobody, so both runs hold them, with the same ids.
     seed_catalogue(session)
 
@@ -185,6 +187,9 @@ DOMAIN_404 = {
     # run, and A captains rather than plays on it. Tested in tests/test_teams.py.
     ("DELETE", "/api/teams/{user_id}/{team_id}/members/{member_id}"): "nobody on the team to remove",
     ("DELETE", "/api/teams/{user_id}/{team_id}/membership"): "A captains the team; there is no membership to leave",
+    # Requests to join (Phase 3 item 9), likewise: A has asked to join nobody's
+    # team in either run. Tested in tests/test_league.py.
+    ("DELETE", "/api/fitness/{user_id}/join-requests/{request_id}"): "A has no request to take back",
 }
 
 

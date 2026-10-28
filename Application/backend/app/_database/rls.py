@@ -37,6 +37,7 @@ SHARED_READ_TABLES = frozenset({"catalogue_courses", "catalogue_prerequisites", 
 #: the shared list, and refused if the table has an owner.
 SEALED_TABLES = frozenset({
     "grade_distributions", "course_intel", "office_hour_slots", "salary_figures", "merchant_categories",
+    "campus_board",
 })
 
 #: Who may read a shared row: anyone the API has identified. Not ``true``, so an
@@ -93,6 +94,14 @@ FUNCTIONS = (
     "account_merchant_categories",
     # Phase 3 item 13: connections also looking for someone to train with.
     "account_gym_buddies",
+    # Phase 3 items 8-9 (D13): boards and the league directory.
+    "account_team_board",
+    "account_recount_campus_board",
+    "account_campus_board",
+    "account_team_directory",
+    "account_request_to_join",
+    "account_team_requests",
+    "account_answer_join_request",
     # Phase 2 item 11 (D26): teams and games.
     "account_on_team",
     "account_team_invite_preview",
@@ -111,7 +120,8 @@ FUNCTIONS = (
 #: update (Phase 2 D23). A membership row is written only by the accept
 #: function, for the person holding the link -- so not even the task's owner
 #: can put somebody on a task, and nobody can rewrite a copied name.
-NO_DIRECT_WRITE_TABLES = frozenset({"task_members", "event_members", "team_members", "games"})
+#: Phase 3 item 9 adds requests to join a team: written only by account_request_to_join.
+NO_DIRECT_WRITE_TABLES = frozenset({"task_members", "event_members", "team_members", "games", "team_join_requests"})
 
 FUNCTION_SQL = """
 CREATE OR REPLACE FUNCTION account_current_user() RETURNS uuid
@@ -910,6 +920,166 @@ CREATE OR REPLACE FUNCTION account_gym_buddies()
           GROUP BY u.id, u.name, g.times, g.note
           ORDER BY u.name $$;
 
+-- Phase 3 item 8 (D13): a team's board, this week's points for everyone on it
+-- who opted in (users.preferences.leaderboard_opt_in), seen only by someone on
+-- the team who opted in too, for a window of at most 7 days. Names, never ids.
+CREATE OR REPLACE FUNCTION account_team_board(p_team uuid, p_from date, p_to date)
+    RETURNS TABLE(name text, points integer, is_me boolean)
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ WITH people AS (
+              SELECT t.user_id AS person FROM teams t WHERE t.id = p_team
+              UNION SELECT m.member_id FROM team_members m WHERE m.team_id = p_team)
+          SELECT u.name::text,
+                 coalesce((SELECT sum(a.points) FROM activities a
+                           WHERE a.user_id = u.id AND a.on_date BETWEEN p_from AND p_to), 0)::integer,
+                 u.id = account_current_user()
+          FROM people p JOIN users u ON u.id = p.person AND u.deleted_at IS NULL
+          WHERE account_on_team(p_team) AND p_to - p_from BETWEEN 0 AND 6
+            AND coalesce((u.preferences ->> 'leaderboard_opt_in')::boolean, false)
+            AND EXISTS (SELECT 1 FROM users me WHERE me.id = account_current_user()
+                        AND coalesce((me.preferences ->> 'leaderboard_opt_in')::boolean, false))
+          ORDER BY 2 DESC, 1 $$;
+
+-- The listed teams of live captains: what the directory and the campus board
+-- read. Not a definer: only the functions below call it.
+CREATE OR REPLACE FUNCTION account_listed_team_ids() RETURNS SETOF uuid
+    LANGUAGE sql STABLE SET search_path = public, pg_temp
+    AS $$ SELECT t.id FROM teams t JOIN users c ON c.id = t.user_id WHERE t.listed AND c.deleted_at IS NULL $$;
+
+-- Phase 3 item 8 (D13): this week's (UTC Monday to Sunday) listed teams by
+-- their opted-in players' points, rebuilt whole; nothing until 5 teams are
+-- listed (models.DIRECTORY_FLOOR). Team names, never a person's.
+CREATE OR REPLACE FUNCTION account_recount_campus_board() RETURNS integer
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$
+DECLARE
+    written integer;
+    week date := date_trunc('week', now() AT TIME ZONE 'utc')::date;
+BEGIN
+    DELETE FROM campus_board;
+    IF (SELECT count(*) FROM account_listed_team_ids()) < 5 THEN RETURN 0; END IF;
+    WITH listed AS (
+        SELECT t.id, t.user_id, t.name, t.sport FROM teams t WHERE t.id IN (SELECT account_listed_team_ids())
+    ), people AS (
+        SELECT l.id AS team_id, l.user_id AS person FROM listed l
+        UNION SELECT m.team_id, m.member_id FROM team_members m JOIN listed l ON l.id = m.team_id
+    )
+    INSERT INTO campus_board (id, week_start, team_name, sport, points, computed_at)
+        SELECT gen_random_uuid(), week, l.name, l.sport, coalesce(sum(a.points), 0)::integer,
+               now() AT TIME ZONE 'utc'
+        FROM listed l
+        LEFT JOIN people p ON p.team_id = l.id
+        LEFT JOIN users u ON u.id = p.person AND u.deleted_at IS NULL
+                          AND coalesce((u.preferences ->> 'leaderboard_opt_in')::boolean, false)
+        LEFT JOIN activities a ON a.user_id = u.id AND a.on_date BETWEEN week AND week + 6
+        GROUP BY l.id, l.name, l.sport;
+    GET DIAGNOSTICS written = ROW_COUNT;
+    RETURN written;
+END $$;
+
+-- The campus board, to anyone signed in, only at 5 teams (checked again).
+CREATE OR REPLACE FUNCTION account_campus_board()
+    RETURNS TABLE(week_start date, team_name text, sport text, points integer)
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ SELECT b.week_start, b.team_name::text, b.sport::text, b.points
+          FROM campus_board b
+          WHERE account_current_user() IS NOT NULL AND (SELECT count(*) FROM campus_board) >= 5
+          ORDER BY b.points DESC, b.team_name $$;
+
+-- Phase 3 item 9 (D13): the league directory. Listed teams of live captains,
+-- only once 5 are listed (never launch empty), with no member's name: the
+-- team, its size, its last game, whether the caller is on it, and the
+-- caller's own request to join it, if any.
+CREATE OR REPLACE FUNCTION account_team_directory()
+    RETURNS TABLE(team_id uuid, name text, sport text, level text, area text, looking boolean, blurb text,
+                  members integer, last_game_on date, mine boolean, requested text)
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ SELECT t.id, t.name::text, t.sport::text, t.level::text, t.area::text, t.looking_for_players,
+                 t.blurb::text,
+                 (1 + (SELECT count(*) FROM team_members m WHERE m.team_id = t.id))::integer,
+                 (SELECT max(g.played_on) FROM games g WHERE g.team_id = t.id),
+                 account_on_team(t.id),
+                 (SELECT r.status::text FROM team_join_requests r
+                  WHERE r.team_id = t.id AND r.user_id = account_current_user())
+          FROM teams t
+          WHERE account_current_user() IS NOT NULL AND t.id IN (SELECT account_listed_team_ids())
+            AND (SELECT count(*) FROM account_listed_team_ids()) >= 5
+          ORDER BY lower(t.name) $$;
+
+-- Asking to join a listed team: the only writer of team_join_requests, for
+-- the caller. Refused unless the directory is open (5 listed teams), the team
+-- listed and its captain live, the caller not already on it, with no earlier
+-- request to it, and under 5 requests waiting (models.MAX_PENDING_REQUESTS).
+-- Answers with a status word.
+CREATE OR REPLACE FUNCTION account_request_to_join(p_team uuid, p_message text) RETURNS text
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$
+DECLARE
+    me uuid := account_current_user();
+    tm teams%ROWTYPE;
+BEGIN
+    IF me IS NULL OR NOT EXISTS (SELECT 1 FROM users WHERE id = me AND deleted_at IS NULL) THEN
+        RETURN 'invalid';
+    END IF;
+    IF length(coalesce(p_message, '')) > 200 THEN RETURN 'invalid'; END IF;
+    IF (SELECT count(*) FROM account_listed_team_ids()) < 5 THEN RETURN 'not_listed'; END IF;
+    SELECT * INTO tm FROM teams WHERE id = p_team AND id IN (SELECT account_listed_team_ids());
+    IF NOT FOUND THEN RETURN 'not_listed'; END IF;
+    IF account_on_team(p_team) THEN RETURN 'own'; END IF;
+    IF EXISTS (SELECT 1 FROM team_join_requests WHERE user_id = me AND team_id = p_team) THEN RETURN 'already'; END IF;
+    IF (SELECT count(*) FROM team_join_requests WHERE user_id = me AND status = 'pending') >= 5 THEN
+        RETURN 'limit';
+    END IF;
+    INSERT INTO team_join_requests (id, user_id, team_id, team_name, message, status, created_at)
+        VALUES (gen_random_uuid(), me, p_team, tm.name, nullif(btrim(coalesce(p_message, '')), ''), 'pending',
+                now() AT TIME ZONE 'utc');
+    RETURN 'sent';
+END $$;
+
+-- A team's waiting requests, to its captain alone: the requester's name and
+-- message, never their id.
+CREATE OR REPLACE FUNCTION account_team_requests(p_team uuid)
+    RETURNS TABLE(request_id uuid, requester_name text, message text, created_at timestamp)
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ SELECT r.id, u.name::text, r.message::text, r.created_at
+          FROM team_join_requests r
+          JOIN teams t ON t.id = r.team_id AND t.user_id = account_current_user()
+          JOIN users u ON u.id = r.user_id AND u.deleted_at IS NULL
+          WHERE r.team_id = p_team AND r.status = 'pending'
+          ORDER BY r.created_at $$;
+
+-- The captain answers. Accepting puts the requester on the team, as an
+-- accepted link would (30 is models.MAX_TEAM_MEMBERS). Answers with a word.
+CREATE OR REPLACE FUNCTION account_answer_join_request(p_request uuid, p_accept boolean) RETURNS text
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$
+DECLARE
+    me uuid := account_current_user();
+    req team_join_requests%ROWTYPE;
+    tm teams%ROWTYPE;
+    their_name text;
+    my_name text;
+BEGIN
+    IF me IS NULL THEN RETURN 'invalid'; END IF;
+    SELECT * INTO req FROM team_join_requests WHERE id = p_request AND status = 'pending' FOR UPDATE;
+    IF NOT FOUND THEN RETURN 'invalid'; END IF;
+    SELECT * INTO tm FROM teams WHERE id = req.team_id AND user_id = me FOR UPDATE;
+    IF NOT FOUND THEN RETURN 'invalid'; END IF;
+    IF NOT p_accept THEN
+        UPDATE team_join_requests SET status = 'declined', answered_at = now() AT TIME ZONE 'utc' WHERE id = req.id;
+        RETURN 'declined';
+    END IF;
+    SELECT name INTO their_name FROM users WHERE id = req.user_id AND deleted_at IS NULL;
+    SELECT name INTO my_name FROM users WHERE id = me AND deleted_at IS NULL;
+    IF their_name IS NULL OR my_name IS NULL THEN RETURN 'invalid'; END IF;
+    IF (SELECT count(*) FROM team_members WHERE team_id = tm.id) >= 30 THEN RETURN 'full'; END IF;
+    INSERT INTO team_members (id, team_id, member_id, member_name, owner_name, joined_at)
+        VALUES (gen_random_uuid(), tm.id, req.user_id, their_name, my_name, now() AT TIME ZONE 'utc')
+        ON CONFLICT (team_id, member_id) DO NOTHING;
+    UPDATE team_join_requests SET status = 'accepted', answered_at = now() AT TIME ZONE 'utc' WHERE id = req.id;
+    RETURN 'accepted';
+END $$;
+
 -- Definer functions run with their owner's rights, so nobody but the API
 -- needs to be able to call them.
 REVOKE ALL ON FUNCTION account_user_id_by_email(text) FROM PUBLIC;
@@ -957,6 +1127,14 @@ REVOKE ALL ON FUNCTION account_correct_team_game(uuid, date, text, integer, inte
 REVOKE ALL ON FUNCTION account_delete_team_game(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_leave_team(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_gym_buddies() FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_team_board(uuid, date, date) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_listed_team_ids() FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_recount_campus_board() FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_campus_board() FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_team_directory() FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_request_to_join(uuid, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_team_requests(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_answer_join_request(uuid, boolean) FROM PUBLIC;
 
 -- PUBLIC is not the only way in. Supabase's default privileges grant every new
 -- function to anon and authenticated by name, and its Data API lets anon call
@@ -1256,6 +1434,13 @@ def grant_statements() -> list[str]:
         "GRANT EXECUTE ON FUNCTION account_delete_team_game(uuid) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_leave_team(uuid) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_gym_buddies() TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_team_board(uuid, date, date) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_recount_campus_board() TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_campus_board() TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_team_directory() TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_request_to_join(uuid, text) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_team_requests(uuid) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_answer_join_request(uuid, boolean) TO " + APP_ROLE,
     ]
 
 

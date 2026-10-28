@@ -14,7 +14,8 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app._database.models import (
-    MAX_TEAM_MEMBERS, GameModel, TeamInviteModel, TeamMemberModel, TeamModel, UserModel, utc_now,
+    DIRECTORY_FLOOR, MAX_PENDING_REQUESTS, MAX_TEAM_MEMBERS, ActivityModel, GameModel, TeamInviteModel,
+    TeamJoinRequestModel, TeamMemberModel, TeamModel, UserModel, utc_now,
 )
 
 
@@ -445,3 +446,248 @@ def leave_team(db: Session, user_id: uuid.UUID, team_id: uuid.UUID) -> bool:
     ).delete(synchronize_session=False)
     db.commit()
     return gone > 0
+
+
+# --- Phase 3 items 8-9 (D13): the team board, the directory, requests to join ---
+
+def opted_in(user: UserModel | None) -> bool:
+    """Return whether a user has chosen to appear on boards (off unless chosen)."""
+    return bool(user is not None and (user.preferences or {}).get("leaderboard_opt_in") is True)
+
+
+def _people(db: Session, team: TeamModel) -> set[uuid.UUID]:
+    """Return everyone on a team: its captain and its members."""
+    return {team.user_id} | {m.member_id for m in db.query(TeamMemberModel).filter_by(team_id=team.id)}
+
+
+@dataclass(frozen=True)
+class BoardRow:
+    """One player on a team's board.
+
+    Attributes:
+        name: Their display name.
+        points: Their points in the window.
+        is_me: Whether it's the caller.
+    """
+    name: str
+    points: int
+    is_me: bool
+
+
+def team_board(db: Session, user_id: uuid.UUID, team_id: uuid.UUID, start: date, end: date) -> list[BoardRow]:
+    """Return a team's board for a window of at most 7 days: opted-in players' points.
+
+    Args:
+        db: Open session acting as the caller.
+        user_id: The caller. Read on SQLite only; Postgres uses the acting user.
+        team_id: The team.
+        start: First day, inclusive.
+        end: Last day, inclusive; at most 6 days after `start`.
+
+    Returns:
+        Opted-in players by points, most first; empty unless the caller is on the
+        team and opted in too.
+    """
+    if _is_postgres(db):
+        rows = db.execute(text("SELECT * FROM account_team_board(:t, :s, :e)"),
+                          {"t": team_id, "s": start, "e": end}).all()
+        return [BoardRow(r.name, r.points, r.is_me) for r in rows]
+    team = _on_team(db, user_id, team_id)
+    if team is None or not opted_in(db.get(UserModel, user_id)) or not 0 <= (end - start).days <= 6:
+        return []
+    out = []
+    for person in _people(db, team):
+        user = _live(db, person)
+        if user is None or not opted_in(user):
+            continue
+        total = sum(a.points for a in db.query(ActivityModel).filter(
+            ActivityModel.user_id == person, ActivityModel.on_date >= start, ActivityModel.on_date <= end))
+        out.append(BoardRow(user.name, total, person == user_id))
+    return sorted(out, key=lambda row: (-row.points, row.name))
+
+
+def listed_teams(db: Session) -> list[TeamModel]:
+    """Return the listed teams whose captains' accounts aren't being deleted."""
+    return [team for team in db.query(TeamModel).filter(TeamModel.listed.is_(True))
+            if _live(db, team.user_id) is not None]
+
+
+@dataclass(frozen=True)
+class DirectoryTeam:
+    """A listed team as the directory shows it: never a member's name.
+
+    Attributes:
+        team_id: The team, for asking to join.
+        name: Its name.
+        sport: Its sport, or None.
+        level: "casual", "intermediate" or "competitive", or None.
+        area: Where it plays, or None.
+        looking: Whether it wants players.
+        blurb: Its line about itself, or None.
+        members: How many are on it, the captain included.
+        last_game_on: Its latest recorded game, or None.
+        mine: Whether the caller is on it.
+        requested: The caller's request to join it ("pending", "accepted",
+            "declined"), or None.
+    """
+    team_id: uuid.UUID
+    name: str
+    sport: str | None
+    level: str | None
+    area: str | None
+    looking: bool
+    blurb: str | None
+    members: int
+    last_game_on: date | None
+    mine: bool
+    requested: str | None
+
+
+def directory(db: Session, user_id: uuid.UUID) -> list[DirectoryTeam]:
+    """Return the league directory: listed teams, once `DIRECTORY_FLOOR` are listed.
+
+    Args:
+        db: Open session acting as the caller.
+        user_id: The caller. Read on SQLite only; Postgres uses the acting user.
+
+    Returns:
+        The listed teams by name; empty while fewer than the floor are listed.
+    """
+    if _is_postgres(db):
+        rows = db.execute(text("SELECT * FROM account_team_directory()")).all()
+        return [DirectoryTeam(*row) for row in rows]
+    teams = listed_teams(db)
+    if len(teams) < DIRECTORY_FLOOR:
+        return []
+    out = []
+    for team in teams:
+        games = [g.played_on for g in db.query(GameModel).filter_by(team_id=team.id)]
+        mine = db.query(TeamJoinRequestModel).filter_by(team_id=team.id, user_id=user_id).first()
+        out.append(DirectoryTeam(team.id, team.name, team.sport, team.level, team.area, team.looking_for_players,
+                                 team.blurb, len(_people(db, team)), max(games) if games else None,
+                                 _on_team(db, user_id, team.id) is not None, mine.status if mine else None))
+    return sorted(out, key=lambda team: team.name.lower())
+
+
+def request_to_join(db: Session, user_id: uuid.UUID, team_id: uuid.UUID, message: str | None) -> str:
+    """Ask to join a listed team, sending the captain your name and a message.
+
+    Args:
+        db: Open session acting as the caller.
+        user_id: The caller. Read on SQLite only; Postgres uses the acting user.
+        team_id: The team.
+        message: Up to 200 characters, or None.
+
+    Returns:
+        "sent"; "not_listed" while the directory is closed or the team isn't listed;
+        "own" for someone already on it; "already" for a second request to it;
+        "limit" at `MAX_PENDING_REQUESTS` waiting; "invalid" for an unusable caller or
+        message.
+
+    Note:
+        Commits.
+    """
+    if _is_postgres(db):
+        status = db.execute(text("SELECT account_request_to_join(:t, :m)"), {"t": team_id, "m": message}).scalar()
+        db.commit()
+        return status
+    if _live(db, user_id) is None or len(message or "") > 200:
+        return "invalid"
+    teams = listed_teams(db)
+    team = next((t for t in teams if t.id == team_id), None)
+    if len(teams) < DIRECTORY_FLOOR or team is None:
+        return "not_listed"
+    if _on_team(db, user_id, team_id) is not None:
+        return "own"
+    mine = db.query(TeamJoinRequestModel).filter(TeamJoinRequestModel.user_id == user_id)
+    if mine.filter(TeamJoinRequestModel.team_id == team_id).first() is not None:
+        return "already"
+    if mine.filter(TeamJoinRequestModel.status == "pending").count() >= MAX_PENDING_REQUESTS:
+        return "limit"
+    db.add(TeamJoinRequestModel(user_id=user_id, team_id=team_id, team_name=team.name,
+                                message=(message or "").strip() or None, status="pending", created_at=utc_now()))
+    db.commit()
+    return "sent"
+
+
+@dataclass(frozen=True)
+class JoinRequest:
+    """A waiting request to join, as the team's captain sees it: never the requester's id.
+
+    Attributes:
+        request_id: The request, for answering it.
+        requester_name: Who asked.
+        message: What they said, or None.
+        created_at: When they asked (naive UTC).
+    """
+    request_id: uuid.UUID
+    requester_name: str
+    message: str | None
+    created_at: datetime
+
+
+def team_requests(db: Session, user_id: uuid.UUID, team_id: uuid.UUID) -> list[JoinRequest]:
+    """Return a team's waiting requests to join, to its captain alone.
+
+    Args:
+        db: Open session acting as the caller.
+        user_id: The caller. Read on SQLite only; Postgres uses the acting user.
+        team_id: The team.
+
+    Returns:
+        The waiting requests, oldest first; empty for anyone but the captain.
+    """
+    if _is_postgres(db):
+        rows = db.execute(text("SELECT * FROM account_team_requests(:t)"), {"t": team_id}).all()
+        return [JoinRequest(*row) for row in rows]
+    team = db.get(TeamModel, team_id)
+    if team is None or team.user_id != user_id:
+        return []
+    out = []
+    for request in db.query(TeamJoinRequestModel).filter_by(team_id=team_id, status="pending"):
+        requester = _live(db, request.user_id)
+        if requester is not None:
+            out.append(JoinRequest(request.id, requester.name, request.message, request.created_at))
+    return sorted(out, key=lambda r: r.created_at)
+
+
+def answer_request(db: Session, user_id: uuid.UUID, request_id: uuid.UUID, accept: bool) -> str:
+    """Accept or decline a request to join, as the team's captain.
+
+    Args:
+        db: Open session acting as the caller.
+        user_id: The caller. Read on SQLite only; Postgres uses the acting user.
+        request_id: The request.
+        accept: True puts the requester on the team.
+
+    Returns:
+        "accepted" or "declined"; "full" at `MAX_TEAM_MEMBERS`; "invalid" when it isn't
+        a waiting request to the caller's team, or either account is being deleted.
+
+    Note:
+        Commits.
+    """
+    if _is_postgres(db):
+        status = db.execute(text("SELECT account_answer_join_request(:r, :a)"),
+                            {"r": request_id, "a": accept}).scalar()
+        db.commit()
+        return status
+    request = db.get(TeamJoinRequestModel, request_id)
+    team = db.get(TeamModel, request.team_id) if request is not None and request.status == "pending" else None
+    if team is None or team.user_id != user_id:
+        return "invalid"
+    if not accept:
+        request.status, request.answered_at = "declined", utc_now()
+        db.commit()
+        return "declined"
+    requester, captain = _live(db, request.user_id), _live(db, user_id)
+    if requester is None or captain is None:
+        return "invalid"
+    if db.query(TeamMemberModel).filter_by(team_id=team.id).count() >= MAX_TEAM_MEMBERS:
+        return "full"
+    if db.query(TeamMemberModel).filter_by(team_id=team.id, member_id=requester.id).first() is None:
+        db.add(TeamMemberModel(id=uuid.uuid4(), team_id=team.id, member_id=requester.id,
+                               member_name=requester.name, owner_name=captain.name, joined_at=utc_now()))
+    request.status, request.answered_at = "accepted", utc_now()
+    db.commit()
+    return "accepted"

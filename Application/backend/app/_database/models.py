@@ -182,6 +182,7 @@ class UserModel(Base):
     salary_shares = relationship("SalaryShareModel", cascade=cascade, overlaps="application,salary_share")
     gym_buddy = relationship("GymBuddyModel", cascade=cascade, uselist=False)
     activities = relationship("ActivityModel", cascade=cascade)
+    join_requests = relationship("TeamJoinRequestModel", cascade=cascade, overlaps="join_requests")
     application_seasons = relationship("ApplicationSeasonModel", cascade=cascade)
     partnerships = relationship(
         "PartnershipModel", cascade=cascade, foreign_keys="PartnershipModel.user_id"
@@ -2702,6 +2703,13 @@ class TeamModel(Base):
         name: Team name.
         sport: Free text, such as "Ultimate"; optional.
         created_at: When the team was created.
+        listed: The captain lists it on campus: in the league directory and on the
+            campus board (Phase 3 items 8-9, D13).
+        level: "casual", "intermediate" or "competitive"; optional. Checked by the
+            request schema, not the database: the column was added to a live table.
+        area: Where it plays, such as "UBC Vancouver"; optional, 60 characters.
+        looking_for_players: Shown in the directory as wanting players.
+        blurb: A line about the team for the directory; optional, 200 characters.
     """
 
     __tablename__ = "teams"
@@ -2712,10 +2720,91 @@ class TeamModel(Base):
     #: Free text: "Ultimate", "Rec volleyball". No per-sport templates yet.
     sport = Column(String, nullable=True)
     created_at = Column(DateTime, nullable=False, default=utc_now)
+    #: Phase 3 items 8-9 (D13): off until the captain lists the team.
+    listed = Column(Boolean, nullable=False, default=False)
+    level = Column(String, nullable=True)
+    area = Column(String, nullable=True)
+    looking_for_players = Column(Boolean, nullable=False, default=False)
+    blurb = Column(String, nullable=True)
 
     members = relationship("TeamMemberModel", back_populates="team", cascade="all, delete-orphan")
     invites = relationship("TeamInviteModel", back_populates="team", cascade="all, delete-orphan")
     games = relationship("GameModel", back_populates="team", cascade="all, delete-orphan")
+    # Requests are other people's rows, which the captain can't see; the database
+    # cascade removes them with the team (delete order, see ORDERING).
+    join_requests = relationship("TeamJoinRequestModel", cascade="all, delete-orphan", passive_deletes=True)
+
+
+#: Phase 3 item 9. A listed team the directory shows only once this many teams
+#: are listed ("never launch empty"); the campus board waits for the same.
+DIRECTORY_FLOOR = 5
+#: How many requests to join one person may have waiting at once.
+MAX_PENDING_REQUESTS = 5
+#: Where a request to join stands.
+JOIN_REQUEST_STATUSES = ("pending", "accepted", "declined")
+
+
+class TeamJoinRequestModel(Base):
+    """Per-user row, no direct write: a student asking to join a listed team.
+
+    The requester's own row; only `account_request_to_join` writes it, checking the
+    team is listed and the requester has fewer than `MAX_PENDING_REQUESTS` waiting.
+    The captain sees and answers it only through definer functions. It keeps a copy
+    of the team's name, since the requester can't read the team. Unique per person
+    and team, so a declined request can't be sent again.
+
+    Attributes:
+        id: Primary key.
+        user_id: The requester.
+        team_id: The team asked to join; the row goes with the team.
+        team_name: The team's name, copied when the request was sent.
+        message: What the requester said, up to 200 characters; optional.
+        status: "pending", "accepted" or "declined".
+        created_at: When it was sent.
+        answered_at: When the captain answered; null while pending.
+    """
+
+    __tablename__ = "team_join_requests"
+    __table_args__ = (
+        UniqueConstraint("user_id", "team_id", name="uq_team_join_request"),
+        CheckConstraint(_one_of("status", JOIN_REQUEST_STATUSES), name="ck_team_join_request_status"),
+    )
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    team_id = Column(Uuid, ForeignKey("teams.id", ondelete="CASCADE"), nullable=False, index=True)
+    team_name = Column(String, nullable=False)
+    message = Column(String, nullable=True)
+    status = Column(String, nullable=False, default="pending")
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+    answered_at = Column(DateTime, nullable=True)
+
+
+class CampusBoardModel(Base):
+    """Sealed: this week's listed teams ranked by their opted-in players' points.
+
+    The API's role can neither read nor write it. Only `account_recount_campus_board`
+    writes it, rebuilding it whole for the current Monday-to-Sunday week (UTC), and
+    writing nothing until `DIRECTORY_FLOOR` teams are listed. Holds team names, never
+    a person's. Unique per week and team name.
+
+    Attributes:
+        id: Primary key.
+        week_start: The week's Monday.
+        team_name: The listed team's name.
+        sport: Its sport, or null.
+        points: Its opted-in players' points that week.
+        computed_at: When the recount wrote it.
+    """
+
+    __tablename__ = "campus_board"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    week_start = Column(Date, nullable=False)
+    team_name = Column(String, nullable=False)
+    sport = Column(String, nullable=True)
+    points = Column(Integer, nullable=False)
+    computed_at = Column(DateTime, nullable=False, default=utc_now)
 
 
 class TeamMemberModel(Base):

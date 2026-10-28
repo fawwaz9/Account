@@ -67,3 +67,95 @@ export const logActivity = (userId: string, activity: { on_date: string; kind: A
 export async function deleteActivity(userId: string, activityId: string) {
   return del<{ deleted: boolean }>(`fitness/${userId}/activities/${activityId}`);
 }
+
+/** One opted-in player on a team's board this week. */
+export interface BoardRow {
+  name: string;
+  points: number;
+  is_me: boolean;
+}
+
+/** A team's board: empty for you until you opt in. */
+export interface TeamBoard {
+  opted_in: boolean;
+  week_start: string;
+  rows: BoardRow[];
+}
+
+/** This week's campus board: listed teams, never people; empty below the floor. */
+export interface CampusBoard {
+  floor: number;
+  week_start: string | null;
+  teams: { team_name: string; sport: string | null; points: number }[];
+}
+
+/** A listed team in the directory: never a member's name. */
+export interface DirectoryTeam {
+  team_id: string;
+  name: string;
+  sport: string | null;
+  level: string | null;
+  area: string | null;
+  looking: boolean;
+  blurb: string | null;
+  members: number;
+  last_game_on: string | null;
+  /** No game in 30 days: shown greyed. */
+  dormant: boolean;
+  /** You're on it. */
+  mine: boolean;
+  /** Your request to join it, if any. */
+  requested: "pending" | "accepted" | "declined" | null;
+}
+
+/** The directory: empty until `floor` teams are listed. */
+export interface Directory {
+  floor: number;
+  teams: DirectoryTeam[];
+}
+
+/** One of your own requests to join a team. */
+export interface MyJoinRequest {
+  id: string;
+  team_name: string;
+  message: string | null;
+  status: "pending" | "accepted" | "declined";
+  created_at: string;
+}
+
+/** A waiting request to join your team, as its captain sees it. */
+export interface TeamJoinRequest {
+  request_id: string;
+  requester_name: string;
+  message: string | null;
+  created_at: string;
+}
+
+/** A team's board this week. */
+export const fetchTeamBoard = (userId: string, teamId: string) =>
+  get<TeamBoard>(`fitness/${userId}/teams/${teamId}/board`);
+
+/** This week's campus board. */
+export const fetchCampusBoard = (userId: string) => get<CampusBoard>(`fitness/${userId}/campus-board`);
+
+/** The league directory. */
+export const fetchDirectory = (userId: string) => get<Directory>(`fitness/${userId}/directory`);
+
+/** Ask to join a listed team; answers "sent" or why not. */
+export const joinTeam = (userId: string, teamId: string, message: string | null) =>
+  post<{ status: string }>(`fitness/${userId}/directory/${teamId}/join`, { message });
+
+/** Your own requests to join teams. */
+export const fetchMyJoinRequests = (userId: string) => get<MyJoinRequest[]>(`fitness/${userId}/join-requests`);
+
+/** Take back a waiting request; you can ask again, so nothing to confirm. */
+export const withdrawJoinRequest = (userId: string, requestId: string) =>
+  del<{ deleted: boolean }>(`fitness/${userId}/join-requests/${requestId}`);
+
+/** The waiting requests to join a team you captain. */
+export const fetchTeamJoinRequests = (userId: string, teamId: string) =>
+  get<TeamJoinRequest[]>(`fitness/${userId}/teams/${teamId}/join-requests`);
+
+/** Accept or decline a request to join your team. */
+export const answerJoinRequest = (userId: string, requestId: string, accept: boolean) =>
+  post<{ status: string }>(`fitness/${userId}/join-requests/${requestId}/answer`, { accept });

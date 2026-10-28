@@ -249,3 +249,88 @@
   display: flex;
   gap: 6px;
 }
+
+/* Boards, listing, requests and the directory (Phase 3 items 8-9). */
+.teamBoard,
+.teamListing,
+.teamRequests {
+  padding: 12px 0 0;
+  border-top: 1px solid var(--border);
+}
+
+.teamBoard h3,
+.teamListing h3,
+.teamRequests h3,
+.directoryMine h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.teamBoardList,
+.campusBoardList {
+  margin: 8px 0 0;
+  padding-left: 22px;
+}
+
+.teamBoardList li,
+.campusBoardList li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+}
+
+.teamBoardMe {
+  color: var(--gold);
+}
+
+.teamListing {
+  display: grid;
+  gap: 8px;
+}
+
+.teamListingFields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.teamRequests ul,
+.directoryList,
+.directoryMine ul {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.teamRequests li,
+.directoryList li,
+.directoryMine li {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.teamRequestActions,
+.directoryAsk {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.directoryDormant {
+  opacity: 0.55;
+}
+
+.directorySport {
+  max-width: 200px;
+  margin-bottom: 6px;
+}
+
+.directoryMine {
+  margin-top: 12px;
+}

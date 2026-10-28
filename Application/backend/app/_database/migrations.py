@@ -97,6 +97,14 @@ ADDED_COLUMNS: dict[str, dict[str, str | dict[str, str]]] = {
     },
     # Pay on set days of the month (next.md, decided 2026-10-03). Not
     # backfilled: every existing job keeps paying by its rule.
+    # Phase 3 items 8-9 (D13): a captain lists a team on campus.
+    "teams": {
+        "listed": "BOOLEAN NOT NULL DEFAULT false",
+        "level": "VARCHAR",
+        "area": "VARCHAR",
+        "looking_for_players": "BOOLEAN NOT NULL DEFAULT false",
+        "blurb": "VARCHAR",
+    },
     "jobs": {
         "pay_month_days": "VARCHAR",
         "pay_last_day": "BOOLEAN NOT NULL DEFAULT false",

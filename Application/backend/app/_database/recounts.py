@@ -17,6 +17,7 @@ RECOUNTS: list[tuple[str, Callable[[Session], int]]] = [
     ("office_hours", aggregates.recount_office_hours),
     ("salaries", aggregates.recount_salaries),
     ("merchant_categories", aggregates.recount_merchant_categories),
+    ("campus_board", aggregates.recount_campus_board),
 ]
 
 
