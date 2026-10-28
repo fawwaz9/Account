@@ -33,6 +33,8 @@ export const endpoints = {
     classFigures: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/class-figures`,
     /** Check in at a course's office hours. */
     officeHours: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/office-hours`,
+    /** What can be done with outlines on a course: offer, read, apply (Phase 3 item 2). */
+    outline: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/outline`,
     /** One of your own check-ins, to undo it. */
     officeHoursCheckIn: (userId: string, checkinId: string) => `grades/${userId}/office-hours/${checkinId}`,
   },

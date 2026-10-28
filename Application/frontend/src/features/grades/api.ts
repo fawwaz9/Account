@@ -5,6 +5,7 @@ import { CheapestPath,
   ClassFigures,
   OfficeHourCheckIn,
   OfficeHourWait,
+  OutlineStatus,
   CatalogueCourse,
   CatalogueLink,
   PrerequisiteKindName,
@@ -241,4 +242,24 @@ export async function checkInOfficeHours(userId: string, courseId: string, wait:
 /** Take back a check-in just made; nothing to confirm, it is seconds old. */
 export async function undoOfficeHoursCheckIn(userId: string, checkinId: string) {
   return del<{ deleted: boolean }>(endpoints.grades.officeHoursCheckIn(userId, checkinId));
+}
+
+/** What can be done with outlines on a course: your offer, and any reviewed outline. */
+export async function fetchOutline(userId: string, courseId: string) {
+  return get<OutlineStatus>(endpoints.grades.outline(userId, courseId));
+}
+
+/** Offer this course's outline for review; offering again replaces the earlier offer. */
+export async function offerOutline(userId: string, courseId: string) {
+  return post<OutlineStatus>(`${endpoints.grades.outline(userId, courseId)}/offer`, {});
+}
+
+/** Take back an offer; it can be offered again at any time, so nothing to confirm. */
+export async function withdrawOutlineOffer(userId: string, courseId: string) {
+  return del<{ deleted: boolean }>(`${endpoints.grades.outline(userId, courseId)}/offer`);
+}
+
+/** Fill this empty course from the reviewed outline for its course and term. */
+export async function applyOutline(userId: string, courseId: string) {
+  return post<OutlineStatus>(`${endpoints.grades.outline(userId, courseId)}/apply`, {});
 }

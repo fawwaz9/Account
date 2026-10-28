@@ -20,6 +20,7 @@ import RequiredFinalModal from "../../features/grades/components/RequiredFinalMo
 import RequiredFinalPanel from "../../features/grades/components/RequiredFinalPanel";
 import GradingSchemes from "../../features/grades/components/GradingSchemes";
 import ClassFigures from "../../features/grades/components/ClassFigures";
+import CourseOutline from "../../features/grades/components/CourseOutline";
 import ProjectionReview from "../../features/grades/components/ProjectionReview";
 import KeptSyllabi from "../../features/intake/KeptSyllabi";
 import SyllabusAddModal from "../../features/intake/SyllabusAddModal";
@@ -314,6 +315,16 @@ export default function CourseDetailPage() {
       {/* The original syllabus, when the course was built from one and the
           file was kept. Renders nothing otherwise. */}
       {user && courseId && <KeptSyllabi userId={user.id} courseId={courseId} />}
+      {/* Phase 3 item 2: fill an empty course from a reviewed outline, or offer
+          this one's. Silent when neither is possible. */}
+      {user && courseId && (
+        <CourseOutline
+          userId={user.id}
+          courseId={courseId}
+          nonce={reloadNonce}
+          onApplied={() => { void refreshCourse(); setReloadNonce((n) => n + 1); }}
+        />
+      )}
 
       {user && courseId && (
         <div className="courseInsights">

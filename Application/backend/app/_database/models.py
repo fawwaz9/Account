@@ -176,6 +176,7 @@ class UserModel(Base):
     term_reviews = relationship("TermReviewModel", cascade=cascade, overlaps="course,term_reviews")
     office_hour_checkins = relationship("OfficeHourCheckinModel", cascade=cascade,
                                         overlaps="course,office_hour_checkins")
+    outline_offers = relationship("OutlineOfferModel", cascade=cascade, overlaps="course,outline_offer")
     teams = relationship("TeamModel", cascade=cascade)
     job_applications = relationship("JobApplicationModel", cascade=cascade)
     salary_shares = relationship("SalaryShareModel", cascade=cascade, overlaps="application,salary_share")
@@ -335,6 +336,8 @@ class CourseModel(Base):
                                 overlaps="term_reviews")
     office_hour_checkins = relationship("OfficeHourCheckinModel", back_populates="course", cascade=cascade,
                                         overlaps="office_hour_checkins")
+    outline_offer = relationship("OutlineOfferModel", back_populates="course", cascade=cascade, uselist=False,
+                                 overlaps="outline_offers")
     grading_schemes = relationship("GradingSchemeModel", cascade=cascade)
     prerequisite_proposals = relationship("PrerequisiteProposalModel", cascade=cascade)
 
@@ -2535,6 +2538,75 @@ class MerchantCategoryModel(Base):
     category_name = Column(String, nullable=False)
     people = Column(Integer, nullable=False)
     computed_at = Column(DateTime, nullable=False, default=utc_now)
+
+
+#: Phase 3 item 2 (D12). Where an offered outline stands in the owner's review.
+OUTLINE_STATUSES = ("pending", "accepted", "rejected")
+
+
+class OutlineOfferModel(Base):
+    """Per-user row: a student's offer of their course's outline to classmates.
+
+    The outline is the course's category weights and its assessments' names,
+    categories and due dates, never a score or a note. It reaches nobody until the
+    owner approves it with `scripts/outline_review.py`, which copies it into
+    `shared_outlines`. One per course; offering again replaces it and resets review.
+
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        course_id: The course whose outline is offered.
+        course_key: Snapshot of the key it is shared under, such as "UBCV CPSC 221".
+        term_code: Snapshot of the term, such as "2026W1".
+        outline: JSON: {"weights": {category: percent}, "assessments": [{"name",
+            "category", "due_date"}]}.
+        status: "pending", "accepted" or "rejected".
+        created_at: When it was offered (or offered again).
+        reviewed_at: When the review decided it; null while pending.
+    """
+
+    __tablename__ = "outline_offers"
+    __table_args__ = (CheckConstraint(_one_of("status", OUTLINE_STATUSES), name="ck_outline_offer_status"),)
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    #: A unique index rather than a constraint, so it also serves the foreign key.
+    course_id = Column(Uuid, ForeignKey("courses.id"), nullable=False, unique=True, index=True)
+    course_key = Column(String, nullable=False)
+    term_code = Column(String, nullable=False)
+    outline = Column(JSON, nullable=False)
+    status = Column(String, nullable=False, default="pending")
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+    reviewed_at = Column(DateTime, nullable=True)
+
+    course = relationship("CourseModel", back_populates="outline_offer", overlaps="outline_offers")
+
+
+class SharedOutlineModel(Base):
+    """Shared: a reviewed course outline for one course and term, read by everyone.
+
+    World knowledge, like the catalogue: every signed-in user reads it, and only the
+    owner-run `scripts/outline_review.py` writes it, from an offer the owner approved.
+    Unique per course and term.
+
+    Attributes:
+        id: Primary key.
+        course_key: The course, such as "UBCV CPSC 221".
+        term_code: The term, such as "2026W1".
+        outline: JSON in `OutlineOfferModel.outline`'s shape.
+        source: Always "reviewed-offer".
+        approved_at: When the owner approved it.
+    """
+
+    __tablename__ = "shared_outlines"
+    __table_args__ = (UniqueConstraint("course_key", "term_code", name="uq_shared_outline"),)
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    course_key = Column(String, nullable=False)
+    term_code = Column(String, nullable=False)
+    outline = Column(JSON, nullable=False)
+    source = Column(String, nullable=False, default="reviewed-offer")
+    approved_at = Column(DateTime, nullable=False, default=utc_now)
 
 
 #: How many people besides the captain a team can hold (Phase 2 D26). Written

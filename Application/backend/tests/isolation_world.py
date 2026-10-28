@@ -63,6 +63,8 @@ from app._database.models import (
     EventMemberModel,
     GradeDistributionModel,
     CourseIntelModel,
+    OutlineOfferModel,
+    SharedOutlineModel,
     MerchantCategoryModel,
     SalaryFigureModel,
     SalaryShareModel,
@@ -351,6 +353,11 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
     add(OfficeHourCheckinModel(id=new_id(), user_id=user_id, course_id=course.id, course_key=f"{marker} key",
                                weekday=day.weekday(), hour=14, wait="long",
                                checked_at=datetime.combine(day, time(21, 0))))
+    # Phase 3 item 2: the world's course outline, offered, with the marker in an
+    # assessment's name a leak would carry.
+    add(OutlineOfferModel(id=new_id(), user_id=user_id, course_id=course.id, course_key=f"{marker} key",
+                          term_code="2026W1", outline={"weights": {"Assignment": 100.0}, "assessments": [
+                              {"name": f"{marker} assignment", "category": "Assignment", "due_date": None}]}))
     _ = (event, transaction, recurring_task)
 
     db.commit()
@@ -433,6 +440,7 @@ CATALOGUE_IDS = {
     "office_hour_slots": uuid.uuid5(uuid.NAMESPACE_URL, "account-test/office_hour_slots"),
     "salary_figures": uuid.uuid5(uuid.NAMESPACE_URL, "account-test/salary_figures"),
     "merchant_categories": uuid.uuid5(uuid.NAMESPACE_URL, "account-test/merchant_categories"),
+    "shared_outlines": uuid.uuid5(uuid.NAMESPACE_URL, "account-test/shared_outlines"),
 }
 
 
@@ -476,11 +484,15 @@ def seed_catalogue(db) -> dict[str, uuid.UUID]:
     merchant = MerchantCategoryModel(id=CATALOGUE_IDS["merchant_categories"], merchant_key="blenz",
                                      category_name="coffee", people=3)
     db.add(merchant)
+    # Phase 3 item 2: a reviewed outline, shared like the catalogue.
+    outline = SharedOutlineModel(id=CATALOGUE_IDS["shared_outlines"], course_key="UBCV CPSC 221", term_code="2026W1",
+                                 outline={"weights": {"Assignment": 40.0, "Final": 60.0}, "assessments": []})
+    db.add(outline)
     # Read before the commit: after it, touching an attribute refreshes the row
     # and leaves a transaction open holding a lock that blocks rls.install.
     ids = {"catalogue_courses": course.id, "catalogue_prerequisites": rule.id, "grade_distributions": sealed.id,
            "course_intel": intel.id, "office_hour_slots": slot.id, "salary_figures": pay.id,
-           "merchant_categories": merchant.id}
+           "merchant_categories": merchant.id, "shared_outlines": outline.id}
     db.commit()
     missing = (SHARED_READ_TABLES | SEALED_TABLES) - set(ids)
     assert not missing, f"the catalogue seed has nothing in: {sorted(missing)}"

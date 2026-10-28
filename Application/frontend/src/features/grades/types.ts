@@ -620,3 +620,34 @@ export interface ClassFigures {
   /** Busy office-hour slots above the floor, by weekday then hour. */
   office_hours: OfficeHourSlot[];
 }
+
+/** One assessment in a shared outline; never a score. */
+export interface OutlineAssessment {
+  name: string;
+  category: GradeCategory;
+  /** YYYY-MM-DD in that term, or null when the outline doesn't say. */
+  due_date: string | null;
+}
+
+/** A course's structure as shared between students: weights and assessments. */
+export interface Outline {
+  /** Category to percent, only categories above 0. */
+  weights: Partial<Record<GradeCategory, number>>;
+  assessments: OutlineAssessment[];
+}
+
+/** What you can do with outlines on one of your courses. */
+export interface OutlineStatus {
+  course_key: string | null;
+  /** "2026W1"; null without the first-year setting. */
+  term_code: string | null;
+  can_offer: boolean;
+  /** Why not, when it can't be offered. */
+  offer_blocked: string | null;
+  /** Your own offer of this course's outline, and where its review stands. */
+  offer: { status: "pending" | "accepted" | "rejected"; created_at: string } | null;
+  /** A reviewed outline for this course and term. */
+  shared: { outline: Outline; approved_at: string } | null;
+  /** True when `shared` can fill this course: it has no grades yet. */
+  can_apply: boolean;
+}

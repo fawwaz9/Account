@@ -28,7 +28,8 @@ POLICY = "account_isolation"
 #: Tables that belong to nobody: every signed-in user reads them, no request
 #: writes them (Phase 2 D9). By name, so an ownerless table still raises
 #: unless someone decided, here, that it is shared.
-SHARED_READ_TABLES = frozenset({"catalogue_courses", "catalogue_prerequisites"})
+#: Phase 3 item 2 adds reviewed course outlines (D12), written by the outline review.
+SHARED_READ_TABLES = frozenset({"catalogue_courses", "catalogue_prerequisites", "shared_outlines"})
 
 #: Tables nobody reads through the API at all (Phase 2 D25): row-level
 #: security with no policy, and every grant revoked, the app role's included.

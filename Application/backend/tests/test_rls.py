@@ -235,6 +235,11 @@ def test_a_write_grant_left_on_a_shared_table_is_taken_back(owner_engine):
     "DELETE FROM catalogue_prerequisites",
     "TRUNCATE catalogue_prerequisites",
     "UPDATE catalogue_prerequisites SET rule = '{}'",
+    # Phase 3 item 2: reviewed outlines are written by the outline review alone.
+    "INSERT INTO shared_outlines (id, course_key, term_code, outline, source, approved_at) "
+    "VALUES (gen_random_uuid(), 'UBCV PLNT 101', '2026W1', '{}', 'planted', now())",
+    "UPDATE shared_outlines SET outline = '{}'",
+    "DELETE FROM shared_outlines",
 ])
 def test_the_app_role_cannot_write_a_shared_table(worlds, app_session, statement):
     owner, a, *_ = worlds
@@ -673,6 +678,37 @@ def test_the_review_refuses_the_app_role(app_session):
 
 def test_the_review_refuses_a_role_that_cannot_write_the_catalogue(owner_engine):
     review = _review_module()
+    with owner_engine.begin() as conn:
+        if not conn.execute(text("SELECT 1 FROM pg_roles WHERE rolname = 'rls_outsider'")).scalar():
+            conn.execute(text("CREATE ROLE rls_outsider LOGIN PASSWORD 'outsider_test_only'"))
+    url = make_url(TEST_DATABASE_URL).set(username="rls_outsider", password="outsider_test_only")
+    outsider = create_engine(url, connect_args=connect_args_for(TEST_DATABASE_URL))
+    session = sessionmaker(bind=outsider)()
+    try:
+        with pytest.raises(review.Refused, match="cannot write"):
+            review.check_connection(session)
+    finally:
+        session.close()
+        outsider.dispose()
+
+
+def _outline_review_module():
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    import outline_review
+    return outline_review
+
+
+def test_the_outline_review_refuses_the_app_role(app_session):
+    """Phase 3 item 2 (D12): shared outlines' only writer runs as the owner."""
+    review = _outline_review_module()
+    with pytest.raises(review.Refused, match="the API's role"):
+        review.check_connection(app_session)
+
+
+def test_the_outline_review_refuses_a_role_that_cannot_write_the_outlines(owner_engine):
+    review = _outline_review_module()
     with owner_engine.begin() as conn:
         if not conn.execute(text("SELECT 1 FROM pg_roles WHERE rolname = 'rls_outsider'")).scalar():
             conn.execute(text("CREATE ROLE rls_outsider LOGIN PASSWORD 'outsider_test_only'"))
