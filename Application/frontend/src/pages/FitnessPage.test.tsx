@@ -85,6 +85,15 @@ describe("FitnessPage", () => {
     await waitFor(() => expect(api.createTeam).toHaveBeenCalledWith("u1", "Thunder", "Ultimate"));
   });
 
+  // Unstyled, the fields read as plain words beside a greyed-out button, and nobody
+  // could tell where to type (the owner, 2026-10-28).
+  it("draws every text field on the page as a box", async () => {
+    const view = await openTeam();
+    const fields = [screen.getByLabelText("New team name"), screen.getByLabelText("New team sport"),
+      ...within(view).getByRole("form", { name: "Record the game" }).querySelectorAll("input")];
+    for (const field of fields) expect(field.className).toContain("calInput");
+  });
+
   it("records a game in one form, with today already filled in", async () => {
     api.recordGame.mockResolvedValue(detail());
     const view = await openTeam();

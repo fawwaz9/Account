@@ -76,7 +76,7 @@ export default function ClubsSection({ userId }: { readonly userId: string }) {
             ))}
           </ul>
           <form className="teamsNew" onSubmit={create}>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Club name" maxLength={80}
+            <input className="calInput" value={name} onChange={(e) => setName(e.target.value)} placeholder="Club name" maxLength={80}
                    aria-label="New club name" />
             <button type="submit" className="calButton calButtonPrimary" disabled={!name.trim()}>New club</button>
           </form>

@@ -56,6 +56,12 @@ describe("ClubsSection", () => {
     expect(await screen.findByRole("region", { name: "Chess Club" })).toBeTruthy();
   });
 
+  it("draws the new club field as a box, not plain words", async () => {
+    api.fetchClubs.mockResolvedValue([]);
+    render(<ClubsSection userId="u1" />);
+    expect((await screen.findByLabelText("New club name")).className).toContain("calInput");
+  });
+
   it("shows a member the posts, polls and events, and lets them vote, not post", async () => {
     const view = await openClub(detail());
     expect(within(view).getByText("Tournament Saturday")).toBeTruthy();

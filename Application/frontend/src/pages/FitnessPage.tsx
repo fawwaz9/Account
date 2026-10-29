@@ -101,9 +101,9 @@ export default function FitnessPage() {
             ))}
           </ul>
           <form className="teamsNew" onSubmit={create}>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Team name" maxLength={60}
+            <input className="calInput" value={name} onChange={(e) => setName(e.target.value)} placeholder="Team name" maxLength={60}
                    aria-label="New team name" />
-            <input value={sport} onChange={(e) => setSport(e.target.value)} placeholder="Sport (optional)" maxLength={30}
+            <input className="calInput" value={sport} onChange={(e) => setSport(e.target.value)} placeholder="Sport (optional)" maxLength={30}
                    aria-label="New team sport" />
             <button type="submit" className="calButton calButtonPrimary" disabled={busy || !name.trim()}>New team</button>
           </form>
@@ -306,12 +306,12 @@ function GameForm({ submitLabel, busy, initial, onSubmit, onCancel }: FormProps)
 
   return (
     <form className="gameForm" onSubmit={submit} aria-label={submitLabel}>
-      <input type="date" value={playedOn} onChange={(e) => setPlayedOn(e.target.value)} aria-label="Date played" />
-      <input value={opponent} onChange={(e) => setOpponent(e.target.value)} placeholder="Opponent" maxLength={60}
+      <input className="calInput" type="date" value={playedOn} onChange={(e) => setPlayedOn(e.target.value)} aria-label="Date played" />
+      <input className="calInput" value={opponent} onChange={(e) => setOpponent(e.target.value)} placeholder="Opponent" maxLength={60}
              aria-label="Opponent" />
-      <input type="number" min={0} max={999} inputMode="numeric" value={ours} onChange={(e) => setOurs(e.target.value)}
+      <input className="calInput" type="number" min={0} max={999} inputMode="numeric" value={ours} onChange={(e) => setOurs(e.target.value)}
              placeholder="Us" aria-label="Our score" />
-      <input type="number" min={0} max={999} inputMode="numeric" value={theirs} onChange={(e) => setTheirs(e.target.value)}
+      <input className="calInput" type="number" min={0} max={999} inputMode="numeric" value={theirs} onChange={(e) => setTheirs(e.target.value)}
              placeholder="Them" aria-label="Their score" />
       <button type="submit" className="calButton calButtonPrimary" disabled={busy || !ready}>{submitLabel}</button>
       {onCancel && <button type="button" className="calButton" onClick={onCancel}>Cancel</button>}
@@ -372,8 +372,8 @@ function GameRow({ game, isCaptain, busy, onConfirm, onDispute, onCorrect, onRem
       {mode === "dispute" ? (
         <span className="catalogueActions">
           <span className="small-text">What was it?</span>
-          <input type="number" min={0} max={999} value={ours} onChange={(e) => setOurs(e.target.value)} aria-label="Our score, as you saw it" />
-          <input type="number" min={0} max={999} value={theirs} onChange={(e) => setTheirs(e.target.value)} aria-label="Their score, as you saw it" />
+          <input className="calInput" type="number" min={0} max={999} value={ours} onChange={(e) => setOurs(e.target.value)} aria-label="Our score, as you saw it" />
+          <input className="calInput" type="number" min={0} max={999} value={theirs} onChange={(e) => setTheirs(e.target.value)} aria-label="Their score, as you saw it" />
           <button type="button" className="calButton calButtonPrimary" disabled={busy}
                   onClick={() => void onDispute(Number(ours), Number(theirs)).then(() => setMode("idle"))}>
             Send
