@@ -14,8 +14,9 @@ criteria.
 
 - **Part A, the job application tracker,** is planned in full below (item 1).
 - **Part B, the density features** (items 2–13), was drafted and built on
-  2026-10-28 (D10–D13), **not yet deployed**: Batch 3 in the runbook. Most of
-  it shows nothing until enough people contribute, by design.
+  2026-10-28 (D10–D13), and **deployed the same night** (`9b5a4bd`, Batch 3 in
+  the runbook). Most of it shows nothing until enough people contribute, by
+  design.
 
 ## What Phase 3 is for
 
@@ -51,24 +52,25 @@ because the vision put it here, and it has its own "Done when".
 
 ## Status at a glance (2026-10-28)
 
-Every item is built. Items 2–13 wait on Batch 3's schema step and deploy, and
-then on contributors (D11's floors).
+Every item is built and deployed. Items 2–13 went live with Batch 3
+(`9b5a4bd`) and now wait on contributors (D11's floors); Strava and Fitbit wait
+on your app registrations.
 
 | # | Item | Status |
 |---|---|---|
 | 1 | Job application tracker | **Deployed 2026-10-13** (`72bb9f2`), with D2–D6; seasons (D7) 2026-10-14 (`e5d5eb6`) |
-| 2 | Shared syllabi | **Built** (`e24b42b`): offered outlines, your review script, "Use it" on an empty course |
-| 3 | Grade distributions shown | **Built** (`c501b90`): closed terms above the floor on the course page |
-| 4 | Shared merchant map | **Built** (`b100c82`): a layer after your own history, 3 people agreeing |
-| 5 | Crowdsourced course intel | **Built** (`79d0c91`): hours, difficulty, clarity and "take again" per figure above the floor |
-| 6 | Exertion score | **Built** (`1584637`), manual entries. Strava and Fitbit wait on your app registrations |
-| 7 | Adaptive exertion goals | **Built** (`1584637`): last 4 weeks plus 10%, eased in exam weeks |
-| 8 | Campus leaderboards | **Built** (`294301a`): team board (opt-in), campus board of listed teams. A city board waits for a second campus |
-| 9 | Open league directory | **Built** (`294301a`): opens at 5 listed teams; ask to join |
-| 10 | Club management | **Built** (`06c6726`): members by link, posts, polls, calendar events |
-| 11 | Office-hours radar | **Built** (`4acc31e`): three taps, slots above the floor |
-| 12 | Co-op salary transparency | **Built** (`a479d50`): verified, published in batches of 5 |
-| 13 | Gym buddy, scoped | **Built** (`c16c14a`): partners and teammates only |
+| 2 | Shared syllabi | **Deployed 2026-10-28** (`e24b42b`): offered outlines, your review script, "Use it" on an empty course |
+| 3 | Grade distributions shown | **Deployed 2026-10-28** (`c501b90`): closed terms above the floor on the course page |
+| 4 | Shared merchant map | **Deployed 2026-10-28** (`b100c82`): a layer after your own history, 3 people agreeing |
+| 5 | Crowdsourced course intel | **Deployed 2026-10-28** (`79d0c91`): hours, difficulty, clarity and "take again" per figure above the floor |
+| 6 | Exertion score | **Deployed 2026-10-28** (`1584637`), manual entries. Strava and Fitbit wait on your app registrations |
+| 7 | Adaptive exertion goals | **Deployed 2026-10-28** (`1584637`): last 4 weeks plus 10%, eased in exam weeks |
+| 8 | Campus leaderboards | **Deployed 2026-10-28** (`294301a`): team board (opt-in), campus board of listed teams. A city board waits for a second campus |
+| 9 | Open league directory | **Deployed 2026-10-28** (`294301a`): opens at 5 listed teams; ask to join |
+| 10 | Club management | **Deployed 2026-10-28** (`06c6726`): members by link, posts, polls, calendar events |
+| 11 | Office-hours radar | **Deployed 2026-10-28** (`4acc31e`): three taps, slots above the floor |
+| 12 | Co-op salary transparency | **Deployed 2026-10-28** (`a479d50`): verified, published in batches of 5 |
+| 13 | Gym buddy, scoped | **Deployed 2026-10-28** (`c16c14a`): partners and teammates only |
 
 ---
 

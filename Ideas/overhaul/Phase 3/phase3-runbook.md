@@ -182,7 +182,26 @@ the `72bb9f2` deployment. The table stays; the older API never reads it.
 - No errors in the logs. Settings carried over.
 - The live site matches the build (38 files).
 
-## Batch 3: Part B, items 2-13 (D10-D13). NOT DEPLOYED: waiting on your go-ahead
+## Batch 3: Part B, items 2-13 (D10-D13). DEPLOYED 2026-10-28
+
+**Done.** Your schema run, then read-backs A, B and C matched exactly (19
+tables with row security, the five sealed ones without a policy or a grant,
+`account_app` the only grantee; the five team columns, both flags `NO` and
+`false`). Then `deploy.run.sh all --yes` at `9b5a4bd`:
+- The backup held 72 tables and 2,251 rows.
+- The gate reported row-level security on for 72 of 72 tables, so every
+  function was there (D).
+- API `account-api-00049-smp`, digest-verified `sha256:0c63e2f9...`, serving
+  100% since 2026-10-29 05:49 UTC. Health ok; all nine settings carried over.
+- Six new routes answer 401 against two 404 controls (they answered 404 or 405
+  on the old API); the recount door answers 403 without its secret.
+- A manual run of `account-grade-recount` answered `200` from
+  `Google-Cloud-Scheduler` in 0.45 s. The route doesn't log its body, so the
+  six keys stand on the tests; a `200` means every rebuild ran, since any
+  failure is a 500.
+- No errors and no 5xx in the new revision's logs.
+- Frontend `main` at `9b5a4bd`, matching a production build file by file (40
+  files).
 
 Built 2026-10-28 on `phase3` (`c501b90` to `06c6726`), every item in one schema
 run. Nothing existing is altered or dropped except five new columns on `teams`.

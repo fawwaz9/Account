@@ -884,6 +884,54 @@ production-URL build: 26 of 26 files.
 
 ---
 
+## Phase 3 batch 3: Part B, the density features -- SHIPPED 2026-10-28
+Your asks: all buildable items tonight, floors of 5 (merchants at 3), verified
+by my review. Items 2–13 in one schema run (yours) and one deploy. D10–D13 are
+the design; D14 lists every call I made while building.
+- **From past students, on the course page:** past terms' grade bands with
+  yours marked, and hours, difficulty, clarity and "take it again" from term
+  reviews. A term counts only once its review window has closed, so the first
+  figures appear in mid-2027.
+- **Office-hours radar:** three taps after a visit; slots show above the floor.
+- **Co-op pay:** "share this offer's pay anonymously", verified offers only,
+  published per employer in batches of 5.
+- **Shared merchant map:** a new user's first import comes back categorised
+  from what 3 or more people file a shop under. Your own history always wins,
+  and Settings → Financial turns sharing off.
+- **Shared outlines:** offer a course's outline; your review script approves
+  it; "Use it" fills an empty course.
+- **Fitness:** activities for points with a weekly goal that eases in exam
+  weeks; an opt-in team board; a campus board of listed teams, never people; a
+  league directory with "Ask to join", open at 5 listed teams; gym buddies
+  among partners and teammates.
+- **Clubs,** under Fitness: members by link, announcements, anonymous polls,
+  and events on members' calendars.
+- **Isolation:** a new kind, the shared aggregate (D11): sealed tables rebuilt
+  whole by the daily recount, read through one definer function each that
+  checks the floor again, and no user id in any of them. 19 new tables (72),
+  22 new definer functions, in every walk on both databases.
+- **Also on board:** the redocumentation and the new audit (`redoc`).
+
+377 new backend tests: 2,983 on SQLite, 3,481 on Postgres; 847 frontend.
+Mutations: 162 of 162 caught, after 11 survivors gained tests.
+
+LIVE: API `account-api-00049-smp` (digest-verified `9b5a4bd`, sha256
+`0c63e2f9...`) since 2026-10-29 05:49 UTC.
+- The backup held 72 tables and 2,251 rows.
+- Read-backs A, B and C matched: `account_app` only, the sealed five with no
+  policy and no grant.
+- The gate reports row-level security on for 72 of 72 tables.
+- Health ok. Six new routes answer 401 against two 404 controls.
+- The daily recount job, run by hand, answered `200`.
+- No errors or 5xx in the logs. All nine settings carried over.
+- Frontend `main` at `9b5a4bd`, matching a production build file by file (40
+  files).
+
+Not looked at in a browser: the new screens rest on their component tests.
+Strava and Fitbit wait on your app registrations.
+
+---
+
 ## Pages come back at once: a GET cache, always refetched -- SHIPPED 2026-10-18
 Audit #35, the first half. Your call: **always refetch in the background**.
 - **A revisit is drawn from memory at once,** then the same requests go out
