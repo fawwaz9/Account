@@ -884,6 +884,24 @@ production-URL build: 26 of 26 files.
 
 ---
 
+## "Why can't I make a team or a club?" -- FIXED 2026-10-28
+Your report, an hour after batch 3. The team and club name fields had no box:
+no border, no fill, so "Team name" read as a label beside a greyed-out button,
+and nothing said where to type. Nothing was refused: the API log showed no
+attempt to make either reached it. The team form had been like this since
+Phase 2, and the club form copied it.
+- The new-team, new-club, record-a-game and dispute fields now draw as boxes
+  (`calInput`); the date keeps its own width, and the score boxes fit "Them".
+- Seen in a browser at desktop and phone width, making a team and a club on a
+  local copy. Two tests fail without the fix and pass with it.
+
+849 frontend tests. Frontend only.
+
+LIVE: `main` at `abeb498`, matching a production build file by file (40
+files). Roll Pages back to the `9b5a4bd` deployment to undo it.
+
+---
+
 ## Phase 3 batch 3: Part B, the density features -- SHIPPED 2026-10-28
 Your asks: all buildable items tonight, floors of 5 (merchants at 3), verified
 by my review. Items 2–13 in one schema run (yours) and one deploy. D10–D13 are
