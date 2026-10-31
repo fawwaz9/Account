@@ -31,7 +31,8 @@ export default function CampusBoardCard({ userId }: { readonly userId: string })
         <ol className="campusBoardList">
           {board.teams.map((team, index) => (
             <li key={`${team.team_name}-${index}`}>
-              <span>{team.team_name}{team.sport && <span className="small-text muted"> · {team.sport}</span>}</span>
+              <span className="campusBoardRank">{index + 1}</span>
+              <span className="campusBoardTeam">{team.team_name}{team.sport && <span className="small-text muted"> · {team.sport}</span>}</span>
               <strong>{team.points}</strong>
             </li>
           ))}

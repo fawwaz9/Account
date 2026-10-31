@@ -69,6 +69,14 @@ describe("intelLines", () => {
   });
 });
 
+describe("the pooled figures", () => {
+  it("rounds what a recount stores unrounded", () => {
+    const lines = intelLines({ hours_answers: 6, hours_median: 8.25, difficulty_answers: 6,
+      difficulty_mean: 11 / 3, clarity_answers: 6, clarity_mean: 4, again_answers: 6, again_share: 200 / 3 });
+    expect(lines.map((l) => l.value)).toEqual(["about 8.3", "3.7 / 5", "4 / 5", "67%"]);
+  });
+});
+
 describe("ClassFigures", () => {
   it("shows what past students' reviews say above the grades", async () => {
     api.fetchClassFigures.mockResolvedValue(figures({ intel }));

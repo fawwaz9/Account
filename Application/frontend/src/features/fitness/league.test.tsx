@@ -105,7 +105,7 @@ describe("CampusBoardCard", () => {
     api.fetchCampusBoard.mockResolvedValue({ floor: 5, week_start: "2026-10-26",
       teams: [{ team_name: "Disc Jockeys", sport: "Ultimate", points: 120 }] });
     render(<CampusBoardCard userId="u1" />);
-    expect((await screen.findByRole("listitem")).textContent).toBe("Disc Jockeys · Ultimate120");
+    expect((await screen.findByRole("listitem")).textContent).toBe("1Disc Jockeys · Ultimate120");
     cleanup();
     api.fetchCampusBoard.mockResolvedValue({ floor: 5, week_start: null, teams: [] });
     render(<CampusBoardCard userId="u1" />);

@@ -142,13 +142,17 @@
 }
 
 /* ===== Beyond teams (Phase 3): gym buddy, activity, boards, directory, clubs =====
-   Cards in a row under the teams, wrapping to one column on a phone. */
+   Cards in columns under the teams, wrapping to one column on a phone. */
 .fitnessMore {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
-  gap: 20px;
+  columns: 3 320px;
+  column-gap: 20px;
   margin-top: 28px;
-  align-items: start;
+}
+
+/* Columns, not a grid: a long directory shouldn't leave a hole beside it. */
+.fitnessMore > * {
+  break-inside: avoid;
+  margin-bottom: 20px;
 }
 
 .fitnessCard {
@@ -274,7 +278,20 @@
 .teamBoardList,
 .campusBoardList {
   margin: 8px 0 0;
-  padding-left: 22px;
+  padding: 0;
+  list-style: none;
+}
+
+.campusBoardRank {
+  width: 1.5em;
+  flex: none;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.campusBoardTeam {
+  flex: 1;
+  min-width: 0;
 }
 
 .teamBoardList li,

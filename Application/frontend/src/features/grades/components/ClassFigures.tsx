@@ -51,20 +51,25 @@ const READINGS: Record<OfficeHourWait, string> = {
   long: "usually a long line",
 };
 
+/** A pooled figure to one decimal, so 3.6666 reads 3.7 and 9 stays 9. */
+function oneDecimal(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
 /** What past students' reviews say, as label and reading pairs; only figures above the floor. */
 export function intelLines(intel: CourseIntel): { label: string; value: string; from: number }[] {
   const lines: { label: string; value: string; from: number }[] = [];
   if (intel.hours_median !== null && intel.hours_answers !== null) {
-    lines.push({ label: "Hours a week", value: `about ${intel.hours_median}`, from: intel.hours_answers });
+    lines.push({ label: "Hours a week", value: `about ${oneDecimal(intel.hours_median)}`, from: intel.hours_answers });
   }
   if (intel.difficulty_mean !== null && intel.difficulty_answers !== null) {
-    lines.push({ label: "Difficulty", value: `${intel.difficulty_mean} / 5`, from: intel.difficulty_answers });
+    lines.push({ label: "Difficulty", value: `${oneDecimal(intel.difficulty_mean)} / 5`, from: intel.difficulty_answers });
   }
   if (intel.clarity_mean !== null && intel.clarity_answers !== null) {
-    lines.push({ label: "Instructor clarity", value: `${intel.clarity_mean} / 5`, from: intel.clarity_answers });
+    lines.push({ label: "Instructor clarity", value: `${oneDecimal(intel.clarity_mean)} / 5`, from: intel.clarity_answers });
   }
   if (intel.again_share !== null && intel.again_answers !== null) {
-    lines.push({ label: "Would take it again", value: `${intel.again_share}%`, from: intel.again_answers });
+    lines.push({ label: "Would take it again", value: `${Math.round(intel.again_share)}%`, from: intel.again_answers });
   }
   return lines;
 }
