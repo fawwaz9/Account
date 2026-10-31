@@ -116,8 +116,9 @@ def default_category_weights() -> dict[GradeCategory, float]:
     """
     return dict.fromkeys(GradeCategory, 0.0)
 
+
 def normalize_category_weights(
-    weights: dict[GradeCategory, float] | None
+    weights: dict[GradeCategory, float] | None,
 ) -> dict[GradeCategory, float]:
     """Return a checked weight for every category, the given ones over zeros.
 
@@ -145,6 +146,7 @@ def normalize_category_weights(
 
     return normalized
 
+
 class CourseBase(BaseModel):
     """A course's fields and the rules a complete course must satisfy.
 
@@ -169,27 +171,83 @@ class CourseBase(BaseModel):
         archived: Kept and averaged, but not counted toward credits completed.
         links: At most 20 links.
     """
-    code: str = Field(..., min_length=3, max_length=20, description="The unique code for the course (e.g., CS101, MATH202)")
-    name: str = Field(..., min_length=1, max_length=100, description="The name of the course (e.g., Introduction to Computer Science, Calculus II)")
-    year: int = Field(..., ge=1, le=10, description="The academic year of the course (e.g., 1 for first year, 2 for second year, etc.)")
-    semester: Semester = Field(..., description="The semester in which the course is offered")
-    credits: float = Field(default=3.0, ge=0.5, le=10.0, description="The number of credits for the course")
-    required: bool = Field(default=True, description="Indicates if the course is required or elective")
-    professor: str | None = Field(default=None, max_length=100, description="The name of the professor teaching the course")
-    section: str | None = Field(default=None, max_length=20, description="The section you are in, e.g. 101 or L2B")
-    final_grade: float = Field(default=0.0, ge=0, le=100, description="The final grade for the course submitted by the professor")
-    target_grade: float | None = Field(default=None, ge=0, le=100, description="The grade you are aiming for; null uses the account default")
-    category_weights: dict[GradeCategory, float] = Field(default_factory=default_category_weights, description="Weights by grade category")
-    # Typed as date, not str: the column is Column(Date), and Pydantic v2 will not
-    # coerce a date into a str -- it raises. Serialization still emits ISO strings.
-    start_date: date | None = Field(default=None, description="The date the course starts")
+
+    code: str = Field(
+        ...,
+        min_length=3,
+        max_length=20,
+        description="The unique code for the course (e.g., CS101, MATH202)",
+    )
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="The name of the course (e.g., Introduction to Computer Science, Calculus II)",
+    )
+    year: int = Field(
+        ...,
+        ge=1,
+        le=10,
+        description="The academic year of the course (e.g., 1 for first year, 2 for second year, etc.)",
+    )
+    semester: Semester = Field(
+        ..., description="The semester in which the course is offered"
+    )
+    credits: float = Field(
+        default=3.0, ge=0.5, le=10.0, description="The number of credits for the course"
+    )
+    required: bool = Field(
+        default=True, description="Indicates if the course is required or elective"
+    )
+    professor: str | None = Field(
+        default=None,
+        max_length=100,
+        description="The name of the professor teaching the course",
+    )
+    section: str | None = Field(
+        default=None,
+        max_length=20,
+        description="The section you are in, e.g. 101 or L2B",
+    )
+    final_grade: float = Field(
+        default=0.0,
+        ge=0,
+        le=100,
+        description="The final grade for the course submitted by the professor",
+    )
+    target_grade: float | None = Field(
+        default=None,
+        ge=0,
+        le=100,
+        description="The grade you are aiming for; null uses the account default",
+    )
+    category_weights: dict[GradeCategory, float] = Field(
+        default_factory=default_category_weights,
+        description="Weights by grade category",
+    )
+    # Typed as date, not str: the column is Column(Date), and Pydantic v2 will not coerce a date into a str -- it raises. Serialization still emits ISO strings.
+    start_date: date | None = Field(
+        default=None, description="The date the course starts"
+    )
     end_date: date | None = Field(default=None, description="The date the course ends")
-    # Three independent flags rather than one status, because they combine: a
-    # transfer credit can also be archived.
-    no_final: bool = Field(default=False, description="No final exam, so a missing final grade is not a problem to act on")
-    transfer_credit: bool = Field(default=False, description="Credit granted without taking the course; contributes credits and no grade")
-    archived: bool = Field(default=False, description="Still searchable and still in the average, but no longer counted toward credits completed")
-    links: list[CourseLink] = Field(default_factory=list, max_length=20, description="Where this course lives: Canvas, Piazza, a syllabus")
+    # Three independent flags rather than one status, because they combine: a transfer credit can also be archived.
+    no_final: bool = Field(
+        default=False,
+        description="No final exam, so a missing final grade is not a problem to act on",
+    )
+    transfer_credit: bool = Field(
+        default=False,
+        description="Credit granted without taking the course; contributes credits and no grade",
+    )
+    archived: bool = Field(
+        default=False,
+        description="Still searchable and still in the average, but no longer counted toward credits completed",
+    )
+    links: list[CourseLink] = Field(
+        default_factory=list,
+        max_length=20,
+        description="Where this course lives: Canvas, Piazza, a syllabus",
+    )
 
     @model_validator(mode="after")
     def validate_course_logic(self):
@@ -223,9 +281,12 @@ class CourseBase(BaseModel):
         self.category_weights = normalize_category_weights(self.category_weights)
         return self
 
+
 class CourseCreate(CourseBase):
     """Request body for adding a course; the fields and rules of `CourseBase`."""
+
     pass
+
 
 class CategoryWeightsUpdate(BaseModel):
     """Request body replacing a course's category weights.
@@ -234,7 +295,10 @@ class CategoryWeightsUpdate(BaseModel):
         category_weights: Category to weight percentage, each 0-100, total at most
             `MAX_TOTAL_WEIGHT`.
     """
-    category_weights: dict[GradeCategory, float] = Field(..., description="Category weights to update")
+
+    category_weights: dict[GradeCategory, float] = Field(
+        ..., description="Category weights to update"
+    )
 
     @model_validator(mode="after")
     def validate_category_weights(self):
@@ -256,6 +320,7 @@ class CategoryWeightsUpdate(BaseModel):
             raise ValueError(weight_error["invalid_weights"])
 
         return self
+
 
 class CourseUpdate(BaseModel):
     """Request body for editing a course; omitted fields stay as they are.
@@ -282,22 +347,78 @@ class CourseUpdate(BaseModel):
         archived: Whether the course is archived.
         links: The whole new list of links, at most 20; replaces the old one.
     """
-    code: str | None = Field(default=None, min_length=3, max_length=20, description="The unique code for the course (e.g., CS101, MATH202)")
-    name: str | None = Field(default=None, min_length=1, max_length=100, description="The name of the course (e.g., Introduction to Computer Science, Calculus II)")
-    year: int | None = Field(default=None, ge=1, le=10, description="The academic year of the course (e.g., 1 for first year, 2 for second year, etc.)")
-    semester: Semester | None = Field(default=None, description="The semester in which the course is offered")
-    credits: float | None = Field(default=None, ge=0.5, le=10.0, description="The number of credits for the course")
-    required: bool | None = Field(default=None, description="Indicates if the course is required or elective")
-    professor: str | None = Field(default=None, max_length=100, description="The name of the professor teaching the course")
-    section: str | None = Field(default=None, max_length=20, description="The section you are in, e.g. 101 or L2B")
-    final_grade: float | None = Field(default=None, ge=0, le=100, description="The final grade for the course submitted by the professor")
-    target_grade: float | None = Field(default=None, ge=0, le=100, description="The grade you are aiming for; null uses the account default")
-    category_weights: dict[GradeCategory, float] | None = Field(default=None, description="Weights by grade category")
-    start_date: date | None = Field(default=None, description="The date the course starts")
+
+    code: str | None = Field(
+        default=None,
+        min_length=3,
+        max_length=20,
+        description="The unique code for the course (e.g., CS101, MATH202)",
+    )
+    name: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=100,
+        description="The name of the course (e.g., Introduction to Computer Science, Calculus II)",
+    )
+    year: int | None = Field(
+        default=None,
+        ge=1,
+        le=10,
+        description="The academic year of the course (e.g., 1 for first year, 2 for second year, etc.)",
+    )
+    semester: Semester | None = Field(
+        default=None, description="The semester in which the course is offered"
+    )
+    credits: float | None = Field(
+        default=None,
+        ge=0.5,
+        le=10.0,
+        description="The number of credits for the course",
+    )
+    required: bool | None = Field(
+        default=None, description="Indicates if the course is required or elective"
+    )
+    professor: str | None = Field(
+        default=None,
+        max_length=100,
+        description="The name of the professor teaching the course",
+    )
+    section: str | None = Field(
+        default=None,
+        max_length=20,
+        description="The section you are in, e.g. 101 or L2B",
+    )
+    final_grade: float | None = Field(
+        default=None,
+        ge=0,
+        le=100,
+        description="The final grade for the course submitted by the professor",
+    )
+    target_grade: float | None = Field(
+        default=None,
+        ge=0,
+        le=100,
+        description="The grade you are aiming for; null uses the account default",
+    )
+    category_weights: dict[GradeCategory, float] | None = Field(
+        default=None, description="Weights by grade category"
+    )
+    start_date: date | None = Field(
+        default=None, description="The date the course starts"
+    )
     end_date: date | None = Field(default=None, description="The date the course ends")
-    no_final: bool | None = Field(default=None, description="No final exam, so a missing final grade is not a problem to act on")
-    transfer_credit: bool | None = Field(default=None, description="Credit granted without taking the course; contributes credits and no grade")
-    archived: bool | None = Field(default=None, description="Still searchable and still in the average, but no longer counted toward credits completed")
+    no_final: bool | None = Field(
+        default=None,
+        description="No final exam, so a missing final grade is not a problem to act on",
+    )
+    transfer_credit: bool | None = Field(
+        default=None,
+        description="Credit granted without taking the course; contributes credits and no grade",
+    )
+    archived: bool | None = Field(
+        default=None,
+        description="Still searchable and still in the average, but no longer counted toward credits completed",
+    )
     #: Sent whole, never patched entry by entry. The list is small and ordered,
     #: and a per-entry API would need ids the JSON column does not carry.
     links: list[CourseLink] | None = Field(default=None, max_length=20)
@@ -334,6 +455,7 @@ class CourseUpdate(BaseModel):
 
         return self
 
+
 class Course(CourseBase):
     """A course as the API returns it, with figures the server computes.
 
@@ -353,6 +475,7 @@ class Course(CourseBase):
             the server only.
         projected_on: The day that projection was taken.
     """
+
     id: UUID = Field(default_factory=uuid4)
     #: Null when the course has no marked work, rather than 0.0.
     #:
@@ -367,8 +490,12 @@ class Course(CourseBase):
     average: float | None = Field(default=None, validation_alias="reported_average")
     # Both computed server-side so one grade scale and one term comparison
     # serve the list, the course page, and search alike.
-    letter_grade: str = Field(default="", description="Letter grade for the current average")
-    grade_points: float = Field(default=0.0, description="Grade points on the configured scale")
+    letter_grade: str = Field(
+        default="", description="Letter grade for the current average"
+    )
+    grade_points: float = Field(
+        default=0.0, description="Grade points on the configured scale"
+    )
     term_bucket: str = Field(
         default="current",
         description="past, current, or future, relative to the student's term",
@@ -383,9 +510,11 @@ class Course(CourseBase):
 
     class Config:
         """Pydantic v1-style settings: read attributes; accept `average` by name."""
+
         from_attributes = True
         # So `Course(average=...)` still works by field name alongside the alias.
         populate_by_name = True
+
 
 class CourseDetail(Course):
     """A course with its grades and per-category figures, for the course page.
@@ -395,7 +524,8 @@ class CourseDetail(Course):
         category_averages: Point-weighted average per category, 0-100.
         category_points: Marks each category contributes, out of its weight.
     """
-    grades: List[Grade] =  Field(default_factory=list)
+
+    grades: List[Grade] = Field(default_factory=list)
 
     # Ordered here rather than at every call site that builds one of these, so a
     # new path cannot forget. See `grade_sort_key` for why it is not a plain
@@ -412,6 +542,7 @@ class CourseDetail(Course):
             The same grades sorted by `sorted_grades`.
         """
         return sorted_grades(grades)
+
     # Point-weighted average per category, computed server-side so the client
     # renders one authoritative number instead of reimplementing the formula.
     # Defaults to empty so any path that does not populate it still serializes.
@@ -429,4 +560,5 @@ class CourseDetail(Course):
 
     class Config:
         """Pydantic v1-style settings: build the model from object attributes."""
+
         from_attributes = True
