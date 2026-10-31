@@ -390,6 +390,13 @@ export interface UserGradeDashboard {
   semester_average: number;
   /** Null when the GPA scale is switched off in Settings. */
   cgpa: number | null;
+  /**
+   * The cumulative average with each current course at its running average (Phase 4 D5).
+   * Null when no current course has one; absent from an API older than the field.
+   */
+  cumulative_average_including_term?: number | null;
+  /** The CGPA on the same courses; null when the average is, or the GPA scale is off. */
+  cgpa_including_term?: number | null;
   credits_completed: number;
   credits_in_progress: number;
   credits_required: number;

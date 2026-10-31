@@ -395,6 +395,30 @@
   padding: 2px 12px;
 }
 
+/* The "including this term" pair: set apart under its own label, and quieter
+   than the official figures so the two are never mistaken for each other. */
+.summaryIncluding {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+}
+
+/* `labelWithTip` (globals.css) keeps the mark beside the label and puts its
+   panel on the next line; only the label itself is set in capitals. */
+.summaryIncludingLabel {
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.summaryStatSecondary {
+  font-size: 1.1rem;
+  color: var(--text);
+}
+
 /* ----- Credits ----- */
 .creditsPanel {
   background: linear-gradient(145deg, var(--panel), var(--panel-2));

@@ -90,6 +90,10 @@ class UserGradeDashboard(BaseModel):
         cumulative_average: Credit-weighted mean over courses with a final grade.
         semester_average: Plain mean across the current term's courses.
         cgpa: Credit-weighted grade points; None when the GPA scale is off.
+        cumulative_average_including_term: The cumulative average with each current
+            course at its running average; None when no current course has one.
+        cgpa_including_term: The CGPA on the same courses; None when the average is
+            None or the GPA scale is off.
         credits_completed: Credits finished.
         credits_in_progress: Credits in the current term not yet finished.
         credits_required: Completed credits from required courses.
@@ -117,6 +121,11 @@ class UserGradeDashboard(BaseModel):
     semester_average: float = 0.0
     #: Credit-weighted grade points. None when the GPA scale is switched off.
     cgpa: float | None = None
+    #: The cumulative average again, with each current course counted at its running
+    #: average (Phase 4 D5). None when no current course has one.
+    cumulative_average_including_term: float | None = None
+    #: The CGPA on the same courses. None when the average is, or the GPA scale is off.
+    cgpa_including_term: float | None = None
     credits_completed: float = 0.0
     credits_in_progress: float = 0.0
     #: Completed credits split by the course's required flag.

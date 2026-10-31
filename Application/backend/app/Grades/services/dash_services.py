@@ -165,6 +165,9 @@ def get_dashboard(db: Session, user_id: uuid.UUID, target_grade: float = DEFAULT
     current_courses = [c for c in course_list if c.term_bucket == CURRENT]
     completed_credits, in_progress_credits = credits_by_state(course_list)
     required_credits, elective_credits = completed_credits_by_kind(course_list)
+    average_with_term, cgpa_with_term = averages_including_this_term(
+        course_list, preferences.gpa_scale_enabled
+    )
 
     # Only courses with a mark can be the best or the weakest one. An unmarked
     # course used to carry an average of 0.0 and was therefore reported as the
@@ -187,6 +190,8 @@ def get_dashboard(db: Session, user_id: uuid.UUID, target_grade: float = DEFAULT
         cumulative_average=calculate_cumulative_average(course_list),
         semester_average=plain_average(current_courses),
         cgpa=calculate_cgpa(course_list) if preferences.gpa_scale_enabled else None,
+        cumulative_average_including_term=average_with_term,
+        cgpa_including_term=cgpa_with_term,
         credits_completed=completed_credits,
         credits_in_progress=in_progress_credits,
         credits_required=required_credits,
@@ -270,6 +275,67 @@ def calculate_cgpa(courses) -> float | None:
         return None
 
     return round(total_points / total_credits, 2)
+
+
+def results_including_this_term(courses) -> tuple[list[tuple[float, float]], bool]:
+    """Return the (grade, credits) pairs the "including this term" pair averages.
+
+    Every course the official pair counts (a final above 0), plus each current
+    course without a final at its running average: the figure the Semester Average
+    uses (`course_result_grade`), not a projected finish. An unmarked course is
+    skipped, as is transfer credit and any course without credits.
+
+    Args:
+        courses: Course rows with `term_bucket` set.
+
+    Returns:
+        The pairs, and whether any current course counted at its running average.
+        When none did, the pairs are exactly the official pair's.
+    """
+    pairs: list[tuple[float, float]] = []
+    any_running = False
+
+    for course in courses:
+        if not is_graded(course) or not course.credits or course.credits <= 0:
+            continue
+        final = course.final_grade
+        if final and final > 0:
+            pairs.append((final, course.credits))
+        elif course.term_bucket == CURRENT:
+            running = course_result_grade(course)
+            if running is not None:
+                pairs.append((running, course.credits))
+                any_running = True
+
+    return pairs, any_running
+
+
+def averages_including_this_term(courses, gpa_scale_enabled: bool) -> tuple[float | None, float | None]:
+    """Return the cumulative average and CGPA counting this term at its running averages.
+
+    A second pair, shown beside the official one under its own label (Phase 4 D5).
+    The official pair is unchanged.
+
+    Args:
+        courses: Course rows with `term_bucket` set.
+        gpa_scale_enabled: The user's GPA-scale setting; off leaves the CGPA None.
+
+    Returns:
+        (average, cgpa), each rounded to 2 places. Both None when no current course
+        has a running average, because the pair would only repeat the official one.
+    """
+    pairs, any_running = results_including_this_term(courses)
+    if not any_running:
+        return None, None
+
+    total_credits = sum(credits for _, credits in pairs)
+    average = round(sum(grade * credits for grade, credits in pairs) / total_credits, 2)
+    cgpa = None
+    if gpa_scale_enabled:
+        cgpa = round(
+            sum(calculate_gpa_points(grade) * credits for grade, credits in pairs) / total_credits, 2
+        )
+    return average, cgpa
 
 
 def credits_by_state(courses) -> tuple[float, float]:
