@@ -884,6 +884,27 @@ production-URL build: 26 of 26 files.
 
 ---
 
+## Phase 3 walkthrough fixes -- SHIPPED 2026-10-31
+Found by walking every Phase 3 screen in a browser with data above the floors.
+- Figures from past students are rounded: hours and the two ratings to one
+  decimal, "take again" to a whole percent. One had printed 66.66666666666667%.
+- The campus board shows ranks again. Its list had lost its numbers to
+  `display:flex`; each row now carries its rank in its own column.
+- A long league directory no longer leaves a hole on the Fitness page. The cards
+  under the teams flow in columns, not a grid.
+- Delete Course no longer runs 5px past a phone's edge.
+
+850 frontend tests, tsc and build clean. Frontend only. CI green on all three
+jobs at `83f4bc0`, whose frontend tree is byte-identical to `5baad80`.
+
+LIVE: `main` fast-forwarded to `5baad80`; Cloudflare's check on the commit
+reads "Deploy successful" (2026-10-31 18:38 UTC). **Not yet compared file by
+file** with a production build: the cloud session that deployed it can't reach
+`account-2a7.pages.dev` (network policy). The local production-URL build to
+compare against is 54 files. Roll Pages back to the `abeb498` deployment to undo it.
+
+---
+
 ## "Why can't I make a team or a club?" -- FIXED 2026-10-28
 Your report, an hour after batch 3. The team and club name fields had no box:
 no border, no fill, so "Team name" read as a label beside a greyed-out button,
