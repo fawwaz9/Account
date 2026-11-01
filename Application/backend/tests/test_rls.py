@@ -520,6 +520,8 @@ DEFINER_SIGNATURES = (
     "account_vote_club_poll(uuid, integer)",
     "account_club_events(date, date)",
     "account_leave_club(uuid)",
+    "account_assistant_token_user(text)",
+    "account_users_with_briefing()",
 )
 
 
@@ -604,6 +606,8 @@ def test_only_the_app_role_can_call_the_cross_user_functions(owner_engine):
             "SELECT account_vote_club_poll(gen_random_uuid(), 0)",
             "SELECT * FROM account_club_events(current_date, current_date)",
             "SELECT account_leave_club(gen_random_uuid())",
+            "SELECT account_assistant_token_user('x')",
+            "SELECT * FROM account_users_with_briefing()",
         ):
             with outsider.connect() as conn:
                 with pytest.raises(ProgrammingError, match="permission denied"):
@@ -677,7 +681,7 @@ def test_route_isolation_under_rls(worlds, app_engine, method, path, variant, le
     app.main.app.dependency_overrides[get_db] = per_request_session
     try:
         client = TestClient(app.main.app, raise_server_exceptions=bool(os.getenv("ISOLATION_RAISE")))
-        token = create_access_token(a.id, a.session_epoch or 0)
+        token = iso.bearer_for(method, path, a, "zzownera")
         for url, query, body in iso._expanded_requests(method, path, variant, leaf, a, b,
                                                        world_a, world_b, day):
             before = snapshot(owner)

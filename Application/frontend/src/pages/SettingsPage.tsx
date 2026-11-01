@@ -12,6 +12,8 @@ import { KindColors } from "../features/calender/kindColors";
 import { chooseCashTipAccount } from "../features/jobs/api";
 import HelpTip from "../shared/components/HelpTip";
 import NotificationsSetting from "../features/notifications/NotificationsSetting";
+import AssistantSetting from "../features/briefing/AssistantSetting";
+import BriefingSetting from "../features/briefing/BriefingSetting";
 import CategoriesModal from "../features/budget/components/CategoriesModal";
 import "../styles/login.css";
 // The two budget modals reached from the Financial tab style their rows from
@@ -429,6 +431,10 @@ export default function SettingsPage() {
               </span>
             </div>
             {user && <NotificationsSetting userId={user.id} />}
+            {/* Phase 4 item 6: the Today card as a daily notification (D13). */}
+            {user && <BriefingSetting userId={user.id} hour={(user.preferences?.briefing_hour as number | null | undefined) ?? null} />}
+            {/* Phase 4 item 7: your own assistant reads your briefing (D4). */}
+            {user && <AssistantSetting userId={user.id} />}
             {/* Said out loud, as the vision requires of any analytics here, but
                 behind the (?) rather than as ambient text: it answers "what is
                 this", which is what the owner asked those to be for. */}

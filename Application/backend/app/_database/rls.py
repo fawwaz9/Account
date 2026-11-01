@@ -124,6 +124,10 @@ FUNCTIONS = (
     "account_correct_team_game",
     "account_delete_team_game",
     "account_leave_team",
+    # Phase 4 item 7 (D4): an assistant token, resolved to its owner by its hash.
+    "account_assistant_token_user",
+    # Phase 4 item 6 (D13): who asked for a briefing and has a device for it.
+    "account_users_with_briefing",
 )
 
 #: Tables the app role may read and delete from but never insert into or
@@ -1214,6 +1218,26 @@ CREATE OR REPLACE FUNCTION account_leave_club(p_club uuid) RETURNS boolean
               RETURNING 1)
           SELECT count(*) > 0 FROM gone $$;
 
+-- Phase 4 item 7 (D4). An assistant token arrives before anyone is
+-- identified, so its owner is found here, by the token's hash, and nothing else
+-- is answered. Possession of the token is the proof; revoking deletes the row,
+-- so a revoked token finds nobody. Marks the token used.
+CREATE OR REPLACE FUNCTION account_assistant_token_user(p_token_hash text) RETURNS uuid
+    LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ UPDATE assistant_tokens t SET last_used_at = now() AT TIME ZONE 'utc'
+          FROM users u
+          WHERE t.token_hash = p_token_hash AND u.id = t.user_id AND u.deleted_at IS NULL
+          RETURNING t.user_id $$;
+
+-- Phase 4 item 6 (D13). The briefing dispatcher runs as no one, so the users
+-- who asked for a briefing push, and have a device to send it to, are found
+-- here; each user's own hour is then checked on their own clock.
+CREATE OR REPLACE FUNCTION account_users_with_briefing() RETURNS SETOF uuid
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+    AS $$ SELECT u.id FROM users u
+          WHERE u.deleted_at IS NULL AND (u.preferences ->> 'briefing_hour') IS NOT NULL
+            AND EXISTS (SELECT 1 FROM push_subscriptions s WHERE s.user_id = u.id) $$;
+
 -- Definer functions run with their owner's rights, so nobody but the API
 -- needs to be able to call them.
 REVOKE ALL ON FUNCTION account_user_id_by_email(text) FROM PUBLIC;
@@ -1278,6 +1302,8 @@ REVOKE ALL ON FUNCTION account_club_polls(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_vote_club_poll(uuid, integer) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_club_events(date, date) FROM PUBLIC;
 REVOKE ALL ON FUNCTION account_leave_club(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_assistant_token_user(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION account_users_with_briefing() FROM PUBLIC;
 
 -- PUBLIC is not the only way in. Supabase's default privileges grant every new
 -- function to anon and authenticated by name, and its Data API lets anon call
@@ -1593,6 +1619,8 @@ def grant_statements() -> list[str]:
         "GRANT EXECUTE ON FUNCTION account_vote_club_poll(uuid, integer) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_club_events(date, date) TO " + APP_ROLE,
         "GRANT EXECUTE ON FUNCTION account_leave_club(uuid) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_assistant_token_user(text) TO " + APP_ROLE,
+        "GRANT EXECUTE ON FUNCTION account_users_with_briefing() TO " + APP_ROLE,
     ]
 
 

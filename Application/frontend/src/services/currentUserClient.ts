@@ -44,6 +44,8 @@ export interface CurrentUser {
     cash_tip_account_id?: string | null;
     /** Count your categories toward the shared merchant map; absent means on. */
     share_merchant_categories?: boolean;
+    /** Local hour of the daily briefing push; null or absent is off (Phase 4 item 6). */
+    briefing_hour?: number | null;
     [key: string]: unknown;
   };
 }

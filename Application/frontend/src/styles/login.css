@@ -369,3 +369,62 @@
   font-size: 0.85rem;
   flex-shrink: 0;
 }
+
+/* Settings: your own assistant (Phase 4 item 7). The row wraps so the one-time
+   token can take the full width under it. */
+.assistantSetting {
+  flex-wrap: wrap;
+}
+
+.assistantControls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.assistantControls .buttons,
+.assistantFresh .buttons {
+  margin: 0;
+  padding: 4px 10px;
+  font-size: 0.85rem;
+}
+
+.assistantFresh {
+  flex-basis: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--gold);
+  border-radius: 8px;
+  background: var(--panel-2);
+}
+
+.assistantFresh p {
+  margin: 0 0 6px;
+}
+
+.assistantToken {
+  display: block;
+  margin: 0 0 6px;
+  padding: 6px 8px;
+  overflow-wrap: anywhere;
+  user-select: all;
+  background: var(--panel);
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.assistantFresh code {
+  overflow-wrap: anywhere;
+}
+
+/* Settings: the daily briefing's hour (Phase 4 item 6). */
+.briefingSelect {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+}

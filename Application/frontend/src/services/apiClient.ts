@@ -25,7 +25,7 @@ interface RequestOptions extends RequestInit {
 }
 
 /** Join a path onto the API base. */
-function buildUrl(path: string) {
+export function buildUrl(path: string) {
   const cleanPath = path.replace(/^\/+/, "");
   return cleanPath ? `${API_BASE_URL}/${cleanPath}` : API_BASE_URL;
 }

@@ -55,6 +55,8 @@ class UserModel(Base):
             signup leaves it False.
         preferences: The `UserPreferences` JSON object. Assign a new dict to save a
             change.
+        briefing_sent_on: The user's own day the briefing push last went out; null
+            before the first.
         session_epoch: Counter every token carries; bumping it revokes all outstanding
             sessions.
         deleted_at: When deletion was requested; null for a live account. Sign-in still
@@ -87,6 +89,9 @@ class UserModel(Base):
     # no column behind it, so update_user's setattr loop wrote to a non-mapped
     # attribute and every change was silently dropped on commit.
     preferences = Column(JSON, nullable=False, default=dict)
+    #: Phase 4 item 6 (D13): the user's own day the briefing push last went out,
+    #: so the dispatcher sends one a day. Written only by the dispatcher.
+    briefing_sent_on = Column(Date, nullable=True)
     # Bumped to invalidate every session outstanding at that moment. Each token
     # carries the epoch it was minted under, and a mismatch is refused.
     #
@@ -186,6 +191,8 @@ class UserModel(Base):
     clubs = relationship("ClubModel", cascade=cascade)
     club_votes = relationship("ClubVoteModel", cascade=cascade, overlaps="votes")
     application_seasons = relationship("ApplicationSeasonModel", cascade=cascade)
+    # Phase 4 item 7: deleting the account deletes its assistant token with it.
+    assistant_tokens = relationship("AssistantTokenModel", cascade=cascade)
     partnerships = relationship(
         "PartnershipModel", cascade=cascade, foreign_keys="PartnershipModel.user_id"
     )
@@ -3241,3 +3248,30 @@ class ApplicationSeasonModel(Base):
     starts_month = Column(Date, nullable=False)
     ends_month = Column(Date, nullable=False)
     created_at = Column(DateTime, nullable=False, default=utc_now)
+
+
+class AssistantTokenModel(Base):
+    """Per-user row: the one token that lets the user's own assistant read their digest.
+
+    Phase 4 item 7, BYOAI (D4): off until the user makes a token; the token itself is
+    shown once and only its SHA-256 is kept; revoking deletes the row, so the token
+    stops working at once. It reads the digest and nothing else, through
+    `account_assistant_token_user` on Postgres.
+
+    Attributes:
+        id: Primary key.
+        user_id: Owner; unique, so a user holds at most one token.
+        token_hash: SHA-256 of the token; unique.
+        prefix: The token's first characters, to recognise it by in Settings.
+        created_at: When it was made.
+        last_used_at: When an assistant last read the digest with it; null until then.
+    """
+
+    __tablename__ = "assistant_tokens"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, unique=True, index=True)
+    token_hash = Column(String, nullable=False, unique=True)
+    prefix = Column(String, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+    last_used_at = Column(DateTime, nullable=True)

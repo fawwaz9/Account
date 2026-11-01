@@ -126,7 +126,9 @@ class DispatchResult(BaseModel):
         users: Users with something due who were processed.
         pushed: Notifications delivered.
         removed: Subscriptions deleted because the push service said they are gone.
+        briefings: Daily briefings delivered (Phase 4 item 6).
     """
     users: int
     pushed: int
     removed: int
+    briefings: int = 0

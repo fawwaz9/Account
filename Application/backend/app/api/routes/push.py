@@ -101,7 +101,7 @@ def send_test(user_id: VerifiedUserId, db: DBSession, request: TestRequest | Non
 
 @internal.post("/reminders/dispatch", response_model=DispatchResult)
 def dispatch(db: DBSession, x_cron_secret: str | None = Header(default=None)):
-    """Push every due reminder to its owner's devices; for the scheduler only.
+    """Push every due reminder, and every due daily briefing; for the scheduler only.
 
     Args:
         db: Request-scoped database session; it acts as each user in turn.
@@ -119,4 +119,7 @@ def dispatch(db: DBSession, x_cron_secret: str | None = Header(default=None)):
         raise HTTPException(status_code=404, detail="Not Found")
     if not x_cron_secret or not hmac.compare_digest(x_cron_secret, settings.CRON_SECRET):
         raise HTTPException(status_code=403, detail="Not authorized")
-    return DispatchResult(**push_service.dispatch_due_reminders(db))
+    result = push_service.dispatch_due_reminders(db)
+    # Phase 4 item 6 (D13): the same run sends the daily briefings that are due.
+    result["briefings"] = push_service.dispatch_briefings(db)
+    return DispatchResult(**result)

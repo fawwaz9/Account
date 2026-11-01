@@ -66,7 +66,9 @@ from app.Auth.services.session_service import create_access_token
 from tests.conftest import make_user
 from app.shared.dates import user_today
 from app._database.rls import SEALED_TABLES, SHARED_READ_TABLES
-from tests.isolation_world import CATALOGUE_IDS, PAIRED_TABLES, seed_catalogue, seed_pair, seed_world, snapshot
+from tests.isolation_world import (
+    CATALOGUE_IDS, PAIRED_TABLES, assistant_token_for, seed_catalogue, seed_pair, seed_world, snapshot,
+)
 
 MARK_A = "zzownera"
 MARK_B = "zzvictimb"
@@ -89,6 +91,22 @@ SELF = {
     ("GET", "/api/users/me"),
     ("POST", "/api/auth/password"),
 }
+#: Routes authenticated by an assistant token rather than a session (Phase 4 item
+#: 7, D4): the token resolves to its owner, so there is no foreign id to put in
+#: the path either. Walked with A's assistant token, as own-reads.
+ASSISTANT = {
+    ("GET", "/api/assistant/digest"),
+    ("POST", "/api/assistant/mcp"),
+}
+
+
+def bearer_for(method: str, path: str, user, marker: str) -> str:
+    """Return the credential a walk sends: A's assistant token on the assistant routes, else a session."""
+    if (method, path) in ASSISTANT:
+        return assistant_token_for(marker)
+    return create_access_token(user.id, getattr(user, "session_epoch", 0) or 0)
+
+
 #: Not exercised, with the reason. Kept as short as possible.
 SKIPPED = {
     ("POST", "/api/auth/google"): "verifies a Google credential over the network; "
@@ -259,6 +277,10 @@ BODY_PATCHES: dict[tuple[str, str], list[dict]] = {
         {"mode": "none", "catalogue_course_id": None},
         {"mode": "auto", "catalogue_course_id": None},
     ],
+    # Phase 4 item 7: the one tool, so the walk drives the digest through MCP.
+    ("POST", "/api/assistant/mcp"): [
+        {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "get_briefing"}},
+    ],
     # Phase 4 item 12: catalogue courses are shared rows, the same in every
     # world, so naming one is never a foreign reference; a made-up id is refused
     # before anything is read.
@@ -352,7 +374,7 @@ def _cases():
                 continue
             params = _path_params(path)
             if "user_id" not in params:
-                assert key in PUBLIC or key in SELF, (
+                assert key in PUBLIC or key in SELF or key in ASSISTANT, (
                     f"{method} {path} takes no user_id and is not classified. Add it to "
                     "PUBLIC or SELF in test_isolation.py, after checking it really "
                     "holds nothing per user."
@@ -679,7 +701,7 @@ def client(db):
 @pytest.mark.parametrize(("method", "path", "variant", "leaf"), _cases())
 def test_route_isolation(db, client, two_worlds, method, path, variant, leaf):
     a, b, world_a, world_b, day = two_worlds
-    token = create_access_token(a.id, a.session_epoch or 0)
+    token = bearer_for(method, path, a, MARK_A)
 
     for url, query, body in _expanded_requests(method, path, variant, leaf, a, b, world_a, world_b, day):
         before = snapshot(db)

@@ -224,7 +224,7 @@ def test_the_scheduler_door(db, user, monkeypatch):
         assert plain.post(route).status_code == 403
         assert plain.post(route, headers={"X-Cron-Secret": "wrong" * 8}).status_code == 403
         ok = plain.post(route, headers={"X-Cron-Secret": "s" * 40})
-        assert ok.status_code == 200 and set(ok.json()) == {"users", "pushed", "removed"}
+        assert ok.status_code == 200 and set(ok.json()) == {"users", "pushed", "removed", "briefings"}
     finally:
         app.main.app.dependency_overrides.clear()
 

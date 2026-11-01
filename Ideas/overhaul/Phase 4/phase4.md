@@ -59,8 +59,8 @@ and what happened to a flag (see items 2 and 3).
 | 3 | Deadline risk | No | **Deployed 2026-11-01** (`97f94a4`, D11) |
 | 4 | Focus sessions | **Yes** | Planned |
 | 5 | Exam countdown | No | **Deployed 2026-11-01** (`97f94a4`, D12) |
-| 6 | Briefings | Partly | **Digest and Today card deployed 2026-11-01** (`97f94a4`, D13); the push waits for the schema step |
-| 7 | BYOAI briefing API and MCP | **Yes** | Planned |
+| 6 | Briefings | Partly | **Digest and Today card deployed 2026-11-01** (`97f94a4`, D13); **push built** (D21), waits for your schema step |
+| 7 | BYOAI briefing API and MCP | **Yes** | **Built** (D20); waits for your schema step |
 | 8 | Cross-room correlations, non-financial | No | **Built** (D17) |
 | 9 | Term simulator | No | **Built** (D18; the study part shows coverage, not a projected grade) |
 | 10 | Grade scenarios | No | **Deployed 2026-11-01** (`97f94a4`, D10) |

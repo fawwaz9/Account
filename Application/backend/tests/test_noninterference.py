@@ -132,15 +132,19 @@ def _build(with_b: bool):
 
 
 #: A fresh invite token in a response, and the hash of one in a row: random by
-#: design, so two runs differ there whatever B does (Phase 2 item 10).
-SECRET = re.compile(r'("token"\s*:\s*")[A-Za-z0-9_-]{20,}(")|("token_hash"\s*:\s*")[0-9a-f]{64}(")')
+#: design, so two runs differ there whatever B does (Phase 2 item 10). An
+#: assistant token's shown prefix is cut from the random token, so it too
+#: (Phase 4 item 7).
+SECRET = re.compile(r'("token"\s*:\s*")[A-Za-z0-9_-]{20,}(")|("token_hash"\s*:\s*")[0-9a-f]{64}(")'
+                    r'|("prefix"\s*:\s*")acct_[A-Za-z0-9_-]+(")')
 
 
 def _normalise(text: str, known: set[str]) -> str:
     """Mask what legitimately differs between two runs: clocks, new ids, and
     fresh secrets."""
     text = TIMESTAMP.sub("<ts>", text)
-    text = SECRET.sub(lambda m: (m.group(1) or m.group(3)) + "<secret>" + (m.group(2) or m.group(4)), text)
+    text = SECRET.sub(lambda m: (m.group(1) or m.group(3) or m.group(5)) + "<secret>"
+                      + (m.group(2) or m.group(4) or m.group(6)), text)
     return UUID.sub(lambda m: m.group(0) if m.group(0) in known else "<new>", text)
 
 
@@ -240,7 +244,7 @@ def test_b_cannot_influence_a(method, path, _no_push_network):
         *INFLUENCERS.values(), *B_HISTORY.values(),
     }
     b_course = world_b["courses"]
-    token = create_access_token(A_ID, 0)
+    token = iso.bearer_for(method, path, a, iso.MARK_A)
 
     try:
         for url, query, body in requests:

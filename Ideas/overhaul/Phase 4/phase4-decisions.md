@@ -450,3 +450,71 @@ ever examined. The other-user filter first survived because a stranger's
 spending sits in their own categories; a stray row naming my category now holds
 it. `SpendingGuardCard.test.tsx`, 5 tests. Walked in a browser with twelve
 seeded weeks.
+
+## D20. How BYOAI was built (mine, under your D4; 2026-11-01; yours to overturn)
+
+- **A table and a definer function, so a schema step.** `assistant_tokens`
+  (per user, one row at most: the token's SHA-256, a 12-character prefix to
+  recognise it by, when it was made and last used) and
+  `account_assistant_token_user(text)`, which finds a token's owner by its hash
+  before anyone is identified and answers with nothing else. Row security
+  classifies the table as per-user from its metadata; the function is granted to
+  the API's role only, and a test proves another role (Supabase's `anon` grant
+  modelled) is refused.
+- **Your rules (D4), as built:** off until made ("Let my assistant read my
+  briefing" in Settings, under notifications); the token is shown once with a
+  Copy button and where to point an assistant; only its hash is stored; making a
+  new one replaces the old; "Turn off" deletes the row, so the token stops at
+  once; a deleted account's token is dead.
+- **It reads the digest and nothing else.** Two doors over the same digest:
+  `GET /api/assistant/digest`, and `POST /api/assistant/mcp`, a small stateless
+  MCP server (JSON-RPC: `initialize`, `ping`, `tools/list`, and one tool,
+  `get_briefing`). A GET there is answered 405, as the MCP transport expects of a
+  server with no stream.
+- **The boundaries, each tested:** the token is refused at **every** other route
+  in the app (enumerated: every route, every method, the owner's id in the path);
+  a session token is refused at the assistant routes; anything that isn't
+  `Bearer acct_…` of a sane length is refused **before** the database is asked;
+  a browser page from an origin the API doesn't serve is refused (the MCP
+  transport's guard against a page acting on someone's behalf); 30 failures from
+  one address in the window are throttled.
+- **The walks:** the table is in the isolation world; the assistant routes are
+  walked as own-reads with A's assistant token (a new `ASSISTANT` set beside
+  `PUBLIC` and `SELF`), including the MCP tool call; the noninterference walk
+  masks the random prefix, as it already masked random tokens.
+
+Evidence: `tests/test_assistant.py`, 31 tests; fourteen mutations, all caught
+after three pre-lookup filters first survived (the lookup would have refused
+those values anyway; the tests now prove garbage never reaches it). On a local
+Postgres 16: the RLS suite and these tests pass, 826. Walked in a browser: a
+token made in Settings, then read the digest directly and over MCP with curl; a
+session token was refused there and the assistant token refused at a grades
+route.
+
+## D21. The briefing push, and why it adds a column (mine, 2026-11-01; yours to overturn)
+
+- **At an hour you pick, once a day, on devices with notifications on.**
+  "Daily briefing" in Settings: Off, or 5am to noon, or 5pm to 9pm. The push is
+  the Today card's lines: the date as the title, the first three lines as the
+  body, opening the dashboard.
+- **No new scheduler job.** It runs inside the existing reminder dispatch, every
+  five minutes, and the run's result now counts briefings.
+- **Once a day needs remembering,** so `users.briefing_sent_on` (a nullable
+  date, written only by the dispatcher). I chose a column over a key in your
+  preferences because the preferences are yours to edit, and a server-written
+  date there could be overwritten by a settings save.
+- **Who to brief** comes from a second definer function,
+  `account_users_with_briefing()`, because the dispatcher runs as no one; each
+  user's hour is checked on their own clock.
+- **Grace:** a missed run still sends within three hours of the chosen hour;
+  after that the day's briefing is skipped as stale. A failed delivery isn't
+  marked sent, so the next run tries again.
+- **The hour has its own route,** `PUT /api/briefing/{user_id}/schedule`,
+  because the preferences patch treats null as "no opinion" and could never turn
+  it off (the same reason as the exertion goal).
+
+Evidence: `tests/test_briefing_push.py`, 12 tests (the hour, once a day, grace
+and staleness, off, no device, a failed delivery retried, push not set up, two
+people due at once each getting only their own day, the lookup itself, the
+route); five mutations, all caught after the lookup's filter first survived (the
+dispatcher re-checks it; a direct test now holds it).

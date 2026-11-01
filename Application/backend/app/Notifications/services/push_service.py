@@ -16,7 +16,7 @@ from typing import Callable
 
 from sqlalchemy.orm import Session
 
-from app._database.identity import act_as, release_push_endpoint, users_with_unpushed_reminders
+from app._database.identity import act_as, release_push_endpoint, users_with_briefing, users_with_unpushed_reminders
 from app._database.models import CourseModel, PushSubscriptionModel, ReminderModel, UserModel, utc_now
 from app.config import settings
 from app.Notifications.schemas.push import SubscriptionCreate
@@ -281,3 +281,76 @@ def dispatch_due_reminders(db: Session, sender: Sender | None = None, at: dateti
                 pushed += 1
         db.commit()
     return {"users": users, "pushed": pushed, "removed": removed}
+
+
+#: Hours after the chosen one a briefing may still go out, so a missed scheduler
+#: run sends it late rather than not at all; past that it is stale and skipped.
+BRIEFING_GRACE_HOURS = 3
+
+
+def briefing_payload(digest) -> dict:
+    """Return the push for a digest: the day as the title, its first lines as the body.
+
+    Args:
+        digest: The user's digest.
+
+    Returns:
+        A notification that opens the dashboard; tagged by day, so a second copy
+        replaces the first rather than stacking.
+    """
+    first, *rest = digest.text.split("\n")
+    return {
+        "title": first.rstrip("."),
+        "body": " ".join(rest[:3]) or "Nothing on today.",
+        "url": "/",
+        "tag": f"briefing-{digest.on_date.isoformat()}",
+    }
+
+
+def dispatch_briefings(db: Session, sender: Sender | None = None, at: datetime | None = None) -> int:
+    """Push each user's daily briefing at their chosen local hour, once a day.
+
+    Phase 4 item 6 (D13). Runs inside the reminder dispatch, so it needs no
+    scheduler job of its own. A user is due once their own clock reaches their
+    `briefing_hour`, within `BRIEFING_GRACE_HOURS`, if nothing went out on their
+    own today yet. The digest carries no money (D8).
+
+    Args:
+        db: A session of its own; it is made to act as each user in turn.
+        sender: Stand-in for the network in tests.
+        at: The moment to dispatch for, for tests; defaults to now.
+
+    Returns:
+        Briefings delivered to at least one device; 0 when push is not set up.
+
+    Note:
+        Commits once per user briefed.
+    """
+    from app.Briefing.services.digest_service import build_digest  # imported here: digest imports tasks
+
+    keys = vapid()
+    if keys is None:
+        return 0
+    send = sender or default_sender
+    moment = at or datetime.now(timezone.utc)
+    sent = 0
+    for user_id in users_with_briefing(db):
+        act_as(db, user_id)
+        user = db.query(UserModel).filter(UserModel.id == user_id).first()
+        if user is None:
+            continue
+        hour = (user.preferences or {}).get("briefing_hour")
+        now = local_now(user, moment)
+        if hour is None or not hour <= now.hour < hour + BRIEFING_GRACE_HOURS:
+            continue
+        if user.briefing_sent_on == now.date():
+            continue
+        digest = build_digest(db, user_id, now)
+        if digest is None:
+            continue
+        accepted, _ = deliver(db, user_id, briefing_payload(digest), keys, send)
+        if accepted:
+            user.briefing_sent_on = now.date()
+            db.commit()
+            sent += 1
+    return sent

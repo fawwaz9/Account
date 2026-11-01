@@ -184,6 +184,9 @@ class UserPreferences(BaseModel):
     exertion_goal: int | None = Field(default=None, ge=1, le=10000)
     #: Phase 3 item 8 (D13): off until chosen.
     leaderboard_opt_in: bool = False
+    #: Phase 4 item 6 (D13): the local hour a briefing push goes out; None is off.
+    #: Not on UserPreferencesPatch, for the same reason as `exertion_goal`.
+    briefing_hour: int | None = Field(default=None, ge=0, le=23)
 
     @field_validator("event_colors")
     @classmethod

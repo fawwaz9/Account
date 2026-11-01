@@ -13,7 +13,7 @@ from uuid import UUID
 from sqlalchemy import event, func, text
 from sqlalchemy.orm import Session
 
-from app._database.models import PushSubscriptionModel, ReminderModel, UserModel
+from app._database.models import AssistantTokenModel, PushSubscriptionModel, ReminderModel, UserModel, utc_now
 
 #: The transaction-local setting the row policies read.
 SETTING = "app.user_id"
@@ -199,3 +199,53 @@ def users_with_unpushed_reminders(db: Session, horizon: datetime) -> list[UUID]:
         .distinct()
         .all()
     ]
+
+
+def assistant_token_user(db: Session, token_hash: str) -> UUID | None:
+    """Return the owner of an assistant token by its hash, and mark the token used.
+
+    Phase 4 item 7 (D4). Called before anyone is identified, so on Postgres it goes
+    through `account_assistant_token_user`, a definer function that answers with the
+    owner and nothing else.
+
+    Args:
+        db: Open database session; needs no acting user.
+        token_hash: SHA-256 of the presented token.
+
+    Returns:
+        The owner's id; None for an unknown, revoked or deleted account's token.
+    """
+    if _is_postgres(db):
+        found = db.execute(text("SELECT account_assistant_token_user(:h)"), {"h": token_hash}).scalar()
+        db.commit()
+        return found
+    row = (
+        db.query(AssistantTokenModel)
+        .join(UserModel, UserModel.id == AssistantTokenModel.user_id)
+        .filter(AssistantTokenModel.token_hash == token_hash, UserModel.deleted_at.is_(None))
+        .first()
+    )
+    if row is None:
+        return None
+    row.last_used_at = utc_now()
+    db.commit()
+    return row.user_id
+
+
+def users_with_briefing(db: Session) -> list[UUID]:
+    """Return the users who asked for a briefing push and have a device for it.
+
+    Phase 4 item 6 (D13). The dispatcher runs as no one, so on Postgres this is the
+    definer function `account_users_with_briefing`.
+
+    Args:
+        db: Open database session; needs no acting user.
+
+    Returns:
+        Their ids; each user's own hour is checked by the caller on their clock.
+    """
+    if _is_postgres(db):
+        return list(db.execute(text("SELECT account_users_with_briefing()")).scalars())
+    has_device = db.query(PushSubscriptionModel.id).filter(PushSubscriptionModel.user_id == UserModel.id).exists()
+    rows = db.query(UserModel).filter(UserModel.deleted_at.is_(None), has_device).all()
+    return [row.id for row in rows if (row.preferences or {}).get("briefing_hour") is not None]

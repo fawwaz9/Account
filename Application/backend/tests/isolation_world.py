@@ -85,6 +85,7 @@ from app._database.models import (
     GameModel,
     JobApplicationModel,
     ApplicationSeasonModel,
+    AssistantTokenModel,
     ApplicationStepModel,
     TeamInviteModel,
     TeamMemberModel,
@@ -94,6 +95,11 @@ from app._database.models import (
 from app.Intake.services import storage  # noqa: E402
 
 BYDAY = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"]
+
+
+def assistant_token_for(marker: str) -> str:
+    """Return the raw assistant token a world's owner holds (Phase 4 item 7); only its hash is stored."""
+    return f"acct_{marker}_assistant_token"
 
 
 def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid.UUID]:
@@ -387,6 +393,10 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
     add(ClubInviteModel(id=new_id(), club_id=club.id,
                         token_hash=hashlib.sha256(f"{marker} club invite token".encode()).hexdigest(),
                         expires_at=datetime.combine(day + timedelta(days=5), time(12, 0))))
+    # Phase 4 item 7 (D4): the one assistant token, by hash only.
+    add(AssistantTokenModel(id=new_id(), user_id=user_id,
+                            token_hash=hashlib.sha256(assistant_token_for(marker).encode()).hexdigest(),
+                            prefix=assistant_token_for(marker)[:12]))
     _ = (event, transaction, recurring_task)
 
     db.commit()

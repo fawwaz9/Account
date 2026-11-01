@@ -24,6 +24,8 @@ from app._database import models  # noqa: F401
 ADDED_COLUMNS: dict[str, dict[str, str | dict[str, str]]] = {
     "users": {
         "password_hash": "VARCHAR",
+        # Phase 4 item 6 (D13): one briefing push a day.
+        "briefing_sent_on": "DATE",
         "email_verified": "BOOLEAN NOT NULL DEFAULT 0",
         "preferences": "JSON NOT NULL DEFAULT '{}'",
         "current_school_year": "INTEGER",
