@@ -884,6 +884,30 @@ production-URL build: 26 of 26 files.
 
 ---
 
+## Cumulative average and CGPA including this term -- SHIPPED 2026-10-31
+Phase 4 item 1 (D5, D6); your ask of 2026-10-28. The official cumulative average
+and CGPA count only finished courses, so marks entered this term never moved
+them. Beside them on the grades page, under "Including this term", a second pair
+counts each current course at its running average (the Semester Average's
+figure) with its credits. Absent when no current course has a mark; the CGPA half
+follows the GPA-scale setting. The official pair is unchanged. The home dashboard
+still shows the official pair only.
+
+16 backend tests (5 mutations of the rule, all caught), 5 frontend tests; 855
+frontend, 2,981+16 backend on SQLite and 3,495 on a local Postgres 16; CI green
+on all three jobs at `29bbcb5`. Seen in a browser with seeded data at desktop and
+phone widths. No table, no column (D3).
+
+LIVE: API `863cfcf` on revision `account-api-00050-fqt`, serving 100% since
+2026-10-31 23:54 UTC; the deploy workflow's checks passed (schema gate, backup,
+digest `2700deff…` matching the commit, health ok, CORS for the Pages origin and
+none for a stranger's). Pages at `863cfcf`; Cloudflare's check reads success
+(2026-11-01 00:01 UTC). **Not done from this session:** the Cloud Run log read and
+the file-by-file Pages comparison, because its network policy blocks both hosts.
+`./Application/deploy.run.sh check-web` from your laptop does the second.
+
+---
+
 ## Phase 3 walkthrough fixes -- SHIPPED 2026-10-31
 Found by walking every Phase 3 screen in a browser with data above the floors.
 - Figures from past students are rounded: hours and the two ratings to one

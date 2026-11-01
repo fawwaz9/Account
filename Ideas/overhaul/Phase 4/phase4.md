@@ -54,7 +54,7 @@ and what happened to a flag (see items 2 and 3).
 
 | # | Item | Schema? | Status |
 |---|---|---|---|
-| 1 | Cumulative average and CGPA including this term | No | **Built** (`29bbcb5`, D5, D6) |
+| 1 | Cumulative average and CGPA including this term | No | **Deployed 2026-10-31** (`863cfcf`, `account-api-00050-fqt`; D5, D6) |
 | 2 | Weekly planner | **Yes** (D7) | Planned |
 | 3 | Deadline risk | No | Planned |
 | 4 | Focus sessions | **Yes** | Planned |
@@ -99,7 +99,7 @@ and what happened to a flag (see items 2 and 3).
 
 **What** (Phase 4, added by you 2026-10-28). A second, clearly labelled pair
 beside the official one, counting each current course at its running average.
-**Built** (D5, D6). **Done when:** live, which is a D3 deploy.
+**Deployed 2026-10-31** (`863cfcf`, D5, D6). **Done when:** live, which is a D3 deploy. ✓
 
 ## 2. Weekly planner
 
