@@ -347,6 +347,16 @@ are the size of each job rather than an impression of it.
             BUILT, 2026-10-13 (`72bb9f2`): Phase 3 item 1, the Applications tab
             under Jobs, with a dated history, your figures and a Sankey. See
             `Ideas/overhaul/Phase 3/` and `shipped.md`, "Phase 3 batch 1".
+        Self-employed, left out of Phase 4 item 15 (D25), 2026-11-01:
+          A printable invoice. Needs your name and address and the client's,
+            which the app doesn't keep; the invoice is recorded, not generated.
+          An overdue push. Needs a sent-on date per invoice so it nudges once;
+            for now overdue invoices lead the Self-employed page.
+          The typical month in the year plan. The plan draws one curve and the
+            range is two numbers; it shows on the Self-employed page only.
+          An income-tax estimate against the $3,000 instalment line. Needs a
+            province and a model of the whole return; the page states the rule
+            and dates instead. Your call whether it's worth it.
 ### Budget
         Reimbursement state, and who and when for money lent out. On whichever
           account you actually keep it in -- there is no seeded pot for it since

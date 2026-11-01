@@ -50,6 +50,24 @@ class EmployerYear(BaseModel):
     other_tips: float
 
 
+class SelfEmploymentYear(BaseModel):
+    """A year's self-employment, as the tax packet carries it (Phase 4 item 15).
+
+    Attributes:
+        invoices: Invoices issued in the year.
+        revenue: Their amounts, summed, by issue date.
+        business_expenses: The business share of the year's tagged expenses.
+        net: Revenue less those expenses.
+        cpp: CPP on the net at both halves, an estimate.
+    """
+
+    invoices: int
+    revenue: float
+    business_expenses: float
+    net: float
+    cpp: float
+
+
 class TaxPacket(BaseModel):
     """A calendar year's employment income, summed from what the user recorded.
 
@@ -66,6 +84,8 @@ class TaxPacket(BaseModel):
         cash_tips: Cash tips across all jobs.
         tuition_paid: Tuition payments dated in the year, as their ledger amounts:
             after deductions, with fees included.
+        self_employment: The year's invoices and business expenses; null when
+            there were neither.
     """
 
     year: int
@@ -78,3 +98,4 @@ class TaxPacket(BaseModel):
     net: float
     cash_tips: float
     tuition_paid: float
+    self_employment: SelfEmploymentYear | None = None

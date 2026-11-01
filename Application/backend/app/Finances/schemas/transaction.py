@@ -102,6 +102,8 @@ class TransactionUpdate(BaseModel):
         occurred_on: New date.
         category_id: New category, one of the user's; null clears it.
         course_id: New course, one of the user's; null clears it.
+        business_percent: The share that was a business expense, 1 to 100; null
+            makes it personal again. Expenses only.
     """
 
     amount: float | None = Field(default=None, gt=0)
@@ -109,6 +111,7 @@ class TransactionUpdate(BaseModel):
     occurred_on: date | None = None
     category_id: UUID | None = None
     course_id: UUID | None = None
+    business_percent: int | None = Field(default=None, ge=1, le=100)
 
 
 class Transaction(TransactionBase):
@@ -125,6 +128,7 @@ class Transaction(TransactionBase):
             reads; write responses carry 1.
         category_id: What it was spent on.
         course_id: The course it was bought for.
+        business_percent: The share that was a business expense, 1 to 100.
         tuition_payment_id: The tuition payment that owns the row, so the client
             sends it to the tuition editor; set on list reads only.
     """
@@ -141,6 +145,7 @@ class Transaction(TransactionBase):
     group_size: int = 1
     category_id: UUID | None = None
     course_id: UUID | None = None
+    business_percent: int | None = None
     #: Set when a tuition payment owns this row. The client sends such a
     #: row to the tuition editor instead of the plain one, because editing
     #: the amount directly would leave the rate and the ledger disagreeing.

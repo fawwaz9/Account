@@ -86,8 +86,10 @@ from app._database.models import (
     JobApplicationModel,
     ApplicationSeasonModel,
     AssistantTokenModel,
+    ClientModel,
     CrunchAllocationModel,
     FocusSessionModel,
+    InvoiceModel,
     ApplicationStepModel,
     TeamInviteModel,
     TeamMemberModel,
@@ -238,6 +240,8 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
         # every user's transactions still added up the same.
         id=new_id(), user_id=user_id, account_id=account.id, kind="expense", amount=-25.0,
         description=f"{marker} coffee", occurred_on=WORLD_DAY, category_id=category.id,
+        # Phase 4 item 15: half of it a business expense, so the tagged list has a row.
+        business_percent=50,
         # Not linked to the recurring rule: a linked row reads as today's
         # occurrence already written, so the rule was never due, and a "run the
         # due rules" that reached another user's rules had nothing to show.
@@ -406,6 +410,18 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
     add(AssistantTokenModel(id=new_id(), user_id=user_id,
                             token_hash=hashlib.sha256(assistant_token_for(marker).encode()).hexdigest(),
                             prefix=assistant_token_for(marker)[:12]))
+    # Phase 4 item 15: a client, and an invoice to them paid into the world's
+    # account, the deposit tied by group as a paycheque's is. The deposit row goes
+    # in under its own key, so ids["transactions"] stays the coffee.
+    client = add(ClientModel(id=new_id(), user_id=user_id, name=f"{marker} client"))
+    deposit_group = new_id()
+    payment = TransactionModel(id=new_id(), user_id=user_id, account_id=account.id, kind="income", amount=120.0,
+                               description=f"{marker} invoice payment", occurred_on=WORLD_DAY, group_id=deposit_group)
+    db.add(payment)
+    ids["transactions_invoice_payment"] = payment.id
+    add(InvoiceModel(id=new_id(), user_id=user_id, client_id=client.id, number=f"{marker}-001",
+                     description=f"{marker} tutoring", issued_on=WORLD_DAY - timedelta(days=20),
+                     due_on=WORLD_DAY - timedelta(days=5), amount=120.0, paid_on=WORLD_DAY, group_id=deposit_group))
     _ = (event, transaction, recurring_task)
 
     db.commit()

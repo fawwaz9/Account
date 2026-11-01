@@ -16,6 +16,11 @@ import {
   PayCheck,
   ShiftConflicts,
   TaxPacket,
+  Client,
+  Invoice,
+  InvoiceCreate,
+  PaidCreate,
+  SelfEmployment,
 } from "./types";
 
 /** Fetch jobs; archived ones only on request. */
@@ -150,4 +155,59 @@ export async function fetchShiftConflicts(userId: string, start?: string, end?: 
 /** A calendar year's employment income, from recorded paycheques only. */
 export async function fetchTaxPacket(userId: string, calendarYear: number) {
   return get<TaxPacket>(`jobs/${userId}/tax-packet?calendar_year=${calendarYear}`);
+}
+
+/** Phase 4 item 15: the caller's clients with their invoice totals. */
+export async function fetchClients(userId: string) {
+  return get<Client[]>(`jobs/${userId}/clients`);
+}
+
+/** Add a client. */
+export async function createClient(userId: string, name: string) {
+  return post<Client>(`jobs/${userId}/clients`, { name });
+}
+
+/** Rename or archive a client. */
+export async function updateClient(userId: string, clientId: string, payload: { name?: string; archived?: boolean }) {
+  return patch<Client>(`jobs/${userId}/clients/${clientId}`, payload);
+}
+
+/** Delete a client with no invoices. */
+export async function deleteClient(userId: string, clientId: string) {
+  return del<void>(`jobs/${userId}/clients/${clientId}`);
+}
+
+/** The caller's invoices, latest issued first. */
+export async function fetchInvoices(userId: string) {
+  return get<Invoice[]>(`jobs/${userId}/invoices`);
+}
+
+/** Record an invoice. */
+export async function createInvoice(userId: string, payload: InvoiceCreate) {
+  return post<Invoice>(`jobs/${userId}/invoices`, payload);
+}
+
+/** Correct an invoice. */
+export async function updateInvoice(userId: string, invoiceId: string, payload: Partial<InvoiceCreate>) {
+  return patch<Invoice>(`jobs/${userId}/invoices/${invoiceId}`, payload);
+}
+
+/** Delete an invoice and any deposit its payment wrote. */
+export async function deleteInvoice(userId: string, invoiceId: string) {
+  return del<void>(`jobs/${userId}/invoices/${invoiceId}`);
+}
+
+/** Mark an invoice paid. */
+export async function markInvoicePaid(userId: string, invoiceId: string, payload: PaidCreate) {
+  return post<Invoice>(`jobs/${userId}/invoices/${invoiceId}/paid`, payload);
+}
+
+/** Mark an invoice unpaid again; its deposit goes. */
+export async function markInvoiceUnpaid(userId: string, invoiceId: string) {
+  return del<Invoice>(`jobs/${userId}/invoices/${invoiceId}/paid`);
+}
+
+/** A year of self-employment and the CRA rules read against it. */
+export async function fetchSelfEmployment(userId: string, year?: number) {
+  return get<SelfEmployment>(`jobs/${userId}/self-employment${year ? `?year=${year}` : ""}`);
 }

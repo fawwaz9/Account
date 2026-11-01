@@ -49,7 +49,7 @@ export default function TaxPacketPanel({ userId, nonce }: Props) {
         </label>
       </div>
       {failed && <p className="small-text muted">Couldn&rsquo;t load the tax packet.</p>}
-      {packet && packet.employers.length === 0 && packet.tuition_paid === 0 && (
+      {packet && packet.employers.length === 0 && packet.tuition_paid === 0 && !packet.self_employment && (
         <p className="small-text muted">No paycheques or tuition recorded for {packet.year}.</p>
       )}
       {packet && (packet.employers.length > 0 || packet.tuition_paid > 0) && (
@@ -79,6 +79,18 @@ export default function TaxPacketPanel({ userId, nonce }: Props) {
             {packet.tuition_paid > 0 && <><dt>Tuition paid</dt><dd>{formatMoney(packet.tuition_paid)}</dd></>}
           </dl>
         </>
+      )}
+      {packet?.self_employment && (
+        <div className="taxEmployer">
+          <h3>Self-employment</h3>
+          <dl className="taxLines">
+            <dt>Invoiced ({packet.self_employment.invoices} {packet.self_employment.invoices === 1 ? "invoice" : "invoices"})</dt>
+            <dd>{formatMoney(packet.self_employment.revenue)}</dd>
+            <dt>Business expenses</dt><dd>{formatMoney(packet.self_employment.business_expenses)}</dd>
+            <dt>Net</dt><dd>{formatMoney(packet.self_employment.net)}</dd>
+            <dt>CPP on it, both halves (estimate)</dt><dd>{formatMoney(packet.self_employment.cpp)}</dd>
+          </dl>
+        </div>
       )}
       <p className="small-text muted">
         From what you recorded, for cheques that arrived in that year. Check it against your T4s

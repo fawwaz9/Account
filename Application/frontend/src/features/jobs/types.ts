@@ -387,4 +387,111 @@ export interface TaxPacket {
   net: number;
   cash_tips: number;
   tuition_paid: number;
+  /** The year's invoices and business expenses; null when there were neither. */
+  self_employment?: SelfEmploymentYear | null;
+}
+
+/** Phase 4 item 15: a year's self-employment in the tax packet. */
+export interface SelfEmploymentYear {
+  invoices: number;
+  revenue: number;
+  business_expenses: number;
+  net: number;
+  /** CPP on the net at both halves, an estimate. */
+  cpp: number;
+}
+
+/** Someone a self-employed user invoices, with their totals. */
+export interface Client {
+  id: string;
+  name: string;
+  archived: boolean;
+  invoices: number;
+  invoiced: number;
+  unpaid: number;
+}
+
+/** An invoice's state, read from its dates. */
+export type InvoiceState = "outstanding" | "overdue" | "paid";
+
+/** One invoice to a client. */
+export interface Invoice {
+  id: string;
+  client_id: string;
+  client: string;
+  number: string;
+  description: string | null;
+  issued_on: string;
+  due_on: string;
+  amount: number;
+  paid_on: string | null;
+  state: InvoiceState;
+  days_overdue: number | null;
+  /** True when marking it paid wrote a row to the ledger. */
+  deposited: boolean;
+}
+
+/** Body for a new invoice; due_on omitted means 30 days after issue. */
+export interface InvoiceCreate {
+  client_id: string;
+  number: string;
+  description?: string | null;
+  issued_on: string;
+  due_on?: string | null;
+  amount: number;
+}
+
+/** Body for marking an invoice paid: into one account, split by income share, or neither. */
+export interface PaidCreate {
+  paid_on: string;
+  account_id?: string | null;
+  split?: boolean;
+}
+
+/** An expense tagged as partly or wholly for self-employment. */
+export interface BusinessExpense {
+  transaction_id: string;
+  occurred_on: string;
+  description: string | null;
+  amount: number;
+  percent: number;
+  business_amount: number;
+}
+
+/** CPP on net self-employment income, both halves, after recorded job pay. */
+export interface CppEstimate {
+  figures_year: number;
+  rate: number;
+  exemption: number;
+  ceiling: number;
+  second_rate: number;
+  second_ceiling: number;
+  employment_gross: number;
+  base: number;
+  second: number;
+  total: number;
+}
+
+/** The year's self-employment and the CRA rules read against it. */
+export interface SelfEmployment {
+  year: number;
+  revenue: number;
+  received: number;
+  business_expenses: number;
+  net: number;
+  unpaid: number;
+  overdue: Invoice[];
+  expenses: BusinessExpense[];
+  cpp: CppEstimate;
+  instalments: { threshold: number; dates: string[]; next_due: string | null };
+  gst: {
+    threshold: number;
+    quarters: { label: string; starts_on: string; total: number }[];
+    four_quarter_total: number;
+    level: "under" | "approaching" | "over";
+  };
+  typical_month: { low: number; high: number; months: number } | null;
+  next_number: string;
+  sources: { label: string; url: string }[];
+  note: string;
 }

@@ -93,6 +93,8 @@ export interface Transaction {
   group_size: number;
   /** Course an expense was bought for; tuition never sets it. */
   course_id: string | null;
+  /** Share of an expense that was for self-employment, 1-100; null when personal. */
+  business_percent?: number | null;
   /** Set when a tuition payment owns this row, so it opens that editor. */
   tuition_payment_id: string | null;
 }

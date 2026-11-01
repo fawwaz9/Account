@@ -197,6 +197,9 @@ class UserModel(Base):
     focus_sessions = relationship("FocusSessionModel", cascade=cascade, overlaps="course,focus_sessions")
     # Phase 4 item 13: money set aside for crunch weeks, and the weeks waved off.
     crunch_allocations = relationship("CrunchAllocationModel", cascade=cascade)
+    # Phase 4 item 15: self-employed clients and their invoices.
+    clients = relationship("ClientModel", cascade=cascade)
+    invoices = relationship("InvoiceModel", cascade=cascade, overlaps="client,invoices")
     partnerships = relationship(
         "PartnershipModel", cascade=cascade, foreign_keys="PartnershipModel.user_id"
     )
@@ -524,6 +527,7 @@ class TransactionModel(Base):
             it stops a payment being written twice.
         course_id: Course the expense was for, such as a textbook; never set by tuition.
         import_id: CSV import that wrote this row, so the import can be undone whole.
+        business_percent: Share of an expense that was a business expense; null if none.
     """
 
     __tablename__ = "transactions"
@@ -557,6 +561,9 @@ class TransactionModel(Base):
     #: undone as one unit. Its own column: `group_id` already carries two
     #: meanings and must not take a third.
     import_id = Column(Uuid, ForeignKey("imports.id"), nullable=True, index=True)
+    #: The share of an expense that was for the user's self-employment, 1 to 100;
+    #: null for a personal one (Phase 4 item 15). A phone used half for work is 50.
+    business_percent = Column(Integer, nullable=True)
 
     account = relationship("AccountModel", back_populates="transactions")
     category = relationship("SpendCategoryModel", back_populates="transactions")
@@ -3327,8 +3334,9 @@ class FocusSessionModel(Base):
 class CrunchAllocationModel(Base):
     """Per-user row: money set aside in a category for one crunch week, or the week waved off.
 
-    Phase 4 item 13, the spending guard's second half (§13.5): one tap extends the
-    category limit to a single week; the report card reads it afterwards. A row with
+    Phase 4 item 13, the spending guard's second half (§13.5): one tap marks money
+    set aside for a single week, without touching the monthly category limits
+    (D24); the report card reads it afterwards. A row with
     `dismissed` set records "not this time" instead, and three of those for one
     category stop the guard suggesting it.
 
@@ -3356,3 +3364,76 @@ class CrunchAllocationModel(Base):
     amount = Column(Float, nullable=True)
     dismissed = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, nullable=False, default=utc_now)
+
+
+class ClientModel(Base):
+    """Per-user row: someone a self-employed user invoices (Phase 4 item 15, §13.12).
+
+    Kept to a name: the app is not an accounting product, and a client's own
+    details are theirs. Archived clients keep their invoices; a client with
+    invoices can't be deleted.
+
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        name: What the user calls them.
+        archived: No longer offered for new invoices.
+        created_at: When the row was written.
+    """
+
+    __tablename__ = "clients"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    archived = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+
+    invoices = relationship("InvoiceModel", back_populates="client", cascade=cascade, overlaps="invoices")
+
+
+class InvoiceModel(Base):
+    """Per-user row: one invoice to a client, outstanding, overdue or paid (Phase 4 item 15).
+
+    Its state is read from its dates: paid once `paid_on` is set, overdue when unpaid
+    past `due_on`, outstanding otherwise. Marking it paid into an account writes an
+    income row tied by `group_id`, as a paycheque's deposit is; marking it unpaid or
+    deleting it removes that row.
+
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        client_id: Who it is to.
+        number: The user's invoice number, unique per user.
+        description: What it was for; optional.
+        issued_on: The day it was issued; the day it counts as revenue.
+        due_on: The day payment is due.
+        amount: Dollars invoiced, above 0.
+        paid_on: The day it was paid; null while unpaid.
+        group_id: `group_id` of the income row its payment wrote; null if none.
+        created_at: When the row was written.
+    """
+
+    __tablename__ = "invoices"
+    __table_args__ = (
+        UniqueConstraint("user_id", "number", name="uq_invoice_number"),
+        CheckConstraint("amount > 0", name="ck_invoice_amount"),
+        CheckConstraint("due_on >= issued_on", name="ck_invoice_due"),
+    )
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    client_id = Column(Uuid, ForeignKey("clients.id"), nullable=False, index=True)
+    number = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    issued_on = Column(Date, nullable=False)
+    due_on = Column(Date, nullable=False)
+    amount = Column(Float, nullable=False)
+    paid_on = Column(Date, nullable=True)
+    #: Ties the income row a payment wrote, as `paycheques.group_id` does. Not a
+    #: foreign key, for the same reason.
+    group_id = Column(Uuid, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+
+    client = relationship("ClientModel", back_populates="invoices", overlaps="invoices")
+

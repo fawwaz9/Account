@@ -607,3 +607,82 @@ not yet over has no card. The table is in the isolation world, and the walks
 drive both new routes with each variant's own category. `SpendingGuardCard.test.tsx`
 covers both buttons and the card. Walked in a browser at both widths, before and
 after a tap.
+
+## D25. How self-employed support was built (mine, 2026-11-01; yours to overturn)
+
+- **Two tables and a column, so a schema step:** `clients` (a name, archived or
+  not) and `invoices` (client, number, what it was for, issued, due, amount,
+  paid on); `transactions.business_percent` for business expenses. A client is
+  only a name: the app isn't an accounting product, and a client's own details
+  are theirs. A client with invoices can be archived, not deleted.
+- **Where:** a third tab under Jobs, "Self-employed". Overdue invoices first,
+  then the year's figures, the invoices (paid ones behind a button), the CRA
+  rules, business expenses, and clients. The tax packet gains a
+  self-employment section.
+- **Invoices move through their states by their dates:** outstanding, overdue
+  once unpaid past due (30 days after issue unless you name a date), paid once
+  marked. Numbers are unique per user; the next one is suggested.
+- **Marking one paid** asks where the money went: into one account, split by
+  income share (as a paycheque is), or nowhere new because it's already in your
+  ledger (imported from the bank, say), so nothing is counted twice. The
+  deposit is tied to the invoice the way a paycheque's is; marking it unpaid or
+  deleting it removes the deposit, and a new amount moves it. Only your own
+  accounts, else not found, with nothing changed.
+- **Revenue counts by the day you invoiced,** for the year and for the GST/HST
+  watch; what was paid that year shows beside it.
+- **Business expenses:** an expense's business share, 1 to 100 (a phone used
+  for work 40% of the time is 40). Tagged from the Self-employed page, from the
+  last 90 days' expenses; income can't be tagged. Counted from every account,
+  unlike spending figures, because a business expense is one whichever card
+  paid it.
+- **CPP:** both halves, 11.9% on net self-employment income above the $3,500
+  exemption up to the year's ceiling, then CPP2 at 8% to the second ceiling.
+  The gross pay recorded from your jobs that year uses the exemption and the
+  ceilings first (its own CPP came off the cheques). Figures for 2024 to 2026
+  from the CRA's page; a later year uses 2026's and says so. Part years aren't
+  prorated.
+- **Instalments: the rule and the dates, no income-tax estimate.** The page
+  states the $3,000 rule (this year and either of the two before; $1,800 in
+  Quebec) and the four dates, with the next one. It doesn't estimate your income
+  tax: that takes your whole return (other income, province, credits), and a
+  wrong figure presented as yours is worse than none. *Correction, before
+  shipping:* I first meant to show "CPP alone: $X of the $3,000". The CRA's
+  test counts tax, not CPP, so that line would have been wrong; it's gone. If
+  you want an estimate, it needs a province and a model of the return, and your
+  say.
+- **GST/HST:** invoiced revenue over the last four calendar quarters, the
+  current one to date, against $30,000. Over when the four quarters pass it or
+  any one quarter does; approaching from 80% ($24,000). The page notes that
+  exempt services (some tutoring) don't count and that ride-share and taxi
+  drivers register from the first dollar.
+- **The typical month is a range,** never one number: the lower and upper
+  quartile of up to six finished months since your first invoice, an empty
+  month counting as $0, shown once there are three. It isn't drawn into the
+  year plan: a range doesn't fit the plan's one curve, so it sits on the
+  Self-employed page for now (`next.md`).
+- **Sources cited in the app:** the CRA's CPP rates page, "Who has to pay
+  instalments" and "When to register for and start charging the GST/HST".
+  This session's network can't reach canada.ca, so I checked the figures
+  (2026 ceiling $74,600, second ceiling $85,000; 2025 $71,300 and $81,200) and
+  the rules through search results quoting those pages, not by reading them.
+  Worth a look against the pages themselves.
+- **Not built:** a printable invoice (it would need your address and the
+  client's, which the app doesn't keep), and an overdue push (it would need a
+  sent-on date per invoice). Both in `next.md`.
+
+- **GST/HST, one test for both of CRA's:** one quarter over $30,000 is always
+  the four quarters over it too, since amounts are positive. A mutation showed
+  my separate single-quarter check could never change the answer, so it's gone;
+  the two rules differ only in when registration takes effect.
+
+Evidence: `tests/test_self_employed.py`, 52 tests (CPP cases worked by hand in
+the test's comments), also green on Postgres. 27 mutations of the safety lines
+and rules: 21 caught at first; five user filters and the year filter on
+payments survived until a test wrote rows past the routes (another user's
+invoice on my client, my invoice on theirs, their ledger row in my deposit's
+group) and another's paycheque; now all caught, and the sixth survivor is the
+GST check above. Both tables, the deposit row and a tagged expense are in the isolation
+world, and the walks drive all eleven routes with each variant's own client,
+invoice and account. `SelfEmployedPage.test.tsx`, 7 tests. The repo's delete
+guard caught a client delete with no confirm dialog; it has one now. Walked in a
+browser at both widths, marking an invoice paid into an account.

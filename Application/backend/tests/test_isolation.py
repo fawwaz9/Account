@@ -172,6 +172,9 @@ PATH_SOURCES = {
     "club_id": "clubs",
     "post_id": "club_posts",
     "poll_id": "club_polls",
+    # Phase 4 item 15: a self-employed user's client and invoice.
+    "client_id": "clients",
+    "invoice_id": "invoices",
     # A membership row's own id (Phase 2 item 9a), as the owner removes it.
     "member_id": "task_members",
 }
@@ -194,6 +197,8 @@ FIELD_SOURCES = {
     "scheme_id": "grading_schemes",
     # A season the tracker is filtered by (Phase 3 D7).
     "season_id": "application_seasons",
+    # The client an invoice is to (Phase 4 item 15).
+    "client_id": "clients",
 }
 
 #: Date parameters that open and close a window, by name.

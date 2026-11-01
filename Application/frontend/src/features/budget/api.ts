@@ -145,6 +145,8 @@ export async function updateTransaction(
     description?: string | null;
     occurred_on?: string;
     category_id?: string | null;
+    course_id?: string | null;
+    business_percent?: number | null;
   }
 ) {
   return patch<Transaction>(

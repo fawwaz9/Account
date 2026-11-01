@@ -12,9 +12,10 @@ from datetime import date
 from sqlalchemy.orm import Session
 
 from app._database.models import (
-    JobModel, PaychequeModel, ShiftRecordModel, TransactionModel, TuitionPaymentModel,
+    InvoiceModel, JobModel, PaychequeModel, ShiftRecordModel, TransactionModel, TuitionPaymentModel,
 )
-from app.Jobs.schemas.tax_packet import DeductionLine, EmployerYear, TaxPacket
+from app.Jobs.schemas.tax_packet import DeductionLine, EmployerYear, SelfEmploymentYear, TaxPacket
+from app.Jobs.services.self_employed_service import cpp_estimate, year_totals
 from app.shared.dates import user_for
 
 KIND_LABELS = {"income_tax": "Income tax", "cpp": "CPP", "ei": "EI"}
@@ -113,6 +114,7 @@ def tax_packet(db: Session, user_id: uuid.UUID, year: int) -> TaxPacket | None:
         .all()
     )
     return TaxPacket(
+        self_employment=self_employment_year(db, user_id, year, sum(e.gross for e in employers)),
         year=year, employers=employers,
         gross=_money(sum(e.gross for e in employers)),
         income_tax=total("income_tax"), cpp=total("cpp"), ei=total("ei"), other_deductions=total("other"),
@@ -120,3 +122,23 @@ def tax_packet(db: Session, user_id: uuid.UUID, year: int) -> TaxPacket | None:
         cash_tips=_money(sum(e.cash_tips for e in employers)),
         tuition_paid=_money(sum(abs(amount or 0.0) for (amount,) in tuition)),
     )
+
+
+def self_employment_year(db: Session, user_id: uuid.UUID, year: int, employment_gross: float):
+    """Return the year's invoices and business expenses for the packet; None when there were neither.
+
+    Args:
+        db: Open database session.
+        user_id: Whose records.
+        year: The calendar year.
+        employment_gross: The year's recorded gross pay, which CPP reaches first.
+    """
+    count = db.query(InvoiceModel.id).filter(
+        InvoiceModel.user_id == user_id, InvoiceModel.issued_on >= date(year, 1, 1),
+        InvoiceModel.issued_on <= date(year, 12, 31)).count()
+    revenue, expenses, tagged = year_totals(db, user_id, year)
+    if not count and not tagged:
+        return None
+    net = _money(revenue - expenses)
+    return SelfEmploymentYear(invoices=count, revenue=revenue, business_expenses=expenses, net=net,
+                              cpp=cpp_estimate(net, employment_gross, year).total)

@@ -169,6 +169,7 @@ def as_schema(
         group_size=group_size,
         category_id=transaction.category_id,
         course_id=transaction.course_id,
+        business_percent=transaction.business_percent,
         tuition_payment_id=tuition_payment_id,
     )
 
@@ -415,6 +416,10 @@ def update_transaction(
     category_id = update_data.get("category_id")
     if category_id is not None and owned_category(db, user_id, category_id) is None:
         raise ValueError("That category does not exist")
+
+    # Only money going out can be a business expense (Phase 4 item 15).
+    if update_data.get("business_percent") is not None and transaction.kind != TransactionKind.EXPENSE.value:
+        raise ValueError("Only an expense can be a business expense")
 
     new_amount = update_data.pop("amount", None)
 

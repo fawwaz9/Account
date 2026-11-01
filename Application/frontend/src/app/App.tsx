@@ -27,6 +27,8 @@ const TasksPage = lazy(() => import("../pages/TasksPage"));
 const JobsPage = lazy(() => import("../pages/JobsPage"));
 /** Job applications and their seasons. */
 const ApplicationsPage = lazy(() => import("../pages/ApplicationsPage"));
+/** Self-employment: invoices, clients and the CRA rules (Phase 4 item 15). */
+const SelfEmployedPage = lazy(() => import("../pages/SelfEmployedPage"));
 /** Budget page (Finances). */
 const BudgetPage = lazy(() => import("../pages/BudgetPage"));
 /** One money account's activity. */
@@ -71,6 +73,7 @@ export default function App() {
               <Route path="/tasks" element={<TasksPage />} />
               <Route path="/jobs" element={<JobsPage />} />
               <Route path="/jobs/applications" element={<ApplicationsPage />} />
+              <Route path="/jobs/self-employed" element={<SelfEmployedPage />} />
               {/* Phase 2 item 11: teams, under Fitness. */}
               <Route path="/fitness" element={<FitnessPage />} />
               <Route path="/budget" element={<BudgetPage />} />

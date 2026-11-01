@@ -50,7 +50,10 @@ From §11: "Phase 4 — ongoing, not a gate."
 item ships, and the first two need the app to record what came from the planner
 and what happened to a flag (see items 2 and 3).
 
-## Status at a glance (2026-10-31)
+## Status at a glance (2026-11-01)
+
+Every item is built. The six schema items wait for one schema step, written out
+with its read-backs in `phase4-runbook.md` and rehearsed on a throwaway Postgres.
 
 | # | Item | Schema? | Status |
 |---|---|---|---|
@@ -68,7 +71,7 @@ and what happened to a flag (see items 2 and 3).
 | 12 | Next-term planner | No | **Deployed 2026-11-01** (`ce9eba9`, D15) |
 | 13 | Deadline spending guard | Partly | **Detection deployed 2026-11-01** (`ce9eba9`, D19); pre-allocation and report card **built** (D24), wait for your schema step |
 | 14 | Money what-if | No | **Deployed 2026-11-01** (`ce9eba9`, D16) |
-| 15 | Self-employed support | **Yes** | Planned |
+| 15 | Self-employed support | **Yes** | **Built** (D25); waits for your schema step |
 | — | Plaid | — | Out of scope (D2) |
 
 ---
@@ -87,7 +90,7 @@ and what happened to a flag (see items 2 and 3).
 3. **What needs a schema step.** The planner's `events.source` (D7), focus
    sessions (a table of sessions), BYOAI (a
    table of hashed tokens), the spending guard's pre-allocation and report card
-   (a per-week override), and self-employed support (clients and invoices). Each
+   (a per-week mark, D24), and self-employed support (clients and invoices). Each
    is built and tested on `phase4`, its runbook step written, and it deploys
    after your schema step. Everything else is computed on read.
 4. **History windows.** Velocity, correlations and spike prediction read a
