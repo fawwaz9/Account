@@ -277,6 +277,9 @@ BODY_PATCHES: dict[tuple[str, str], list[dict]] = {
         {"mode": "none", "catalogue_course_id": None},
         {"mode": "auto", "catalogue_course_id": None},
     ],
+    # Phase 4 item 2: a block that ends after it starts, so the request reaches the
+    # service; the task in it stays each variant's own (B's under foreign-refs).
+    ("POST", "/api/calendar/{user_id}/planner/accept"): [{"blocks.0.ends_at": "10:00:00"}],
     # Phase 4 item 7: the one tool, so the walk drives the digest through MCP.
     ("POST", "/api/assistant/mcp"): [
         {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "get_briefing"}},
@@ -315,12 +318,13 @@ BODY_PATCHES: dict[tuple[str, str], list[dict]] = {
 
 
 def _patched(body, patch: dict):
+    """Apply dotted-path changes to a copy of a body; a numeric part indexes a list."""
     body = json.loads(json.dumps(body))
     for dotted, value in patch.items():
         *parents, last = dotted.split(".")
         node = body
         for part in parents:
-            node = node[part]
+            node = node[int(part)] if isinstance(node, list) else node[part]
         if value is None:
             node.pop(last, None)
         else:

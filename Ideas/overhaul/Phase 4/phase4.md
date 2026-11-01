@@ -55,7 +55,7 @@ and what happened to a flag (see items 2 and 3).
 | # | Item | Schema? | Status |
 |---|---|---|---|
 | 1 | Cumulative average and CGPA including this term | No | **Deployed 2026-10-31** (`863cfcf`, `account-api-00050-fqt`; D5, D6) |
-| 2 | Weekly planner | **Yes** (D7) | Planned |
+| 2 | Weekly planner | **Yes** (D7) | **Built** (D22); waits for your schema step |
 | 3 | Deadline risk | No | **Deployed 2026-11-01** (`97f94a4`, D11) |
 | 4 | Focus sessions | **Yes** | Planned |
 | 5 | Exam countdown | No | **Deployed 2026-11-01** (`97f94a4`, D12) |

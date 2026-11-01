@@ -84,6 +84,10 @@ ADDED_COLUMNS: dict[str, dict[str, str | dict[str, str]]] = {
     "events": {
         "grade_id": "CHAR(32)",
         "job_id": "CHAR(32)",
+        # Phase 4 item 2 (D7): where an event came from, and the task the planner
+        # placed. No foreign key on the task: a planned block outlives its task.
+        "source": "VARCHAR",
+        "planned_task_id": {"sqlite": "CHAR(32)", "postgresql": "UUID"},
     },
     "tasks": {
         "recurring_id": "CHAR(32)",

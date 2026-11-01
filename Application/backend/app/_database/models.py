@@ -770,6 +770,12 @@ class EventModel(Base):
     #: a lecture that did not happen. Without these, removing one occurrence of a
     #: series could only mean ending the series.
     skipped_dates = Column(JSON, nullable=False, default=list)
+    #: Phase 4 item 2 (D7): where the event came from. "planner" for a block the
+    #: weekly planner placed and you accepted; null for everything you made.
+    source = Column(String, nullable=True)
+    #: The task a planner block is for. No foreign key: the block is your calendar's,
+    #: and stays if the task is deleted.
+    planned_task_id = Column(Uuid, nullable=True)
 
     user = relationship("UserModel", back_populates="events")
     course = relationship("CourseModel", back_populates="events")

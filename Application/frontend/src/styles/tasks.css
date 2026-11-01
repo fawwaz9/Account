@@ -1241,3 +1241,61 @@
 .examCountdownSum {
   margin: 6px 0 0;
 }
+
+/* ===== Weekly planner (Phase 4 item 2) ===== */
+.plannerLaunch {
+  margin: 8px 0 12px;
+}
+
+.plannerPanel {
+  max-width: 600px;
+  text-align: left;
+}
+
+.plannerDay {
+  margin: 10px 0;
+}
+
+.plannerDayTitle {
+  margin: 0 0 4px;
+  font-size: 0.95rem;
+  color: var(--gold);
+  text-align: left;
+}
+
+.plannerBlocks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plannerBlock label {
+  display: grid;
+  grid-template-columns: auto 7.5em minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  padding: 6px 0;
+  border-top: 1px solid #1f2a44;
+  cursor: pointer;
+}
+
+.plannerTime {
+  font-variant-numeric: tabular-nums;
+}
+
+.plannerWhat {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.plannerWhy {
+  display: block;
+}
+
+.plannerMissed li {
+  padding: 4px 0;
+}
+
+.plannerDone {
+  margin: 12px 0;
+}

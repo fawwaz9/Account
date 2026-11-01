@@ -45,6 +45,8 @@ from app.Calendar.services.blackout_service import (
 )
 from app.Calendar.schemas.load import CrunchStrip, FreeBlock, WeekLoad
 from app.Calendar.services.load_service import crunch, free_blocks, week_load
+from app.Calendar.schemas.planner import AcceptedPlan, AcceptPlan, WeekPlan
+from app.Calendar.services import planner_service
 from app.shared import audit
 from app.shared.errors import error_course, error_user, responses
 from app.Usage.services.usage_service import CREATE, record as record_usage
@@ -516,3 +518,53 @@ def remove_blackout(user_id: VerifiedUserId, blackout_id: UUID, db: DBSession):
     if delete_blackout(db, user_id, blackout_id) is None:
         raise HTTPException(status_code=404, detail="Blocked period not found")
     return None
+
+
+# Phase 4 item 2 (D7): the weekly planner.
+
+@router.get("/{user_id}/planner", response_model=WeekPlan, responses=responses["user_404"])
+def get_week_plan(user_id: VerifiedUserId, db: DBSession):
+    """Propose the week: each open task's work in free time before it's due, with why.
+
+    Args:
+        user_id: The verified caller's id.
+        db: Request-scoped database session.
+
+    Returns:
+        The blocks, what didn't fit, and every assumption; nothing is stored.
+
+    Raises:
+        HTTPException: 404 when the user does not exist.
+    """
+    plan = planner_service.plan_week(db, user_id)
+    if plan is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+    return plan
+
+
+@router.post("/{user_id}/planner/accept", response_model=AcceptedPlan, status_code=201,
+             responses=responses["user_404"])
+def accept_week_plan(user_id: VerifiedUserId, body: AcceptPlan, db: DBSession):
+    """Put the accepted blocks on the calendar, each re-checked against free time now.
+
+    Args:
+        user_id: The verified caller's id.
+        body: The blocks.
+        db: Request-scoped database session.
+
+    Returns:
+        How many events were written, each marked as the planner's (D7).
+
+    Raises:
+        HTTPException: 404 when the user does not exist or a block names anything but
+            the caller's open task; 422 when a block isn't in free time, or overlaps.
+    """
+    try:
+        accepted = planner_service.accept(db, user_id, body)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    if accepted is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+    return accepted

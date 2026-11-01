@@ -518,3 +518,39 @@ and staleness, off, no device, a failed delivery retried, push not set up, two
 people due at once each getting only their own day, the lookup itself, the
 route); five mutations, all caught after the lookup's filter first survived (the
 dispatcher re-checks it; a direct test now holds it).
+
+## D22. How the weekly planner was built (mine, under your D7; 2026-11-01; yours to overturn)
+
+- **Two columns on `events`, so a schema step:** `source` ("planner" on the
+  blocks it makes, D7) and `planned_task_id`, the task a block is for, with no
+  foreign key, because the block is your calendar's and stays if the task goes.
+  The second column is mine: without it a second plan would plan the same task
+  again in the time left over.
+- **"Plan my week" on the Tasks page.** Tasks due in the next seven days, and any
+  overdue, sorted by due date and then priority, placed greedily into the free
+  blocks the calendar already finds (inside your study window, never over an
+  event). Each block says why: "The first free time before it's due Wednesday",
+  "Tomorrow, because the free time before it went to work due sooner", "It's
+  overdue, so the first free time". What doesn't fit is listed with the
+  shortfall, never squeezed in.
+- **The sizes:** a task gets its estimate (scaled by the estimate ratio if you
+  turned it on) less time already logged; no estimate gets 60 minutes; a task
+  within 15 minutes of done isn't planned. No block runs over two hours, a
+  15-minute break separates two blocks of the same task, and no block is shorter
+  than your minimum free block (a 10-minute remainder rounds up). Time you've
+  already accepted counts toward each task.
+- **Accepting re-checks everything:** each block must still be inside free time
+  as the calendar stands, inside the week, for one of your open tasks, and not
+  overlap another; anything else is refused. Another person's task reads as not
+  found (404), as every other route does.
+- **Found while building it:** the first version moved to the next free stretch
+  after one two-hour chunk instead of filling the rest of the same stretch, so a
+  long task due today was reported as not fitting; and the first walk showed a
+  ten-minute block. Both fixed, both pinned by tests.
+
+Evidence: `tests/test_planner.py`, 21 tests; twelve mutations, all caught after
+the priority one first survived (my test's titles sorted the same way by
+alphabet; they now disagree). The isolation walk drives the accept route with
+each variant's own task (B's under foreign-refs, now refused as not found);
+`_patched` learned list indices for that. `PlannerModal.test.tsx`, 4 tests.
+Walked in a browser at both widths.

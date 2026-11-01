@@ -47,6 +47,7 @@ import HowLongPrompt from "../features/tasks/components/HowLongPrompt";
 import EstimateRatioCard from "../features/tasks/components/EstimateRatioCard";
 import DeadlineRiskCard from "../features/tasks/components/DeadlineRiskCard";
 import ExamCountdownCard from "../features/tasks/components/ExamCountdownCard";
+import PlannerModal from "../features/calender/components/PlannerModal";
 import PartnersPanel from "../features/partners/PartnersPanel";
 import SharedTasks from "../features/tasks/components/SharedTasks";
 import { updatePreferences } from "../services/currentUserClient";
@@ -86,6 +87,7 @@ export default function TasksPage() {
   const [ratio, setRatio] = useState<EstimateRatio | null>(null);
   const [risk, setRisk] = useState<DeadlineRisk | null>(null);
   const [countdown, setCountdown] = useState<ExamCountdown | null>(null);
+  const [planning, setPlanning] = useState(false);
   const [ratioNonce, setRatioNonce] = useState(0);
   const [timerNote, setTimerNote] = useState<string | null>(null);
 
@@ -286,6 +288,14 @@ export default function TasksPage() {
       <ExamCountdownCard countdown={countdown} />
 
       <DeadlineRiskCard risk={risk} />
+
+      {/* Phase 4 item 2: the week's work in free time, each block explained. */}
+      {user && (
+        <div className="plannerLaunch">
+          <button type="button" className="calButton" onClick={() => setPlanning(true)}>Plan my week</button>
+        </div>
+      )}
+      {planning && user && <PlannerModal userId={user.id} onClose={() => setPlanning(false)} />}
 
       {error && <p className="calError">{error}</p>}
       {actionError && <p className="calError">{actionError}</p>}
