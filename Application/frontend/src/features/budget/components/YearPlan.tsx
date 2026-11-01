@@ -4,6 +4,7 @@ import { AnnualPlan, PlanGoal } from "../types";
 import { formatMoney } from "../money";
 import { useAuth } from "../../../app/auth/AuthContext";
 import PlanVsActual from "./PlanVsActual";
+import WhatIfPanel from "./WhatIfPanel";
 
 /** Props for the year plan. */
 interface YearPlanProps {
@@ -132,6 +133,9 @@ export default function YearPlan({ nonce }: YearPlanProps) {
 
       {error && <p className="small-text error" role="alert">{error}</p>}
       {asked && <GoalAnswer goal={planned.goal} endsOn={planned.ends_on} />}
+
+      {/* Phase 4 item 14: the same plan, re-run with changes. */}
+      {userId && <WhatIfPanel userId={userId} />}
 
       {/* Under the plan it saves: the plan is recomputed on every read, so
           only a saved copy can be compared with what happened. */}

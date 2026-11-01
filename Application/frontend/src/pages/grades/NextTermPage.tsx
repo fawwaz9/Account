@@ -74,6 +74,7 @@ export default function NextTermPage() {
         <Link to="/grades" className="calButton">Back to grades</Link>
       </div>
 
+      <div className="nextTermBody">
       <label className="nextTermSearch">
         <span className="srOnly">Add a course</span>
         <input
@@ -167,6 +168,7 @@ export default function NextTermPage() {
           </ul>
         </>
       )}
+      </div>
     </div>
   );
 }

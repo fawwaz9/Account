@@ -12,6 +12,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query
 
+from app.Finances.schemas.whatif import WhatIfIn, WhatIfResult
+from app.Finances.services.whatif_service import what_if
 from app._database.dependencies import DBSession
 from app.shared.dates import user_today
 from app.Auth.services.access import VerifiedUserId
@@ -438,6 +440,32 @@ def undo_import(user_id: VerifiedUserId, import_id: UUID, db: DBSession):
     if removed is None:
         raise HTTPException(status_code=404, detail="Import not found")
     return {"removed": removed}
+
+
+@router.post("/{user_id}/what-if", response_model=WhatIfResult, responses=responses["user_404"])
+def money_what_if(user_id: VerifiedUserId, body: WhatIfIn, db: DBSession):
+    """Re-run the year plan with changed hours, wage, spending or purchases; nothing is stored.
+
+    Args:
+        user_id: The verified caller's id.
+        body: The scenario.
+        db: Request-scoped database session.
+
+    Returns:
+        The plan as it stands beside the scenario, with every assumption and cap
+        (Phase 4 item 14). No academic figure in it.
+
+    Raises:
+        HTTPException: 404 when the user does not exist; 422 for a date outside the
+            plan or an inverted window.
+    """
+    try:
+        result = what_if(db, user_id, body)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    if result is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+    return result
 
 
 @router.get(

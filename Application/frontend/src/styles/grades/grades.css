@@ -1148,7 +1148,9 @@
   gap: 10px;
 }
 
-.nextTermPage {
+/* On an inner wrapper, not on the page: the page shares its element with
+   .container, and two max-widths there tie on bundler order (pageWidth.test.ts). */
+.nextTermBody {
   max-width: 760px;
 }
 

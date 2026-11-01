@@ -1883,3 +1883,141 @@
   background: transparent;
   border: 1px dashed var(--muted);
 }
+
+/* ===== Money what-if (Phase 4 item 14) =====
+   Under the year plan: the same plan re-run with changes, both curves on one scale. */
+.whatIf {
+  margin: 14px 0;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.whatIf > summary {
+  cursor: pointer;
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.whatIfInputs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 10px 16px;
+  margin: 10px 0;
+}
+
+.whatIfInputs label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.whatIfInput {
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+}
+
+.whatIfInput:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+
+.whatIfNoShifts,
+.whatIfPurchase {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.whatIfPurchase .whatIfInput[type="text"] {
+  flex: 1 1 140px;
+}
+
+.whatIfPurchase .whatIfInput[type="number"] {
+  width: 7em;
+}
+
+.whatIfPreset {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: none;
+  color: var(--gold);
+  font-size: 0.85rem;
+}
+
+.whatIfPurchases {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.whatIfRemove {
+  padding: 0 4px;
+  border: none;
+  background: none;
+  color: var(--muted);
+}
+
+.whatIfHeadline {
+  margin: 6px 0 2px;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.whatIfNegative {
+  color: #f0a39c;
+}
+
+.whatIfLegend {
+  display: flex;
+  gap: 16px;
+  margin: 8px 0 2px;
+}
+
+.whatIfKeyBase::before,
+.whatIfKeyScenario::before {
+  content: "";
+  display: inline-block;
+  width: 18px;
+  margin-right: 6px;
+  vertical-align: middle;
+  border-top: 2px dashed var(--muted);
+}
+
+.whatIfKeyScenario::before {
+  border-top: 2px solid var(--gold);
+}
+
+.whatIfChartWrap {
+  overflow-x: auto;
+}
+
+.whatIfChart {
+  display: block;
+  width: 100%;
+  min-width: 320px;
+  height: auto;
+}
+
+.whatIfGrid { stroke: #1f2a44; stroke-width: 1; }
+.whatIfZero { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.whatIfAxis { fill: var(--muted); font-size: 9px; }
+.whatIfBase { fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.whatIfScenario { fill: none; stroke: var(--gold); stroke-width: 2; stroke-linejoin: round; }
+
+.whatIfCapped {
+  margin: 6px 0;
+  padding-left: 18px;
+  color: #f0a39c;
+}

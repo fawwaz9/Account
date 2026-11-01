@@ -9,6 +9,8 @@ import {
   SafeToSpend,
   CashFlowForecast,
   AnnualPlan,
+  WhatIfIn,
+  WhatIfResult,
   PlanReview,
   SavedPlan,
   ImportMapping,
@@ -365,6 +367,11 @@ export async function fetchForecast(userId: string) {
 }
 
 /** Year plan; with a target, the weekly hours it takes. */
+/** The year plan beside the plan with a scenario's changes; nothing is stored (Phase 4 item 14). */
+export async function fetchWhatIf(userId: string, scenario: WhatIfIn) {
+  return post<WhatIfResult>(endpoints.finances.whatIf(userId), scenario, { keepCache: true });
+}
+
 export async function fetchPlan(userId: string, target?: number, until?: string) {
   const params = new URLSearchParams();
   if (target !== undefined) params.set("target", String(target));

@@ -757,3 +757,43 @@ export interface ImportSummary {
   /** Subscriptions the audit now sees; only on the commit's answer. */
   subscription_candidates: number | null;
 }
+
+/** A one-off spend in a what-if (Phase 4 item 14). */
+export interface WhatIfPurchase {
+  label: string;
+  amount: number;
+  on_date: string;
+}
+
+/** A money what-if; anything left out changes nothing. */
+export interface WhatIfIn {
+  hours_per_week?: number;
+  hours_from?: string | null;
+  hours_until?: string | null;
+  no_shifts_from?: string | null;
+  no_shifts_until?: string | null;
+  hourly_rate?: number | null;
+  monthly_spending_change?: number;
+  purchases?: WhatIfPurchase[];
+}
+
+/** One side of the what-if comparison. */
+export interface WhatIfOutcome {
+  ending_balance: number;
+  lowest_balance: number;
+  lowest_on: string;
+  negative_on: string | null;
+  points: { on_date: string; balance: number }[];
+}
+
+/** The year plan beside the plan with the changes. Money only, never grades. */
+export interface WhatIfResult {
+  starts_on: string;
+  ends_on: string;
+  baseline: WhatIfOutcome;
+  scenario: WhatIfOutcome;
+  difference: number;
+  exam_season: { starts_on: string; ends_on: string } | null;
+  assumptions: string[];
+  capped: string[];
+}

@@ -303,3 +303,43 @@ Evidence: `tests/test_next_term.py`, 9 tests (the floor, the campus key, the sum
 leaving out what's missing, catalogue-only, no repeats, one to eight).
 `NextTermPage.test.tsx`, 3 tests. Walked in a browser at both widths with seeded
 catalogue courses and figures.
+
+## D16. How the money what-if was built (mine, 2026-11-01; yours to overturn)
+
+- **The year plan's own inputs, shared rather than copied.** The part of `plan`
+  that gathers balances, spending, standing instructions and pay is now
+  `plan_inputs`, and the solver's "main hourly job and its deduction rate" is
+  `main_hourly_job`; the plan, the solver and the what-if all call them. The
+  plan's 46 existing tests pass unchanged, and a test checks that a scenario with
+  nothing changed is the plan to the cent.
+- **The changes:** hours a week more or fewer at the main job (in a date window
+  or the whole plan); a stretch with no shifts at all; a different hourly rate;
+  day-to-day spending a month more or less; up to ten one-off purchases. Under
+  "What if…" below the year plan; nothing is saved.
+- **"Exam season" is offered, not assumed:** the three weeks up to the last final
+  on your calendar, as a button that fills the no-shifts stretch. The calendar
+  feeds money here; nothing flows back.
+- **Caps, said rather than silent** (§13.5): hours can only come off shifts that
+  are on the schedule, week by week; spending can't go below $0 a day; dates
+  outside the plan, inverted windows, a stretch with one end, and out-of-range
+  figures are refused.
+- **Where the money lands:** lost shifts come off the cheque each would have been
+  on; changed hours land at each week's end (said in the assumptions); a new
+  wage scales the main job's upcoming cheques only.
+- **The silo, proved:** a test captures every query the what-if runs and fails
+  if it reads grades, tasks or any academic table.
+
+Evidence: `tests/test_whatif.py`, 27 tests with hand-worked figures (four lost
+shifts cost $370, or $296 after 20% deductions; a $20 wage on $2,590 of cheques
+adds $210); eight mutations, six caught. The two that survive are equivalent:
+copying the events before changing them (the baseline is already projected), and
+skipping salaried shifts (they earn $0 from hours anyway). `WhatIfPanel.test.tsx`,
+4 tests. Walked in a browser: exam season plus $100 a month less came to −$70.93,
+which is nine $92.50 shifts at the 80% of pay that lands in liquid accounts
+against $595 saved.
+
+**Correction, in place (D15):** the next-term page first set its own
+`max-width` on an element it shares with `.container`; the repo's page-width
+guard caught it after the commit was pushed. The width now sits on an inner
+wrapper. I had run only that page's tests before committing; the full suite
+runs before every commit from here.

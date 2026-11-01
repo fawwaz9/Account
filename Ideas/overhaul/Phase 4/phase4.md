@@ -67,7 +67,7 @@ and what happened to a flag (see items 2 and 3).
 | 11 | Course-drop simulator | No | **Built** (D14) |
 | 12 | Next-term planner | No | **Built** (D15) |
 | 13 | Deadline spending guard | Partly | Planned |
-| 14 | Money what-if | No | Planned |
+| 14 | Money what-if | No | **Built** (D16) |
 | 15 | Self-employed support | **Yes** | Planned |
 | — | Plaid | — | Out of scope (D2) |
 

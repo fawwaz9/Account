@@ -10,6 +10,7 @@ what happened lives in `plan_review_service`.
 import math
 import uuid
 from collections import defaultdict
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 from sqlalchemy.orm import Session
@@ -42,25 +43,49 @@ from app.shared.money import money
 SCENARIO_HOURS = (0, 4, 8, 12, 16)
 
 
-def plan(
+@dataclass
+class PlanInputs:
+    """What the year plan is worked out from, before it is projected.
+
+    Shared by `plan` and the what-if simulator (Phase 4 item 14), so the two can
+    never start from different figures.
+
+    Attributes:
+        anchor: The day the plan runs from.
+        ends_on: The day it runs to.
+        starting: Liquid money today.
+        daily: Day-to-day spending per day from tomorrow.
+        events: Standing instructions and pay, dated and signed.
+        share: The liquid accounts' share of the income split (1.0 when unknown).
+        liquid_ids: The liquid accounts.
+        assumptions: Every assumption so far, in words.
+    """
+    anchor: date
+    ends_on: date
+    starting: float
+    daily: float
+    events: list
+    share: float
+    liquid_ids: set
+    assumptions: list[str] = field(default_factory=list)
+
+
+def plan_inputs(
     db: Session,
     user_id: uuid.UUID,
     on_day: date | None = None,
-    target: float | None = None,
     target_on: date | None = None,
-) -> AnnualPlan | None:
-    """Return the year plan, and the hours a target needs when one is given.
+) -> PlanInputs | None:
+    """Return what the year plan is worked out from.
 
     Args:
         db: Open database session.
         user_id: Whose money.
         on_day: The day to plan from; defaults to the user's today.
-        target: A balance to reach by the plan's end, in dollars; None for no goal.
         target_on: The date the plan runs to instead of the school year's end.
 
     Returns:
-        The monthly rows, the ending and lowest balances, the goal when it can be
-        priced, and every assumption; None when the user does not exist.
+        The inputs; None when the user does not exist.
 
     Raises:
         ValueError: If `target_on` is not after today or is more than `MAX_DAYS`
@@ -112,6 +137,42 @@ def plan(
         "Liquid money is spending, savings and emergency accounts; investments and debt are left out."
     )
     assumptions.append("Tuition instalments and anything else not yet scheduled aren't included.")
+
+    return PlanInputs(
+        anchor=anchor, ends_on=ends_on, starting=starting, daily=daily, events=events,
+        share=share, liquid_ids=liquid_ids, assumptions=assumptions,
+    )
+
+
+def plan(
+    db: Session,
+    user_id: uuid.UUID,
+    on_day: date | None = None,
+    target: float | None = None,
+    target_on: date | None = None,
+) -> AnnualPlan | None:
+    """Return the year plan, and the hours a target needs when one is given.
+
+    Args:
+        db: Open database session.
+        user_id: Whose money.
+        on_day: The day to plan from; defaults to the user's today.
+        target: A balance to reach by the plan's end, in dollars; None for no goal.
+        target_on: The date the plan runs to instead of the school year's end.
+
+    Returns:
+        The monthly rows, the ending and lowest balances, the goal when it can be
+        priced, and every assumption; None when the user does not exist.
+
+    Raises:
+        ValueError: If `target_on` is not after today or is more than `MAX_DAYS`
+            ahead.
+    """
+    inputs = plan_inputs(db, user_id, on_day, target_on)
+    if inputs is None:
+        return None
+    anchor, ends_on, starting = inputs.anchor, inputs.ends_on, inputs.starting
+    daily, events, share, assumptions = inputs.daily, inputs.events, inputs.share, inputs.assumptions
 
     points, _, lowest, lowest_on = project(starting, daily, events, anchor, ends_on)
     months = monthly(points, events, daily, anchor)
@@ -224,6 +285,43 @@ def monthly(points, events, daily: float, anchor: date) -> list[PlanMonth]:
     ]
 
 
+def main_hourly_job(db: Session, user_id: uuid.UUID, anchor: date) -> tuple[JobModel | None, float | None]:
+    """Return the main hourly job and the recent deduction rate.
+
+    The main job is the first current, unarchived hourly job with a rate, in the
+    user's order; the kept share is from the recent deduction rate. Shared by the
+    solver and the what-if simulator, so an hour is priced one way everywhere.
+
+    Args:
+        db: Open database session.
+        user_id: Whose jobs.
+        anchor: Today.
+
+    Returns:
+        (the job or None, the deduction percentage or None when no cheques show one).
+    """
+    job = (
+        db.query(JobModel)
+        .filter(
+            JobModel.user_id == user_id,
+            JobModel.ended_on.is_(None),
+            JobModel.archived.is_(False),
+            JobModel.kind == JobKind.HOURLY.value,
+            JobModel.hourly_rate.isnot(None),
+            JobModel.hourly_rate > 0,
+        )
+        .order_by(JobModel.position, JobModel.name)
+        .first()
+    )
+    rate = effective_rate(db, user_id, anchor - timedelta(days=DEDUCTION_LOOKBACK_DAYS), anchor, anchor)
+    return job, rate.deduction_percent
+
+
+def kept_share(deduction_percent: float | None) -> float:
+    """Return the fraction of gross pay kept: 1 less the deductions, or 1.0 when unknown."""
+    return 1 - deduction_percent / 100 if deduction_percent is not None else 1.0
+
+
 def solve(
     db: Session,
     user_id: uuid.UUID,
@@ -253,26 +351,11 @@ def solve(
     Returns:
         The goal with scenarios; None when no hourly job can price an hour.
     """
-    job = (
-        db.query(JobModel)
-        .filter(
-            JobModel.user_id == user_id,
-            JobModel.ended_on.is_(None),
-            JobModel.archived.is_(False),
-            JobModel.kind == JobKind.HOURLY.value,
-            JobModel.hourly_rate.isnot(None),
-            JobModel.hourly_rate > 0,
-        )
-        .order_by(JobModel.position, JobModel.name)
-        .first()
-    )
+    job, deduction = main_hourly_job(db, user_id, anchor)
     if job is None:
         assumptions.append("No hourly job with a rate, so extra hours can't be priced.")
         return None
-
-    rate = effective_rate(db, user_id, anchor - timedelta(days=DEDUCTION_LOOKBACK_DAYS), anchor, anchor)
-    keep = 1 - rate.deduction_percent / 100 if rate.deduction_percent is not None else 1.0
-    net_hourly = job.hourly_rate * keep * share
+    net_hourly = job.hourly_rate * kept_share(deduction) * share
     weeks = (ends_on - anchor).days / 7
     shortfall = money(target - base_end)
 
@@ -284,7 +367,7 @@ def solve(
 
     assumptions.append(
         f"Extra hours are priced at {job.name}'s {money_text(job.hourly_rate)} an hour"
-        + (f", after {rate.deduction_percent:g}% deductions" if rate.deduction_percent is not None else "")
+        + (f", after {deduction:g}% deductions" if deduction is not None else "")
         + ", on top of the shifts already scheduled."
     )
 
