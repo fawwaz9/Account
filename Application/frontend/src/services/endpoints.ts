@@ -79,6 +79,7 @@ export const endpoints = {
     /** Literal path: the server declares it above the task-id route. */
     estimates: (userId: string) => `tasks/${userId}/tasks/estimates`,
     risk: (userId: string) => `tasks/${userId}/tasks/risk`,
+    examCountdown: (userId: string) => `tasks/${userId}/tasks/exam-countdown`,
     timerStart: (userId: string, taskId: string) => `tasks/${userId}/tasks/${taskId}/timer/start`,
     timerStop: (userId: string, taskId: string) => `tasks/${userId}/tasks/${taskId}/timer/stop`,
   },

@@ -198,3 +198,26 @@ count, the ratio only when asked, archived tasks, both user filters, actual
 before estimate, the UTC date, flagging days that add nothing).
 `DeadlineRiskCard.test.tsx`, 6 tests. Walked in a browser at 1280px and 390px
 with 28 days of seeded history.
+
+## D12. How exam countdown was built (mine, 2026-11-01; yours to overturn)
+
+- **Inside 7 days, today included,** of a midterm or final on the calendar, a
+  card under the exam strip names it and lists its course's open work: due by
+  the exam's day or undated, dated soonest first, then the most important. Up to
+  five are listed; the count and the estimated time cover all of them.
+- **Work due after the exam stays out.** Walking it showed the course's
+  assignment due a fortnight later and the final itself listed under a midterm,
+  which isn't exam-week work. It stays in the list below.
+- **The main list's order is unchanged.** The countdown sits above it rather
+  than re-sorting it, so nothing you've learned about where things are moves.
+- **An exam over today has left**, by the exam strip's own rule (past its end,
+  else its start; an untimed exam stays the day).
+- **Computed on the server**, so the briefing digest (item 6) reads the same
+  rule rather than a copy.
+
+Evidence: `tests/test_exam_countdown.py`, 12 tests; seven mutations caught (over
+exams kept, any kind an exam, finished work, the user filter, the window a day
+short, undated first, work after the exam). The user filter first survived,
+because a stranger's task always sits on the stranger's course; a test now puts
+a stray row on my course to prove the filter itself. `ExamCountdownCard.test.tsx`,
+5 tests. Walked in a browser at both widths.

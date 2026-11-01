@@ -279,3 +279,35 @@ export interface DeadlineRisk {
   horizon_days: number;
   deadlines: RiskDeadline[];
 }
+
+/** An open task on an exam's course (Phase 4 item 5). */
+export interface CountdownTask {
+  id: string;
+  title: string;
+  due_date: string | null;
+  estimated_minutes: number | null;
+  priority: number;
+}
+
+/** A midterm or final inside the week, with its course's open work. */
+export interface CountdownExam {
+  event_id: string;
+  title: string;
+  kind: "midterm" | "final";
+  on_date: string;
+  start_time: string | null;
+  location: string | null;
+  course_id: string | null;
+  course_code: string | null;
+  /** 0 is today. */
+  days_left: number;
+  tasks: CountdownTask[];
+  open_tasks: number;
+  estimated_minutes: number;
+}
+
+/** Every exam inside the countdown window, soonest first. */
+export interface ExamCountdown {
+  window_days: number;
+  exams: CountdownExam[];
+}

@@ -25,6 +25,7 @@ import {
   deleteTask,
   fetchEstimateRatio,
   fetchDeadlineRisk,
+  fetchExamCountdown,
   fetchTaskTiming,
   setActualMinutes,
   setTaskDone,
@@ -37,6 +38,7 @@ import {
   CompletionTiming,
   EstimateRatio,
   DeadlineRisk,
+  ExamCountdown,
   RecurringTask,
   Task,
   TaskCreate,
@@ -44,6 +46,7 @@ import {
 import HowLongPrompt from "../features/tasks/components/HowLongPrompt";
 import EstimateRatioCard from "../features/tasks/components/EstimateRatioCard";
 import DeadlineRiskCard from "../features/tasks/components/DeadlineRiskCard";
+import ExamCountdownCard from "../features/tasks/components/ExamCountdownCard";
 import PartnersPanel from "../features/partners/PartnersPanel";
 import SharedTasks from "../features/tasks/components/SharedTasks";
 import { updatePreferences } from "../services/currentUserClient";
@@ -82,6 +85,7 @@ export default function TasksPage() {
   const [asking, setAsking] = useState<Task | null>(null);
   const [ratio, setRatio] = useState<EstimateRatio | null>(null);
   const [risk, setRisk] = useState<DeadlineRisk | null>(null);
+  const [countdown, setCountdown] = useState<ExamCountdown | null>(null);
   const [ratioNonce, setRatioNonce] = useState(0);
   const [timerNote, setTimerNote] = useState<string | null>(null);
 
@@ -122,6 +126,10 @@ export default function TasksPage() {
     fetchDeadlineRisk(user.id)
       .then((next) => { if (mounted) setRisk(next); })
       .catch(() => { if (mounted) setRisk(null); });
+    // Phase 4 item 5: a tick or a new task moves it too.
+    fetchExamCountdown(user.id)
+      .then((next) => { if (mounted) setCountdown(next); })
+      .catch(() => { if (mounted) setCountdown(null); });
 
     return () => { mounted = false; };
   }, [user, tasks, ratioNonce]);
@@ -274,6 +282,8 @@ export default function TasksPage() {
       <ReminderBanner due={dueReminders} onDismiss={dismissDue} />
 
       <ExamStrip />
+
+      <ExamCountdownCard countdown={countdown} />
 
       <DeadlineRiskCard risk={risk} />
 

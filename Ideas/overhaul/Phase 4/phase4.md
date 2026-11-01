@@ -58,7 +58,7 @@ and what happened to a flag (see items 2 and 3).
 | 2 | Weekly planner | **Yes** (D7) | Planned |
 | 3 | Deadline risk | No | **Built** (D11) |
 | 4 | Focus sessions | **Yes** | Planned |
-| 5 | Exam countdown | No | Planned |
+| 5 | Exam countdown | No | **Built** (D12) |
 | 6 | Briefings | No | Planned |
 | 7 | BYOAI briefing API and MCP | **Yes** | Planned |
 | 8 | Cross-room correlations, non-financial | No | Planned |

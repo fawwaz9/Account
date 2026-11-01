@@ -1190,3 +1190,54 @@
 .deadlineRiskWhy {
   grid-column: 2;
 }
+
+/* ===== Exam countdown (Phase 4 item 5) =====
+   Inside a week of an exam, its course's open work, under the exam strip. */
+.examCountdown {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.examCountdownItem {
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid #1f2a44;
+  /* The exam strip's colours, so the two read as one thing. */
+  border-left: 4px solid #e0685f;
+  border-radius: 12px;
+}
+
+.examCountdown-final {
+  border-left-color: #c9453c;
+}
+
+.examCountdownTitle {
+  margin: 0 0 6px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.examCountdownDays {
+  color: var(--gold);
+}
+
+.examCountdownName {
+  color: var(--text);
+}
+
+.examCountdownTasks {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.examCountdownTasks li {
+  padding: 2px 0;
+  overflow-wrap: anywhere;
+}
+
+.examCountdownSum {
+  margin: 6px 0 0;
+}

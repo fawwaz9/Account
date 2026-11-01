@@ -68,6 +68,8 @@ from app.Tasks.services.task_service import (
 from app.Tasks.services.estimates_service import estimate_ratio
 from app.Tasks.schemas.risk import DeadlineRisk
 from app.Tasks.services.risk_service import deadline_risk
+from app.Tasks.schemas.countdown import ExamCountdown
+from app.Tasks.services.countdown_service import exam_countdown
 from app.Tasks.services.timing_service import completion_timing
 from app.shared import audit
 from app.shared.errors import error_user, responses
@@ -646,6 +648,32 @@ def get_deadline_risk(user_id: VerifiedUserId, db: DBSession):
     if risk is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
     return risk
+
+
+@router.get(
+    "/{user_id}/tasks/exam-countdown",
+    response_model=ExamCountdown,
+    responses=responses["user_404"],
+)
+def get_exam_countdown(user_id: VerifiedUserId, db: DBSession):
+    """Get every midterm and final in the next week, each with its course's open work.
+
+    Declared above `/tasks/{task_id}` for the same reason as the timing route.
+
+    Args:
+        user_id: The verified caller's id.
+        db: Request-scoped database session.
+
+    Returns:
+        The exams, soonest first (Phase 4 item 5).
+
+    Raises:
+        HTTPException: 404 when the user does not exist.
+    """
+    countdown = exam_countdown(db, user_id)
+    if countdown is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+    return countdown
 
 
 @router.post("/{user_id}/tasks/{task_id}/timer/start", response_model=Task, responses=TASK_BOTH)
