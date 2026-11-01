@@ -56,7 +56,7 @@ and what happened to a flag (see items 2 and 3).
 |---|---|---|---|
 | 1 | Cumulative average and CGPA including this term | No | **Deployed 2026-10-31** (`863cfcf`, `account-api-00050-fqt`; D5, D6) |
 | 2 | Weekly planner | **Yes** (D7) | Planned |
-| 3 | Deadline risk | No | Planned |
+| 3 | Deadline risk | No | **Built** (D11) |
 | 4 | Focus sessions | **Yes** | Planned |
 | 5 | Exam countdown | No | Planned |
 | 6 | Briefings | No | Planned |

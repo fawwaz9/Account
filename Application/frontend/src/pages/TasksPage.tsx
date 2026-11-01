@@ -24,6 +24,7 @@ import {
   deleteRepeating,
   deleteTask,
   fetchEstimateRatio,
+  fetchDeadlineRisk,
   fetchTaskTiming,
   setActualMinutes,
   setTaskDone,
@@ -35,12 +36,14 @@ import {
 import {
   CompletionTiming,
   EstimateRatio,
+  DeadlineRisk,
   RecurringTask,
   Task,
   TaskCreate,
 } from "../features/tasks/types";
 import HowLongPrompt from "../features/tasks/components/HowLongPrompt";
 import EstimateRatioCard from "../features/tasks/components/EstimateRatioCard";
+import DeadlineRiskCard from "../features/tasks/components/DeadlineRiskCard";
 import PartnersPanel from "../features/partners/PartnersPanel";
 import SharedTasks from "../features/tasks/components/SharedTasks";
 import { updatePreferences } from "../services/currentUserClient";
@@ -78,6 +81,7 @@ export default function TasksPage() {
   // "how long did it take?", and how estimates have been running.
   const [asking, setAsking] = useState<Task | null>(null);
   const [ratio, setRatio] = useState<EstimateRatio | null>(null);
+  const [risk, setRisk] = useState<DeadlineRisk | null>(null);
   const [ratioNonce, setRatioNonce] = useState(0);
   const [timerNote, setTimerNote] = useState<string | null>(null);
 
@@ -114,6 +118,10 @@ export default function TasksPage() {
     fetchEstimateRatio(user.id)
       .then((next) => { if (mounted) setRatio(next); })
       .catch(() => { if (mounted) setRatio(null); });
+    // Phase 4 item 3: the same triggers, since a tick or an estimate moves it.
+    fetchDeadlineRisk(user.id)
+      .then((next) => { if (mounted) setRisk(next); })
+      .catch(() => { if (mounted) setRisk(null); });
 
     return () => { mounted = false; };
   }, [user, tasks, ratioNonce]);
@@ -266,6 +274,8 @@ export default function TasksPage() {
       <ReminderBanner due={dueReminders} onDismiss={dismissDue} />
 
       <ExamStrip />
+
+      <DeadlineRiskCard risk={risk} />
 
       {error && <p className="calError">{error}</p>}
       {actionError && <p className="calError">{actionError}</p>}

@@ -78,6 +78,7 @@ export const endpoints = {
     snoozes: (userId: string, taskId: string) => `tasks/${userId}/tasks/${taskId}/snoozes`,
     /** Literal path: the server declares it above the task-id route. */
     estimates: (userId: string) => `tasks/${userId}/tasks/estimates`,
+    risk: (userId: string) => `tasks/${userId}/tasks/risk`,
     timerStart: (userId: string, taskId: string) => `tasks/${userId}/tasks/${taskId}/timer/start`,
     timerStop: (userId: string, taskId: string) => `tasks/${userId}/tasks/${taskId}/timer/stop`,
   },

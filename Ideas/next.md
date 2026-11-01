@@ -226,6 +226,12 @@ are the size of each job rather than an impression of it.
         Week and Month. Arrows and swipes move a whole page. See `shipped.md`,
         "Phone calendar". Nothing is outstanding for this module.
 
+### Tasks (found 2026-11-01, walking Phase 4)
+        On a 390px phone every task row's Delete button runs 34px past the screen's
+          edge, so the Tasks page scrolls sideways. Pre-existing, not from Phase 4:
+          found while looking at the deadline risk card above the list. The row is
+          a flex line with no wrap; the fix is to let the actions wrap or shrink.
+
 ### Grades
         Term retrospective when a term closes: what moved, what slipped, what you predicted vs got.
         Syllabus paste: drop the text in, get categories, weights and due dates proposed for review.

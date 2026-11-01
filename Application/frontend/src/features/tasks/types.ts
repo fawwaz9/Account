@@ -249,3 +249,33 @@ export interface QuickCaptureResult {
   task: Task;
   preview: QuickCapturePreview;
 }
+
+/** One upcoming due date and the pace finishing everything due by then needs (Phase 4 item 3). */
+export interface RiskDeadline {
+  due_date: string;
+  tasks: number;
+  titles: string[];
+  /** Estimated minutes on that day's own tasks; earlier work makes up the rest. */
+  own_minutes: number;
+  minutes_by_then: number;
+  days_left: number;
+  required_minutes_per_day: number;
+  at_risk: boolean;
+  shortfall_minutes: number;
+}
+
+/** Your velocity, and every due date in the next three weeks against it. */
+export interface DeadlineRisk {
+  /** False until there is enough history; `deadlines` is then empty. */
+  ready: boolean;
+  history_days: number;
+  needed_days: number;
+  counted_tasks: number;
+  needed_tasks: number;
+  window_days: number;
+  velocity_minutes_per_day: number | null;
+  estimate_ratio: number | null;
+  unestimated_open: number;
+  horizon_days: number;
+  deadlines: RiskDeadline[];
+}

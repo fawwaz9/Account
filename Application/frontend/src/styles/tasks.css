@@ -1140,3 +1140,53 @@
   width: 100%;
   min-width: 0;
 }
+
+/* ===== Deadline risk (Phase 4 item 3) =====
+   Under the exam strip: the pace you keep against what each due date needs. */
+.deadlineRisk {
+  margin: 12px 0;
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid #1f2a44;
+  border-radius: 12px;
+}
+
+.deadlineRiskQuiet {
+  padding: 8px 14px;
+}
+
+.deadlineRiskQuiet p {
+  margin: 0;
+}
+
+.deadlineRiskTitle {
+  display: inline;
+}
+
+.deadlineRiskList {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.deadlineRiskList li {
+  display: grid;
+  grid-template-columns: 6.5em minmax(0, 1fr);
+  column-gap: 10px;
+  padding: 6px 0;
+  border-top: 1px solid #1f2a44;
+}
+
+.deadlineRiskWhen {
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.deadlineRiskWhat {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.deadlineRiskWhy {
+  grid-column: 2;
+}

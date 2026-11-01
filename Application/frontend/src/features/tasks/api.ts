@@ -4,6 +4,7 @@ import { endpoints } from "../../services/endpoints";
 import {
   CompletionTiming,
   EstimateRatio,
+  DeadlineRisk,
   QuickCapturePreview,
   QuickCaptureResult,
   RecurringTask,
@@ -103,6 +104,11 @@ export async function stopTimer(userId: string, taskId: string) {
 /** How long tasks really take against their estimates. */
 export async function fetchEstimateRatio(userId: string) {
   return get<EstimateRatio>(endpoints.tasks.estimates(userId));
+}
+
+/** Your velocity, and each due date in the next three weeks against it (Phase 4 item 3). */
+export async function fetchDeadlineRisk(userId: string) {
+  return get<DeadlineRisk>(endpoints.tasks.risk(userId));
 }
 
 /* ===== Reminders ===== */

@@ -167,3 +167,34 @@ survivor, listing dropped work, because the fixture's dropped item was also
 marked; an unmarked dropped item now catches it. `GradeScenarioModal.test.tsx`,
 5 tests, including that only the newest answer lands (mutation caught). Walked
 in a browser at 1280px and 390px; the projection matched the hand figure.
+
+## D11. How deadline risk was built (mine, 2026-11-01; yours to overturn)
+
+- **Velocity** is the minutes of work you finished per day over the last 28
+  days: each finished task's timed or reported minutes, else its estimate; a
+  task with neither counts nothing. A younger history divides by its own length,
+  so a new account isn't read as slow.
+- **Required velocity** for a due date is the estimated minutes still open on
+  everything due by then, overdue work included, over the days left (today
+  counted). The estimate ratio scales it only when you've turned it on, as the
+  workload forecast does.
+- **At risk** means the required pace is above yours **and the day adds
+  estimated work of its own.** A day that adds none (an unestimated "Email TA")
+  shows no new risk; its shortfall was already named at the earlier deadline. The
+  card says "with what's due before it" when earlier work makes up part of one.
+- **Cold start** (§13.5): nothing is said until 14 days of history and 5
+  finished tasks with a time. Before then the card says how close it is; with no
+  finished work at all it says nothing.
+- **Horizon:** the next 21 days. **Where:** the Tasks page, under the exam strip.
+- **Completion days are the user's own.** `completed_at` is naive UTC; it is
+  read in your time zone (the existing `local_completion_date`), so an evening's
+  work isn't counted as tomorrow's. Found while walking it.
+- **"Risk flags acted on rather than dismissed"** (§11) stays unreadable: the
+  card has no dismiss, and recording one would need a table.
+
+Evidence: `tests/test_deadline_risk.py`, 17 tests with hand-worked figures;
+eleven mutations caught (both cold-start floors, overdue work, the days-left
+count, the ratio only when asked, archived tasks, both user filters, actual
+before estimate, the UTC date, flagging days that add nothing).
+`DeadlineRiskCard.test.tsx`, 6 tests. Walked in a browser at 1280px and 390px
+with 28 days of seeded history.
