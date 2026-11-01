@@ -884,6 +884,36 @@ production-URL build: 26 of 26 files.
 
 ---
 
+## Phase 4 batch 3: the simulators, correlations and the spending guard's detection -- SHIPPED 2026-11-01
+Six items under D3 (no table, no column):
+- **Course-drop simulator** (item 11, D14): "If I drop it…" on a current course;
+  before and after, the full-time check at 9 credits (editable), a refund ceiling,
+  information not advice.
+- **Next-term planner** (item 12, D15): "Plan next term" from the grades page;
+  past students' hours summed above the floor, a RateMyProfessors link out.
+- **Money what-if** (item 14, D16): under the year plan; hours, a stretch with no
+  shifts (with an exam-season suggestion), wage, spending, one-off purchases.
+- **Correlations, non-financial** (item 8, D17): on Fitness, exertion against
+  finished work, in words, once eight weeks hold both.
+- **Term simulator** (item 9, D18): "Plan the term" on the calendar; the 168-hour
+  week, money and exertion; the study part shows coverage, never a projected
+  grade, and only once study hours are set.
+- **Spending guard, detection** (item 13, D19): on Budget, before a crunch week,
+  your own past spikes. The pre-allocation waits for the schema step.
+
+CI green on all three jobs at `ce9eba9`; each item mutation-tested and walked in
+a browser. The walks found and fixed: a field with no box, a class-name clash
+that hid the 168-hour bar, a page width tie, a crunch threshold that missed
+exam-only weeks.
+
+LIVE: API `ce9eba9` on revision `account-api-00052-x7s`, serving 100% since
+2026-11-01 02:50 UTC; the deploy workflow's checks passed (schema gate, backup,
+digest `9417e4d1…`, health, CORS). Pages at `ce9eba9`; Cloudflare's check reads
+success (02:51 UTC). Not done from this session: the log read and the
+file-by-file Pages comparison.
+
+---
+
 ## Phase 4 batch 2: grade scenarios, deadline risk, exam countdown, the Today card -- SHIPPED 2026-11-01
 Four items under D3 (no table, no column):
 - **Grade scenarios** (item 10, D10): "What if…" on the course page's band. A

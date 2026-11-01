@@ -61,13 +61,13 @@ and what happened to a flag (see items 2 and 3).
 | 5 | Exam countdown | No | **Deployed 2026-11-01** (`97f94a4`, D12) |
 | 6 | Briefings | Partly | **Digest and Today card deployed 2026-11-01** (`97f94a4`, D13); **push built** (D21), waits for your schema step |
 | 7 | BYOAI briefing API and MCP | **Yes** | **Built** (D20); waits for your schema step |
-| 8 | Cross-room correlations, non-financial | No | **Built** (D17) |
-| 9 | Term simulator | No | **Built** (D18; the study part shows coverage, not a projected grade) |
+| 8 | Cross-room correlations, non-financial | No | **Deployed 2026-11-01** (`ce9eba9`, D17) |
+| 9 | Term simulator | No | **Deployed 2026-11-01** (`ce9eba9`, D18; the study part shows coverage, not a projected grade) |
 | 10 | Grade scenarios | No | **Deployed 2026-11-01** (`97f94a4`, D10) |
-| 11 | Course-drop simulator | No | **Built** (D14) |
-| 12 | Next-term planner | No | **Built** (D15) |
-| 13 | Deadline spending guard | Partly | **Detection built** (D19); pre-allocation and report card wait for the schema step |
-| 14 | Money what-if | No | **Built** (D16) |
+| 11 | Course-drop simulator | No | **Deployed 2026-11-01** (`ce9eba9`, D14) |
+| 12 | Next-term planner | No | **Deployed 2026-11-01** (`ce9eba9`, D15) |
+| 13 | Deadline spending guard | Partly | **Detection deployed 2026-11-01** (`ce9eba9`, D19); pre-allocation and report card wait for the schema step |
+| 14 | Money what-if | No | **Deployed 2026-11-01** (`ce9eba9`, D16) |
 | 15 | Self-employed support | **Yes** | Planned |
 | — | Plaid | — | Out of scope (D2) |
 
