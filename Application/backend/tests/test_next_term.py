@@ -12,10 +12,19 @@ from fastapi.testclient import TestClient
 
 import app.main
 from app._database.db import get_db
+from app._database.identity import act_as
 from app._database.models import COHORT_FLOOR, CatalogueCourseModel, CourseIntelModel
 from app.Auth.dependencies import get_current_user
 from app.Grades.schemas.next_term import NextTermIn
 from app.Grades.services.next_term_service import next_term
+
+
+@pytest.fixture(autouse=True)
+def signed_in(db, user):
+    """On Postgres the figures are read through a definer function that answers only
+    a signed-in caller, as every request is in the app (get_current_user acts as the
+    user first); the tests act as the user the same way."""
+    act_as(db, user.id)
 
 
 def catalogue(db, subject, number, campus="UBCV", credits=3.0, title=None):
