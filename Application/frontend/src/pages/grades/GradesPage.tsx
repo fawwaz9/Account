@@ -234,7 +234,11 @@ export default function GradesPage() {
               />
             )}
 
-            <Link to="/grades/degree" className="calButton degreeLink">Degree audit</Link>
+            <div className="gradesLinks">
+              <Link to="/grades/degree" className="calButton degreeLink">Degree audit</Link>
+              {/* Phase 4 item 12. */}
+              <Link to="/grades/next-term" className="calButton degreeLink">Plan next term</Link>
+            </div>
 
             <GradeTrendChart points={summary?.term_history ?? []} />
 

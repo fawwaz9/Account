@@ -17,6 +17,7 @@ const GradesPage = lazy(() => import("../pages/grades/GradesPage"));
 const CourseDetailPage = lazy(() => import("../pages/grades/CourseDetailPage"));
 /** Degree requirements and progress. */
 const DegreePage = lazy(() => import("../pages/grades/DegreePage"));
+const NextTermPage = lazy(() => import("../pages/grades/NextTermPage"));
 /** Calendar page. */
 const CalendarPage = lazy(() => import("../pages/CalendarPage"));
 /** Tasks page. */
@@ -63,6 +64,7 @@ export default function App() {
               <Route path="/grades" element={<GradesPage />} />
               <Route path="/grades/courses/:courseId" element={<CourseDetailPage />} />
               <Route path="/grades/degree" element={<DegreePage />} />
+              <Route path="/grades/next-term" element={<NextTermPage />} />
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/tasks" element={<TasksPage />} />
               <Route path="/jobs" element={<JobsPage />} />

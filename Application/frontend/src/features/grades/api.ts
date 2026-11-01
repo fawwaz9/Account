@@ -4,6 +4,7 @@ import { CheapestPath,
   GradeScenario,
   GradeScenarioIn,
   DropPreview,
+  NextTermPlan,
   CatalogueChoice,
   ClassFigures,
   OfficeHourCheckIn,
@@ -135,6 +136,11 @@ export async function fetchGradeScenario(userId: string, courseId: string, body:
 /** What dropping one of this term's courses would change; nothing is written (Phase 4 item 11). */
 export async function fetchDropPreview(userId: string, courseId: string, fullTimeCredits: number) {
   return get<DropPreview>(`${endpoints.grades.dropPreview(userId, courseId)}?full_time_credits=${fullTimeCredits}`);
+}
+
+/** Past students' figures added up for candidate courses; nothing is stored (Phase 4 item 12). */
+export async function planNextTerm(userId: string, catalogueIds: string[]) {
+  return post<NextTermPlan>(endpoints.grades.nextTerm(userId), { catalogue_ids: catalogueIds }, { keepCache: true });
 }
 
 /** The cheapest unmarked work toward a course's target. */

@@ -1140,3 +1140,134 @@
   align-items: flex-start;
   gap: 8px;
 }
+
+/* ===== Next term (Phase 4 item 12) ===== */
+.gradesLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.nextTermPage {
+  max-width: 760px;
+}
+
+.nextTermInput {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+}
+
+.nextTermInput:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+
+.nextTermSearch {
+  display: block;
+  margin: 8px 0 4px;
+}
+
+.nextTermMatches {
+  margin: 0 0 12px;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.nextTermMatches button {
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  background: none;
+  color: var(--text);
+  text-align: left;
+}
+
+.nextTermMatches button:hover,
+.nextTermMatches button:focus-visible {
+  background: var(--panel-2);
+}
+
+.nextTermTotals {
+  margin: 16px 0 10px;
+}
+
+.nextTermHeadline {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.nextTermHeadline strong {
+  color: var(--gold);
+}
+
+.nextTermList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nextTermCourse {
+  margin: 0 0 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.nextTermCourseHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.nextTermRemove {
+  padding: 0 6px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 1.1rem;
+}
+
+.nextTermFigures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 6px 16px;
+  margin: 8px 0;
+}
+
+.nextTermFigures dt {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.nextTermFigures dd {
+  margin: 0;
+}
+
+.nextTermProf {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.nextTermProf .nextTermInput {
+  flex: 1 1 200px;
+  width: auto;
+}
+
+.nextTermAssumptions {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  list-style: disc;
+}

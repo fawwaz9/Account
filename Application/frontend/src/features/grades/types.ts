@@ -718,3 +718,25 @@ export interface DropPreview {
   warnings: string[];
   disclaimers: string[];
 }
+
+/** One candidate course with whatever past students' figures have reached the floor (Phase 4 item 12). */
+export interface NextTermCourse {
+  catalogue_id: string;
+  code: string;
+  campus: string;
+  title: string | null;
+  credits: number | null;
+  intel: CourseIntel | null;
+}
+
+/** The candidates added up. */
+export interface NextTermPlan {
+  courses: NextTermCourse[];
+  total_hours: number | null;
+  courses_with_hours: number;
+  total_credits: number;
+  mean_difficulty: number | null;
+  missing: string[];
+  floor: number;
+  assumptions: string[];
+}

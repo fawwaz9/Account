@@ -27,6 +27,8 @@ from app.Grades.schemas.scenario import GradeScenario, GradeScenarioIn
 from app.Grades.services import scenario_service
 from app.Grades.schemas.drop import DEFAULT_FULL_TIME_CREDITS, DropPreview
 from app.Grades.services.drop_service import drop_preview
+from app.Grades.schemas.next_term import NextTermIn, NextTermPlan
+from app.Grades.services.next_term_service import next_term
 from app.Grades.schemas.blind_spot import CategoryBlindSpot
 from app.Grades.schemas.grade import Grade, GradeCreate, GradeUpdate
 from app.Grades.services.grade_service import (
@@ -200,6 +202,28 @@ def resolve_course_from_text(
     if course is None:
         return {"course_id": None, "code": None, "name": None}
     return {"course_id": course.id, "code": course.code, "name": course.name}
+
+
+@router.post("/{user_id}/next-term", response_model=NextTermPlan, responses=responses["user_404"])
+def plan_next_term(user_id: VerifiedUserId, body: NextTermIn, db: DBSession):
+    """Add up past students' figures for a set of candidate courses; nothing is stored.
+
+    Args:
+        user_id: The verified caller's id.
+        body: Up to eight catalogue courses.
+        db: Request-scoped database session.
+
+    Returns:
+        Each course's figures above the floor, the summed weekly hours, mean
+        difficulty, and the courses with no figure yet (Phase 4 item 12).
+
+    Raises:
+        HTTPException: 422 when an id repeats or isn't in the catalogue.
+    """
+    try:
+        return next_term(db, user_id, body)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
 
 
 # The shared catalogue (Phase 2 item 3). Read-only from here: the API's role

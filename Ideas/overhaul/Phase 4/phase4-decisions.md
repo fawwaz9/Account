@@ -278,3 +278,28 @@ courses allowed, the course kept in "after", the full-time comparison, archived
 credits, the 12-credit note, a refund claimed with no rate). The archived-credits
 guard first survived because no archived course was in the fixture; one is now.
 `DropPreviewModal.test.tsx`, 5 tests. Walked in a browser at both widths.
+
+## D15. How the next-term planner was built (mine, 2026-11-01; yours to overturn)
+
+- **Its own page,** "Plan next term", beside "Degree audit" on the grades page.
+  Courses are picked from the shared catalogue (the existing search), up to eight.
+- **Figures through the floor, exactly as the course page reads them** (Phase 3
+  D11): hours, difficulty, clarity and "take again", each only once five people
+  answered. The campus is part of the key, so UBCO's CPSC 221 never borrows
+  UBCV's figures.
+- **The headline is the median weekly hours summed** over the courses that have
+  them ("about 20.5 hours a week across 2 of 3 courses"). A course with no figure
+  yet is named and left out of the sum, never counted as zero. Mean difficulty
+  and total credits sit under it.
+- **Professor ratings are a link out, never a fetch** (§13.6): type an
+  instructor's name and a RateMyProfessors search link appears. Nothing is sent
+  anywhere by the app.
+- **Grade distributions aren't in it.** The vision mentions them; a
+  distribution per course doesn't add up across a combination the way hours do,
+  and each course page already shows its own. Easy to add per row if you want.
+- **Nothing is stored;** the plan is gone when you leave the page.
+
+Evidence: `tests/test_next_term.py`, 9 tests (the floor, the campus key, the sum
+leaving out what's missing, catalogue-only, no repeats, one to eight).
+`NextTermPage.test.tsx`, 3 tests. Walked in a browser at both widths with seeded
+catalogue courses and figures.
