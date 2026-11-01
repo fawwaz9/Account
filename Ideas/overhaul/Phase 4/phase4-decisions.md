@@ -248,3 +248,33 @@ Evidence: `tests/test_digest.py`, 11 tests; five mutations caught (a money query
 both user filters, finished tasks, listing every overdue task). The course-code
 lookup first survived, for the same reason as D12's; a stray-row test now holds
 it. `TodayCard.test.tsx`, 3 tests. Seen in a browser on the dashboard.
+
+## D14. How the course-drop simulator was built (mine, 2026-11-01; yours to overturn)
+
+- **The grades page's own functions, run twice:** once on your courses, once
+  without the one you'd drop. A test checks that "now" equals the grades page.
+  Shown: credits this term, the semester average, the official cumulative and
+  CGPA, and the pair including this term; rows with nothing on either side are
+  left out.
+- **Only a course in the current term** has "If I drop it…" (beside Edit Course);
+  the route refuses any other with a 422.
+- **The full-time line is 9 credits, editable in the dialog (D9).** Under it, the
+  first note names student loans and grants, residence and housing,
+  scholarships and a study permit's conditions, and says to check each; a second
+  says some use 12 credits or 60% of a full load.
+- **The refund is a ceiling, not a promise:** the course's gross tuition (its
+  credits times the term's recorded rate), with "before the refund deadline
+  usually most of it, after it often nothing". With no rate recorded it says no
+  refund can be estimated rather than showing $0. Academic to money only, so the
+  silo holds (§13.6).
+- **The W:** a note that a withdrawal after the deadline can stay on a
+  transcript.
+- **Information, not advice,** said in the dialog. Nothing is written.
+- **Found while walking it:** the full-time field had no visible box, the same
+  fault as the team fields in Phase 3. It now draws one.
+
+Evidence: `tests/test_drop_preview.py`, 12 tests; six mutations caught (past
+courses allowed, the course kept in "after", the full-time comparison, archived
+credits, the 12-credit note, a refund claimed with no rate). The archived-credits
+guard first survived because no archived course was in the fixture; one is now.
+`DropPreviewModal.test.tsx`, 5 tests. Walked in a browser at both widths.

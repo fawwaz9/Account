@@ -17,6 +17,7 @@ import EditGradeModal from "../../features/grades/components/EditGradeModal";
 import EditCourseModal from "../../features/grades/components/EditCourseModal";
 import DeleteConfirmModal from "../../features/grades/components/DeleteConfirmModal";
 import RequiredFinalModal from "../../features/grades/components/RequiredFinalModal";
+import DropPreviewModal from "../../features/grades/components/DropPreviewModal";
 import RequiredFinalPanel from "../../features/grades/components/RequiredFinalPanel";
 import GradingSchemes from "../../features/grades/components/GradingSchemes";
 import ClassFigures from "../../features/grades/components/ClassFigures";
@@ -52,6 +53,7 @@ export default function CourseDetailPage() {
   const [editGrade, setEditGrade] = useState<Grade | null>(null);
   const [editingCourse, setEditingCourse] = useState(false);
   const [showRequiredFinal, setShowRequiredFinal] = useState(false);
+  const [showDrop, setShowDrop] = useState(false);
   const [showBulkAdd, setShowBulkAdd] = useState(false);
   const [addingSyllabus, setAddingSyllabus] = useState(false);
   // Offered only once the server can read a syllabus, as on the grades page:
@@ -446,6 +448,13 @@ export default function CourseDetailPage() {
           Edit Course
         </button>
 
+        {/* Phase 4 item 11: only a course this term can be dropped. */}
+        {course?.term_bucket === "current" && (
+          <button type="button" className="editCourseButton" onClick={() => setShowDrop(true)}>
+            If I drop it…
+          </button>
+        )}
+
         <button
           type="button"
           className="deleteCourseButton"
@@ -457,6 +466,15 @@ export default function CourseDetailPage() {
           Delete Course
         </button>
       </div>
+
+      {showDrop && user && courseId && course && (
+        <DropPreviewModal
+          userId={user.id}
+          courseId={courseId}
+          courseCode={course.code}
+          onClose={() => setShowDrop(false)}
+        />
+      )}
 
       <AddGradeModal
         open={addGradeCategory !== null}

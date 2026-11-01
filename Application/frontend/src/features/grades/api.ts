@@ -3,6 +3,7 @@ import { endpoints } from "../../services/endpoints";
 import { CheapestPath,
   GradeScenario,
   GradeScenarioIn,
+  DropPreview,
   CatalogueChoice,
   ClassFigures,
   OfficeHourCheckIn,
@@ -129,6 +130,11 @@ export async function fetchGradeBand(userId: string, courseId: string) {
  *  It computes and stores nothing, so it keeps the GET cache. */
 export async function fetchGradeScenario(userId: string, courseId: string, body: GradeScenarioIn) {
   return post<GradeScenario>(endpoints.grades.scenario(userId, courseId), body, { keepCache: true });
+}
+
+/** What dropping one of this term's courses would change; nothing is written (Phase 4 item 11). */
+export async function fetchDropPreview(userId: string, courseId: string, fullTimeCredits: number) {
+  return get<DropPreview>(`${endpoints.grades.dropPreview(userId, courseId)}?full_time_credits=${fullTimeCredits}`);
 }
 
 /** The cheapest unmarked work toward a course's target. */

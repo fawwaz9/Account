@@ -25,6 +25,8 @@ from app.Grades.services.course_service import (
 from app.Grades.schemas.dashboard import UserGradeDashboard
 from app.Grades.schemas.scenario import GradeScenario, GradeScenarioIn
 from app.Grades.services import scenario_service
+from app.Grades.schemas.drop import DEFAULT_FULL_TIME_CREDITS, DropPreview
+from app.Grades.services.drop_service import drop_preview
 from app.Grades.schemas.blind_spot import CategoryBlindSpot
 from app.Grades.schemas.grade import Grade, GradeCreate, GradeUpdate
 from app.Grades.services.grade_service import (
@@ -603,6 +605,42 @@ def get_required_final_score(
         message = str(exc)
         status_code = 404 if "not found" in message.lower() else 400
         raise HTTPException(status_code=status_code, detail=message)
+
+
+@router.get(
+    "/{user_id}/courses/{course_id}/drop-preview",
+    response_model=DropPreview,
+    responses=responses["course_both"],
+)
+def get_drop_preview(
+    user_id: VerifiedUserId,
+    course_id: UUID,
+    db: DBSession,
+    full_time_credits: float = Query(default=DEFAULT_FULL_TIME_CREDITS, ge=1, le=30),
+):
+    """Return what dropping one of this term's courses would change; nothing is written.
+
+    Args:
+        user_id: The verified caller's id.
+        course_id: The course.
+        db: Request-scoped database session.
+        full_time_credits: Credits a term below which to warn, 1-30; 9 by default (D9).
+
+    Returns:
+        Before and after figures, the full-time check, the tuition share and warnings
+        (Phase 4 item 11).
+
+    Raises:
+        HTTPException: 404 when the course is missing or another user's; 422 when it
+            is not in the current term.
+    """
+    try:
+        preview = drop_preview(db, user_id, course_id, full_time_credits)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    if preview is None:
+        raise HTTPException(status_code=404, detail=error_course["not_found"])
+    return preview
 
 
 @router.post(

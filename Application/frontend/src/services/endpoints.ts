@@ -13,6 +13,7 @@ export const endpoints = {
     CategoryWeights: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/category-weights`,
     requiredFinal: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/required-final`,
     scenario: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/scenario`,
+    dropPreview: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/drop-preview`,
     resolveCourse: (userId: string) => `grades/${userId}/courses/resolve`,
     blindSpots: (userId: string) => `grades/${userId}/category-blind-spots`,
     gradeBand: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/grade-band`,

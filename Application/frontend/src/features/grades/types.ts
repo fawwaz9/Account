@@ -692,3 +692,29 @@ export interface GradeScenario {
   empty_categories: string[];
   assumptions: string[];
 }
+
+/** The figures a drop moves, on one side of it (Phase 4 item 11). */
+export interface DropFigures {
+  semester_average: number | null;
+  cumulative_average: number;
+  cgpa: number | null;
+  cumulative_average_including_term: number | null;
+  cgpa_including_term: number | null;
+  term_credits: number;
+}
+
+/** What dropping one course this term changes. Information, never advice. */
+export interface DropPreview {
+  course_id: string;
+  course_code: string;
+  credits: number;
+  before: DropFigures;
+  after: DropFigures;
+  full_time_credits: number;
+  below_full_time: boolean;
+  was_full_time: boolean;
+  /** The course's gross tuition, the most a refund could return; null when none is recorded. */
+  tuition_share: number | null;
+  warnings: string[];
+  disclaimers: string[];
+}

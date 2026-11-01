@@ -64,7 +64,7 @@ and what happened to a flag (see items 2 and 3).
 | 8 | Cross-room correlations, non-financial | No | Planned |
 | 9 | Term simulator | No | Planned |
 | 10 | Grade scenarios | No | **Built** (D10) |
-| 11 | Course-drop simulator | No | Planned |
+| 11 | Course-drop simulator | No | **Built** (D14) |
 | 12 | Next-term planner | No | Planned |
 | 13 | Deadline spending guard | Partly | Planned |
 | 14 | Money what-if | No | Planned |
