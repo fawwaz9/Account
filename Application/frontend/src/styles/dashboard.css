@@ -241,3 +241,38 @@ p.workloadHeadline {
   margin-top: 12px;
   align-self: flex-start;
 }
+
+/* ===== Today (Phase 4 item 6) =====
+   The digest's own lines, so the card says what the briefing says. */
+.todayTitle {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+  color: var(--gold);
+}
+
+.todayDate {
+  margin-left: 6px;
+  font-size: 0.9rem;
+  font-weight: 400;
+}
+
+.todayLines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.todayLine {
+  padding: 5px 0;
+  border-top: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+
+.todayLineWarn {
+  color: #f0a39c;
+}
+
+.todayLineExam {
+  color: var(--gold);
+}

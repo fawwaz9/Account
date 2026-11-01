@@ -221,3 +221,30 @@ short, undated first, work after the exam). The user filter first survived,
 because a stranger's task always sits on the stranger's course; a test now puts
 a stray row on my course to prove the filter itself. `ExamCountdownCard.test.tsx`,
 5 tests. Walked in a browser at both widths.
+
+## D13. The digest and the Today card, and why the push waits (mine, 2026-11-01; yours to overturn)
+
+- **One digest, composed from the services that already answer each part:**
+  today's calendar (shifts included as times, never pay), tasks due today, overdue
+  work (three named, all counted), the exam countdown (D12), deadline risk once
+  it knows your pace (D11), the week's load and today's free time. It renders to
+  plain sentences, one line per part, and leaves out any part with nothing in it.
+  The same data gives the same words.
+- **No money, proved on the queries (D8).** A test captures every SQL statement
+  the digest runs and fails if any reads one of the 24 tables that hold money or
+  pay; slipping a transactions query into the digest makes it fail.
+- **The Today card shows the digest's own lines,** so it can never say something
+  the briefing doesn't. It sits at the top of the desktop dashboard. **The phone
+  dashboard is unchanged:** your sketch for it was three cards and no greeting,
+  and I didn't want to overrule that without asking. One line adds it there.
+- **The push briefing waits for the schema step.** The reminder dispatcher finds
+  its users on Postgres through a security-definer function, because it runs as
+  no one; finding users who asked for a briefing needs one more function of that
+  kind, and functions are installed by your schema step. So the opt-in setting
+  and the push land with BYOAI, which needs the same kind of function to turn a
+  token into a user.
+
+Evidence: `tests/test_digest.py`, 11 tests; five mutations caught (a money query,
+both user filters, finished tasks, listing every overdue task). The course-code
+lookup first survived, for the same reason as D12's; a stray-row test now holds
+it. `TodayCard.test.tsx`, 3 tests. Seen in a browser on the dashboard.

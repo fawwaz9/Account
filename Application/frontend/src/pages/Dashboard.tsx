@@ -11,6 +11,7 @@ import GetStarted, { steps } from "../features/onboarding/GetStarted";
 import DisappointmentQuestion from "../features/survey/DisappointmentQuestion";
 import { PHONE_QUERY, useMediaQuery } from "../shared/hooks/useMediaQuery";
 import { FreeBlock } from "../features/calender/types";
+import TodayCard from "../features/briefing/TodayCard";
 
 /** The browser's IANA time zone, or undefined when it cannot say. */
 function browserZone(): string | undefined {
@@ -132,6 +133,9 @@ export default function Dashboard() {
 
       {checklist && user && <GetStarted userId={user.id} steps={checklist} />}
       {user && <DisappointmentQuestion userId={user.id} />}
+
+      {/* Phase 4 item 6: the day first, in the briefing's own words. */}
+      {user && <TodayCard userId={user.id} />}
 
       {hasCourses && summary && (
         <section className="gradeSummary">

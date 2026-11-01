@@ -59,7 +59,7 @@ and what happened to a flag (see items 2 and 3).
 | 3 | Deadline risk | No | **Built** (D11) |
 | 4 | Focus sessions | **Yes** | Planned |
 | 5 | Exam countdown | No | **Built** (D12) |
-| 6 | Briefings | No | Planned |
+| 6 | Briefings | Partly | **Digest and Today card built** (D13); the push waits for the schema step |
 | 7 | BYOAI briefing API and MCP | **Yes** | Planned |
 | 8 | Cross-room correlations, non-financial | No | Planned |
 | 9 | Term simulator | No | Planned |

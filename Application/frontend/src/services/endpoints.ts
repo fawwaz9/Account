@@ -191,4 +191,7 @@ export const endpoints = {
     recurringSkip: (userId: string, ruleId: string) =>
       `finances/${userId}/recurring/${ruleId}/skip`,
   },
+  briefing: {
+    digest: (userId: string) => `briefing/${userId}/digest`,
+  },
 };
