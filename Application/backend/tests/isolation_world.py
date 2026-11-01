@@ -86,6 +86,7 @@ from app._database.models import (
     JobApplicationModel,
     ApplicationSeasonModel,
     AssistantTokenModel,
+    FocusSessionModel,
     ApplicationStepModel,
     TeamInviteModel,
     TeamMemberModel,
@@ -393,6 +394,10 @@ def seed_world(db, user_id: uuid.UUID, marker: str, day: date) -> dict[str, uuid
     add(ClubInviteModel(id=new_id(), club_id=club.id,
                         token_hash=hashlib.sha256(f"{marker} club invite token".encode()).hexdigest(),
                         expires_at=datetime.combine(day + timedelta(days=5), time(12, 0))))
+    # Phase 4 item 4: a finished focus session on the world's course.
+    add(FocusSessionModel(id=new_id(), user_id=user_id, course_id=course.id,
+                          started_at=datetime.combine(day, time(9, 0)), ended_at=datetime.combine(day, time(9, 45)),
+                          minutes=45))
     # Phase 4 item 7 (D4): the one assistant token, by hash only.
     add(AssistantTokenModel(id=new_id(), user_id=user_id,
                             token_hash=hashlib.sha256(assistant_token_for(marker).encode()).hexdigest(),

@@ -1299,3 +1299,66 @@
 .plannerDone {
   margin: 12px 0;
 }
+
+/* ===== Focus sessions (Phase 4 item 4) ===== */
+.focusCard {
+  margin: 12px 0;
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid #1f2a44;
+  border-radius: 12px;
+}
+
+.focusTitle {
+  display: inline;
+}
+
+.focusRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.focusSelect {
+  flex: 1 1 160px;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+}
+
+.focusWeek {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.focusWeek li {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+}
+
+.focusChart {
+  margin: 10px 0 0;
+}
+
+.focusChart svg {
+  width: 100%;
+  max-width: 320px;
+  height: auto;
+}
+
+.focusLabel {
+  fill: var(--muted);
+  font-size: 9px;
+}
+
+.focusAxis { stroke: var(--muted); stroke-width: 1; }
+.focusDot { fill: var(--gold); fill-opacity: 0.8; }

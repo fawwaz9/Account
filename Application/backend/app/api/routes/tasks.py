@@ -70,6 +70,8 @@ from app.Tasks.schemas.risk import DeadlineRisk
 from app.Tasks.services.risk_service import deadline_risk
 from app.Tasks.schemas.countdown import ExamCountdown
 from app.Tasks.services.countdown_service import exam_countdown
+from app.Tasks.schemas.focus import FocusSession, FocusStart, FocusSummary
+from app.Tasks.services import focus_service
 from app.Tasks.services.timing_service import completion_timing
 from app.shared import audit
 from app.shared.errors import error_user, responses
@@ -674,6 +676,65 @@ def get_exam_countdown(user_id: VerifiedUserId, db: DBSession):
     if countdown is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
     return countdown
+
+
+@router.get("/{user_id}/focus", response_model=FocusSummary, responses=responses["user_404"])
+def get_focus(user_id: VerifiedUserId, db: DBSession):
+    """Get the running focus session, and focus per course this week and this term.
+
+    Args:
+        user_id: The verified caller's id.
+        db: Request-scoped database session.
+
+    Returns:
+        The summary, each course with its grade now (Phase 4 item 4).
+
+    Raises:
+        HTTPException: 404 when the user does not exist.
+    """
+    found = focus_service.summary(db, user_id)
+    if found is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+    return found
+
+
+@router.post("/{user_id}/focus/start", response_model=FocusSession, status_code=201, responses=responses["user_404"])
+def start_focus(user_id: VerifiedUserId, body: FocusStart, db: DBSession):
+    """Start a focus session on a course, or on nothing in particular; stops any running one.
+
+    Args:
+        user_id: The verified caller's id.
+        body: The course, if any.
+        db: Request-scoped database session.
+
+    Returns:
+        The new session.
+
+    Raises:
+        HTTPException: 404 when the user or the course does not exist, or the course
+            is another user's.
+    """
+    try:
+        found = focus_service.start(db, user_id, body)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    if found is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+    return found
+
+
+@router.post("/{user_id}/focus/stop", response_model=FocusSession | None, responses=responses["user_404"])
+def stop_focus(user_id: VerifiedUserId, db: DBSession):
+    """Stop the running focus session; a session forgotten past 12 hours records nothing.
+
+    Args:
+        user_id: The verified caller's id.
+        db: Request-scoped database session.
+
+    Returns:
+        The stopped session, or null when nothing was running.
+    """
+    return focus_service.stop(db, user_id)
 
 
 @router.post("/{user_id}/tasks/{task_id}/timer/start", response_model=Task, responses=TASK_BOTH)

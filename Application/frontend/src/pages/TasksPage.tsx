@@ -48,6 +48,7 @@ import EstimateRatioCard from "../features/tasks/components/EstimateRatioCard";
 import DeadlineRiskCard from "../features/tasks/components/DeadlineRiskCard";
 import ExamCountdownCard from "../features/tasks/components/ExamCountdownCard";
 import PlannerModal from "../features/calender/components/PlannerModal";
+import FocusCard from "../features/tasks/components/FocusCard";
 import PartnersPanel from "../features/partners/PartnersPanel";
 import SharedTasks from "../features/tasks/components/SharedTasks";
 import { updatePreferences } from "../services/currentUserClient";
@@ -296,6 +297,9 @@ export default function TasksPage() {
         </div>
       )}
       {planning && user && <PlannerModal userId={user.id} onClose={() => setPlanning(false)} />}
+
+      {/* Phase 4 item 4: a study timer tagged per course. */}
+      {user && <FocusCard userId={user.id} />}
 
       {error && <p className="calError">{error}</p>}
       {actionError && <p className="calError">{actionError}</p>}

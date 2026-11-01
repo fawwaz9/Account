@@ -554,3 +554,24 @@ alphabet; they now disagree). The isolation walk drives the accept route with
 each variant's own task (B's under foreign-refs, now refused as not found);
 `_patched` learned list indices for that. `PlannerModal.test.tsx`, 4 tests.
 Walked in a browser at both widths.
+
+## D23. How focus sessions were built (mine, 2026-11-01; yours to overturn)
+
+- **A table, so a schema step:** `focus_sessions` (per user: an optional course,
+  start, end, minutes). The task timer keeps only a running total, so neither
+  hours per course per week nor hours against grades could be read from it (the
+  correction already noted in `phase4.md`). Focus time on a deleted course goes
+  with the course; deleting the account takes every session.
+- **The timer's rules are the task timer's:** one session at a time, so starting
+  another stops the first; a session left running past 12 hours was forgotten,
+  and stopping it records nothing; only your own courses, else not found.
+- **Where:** a Focus card on the Tasks page: pick a course (or none), Start,
+  Stop; this week's minutes per course; and once two courses have both focus
+  hours and a grade, a small chart of hours this term against each course's
+  grade now. Your own courses only; nothing is compared with anyone.
+
+Evidence: `tests/test_focus.py`, 10 tests (also green on Postgres); five
+mutations, all caught. The table is in the isolation world, and the walks cover
+the three routes. `FocusCard.test.tsx`, 4 tests. The repo's class-collision
+guard caught chart classes I'd reused from the Fitness page; they're renamed.
+Seen in a browser with a session running.

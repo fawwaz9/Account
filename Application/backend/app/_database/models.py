@@ -193,6 +193,8 @@ class UserModel(Base):
     application_seasons = relationship("ApplicationSeasonModel", cascade=cascade)
     # Phase 4 item 7: deleting the account deletes its assistant token with it.
     assistant_tokens = relationship("AssistantTokenModel", cascade=cascade)
+    # Phase 4 item 4: focus sessions.
+    focus_sessions = relationship("FocusSessionModel", cascade=cascade, overlaps="course,focus_sessions")
     partnerships = relationship(
         "PartnershipModel", cascade=cascade, foreign_keys="PartnershipModel.user_id"
     )
@@ -352,6 +354,9 @@ class CourseModel(Base):
                                 overlaps="term_reviews")
     office_hour_checkins = relationship("OfficeHourCheckinModel", back_populates="course", cascade=cascade,
                                         overlaps="office_hour_checkins")
+    # Phase 4 item 4: focus time on a course goes with the course.
+    focus_sessions = relationship("FocusSessionModel", back_populates="course", cascade=cascade,
+                                  overlaps="focus_sessions")
     outline_offer = relationship("OutlineOfferModel", back_populates="course", cascade=cascade, uselist=False,
                                  overlaps="outline_offers")
     grading_schemes = relationship("GradingSchemeModel", cascade=cascade)
@@ -3281,3 +3286,37 @@ class AssistantTokenModel(Base):
     prefix = Column(String, nullable=False)
     created_at = Column(DateTime, nullable=False, default=utc_now)
     last_used_at = Column(DateTime, nullable=True)
+
+
+class FocusSessionModel(Base):
+    """Per-user row: one stretch of focused study, timed, optionally on a course.
+
+    Phase 4 item 4. The task timer keeps only a running total, so neither "hours
+    per course per week" nor hours against grades could be read from it; a session
+    keeps its own start and end. One may run at a time; a session left running
+    past `focus_service.TRUST_HOURS` was forgotten, and stopping it records nothing.
+
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        course_id: The course it was for; null for focus on nothing in particular.
+        started_at: When it started, naive UTC.
+        ended_at: When it stopped, naive UTC; null while running.
+        minutes: Whole minutes focused; null while running, 0 for a forgotten one.
+        created_at: When the row was written.
+    """
+
+    __tablename__ = "focus_sessions"
+    __table_args__ = (
+        CheckConstraint("minutes IS NULL OR minutes >= 0", name="ck_focus_minutes"),
+    )
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    course_id = Column(Uuid, ForeignKey("courses.id"), nullable=True, index=True)
+    started_at = Column(DateTime, nullable=False)
+    ended_at = Column(DateTime, nullable=True)
+    minutes = Column(Integer, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+
+    course = relationship("CourseModel", back_populates="focus_sessions", overlaps="focus_sessions")
