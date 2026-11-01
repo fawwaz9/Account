@@ -159,3 +159,34 @@ export const fetchTeamJoinRequests = (userId: string, teamId: string) =>
 /** Accept or decline a request to join your team. */
 export const answerJoinRequest = (userId: string, requestId: string, accept: boolean) =>
   post<{ status: string }>(`fitness/${userId}/join-requests/${requestId}/answer`, { accept });
+
+/** One week's exertion points and its academic figure (Phase 4 item 8). */
+export interface WeekPair {
+  week_start: string;
+  body: number;
+  academic: number;
+}
+
+/** One pair, read across the weeks: strength in words, never a cause. */
+export interface Correlation {
+  key: "tasks" | "minutes";
+  body_label: string;
+  academic_label: string;
+  weeks: number;
+  coefficient: number | null;
+  strength: "no clear link" | "weak" | "moderate" | "strong";
+  reading: string;
+  pairs: WeekPair[];
+}
+
+/** Exertion against finished work, once eight weeks hold both. No money in it. */
+export interface Correlations {
+  ready: boolean;
+  weeks_of_both: number;
+  needed_weeks: number;
+  correlations: Correlation[];
+  caution: string;
+}
+
+/** Read exertion against finished work, week by week (Phase 4 item 8). */
+export const fetchCorrelations = (userId: string) => get<Correlations>(`fitness/${userId}/correlations`);

@@ -343,3 +343,29 @@ against $595 saved.
 guard caught it after the commit was pushed. The width now sits on an inner
 wrapper. I had run only that page's tests before committing; the full suite
 runs before every commit from here.
+
+## D17. How the non-financial correlations were built (mine, 2026-11-01; yours to overturn)
+
+- **Two pairs, week by week over the last six months:** exertion points against
+  tasks finished, and against minutes of work finished (timed or reported, else
+  the estimate, as deadline risk counts them). Both are things the app already
+  records with a date; marks have no "earned on" date, so they aren't paired.
+- **Silent until eight weeks hold both rooms,** counted from when the later of
+  the two began; only complete weeks count, so this week's half-logged figures
+  never move it. Before eight, the card says how many weeks so far; with nothing
+  in either room it says nothing.
+- **Pearson's r, in words:** under 0.2 "no clear link", then weak, moderate,
+  strong, always with the number of weeks. A side that never changes reads as no
+  clear link rather than dividing by zero.
+- **Never a cause.** The sentence says what tended to go together, and the card
+  ends with "weeks that move together aren't proof that one causes the other".
+- **No money, proved on the queries** (§13.3), the same capture test as the
+  digest's.
+- **Where:** the Fitness page, beside the activity card it reads, with a small
+  scatter of the weeks.
+
+Evidence: `tests/test_correlations.py`, 20 tests (r by hand on known series, the
+strength bands at their edges, the eight-week floor, one room alone, the later
+start, this week left out, a flat side, the money capture, a stranger's weeks);
+six mutations, all caught. `CorrelationsCard.test.tsx`, 3 tests. Walked in a
+browser with twelve seeded weeks.

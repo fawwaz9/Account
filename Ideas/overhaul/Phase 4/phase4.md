@@ -61,7 +61,7 @@ and what happened to a flag (see items 2 and 3).
 | 5 | Exam countdown | No | **Deployed 2026-11-01** (`97f94a4`, D12) |
 | 6 | Briefings | Partly | **Digest and Today card deployed 2026-11-01** (`97f94a4`, D13); the push waits for the schema step |
 | 7 | BYOAI briefing API and MCP | **Yes** | Planned |
-| 8 | Cross-room correlations, non-financial | No | Planned |
+| 8 | Cross-room correlations, non-financial | No | **Built** (D17) |
 | 9 | Term simulator | No | Planned |
 | 10 | Grade scenarios | No | **Deployed 2026-11-01** (`97f94a4`, D10) |
 | 11 | Course-drop simulator | No | **Built** (D14) |

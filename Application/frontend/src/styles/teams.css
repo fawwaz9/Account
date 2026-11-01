@@ -436,3 +436,29 @@
   display: flex;
   gap: 6px;
 }
+
+/* ===== Movement and your work (Phase 4 item 8) ===== */
+.corrRow {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+
+.corrRow p {
+  margin: 0 0 4px;
+}
+
+.corrTitle {
+  font-weight: 600;
+}
+
+.corrScatter {
+  width: 110px;
+  height: 110px;
+}
+
+.corrAxis { stroke: var(--muted); stroke-width: 1; }
+.corrDot { fill: var(--gold); fill-opacity: 0.8; }

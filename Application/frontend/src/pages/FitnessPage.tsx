@@ -17,6 +17,7 @@ import TeamBoard from "../features/fitness/TeamBoard";
 import TeamListingForm from "../features/fitness/TeamListingForm";
 import TeamRequests from "../features/fitness/TeamRequests";
 import GymBuddy from "../features/fitness/GymBuddy";
+import CorrelationsCard from "../features/fitness/CorrelationsCard";
 import "../styles/teams.css";
 
 /**
@@ -118,6 +119,8 @@ export default function FitnessPage() {
       {/* Phase 3: beyond the teams themselves. */}
       <div className="fitnessMore">
         <ActivityCard userId={user.id} />
+        {/* Phase 4 item 8: beside the activity it reads. */}
+        <CorrelationsCard userId={user.id} />
         <CampusBoardCard userId={user.id} />
         <DirectoryCard userId={user.id} />
         <GymBuddy userId={user.id} />

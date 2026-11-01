@@ -15,6 +15,8 @@ from app.Fitness.schemas.fitness import (
     MyJoinRequest, Status, TeamBoard, TeamJoinRequestOut,
 )
 from app.Fitness.services import exertion_service, gym_buddy_service, league_service
+from app.Insights.schemas.correlations import Correlations
+from app.Insights.services.correlation_service import correlations
 from app.shared.errors import error_user, responses
 
 router = APIRouter()
@@ -47,6 +49,27 @@ def save_gym_buddy(user_id: VerifiedUserId, body: GymBuddyIn, db: DBSession):
         The saved status and the connections looking too.
     """
     return gym_buddy_service.save(db, user_id, body)
+
+
+@router.get("/{user_id}/correlations", response_model=Correlations, responses=responses["user_404"])
+def get_correlations(user_id: VerifiedUserId, db: DBSession):
+    """Read exertion against finished work, week by week (Phase 4 item 8); never money.
+
+    Args:
+        user_id: The verified caller's id.
+        db: Request-scoped database session.
+
+    Returns:
+        Each pair's strength in words and the weeks behind it; nothing until eight
+        weeks hold both rooms.
+
+    Raises:
+        HTTPException: 404 when the user does not exist.
+    """
+    found = correlations(db, user_id)
+    if found is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+    return found
 
 
 @router.get("/{user_id}/exertion", response_model=Exertion, responses=responses["user_404"])
