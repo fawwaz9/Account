@@ -14,6 +14,8 @@ from fastapi import APIRouter, HTTPException, Query
 
 from app.Finances.schemas.whatif import WhatIfIn, WhatIfResult
 from app.Finances.services.whatif_service import what_if
+from app.Finances.schemas.guard import SpendingGuard
+from app.Finances.services.guard_service import spending_guard
 from app._database.dependencies import DBSession
 from app.shared.dates import user_today
 from app.Auth.services.access import VerifiedUserId
@@ -440,6 +442,26 @@ def undo_import(user_id: VerifiedUserId, import_id: UUID, db: DBSession):
     if removed is None:
         raise HTTPException(status_code=404, detail="Import not found")
     return {"removed": removed}
+
+
+@router.get("/{user_id}/spending-guard", response_model=SpendingGuard, responses=responses["user_404"])
+def get_spending_guard(user_id: VerifiedUserId, db: DBSession):
+    """Read the crunch week ahead and your own spending spikes in past ones (Phase 4 item 13).
+
+    Args:
+        user_id: The verified caller's id.
+        db: Request-scoped database session.
+
+    Returns:
+        The guard's reading; nothing to say until two crunch weeks are in the history.
+
+    Raises:
+        HTTPException: 404 when the user does not exist.
+    """
+    found = spending_guard(db, user_id)
+    if found is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+    return found
 
 
 @router.post("/{user_id}/what-if", response_model=WhatIfResult, responses=responses["user_404"])

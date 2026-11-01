@@ -259,6 +259,10 @@ BODY_PATCHES: dict[tuple[str, str], list[dict]] = {
         {"mode": "none", "catalogue_course_id": None},
         {"mode": "auto", "catalogue_course_id": None},
     ],
+    # Phase 4 item 12: catalogue courses are shared rows, the same in every
+    # world, so naming one is never a foreign reference; a made-up id is refused
+    # before anything is read.
+    ("POST", "/api/grades/{user_id}/next-term"): [{"catalogue_ids": [str(CATALOGUE_IDS["catalogue_courses"])]}],
     # A readable rule each way, so the write runs: typed, and as a tree.
     ("PUT", "/api/grades/{user_id}/courses/{course_id}/prerequisites"): [
         {"text": "CPSC 210 and one of MATH 200, MATH 217", "rule": None},

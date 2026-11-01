@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -97,7 +98,7 @@ afterEach(() => {
 describe("on a desktop", () => {
   it("offers the week and the month, opening on the week", async () => {
     fakeScreen(false);
-    render(<CalendarPage />);
+    render(<MemoryRouter><CalendarPage /></MemoryRouter>);
 
     expect(tabs().map((tab) => tab.textContent)).toEqual(["Week", "Month"]);
     expect(pressed()).toBe("Week");
@@ -109,13 +110,13 @@ describe("on a desktop", () => {
   it("behaves as it did where there is no matchMedia at all", () => {
     // @ts-expect-error -- removed to stand in for jsdom and very old browsers
     delete window.matchMedia;
-    render(<CalendarPage />);
+    render(<MemoryRouter><CalendarPage /></MemoryRouter>);
     expect(tabs().map((tab) => tab.textContent)).toEqual(["Week", "Month"]);
   });
 
   it("ignores a swipe", () => {
     fakeScreen(false);
-    render(<CalendarPage />);
+    render(<MemoryRouter><CalendarPage /></MemoryRouter>);
     swipe(-120);
     expect(heading()).toBe("28 Sep – 4 Oct 2026");
   });
@@ -124,7 +125,7 @@ describe("on a desktop", () => {
 describe("on a phone", () => {
   it("offers a day, three days and the month -- no week -- opening on three days from today", async () => {
     fakeScreen(true);
-    render(<CalendarPage />);
+    render(<MemoryRouter><CalendarPage /></MemoryRouter>);
 
     expect(tabs().map((tab) => tab.textContent)).toEqual(["Day", "3 day", "Month"]);
     expect(pressed()).toBe("3 day");
@@ -135,7 +136,7 @@ describe("on a phone", () => {
 
   it("moves three days a press, and names it so", () => {
     fakeScreen(true);
-    render(<CalendarPage />);
+    render(<MemoryRouter><CalendarPage /></MemoryRouter>);
 
     fireEvent.click(screen.getByLabelText("Next 3 days"));
     expect(heading()).toBe("6 – 8 Oct 2026");
@@ -146,7 +147,7 @@ describe("on a phone", () => {
 
   it("shows one day, a day a press", async () => {
     fakeScreen(true);
-    render(<CalendarPage />);
+    render(<MemoryRouter><CalendarPage /></MemoryRouter>);
 
     fireEvent.click(screen.getByRole("button", { name: "Day" }));
     expect(heading()).toBe("Sat 3 Oct 2026");
@@ -158,7 +159,7 @@ describe("on a phone", () => {
 
   it("steps forward on a swipe to the left and back on one to the right", () => {
     fakeScreen(true);
-    render(<CalendarPage />);
+    render(<MemoryRouter><CalendarPage /></MemoryRouter>);
 
     swipe(-120);
     expect(heading()).toBe("6 – 8 Oct 2026");
@@ -169,7 +170,7 @@ describe("on a phone", () => {
 
   it("swipes the month too", () => {
     fakeScreen(true);
-    render(<CalendarPage />);
+    render(<MemoryRouter><CalendarPage /></MemoryRouter>);
 
     fireEvent.click(screen.getByRole("button", { name: "Month" }));
     swipe(-120);
@@ -180,7 +181,7 @@ describe("on a phone", () => {
 describe("crossing the breakpoint", () => {
   it("turns three days into the week and back, keeping the date", () => {
     const screenSize = fakeScreen(true);
-    render(<CalendarPage />);
+    render(<MemoryRouter><CalendarPage /></MemoryRouter>);
     fireEvent.click(screen.getByLabelText("Next 3 days"));
     expect(heading()).toBe("6 – 8 Oct 2026");
 
@@ -195,7 +196,7 @@ describe("crossing the breakpoint", () => {
 
   it("keeps the month on either side", () => {
     const screenSize = fakeScreen(false);
-    render(<CalendarPage />);
+    render(<MemoryRouter><CalendarPage /></MemoryRouter>);
     fireEvent.click(screen.getByRole("button", { name: "Month" }));
 
     screenSize.resize(true);

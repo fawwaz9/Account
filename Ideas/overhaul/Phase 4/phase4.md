@@ -62,11 +62,11 @@ and what happened to a flag (see items 2 and 3).
 | 6 | Briefings | Partly | **Digest and Today card deployed 2026-11-01** (`97f94a4`, D13); the push waits for the schema step |
 | 7 | BYOAI briefing API and MCP | **Yes** | Planned |
 | 8 | Cross-room correlations, non-financial | No | **Built** (D17) |
-| 9 | Term simulator | No | Planned |
+| 9 | Term simulator | No | **Built** (D18; the study part shows coverage, not a projected grade) |
 | 10 | Grade scenarios | No | **Deployed 2026-11-01** (`97f94a4`, D10) |
 | 11 | Course-drop simulator | No | **Built** (D14) |
 | 12 | Next-term planner | No | **Built** (D15) |
-| 13 | Deadline spending guard | Partly | Planned |
+| 13 | Deadline spending guard | Partly | **Detection built** (D19); pre-allocation and report card wait for the schema step |
 | 14 | Money what-if | No | **Built** (D16) |
 | 15 | Self-employed support | **Yes** | Planned |
 | — | Plaid | — | Out of scope (D2) |

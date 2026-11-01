@@ -14,8 +14,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from app.api.routes import (
-    applications, briefing, calendar, class_figures, clubs, degree, finances, fitness, grades, intake, jobs, omnibox, outlines,
-    partners, push, recurring, shared_events, shared_tasks, survey, tasks, teams, term_reviews, usage, users, auth,
+    applications, briefing, calendar, class_figures, clubs, degree, finances, fitness, grades, insights, intake, jobs,
+    omnibox, outlines, partners, push, recurring, shared_events, shared_tasks, survey, tasks, teams, term_reviews, usage,
+    users, auth,
 )
 from app._database.db import Base, SessionLocal, engine
 from app._database import models
@@ -168,6 +169,8 @@ app.include_router(shared_events.router, prefix="/api/calendar", tags=["Shared e
 app.include_router(tasks.router, prefix="/api/tasks", tags=["Tasks"])
 # Phase 4 item 6: the digest of a student's day.
 app.include_router(briefing.router, prefix="/api/briefing", tags=["Briefing"])
+# Phase 4 item 9: the term simulator.
+app.include_router(insights.router, prefix="/api/insights", tags=["Insights"])
 # Same prefix as tasks: a shared task is a task (Phase 2 item 9a).
 app.include_router(shared_tasks.router, prefix="/api/tasks", tags=["Shared tasks"])
 app.include_router(jobs.router, prefix="/api/jobs", tags=["Jobs"])

@@ -10,6 +10,7 @@ import {
   CashFlowForecast,
   AnnualPlan,
   WhatIfIn,
+  SpendingGuard,
   WhatIfResult,
   PlanReview,
   SavedPlan,
@@ -367,6 +368,11 @@ export async function fetchForecast(userId: string) {
 }
 
 /** Year plan; with a target, the weekly hours it takes. */
+/** The crunch week ahead and your own spikes in past ones (Phase 4 item 13). */
+export async function fetchSpendingGuard(userId: string) {
+  return get<SpendingGuard>(endpoints.finances.spendingGuard(userId));
+}
+
 /** The year plan beside the plan with a scenario's changes; nothing is stored (Phase 4 item 14). */
 export async function fetchWhatIf(userId: string, scenario: WhatIfIn) {
   return post<WhatIfResult>(endpoints.finances.whatIf(userId), scenario, { keepCache: true });

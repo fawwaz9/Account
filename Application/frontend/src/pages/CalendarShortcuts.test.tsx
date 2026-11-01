@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -55,20 +56,20 @@ afterEach(() => {
 
 describe("Calendar shortcuts", () => {
   it("N opens a new event on today", () => {
-    render(<CalendarPage />);
+    render(<MemoryRouter><CalendarPage /></MemoryRouter>);
     fireEvent.keyDown(document.body, { key: "n" });
     expect(screen.getByText("composing on 2026-10-03")).toBeTruthy();
   });
 
   it("the arrows step back and forward, as the header buttons do", () => {
-    render(<CalendarPage />);
+    render(<MemoryRouter><CalendarPage /></MemoryRouter>);
     fireEvent.keyDown(document.body, { key: "ArrowLeft" });
     fireEvent.keyDown(document.body, { key: "ArrowRight" });
     expect(step.mock.calls).toEqual([[-1], [1]]);
   });
 
   it("T jumps to today", () => {
-    render(<CalendarPage />);
+    render(<MemoryRouter><CalendarPage /></MemoryRouter>);
     fireEvent.keyDown(document.body, { key: "t" });
     expect(setCursor).toHaveBeenCalledWith("2026-10-03");
   });

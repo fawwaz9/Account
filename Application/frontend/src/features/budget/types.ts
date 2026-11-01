@@ -797,3 +797,13 @@ export interface WhatIfResult {
   assumptions: string[];
   capped: string[];
 }
+
+/** The deadline spending guard's detection (Phase 4 item 13): calendar into money, never back. */
+export interface SpendingGuard {
+  ready: boolean;
+  crunch_weeks: number;
+  needed_crunch_weeks: number;
+  upcoming: { starts_on: string; days_away: number; exams: number; deadlines: number; tasks: number } | null;
+  lifts: { category: string; crunch_weekly: number; usual_weekly: number; lift: number; crunch_weeks: number }[];
+  note: string;
+}

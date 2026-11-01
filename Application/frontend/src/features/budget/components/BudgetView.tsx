@@ -26,6 +26,7 @@ import DeleteConfirmModal from "../../grades/components/DeleteConfirmModal";
 import { deleteRecurring, setBudgetTarget, updateAccount } from "../api";
 import { Account, RecurringTransaction, Transaction } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
+import SpendingGuardCard from "./SpendingGuardCard";
 import { useShortcut } from "../../../shared/hooks/useShortcut";
 
 /** Reason shown wherever money cannot be recorded for want of an account. */
@@ -167,6 +168,9 @@ export default function BudgetView() {
             <SafeToSpend safe={safe} />
             <NetWorth figure={worth} />
           </div>
+
+          {/* Phase 4 item 13: only before a crunch week, and only with a real spike to name. */}
+          {user && <SpendingGuardCard userId={user.id} nonce={termNonce} />}
 
           <Sectors
             accounts={accounts}

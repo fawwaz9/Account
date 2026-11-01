@@ -369,3 +369,84 @@ strength bands at their edges, the eight-week floor, one room alone, the later
 start, this week left out, a flat side, the money capture, a stranger's weeks);
 six mutations, all caught. `CorrelationsCard.test.tsx`, 3 tests. Walked in a
 browser with twelve seeded weeks.
+
+## D18. How the term simulator was built, and what "grade bands" became (mine, 2026-11-01; yours to overturn)
+
+- **A composition, not a model** (§13.19). Sliders for sleep, classes, study,
+  work, workouts (how many, how long), everything else a day, and spending. They
+  start from your own figures: classes, tasks' estimates and scheduled shifts over
+  the next four weeks, workouts over the last four, 8 hours' sleep and 3 hours of
+  everything else.
+- **The 168-hour week,** per room: classes and study, work, workouts, sleep and
+  everything else. "Fits, with 58.5 hours spare" or "Needs 179 of your 168 hours:
+  11 short", with a bar and each room's hours.
+- **Money** is the what-if (D16) with the work slider's change from your
+  scheduled hours and the spending slider, so the two can't disagree.
+- **Exertion** prices the workouts at the effort of what you've logged lately
+  (a moderate effort with nothing logged), against your weekly goal.
+- **The boundary** (§13.5, §13.19): the work slider moves time and money only.
+  Nothing academic shows until you tick "Set my study hours", and nothing in that
+  part reads the work hours. A test moves work from 0 to 60 hours and checks the
+  academic part is identical; a mutation that leaks work into it is caught.
+- **What "grade bands from study hours" became.** No honest deterministic model
+  turns hours into a grade, and inventing one (say, sliding from the worst to the
+  best case by hours) would be a made-up prediction in a confident font. So the
+  study part says **what your hours cover**: "6 hours covers 75% of the 8 your
+  tasks are estimated at: about 2 hours short each week", beside each current
+  course's band as it stands ("CPSC 310: 40–90, now 80"), which the simulator
+  never moves. **This is the decision most worth your review**: if you want an
+  actual projected band, it needs a rule you're willing to stand behind, and the
+  calibration loop (§13.13) to check it against real terms.
+- **Not built:** saved simulations and the calibration loop (simulated against
+  actual at term's end). Both need a table, and a term of use first.
+- **Where:** "Plan the term" at the top of the calendar (which is in the phone
+  navigation), at `/term`.
+- **Found while walking it:** the 168-hour bar didn't draw, because the app
+  already had a global `.termBar` from the term budget. Every class on the page
+  is now prefixed `termSim`.
+
+Evidence: `tests/test_term_simulator.py`, 16 tests (the boundary across four
+work values, nothing academic unset, the 168 by room by hand, a week that doesn't
+fit, defaults from the weeks ahead, coverage both ways, bands unmoved, exertion
+at your effort and at the default, spending touching only money); six mutations,
+all caught. `TermPage.test.tsx`, 3 tests. Walked in a browser at both widths.
+
+**Correction, in place (D15):** the next-term route's "foreign references" case
+in the isolation walk never got past validation, because it sent a made-up
+catalogue id; the walk now names the shared catalogue row, as the catalogue-link
+route's case does. CI on `8b14236` will show the failure; this commit fixes it.
+
+## D19. The spending guard's detection half, and its threshold (mine, 2026-11-01; yours to overturn)
+
+- **Built now, without a schema step:** crunch detection, your own spikes, and
+  the timing. **Waiting for the schema step:** the one-tap pre-allocation (a
+  per-week override of a category limit), the report card that reads it, and
+  "three dismissals stop a category", which needs the dismissals remembered.
+- **A week's load** uses the workload model's own weights (final 5, midterm 3,
+  deadline 1, task due 1), counting tasks due **whether done or not**, so a past
+  week reads as heavy as it was rather than as light as its finished list.
+- **A crunch week** carries at least 5 and at least twice your median week.
+  *Correction, in place:* I first used twice the median of your **busy** weeks;
+  a test showed that a student whose only busy weeks are exam weeks then never
+  gets a crunch week at all. The median now runs over every week.
+- **A spike** is your own crunch-week average above 1.5 times your other weeks'
+  average, over at least 3 crunch weeks, and at least $5 more (§13.5's rule plus
+  a floor so $8 against $3 isn't news). Uncounted accounts are left out, as in
+  every money figure.
+- **Silent until two crunch weeks** are in the history (§13.5); before three,
+  it can speak but names no category, so in practice it says nothing until the
+  third.
+- **When:** the week before a crunch week (one to seven days ahead), never
+  during it. The vision says 5–7 days for a push; on the page it shows the whole
+  week before, so it isn't missed by not opening the app on those three days.
+- **Where and how it reads:** the Budget page, under safe-to-spend: "A heavy week
+  from Mon, Nov 2. 2 exams and 5 tasks. In weeks like that, you've spent more on:
+  Delivery, about $85 a week against $38 usually (2.2× over 3 crunch weeks)",
+  with "a heads-up, not a licence". Calendar into money only.
+
+Evidence: `tests/test_spending_guard.py`, 15 tests; eight mutations, seven caught.
+The survivor is equivalent: the seven-day lead check, since only next week is
+ever examined. The other-user filter first survived because a stranger's
+spending sits in their own categories; a stray row naming my category now holds
+it. `SpendingGuardCard.test.tsx`, 5 tests. Walked in a browser with twelve
+seeded weeks.

@@ -144,6 +144,7 @@ export const endpoints = {
     forecast: (userId: string) => `finances/${userId}/forecast`,
     plan: (userId: string) => `finances/${userId}/plan`,
     whatIf: (userId: string) => `finances/${userId}/what-if`,
+    spendingGuard: (userId: string) => `finances/${userId}/spending-guard`,
     /** POST saves the plan as it stands, a new row each time. */
     planSaved: (userId: string) => `finances/${userId}/plan/saved`,
     planReview: (userId: string) => `finances/${userId}/plan/review`,

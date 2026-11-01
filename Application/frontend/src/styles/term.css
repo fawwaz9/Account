@@ -1,0 +1,102 @@
+/* ===== Term simulator (Phase 4 item 9) =====
+   Sliders beside the result; one column on a phone. */
+.termSimLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 760px) {
+  .termSimLayout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.termSimSliders,
+.termSimCard {
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.termSimResult {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.termSimSlider {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 4.5em;
+  grid-template-areas: "label value" "range range";
+  gap: 2px 8px;
+  margin: 0 0 10px;
+}
+
+.termSimSliderLabel { grid-area: label; font-size: 0.9rem; }
+.termSimSliderValue { grid-area: value; text-align: right; color: var(--gold); font-variant-numeric: tabular-nums; }
+.termSimSlider input { grid-area: range; width: 100%; accent-color: var(--gold); }
+.termSimSliderOff { opacity: 0.5; }
+
+.termSimCheck {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 6px;
+  font-size: 0.9rem;
+}
+
+.termSimHeading {
+  margin: 0 0 8px;
+  font-size: 1rem;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.termSimBar {
+  display: flex;
+  width: 100%;
+  height: 14px;
+  overflow: hidden;
+  border-radius: 7px;
+  background: var(--panel-2);
+}
+
+.termSimBarPart { display: block; height: 100%; }
+.termSimRoom-academic { background: var(--gold); }
+.termSimRoom-money { background: #4fb286; }
+.termSimRoom-body { background: #5b9bd5; }
+.termSimRoom-life { background: #6b7280; }
+
+.termSimRooms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.termSimKey {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border-radius: 2px;
+  vertical-align: middle;
+}
+
+.termSimWarn { color: #f0a39c; }
+
+.termSimBands {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.termSimAssumptions ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}

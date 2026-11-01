@@ -152,6 +152,8 @@ export default function CalendarPage() {
     <div className="container">
       <div className="calTopbar">
         <h1 className="title">Calendar</h1>
+        {/* Phase 4 item 9: the term's 168 hours, from where its weeks are kept. */}
+        <Link to="/term" className="calButton">Plan the term</Link>
         <button
           type="button"
           className="calButton calButtonPrimary"
