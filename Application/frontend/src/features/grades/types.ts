@@ -658,3 +658,37 @@ export interface OutlineStatus {
   /** True when `shared` can fill this course: it has no grades yet. */
   can_apply: boolean;
 }
+
+/** A what-if for one course: a score for the rest, and scores set per assessment (Phase 4 item 10). */
+export interface GradeScenarioIn {
+  /** Percentage every unmarked assessment not in `scores` scores, 0-100. */
+  assume: number;
+  /** Grade id to percentage, 0-100; only the course's unmarked assessments. */
+  scores: Record<string, number>;
+}
+
+/** One unmarked assessment and the score a scenario counted for it. */
+export interface ScenarioItem {
+  grade_id: string;
+  name: string;
+  category: string;
+  max_score: number;
+  due_date: string | null;
+  percent: number;
+  /** True when the scenario set it; false when it took `assume`. */
+  set: boolean;
+}
+
+/** What a course finishes at under a scenario, beside where it stands. */
+export interface GradeScenario {
+  course_id: string;
+  current: number;
+  projected: number;
+  letter: string;
+  best: number;
+  worst: number;
+  assume: number;
+  items: ScenarioItem[];
+  empty_categories: string[];
+  assumptions: string[];
+}

@@ -1,6 +1,8 @@
 import { get, post, patch, put, del } from "../../services/apiClient";
 import { endpoints } from "../../services/endpoints";
 import { CheapestPath,
+  GradeScenario,
+  GradeScenarioIn,
   CatalogueChoice,
   ClassFigures,
   OfficeHourCheckIn,
@@ -121,6 +123,12 @@ export async function searchCourses(userId: string, query: string) {
 /** The best-to-worst range a course can still finish in. */
 export async function fetchGradeBand(userId: string, courseId: string) {
   return get<GradeBand>(endpoints.grades.gradeBand(userId, courseId));
+}
+
+/** A course's projected grade under scores chosen for its unmarked work (Phase 4 item 10).
+ *  It computes and stores nothing, so it keeps the GET cache. */
+export async function fetchGradeScenario(userId: string, courseId: string, body: GradeScenarioIn) {
+  return post<GradeScenario>(endpoints.grades.scenario(userId, courseId), body, { keepCache: true });
 }
 
 /** The cheapest unmarked work toward a course's target. */

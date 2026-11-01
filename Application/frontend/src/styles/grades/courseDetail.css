@@ -534,6 +534,123 @@
   color: var(--muted);
 }
 
+/* ===== Grade scenarios (Phase 4 item 10) =====
+   Opened from the band; sliders per unmarked assessment, the projection on top. */
+.gradeBandTry {
+  margin-top: 10px;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: none;
+  color: var(--gold);
+  font-size: 0.8rem;
+}
+
+.gradeBandTry:hover {
+  border-color: var(--gold);
+}
+
+.scenarioPanel {
+  max-width: 560px;
+}
+
+.scenarioOutcome {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  margin: 14px 0 16px;
+}
+
+.scenarioProjected {
+  font-size: 2rem;
+  font-weight: 600;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.scenarioLetter {
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+.scenarioList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+.scenarioRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(90px, 160px) 64px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.scenarioEverything {
+  border-bottom: 2px solid var(--border);
+}
+
+.scenarioName {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.scenarioName .small-text {
+  display: block;
+}
+
+.scenarioRow input[type="range"] {
+  width: 100%;
+  accent-color: var(--gold);
+}
+
+.scenarioValue {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.scenarioSet .scenarioValue {
+  color: var(--gold);
+}
+
+.scenarioReset {
+  padding: 0 4px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  line-height: 1;
+}
+
+.scenarioAssumptions {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  list-style: disc;
+  text-align: left;
+}
+
+/* On a phone the slider takes its own line under the name. */
+@media (max-width: 480px) {
+  .scenarioRow {
+    grid-template-columns: minmax(0, 1fr) 64px;
+  }
+
+  .scenarioRow input[type="range"] {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
 /* ===== What a course cost =====
    Gross: its credits times the term's per-credit rate. This deliberately does
    not tie out against the ledger, which records the net of one payment covering

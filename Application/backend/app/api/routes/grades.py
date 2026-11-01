@@ -23,6 +23,8 @@ from app.Grades.services.course_service import (
     update_course,
 )
 from app.Grades.schemas.dashboard import UserGradeDashboard
+from app.Grades.schemas.scenario import GradeScenario, GradeScenarioIn
+from app.Grades.services import scenario_service
 from app.Grades.schemas.blind_spot import CategoryBlindSpot
 from app.Grades.schemas.grade import Grade, GradeCreate, GradeUpdate
 from app.Grades.services.grade_service import (
@@ -601,6 +603,39 @@ def get_required_final_score(
         message = str(exc)
         status_code = 404 if "not found" in message.lower() else 400
         raise HTTPException(status_code=status_code, detail=message)
+
+
+@router.post(
+    "/{user_id}/courses/{course_id}/scenario",
+    response_model=GradeScenario,
+    responses=responses["course_both"],
+)
+def grade_scenario(user_id: VerifiedUserId, course_id: UUID, body: GradeScenarioIn, db: DBSession):
+    """Return a course's projected grade under scores chosen for its unmarked work.
+
+    Computes only; nothing is stored (Phase 4 item 10).
+
+    Args:
+        user_id: The verified caller's id.
+        course_id: The course.
+        body: The score assumed for the rest, and scores set per assessment.
+        db: Request-scoped database session.
+
+    Returns:
+        The projection, the current grade and the band, with every assumption.
+
+    Raises:
+        HTTPException: 404 when the course is missing or another user's; 422 when a
+            score names anything but this course's unmarked assessments.
+    """
+    try:
+        result = scenario_service.scenario(db, user_id, course_id, body)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    if result is None:
+        raise HTTPException(status_code=404, detail=error_course["not_found"])
+    return result
+
 
 @router.get(
     "/{user_id}/courses/{course_id}/schemes",

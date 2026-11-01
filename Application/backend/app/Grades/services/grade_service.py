@@ -855,6 +855,31 @@ def project_average(
     return min(round(earned + bonus, 2), MAX_COURSE_PERCENT)
 
 
+def empty_weighted_categories(course: CourseModel) -> list[str]:
+    """Return the weighted categories with nothing in them yet, under the counting rules.
+
+    Such a category is unknown rather than zero, so every projection counts it at the
+    assumption whole.
+
+    Args:
+        course: Course with its grades, weights and schemes loaded.
+
+    Returns:
+        Category values, in the weights' order; bonus categories are never listed.
+    """
+    components = counting_components(course)
+    weights = (
+        {c.category.value: c.weight for c in components} if components is not None
+        else course.category_weights
+    )
+    return [
+        category for category, weight in weights.items()
+        if weight > 0
+        and not is_additive(category)
+        and category_average_assuming(course, category, 1.0) is None
+    ]
+
+
 def calculate_grade_band(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
     """Return where a course can still finish: best case, worst case and now.
 
@@ -882,17 +907,7 @@ def calculate_grade_band(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
         1 for g in course.grades
         if g.score is None and g.max_score > 0 and counts_toward_average(g)
     )
-    components = counting_components(course)
-    weights = (
-        {c.category.value: c.weight for c in components} if components is not None
-        else course.category_weights
-    )
-    empty_categories = [
-        category for category, weight in weights.items()
-        if weight > 0
-        and not is_additive(category)
-        and category_average_assuming(course, category, 1.0) is None
-    ]
+    empty_categories = empty_weighted_categories(course)
 
     return {
         "best": best,

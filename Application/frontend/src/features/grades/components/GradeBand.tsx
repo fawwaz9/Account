@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { fetchGradeBand } from "../api";
 import { GradeBand as Band } from "../types";
+import GradeScenarioModal from "./GradeScenarioModal";
 
 /** The course to show, and a counter the page bumps to refetch. */
 interface GradeBandProps {
@@ -8,14 +9,17 @@ interface GradeBandProps {
   readonly courseId: string;
   /** Bumped by the page whenever a grade changes, to refetch. */
   readonly nonce: number;
+  /** The course code, for the scenario dialog's title. */
+  readonly courseCode?: string;
 }
 
 /**
  * The best-to-worst range a course can still finish in, on a 0-100 track marking the average now.
  * Renders nothing once nothing is left to mark.
  */
-export default function GradeBand({ userId, courseId, nonce }: GradeBandProps) {
+export default function GradeBand({ userId, courseId, nonce, courseCode = "" }: GradeBandProps) {
   const [band, setBand] = useState<Band | null>(null);
+  const [trying, setTrying] = useState(false);
   // Grades can be edited faster than this round-trips, and an older answer
   // landing last would show a band for a course state that no longer exists.
   const latestRequest = useRef(0);
@@ -75,6 +79,21 @@ export default function GradeBand({ userId, courseId, nonce }: GradeBandProps) {
           <>nothing entered for {band.empty_categories.join(", ").toLowerCase()}</>
         )}
       </p>
+
+      {/* Phase 4 item 10: try scores on what's left, through the same engine. */}
+      <button type="button" className="gradeBandTry" onClick={() => setTrying(true)}>
+        What if…
+      </button>
+
+      {trying && (
+        <GradeScenarioModal
+          userId={userId}
+          courseId={courseId}
+          courseCode={courseCode}
+          current={band.current}
+          onClose={() => setTrying(false)}
+        />
+      )}
     </div>
   );
 }

@@ -329,7 +329,7 @@ export default function CourseDetailPage() {
       {user && courseId && (
         <div className="courseInsights">
           <CourseCost userId={user.id} courseId={courseId} nonce={reloadNonce} />
-          <GradeBand userId={user.id} courseId={courseId} nonce={reloadNonce} />
+          <GradeBand userId={user.id} courseId={courseId} nonce={reloadNonce} courseCode={course?.code} />
           {/* Against the course's own target, or the account default -- the
               rule the grades page's Attention panel already uses. Silent for
               a course whose final is not still ahead. */}

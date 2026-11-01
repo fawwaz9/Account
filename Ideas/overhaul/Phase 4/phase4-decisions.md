@@ -140,3 +140,30 @@ may be lost, naming student loans, housing and study permits, and says to check
 your own rules. 9 is shown as a default you can change in the simulator, not as
 a fact about your situation. **Rejected:** 12, which some loans and awards use;
 the warning names that some use a higher figure.
+
+## D10. How grade scenarios were built (mine, 2026-11-01; yours to overturn)
+
+- **The server's engine, never a copy.** The dialog posts the scores and the
+  server answers with `project_course`, the function behind the grade band and
+  the cheapest path, so a scenario can't disagree with either. A test over 30
+  generated courses (random weights, marks, drops, overrides) checks equality.
+- **Where:** a "What if…" button on the course page's "Can still finish" band,
+  which only shows while something is left to mark.
+- **What can be set:** only unmarked, counted assessments. Marked work stays as
+  marked ("what if I'd got 90 on the midterm" is a different question, and it
+  would blur what the figure means). Dropped work stays out.
+- **"Everything else"** starts at the course's grade now, rounded, and covers
+  every assessment not set, plus any weighted category with nothing entered yet
+  (which the dialog names), exactly as the band counts it.
+- **Absurd inputs are refused, not clamped** (§13.6): a score outside 0–100, or
+  an assessment that isn't this course's unmarked work, is a 422.
+- **Nothing is saved** and the call keeps the page's GET cache, since it writes
+  nothing.
+
+Evidence: `tests/test_grade_scenarios.py`, 19 tests; five mutations caught
+(accepting any grade id, dropping the percent-to-fraction step, listing dropped
+work, ignoring the overrides, letting scores past 100). The first run had one
+survivor, listing dropped work, because the fixture's dropped item was also
+marked; an unmarked dropped item now catches it. `GradeScenarioModal.test.tsx`,
+5 tests, including that only the newest answer lands (mutation caught). Walked
+in a browser at 1280px and 390px; the projection matched the hand figure.
