@@ -28,7 +28,7 @@ would refuse it before traffic moved, but don't lean on that.
 | Item 2: the weekly planner (D7, D22) | `320cd4a` | **New columns `events.source`** (varchar, nullable) and **`events.planned_task_id`** (uuid, nullable, no foreign key) |
 | Item 4: focus sessions (D23) | `0d7ffc6` | **New table `focus_sessions`** (per-user) |
 | Item 13: setting money aside for a crunch week (D24) | `f214ebf` | **New table `crunch_allocations`** (per-user) |
-| Item 15: self-employed support (D25) | after `f214ebf` | **New tables `clients`, `invoices`** (per-user); **new column `transactions.business_percent`** (integer, nullable) |
+| Item 15: self-employed support (D25) | `662ab43` | **New tables `clients`, `invoices`** (per-user); **new column `transactions.business_percent`** (integer, nullable) |
 
 Five new tables (72 → 77), four new nullable columns, two new definer functions
 (59 → 61 in `rls.FUNCTIONS`). Nothing existing is altered or dropped, and
