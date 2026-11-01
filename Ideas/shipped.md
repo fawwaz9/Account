@@ -884,6 +884,34 @@ production-URL build: 26 of 26 files.
 
 ---
 
+## Phase 4 batch 2: grade scenarios, deadline risk, exam countdown, the Today card -- SHIPPED 2026-11-01
+Four items under D3 (no table, no column):
+- **Grade scenarios** (item 10, D10): "What if…" on the course page's band. A
+  slider per unmarked assessment and one for everything else; the projection
+  comes from the server's own engine.
+- **Deadline risk** (item 3, D11): on Tasks, your pace against what each due
+  date in the next three weeks needs. Quiet until 14 days and 5 finished tasks
+  with a time.
+- **Exam countdown** (item 5, D12): inside a week of a midterm or final, its
+  course's work due by then, under the exam strip.
+- **The digest and the Today card** (item 6, D13): one deterministic digest of
+  the day, no money; the Today card at the top of the desktop dashboard shows its
+  lines. The push briefing waits for the schema step.
+
+CI green on all three jobs at `97f94a4`; each item mutation-tested and walked in
+a browser with seeded data (the walks found and fixed: completion days read in
+UTC, a countdown listing work due after the exam, a deadline flagged for work
+it didn't add, centred dialog text).
+
+LIVE: API `97f94a4` on revision `account-api-00051-6s2`, serving 100% since
+2026-11-01 00:54 UTC; the deploy workflow's checks passed (schema gate, backup,
+digest `d97c9108…` matching the commit, health ok, CORS for the Pages origin and
+none for a stranger's). Pages at `97f94a4`; Cloudflare's check reads success
+(00:55 UTC). **Not done from this session:** the log read and the file-by-file
+Pages comparison (its network policy blocks both hosts).
+
+---
+
 ## Cumulative average and CGPA including this term -- SHIPPED 2026-10-31
 Phase 4 item 1 (D5, D6); your ask of 2026-10-28. The official cumulative average
 and CGPA count only finished courses, so marks entered this term never moved

@@ -56,14 +56,14 @@ and what happened to a flag (see items 2 and 3).
 |---|---|---|---|
 | 1 | Cumulative average and CGPA including this term | No | **Deployed 2026-10-31** (`863cfcf`, `account-api-00050-fqt`; D5, D6) |
 | 2 | Weekly planner | **Yes** (D7) | Planned |
-| 3 | Deadline risk | No | **Built** (D11) |
+| 3 | Deadline risk | No | **Deployed 2026-11-01** (`97f94a4`, D11) |
 | 4 | Focus sessions | **Yes** | Planned |
-| 5 | Exam countdown | No | **Built** (D12) |
-| 6 | Briefings | Partly | **Digest and Today card built** (D13); the push waits for the schema step |
+| 5 | Exam countdown | No | **Deployed 2026-11-01** (`97f94a4`, D12) |
+| 6 | Briefings | Partly | **Digest and Today card deployed 2026-11-01** (`97f94a4`, D13); the push waits for the schema step |
 | 7 | BYOAI briefing API and MCP | **Yes** | Planned |
 | 8 | Cross-room correlations, non-financial | No | Planned |
 | 9 | Term simulator | No | Planned |
-| 10 | Grade scenarios | No | **Built** (D10) |
+| 10 | Grade scenarios | No | **Deployed 2026-11-01** (`97f94a4`, D10) |
 | 11 | Course-drop simulator | No | **Built** (D14) |
 | 12 | Next-term planner | No | **Built** (D15) |
 | 13 | Deadline spending guard | Partly | Planned |
