@@ -17,7 +17,7 @@ import app.main
 from app._database.db import get_db
 from app._database.models import ActivityModel, TaskModel
 from app.Auth.dependencies import get_current_user
-from app.Insights.services.correlation_service import NEEDED_WEEKS, correlations, pearson, strength
+from app.Insights.services.correlation_service import NEEDED_WEEKS, correlations, pearson, reading, strength
 from conftest import make_account, make_user
 
 TODAY = date(2026, 11, 4)          # a Wednesday
@@ -77,6 +77,12 @@ def test_strength_in_words(r, word):
 
 
 # ---------------------------------------------------------------- the reading --
+
+def test_the_reading_counts_tasks_and_measures_work():
+    assert "you tended to finish fewer tasks." in reading(-0.8, 12, "tasks")
+    assert "you tended to finish less work." in reading(-0.8, 12, "work")
+    assert "you tended to finish more tasks." in reading(0.8, 12, "tasks")
+
 
 def test_weeks_that_rise_together_read_as_a_strong_link(db, user, linked):
     result = correlations(db, user.id, TODAY)

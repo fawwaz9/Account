@@ -686,3 +686,25 @@ world, and the walks drive all eleven routes with each variant's own client,
 invoice and account. `SelfEmployedPage.test.tsx`, 7 tests. The repo's delete
 guard caught a client delete with no confirm dialog; it has one now. Walked in a
 browser at both widths, marking an invoice paid into an account.
+
+## D26. What walking every feature found, 2026-11-01 (mine; yours to overturn)
+
+Every Phase 4 item, driven in a browser against a real local API with twelve weeks of
+seeded history, at desktop and phone width, and the new doors probed directly. No server
+error, no leak. Fixed in this commit, which waits for Batch 4 to go live:
+- **Tasks on a phone:** the title sat under Edit, and Delete ran 36px off the screen. This
+  predates Phase 4, so it is live today.
+- **The term simulator's "Spending a month: 0"** is a change, not your spending. It now
+  reads "Change in spending a month: no change", with a sign and a dollar.
+- **Correlations:** "finish less tasks" reads "fewer".
+- **The digest's at-risk line** said a one-hour reading was "5h 43m short". The shortfall
+  counts earlier work, and the line now says so, as the Tasks card does.
+
+Left for you, not changed:
+- **The planner has no daily cap.** With 11 hours of work due, it proposed 9.5 hours on one
+  Sunday, 12:28pm to 10pm, with two 15-minute breaks. The vision warns a visibly dumb
+  schedule kills trust. It also books nothing for an exam itself: it only places tasks.
+- **"Set aside $90" moves no money (D24),** yet it sits above a "Set aside" section saying
+  "Nothing reserved yet", and its footnote says the week "stays inside your plan".
+
+Not walked end to end: a real push on a phone (needs VAPID keys and a device; tests only).

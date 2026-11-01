@@ -122,6 +122,13 @@ def test_deadline_risk_appears_once_it_knows_your_pace(db, user):
     (risk,) = digest.at_risk
     assert risk.titles == ["Essay"]
     assert "At risk: Essay (tomorrow) — about" in digest.text
+    assert risk.includes_earlier is False
+
+    # A small task after a big one: its shortfall is mostly the big one's, and says so.
+    task(db, user, "Short reading", TODAY + timedelta(days=2), estimate=30)
+    digest = build_digest(db, user.id, NOW)
+    assert [r.includes_earlier for r in digest.at_risk] == [False, True]
+    assert "At risk: Short reading (in 2 days), with what is due before it — about" in digest.text
 
 
 def test_the_same_data_gives_the_same_words(db, user, day):

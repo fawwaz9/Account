@@ -70,10 +70,12 @@ class DigestRisk(BaseModel):
         due_date: The day.
         titles: Up to three of the tasks due then.
         shortfall_minutes: How far short your usual pace falls by then.
+        includes_earlier: Whether that shortfall counts work due before this day too.
     """
     due_date: date
     titles: list[str] = Field(default_factory=list)
     shortfall_minutes: int
+    includes_earlier: bool = False
 
 
 class DigestWeek(BaseModel):

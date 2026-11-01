@@ -205,6 +205,22 @@
   cursor: default;
 }
 
+/* On a phone the title gets the row's width and the buttons their own line:
+   side by side, they crushed the title under Edit and pushed Delete off the screen. */
+@media (max-width: 720px) {
+  .taskRow {
+    flex-wrap: wrap;
+  }
+
+  .taskBody {
+    flex: 1 1 calc(100% - 96px);
+  }
+
+  .taskDelete {
+    margin-left: auto;
+  }
+}
+
 .taskMuted {
   flex-shrink: 0;
   color: var(--muted);

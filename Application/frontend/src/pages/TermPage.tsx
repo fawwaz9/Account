@@ -9,7 +9,14 @@ import "../styles/term.css";
 const SETTLE_MS = 250;
 
 /** One slider with its label and value. */
-function Slider({ label, value, min, max, step, unit, onChange, disabled = false }: {
+/** A monthly change in dollars, signed, so 0 reads as "no change" and not as no spending. */
+export function spendingChange(value: number): string {
+  if (value === 0) return "no change";
+  return `${value > 0 ? "+" : "\u2212"}$${Math.abs(value)}`;
+}
+
+function Slider({ label, value, min, max, step, unit, onChange, disabled = false, format }: {
+  readonly format?: (v: number) => string;
   readonly label: string; readonly value: number; readonly min: number; readonly max: number;
   readonly step: number; readonly unit: string; readonly onChange: (v: number) => void; readonly disabled?: boolean;
 }) {
@@ -18,7 +25,7 @@ function Slider({ label, value, min, max, step, unit, onChange, disabled = false
       <span className="termSimSliderLabel">{label}</span>
       <input type="range" min={min} max={max} step={step} value={value} disabled={disabled}
         onChange={(e) => onChange(Number(e.target.value))} aria-label={label} />
-      <span className="termSimSliderValue">{value}{unit}</span>
+      <span className="termSimSliderValue">{format ? format(value) : `${value}${unit}`}</span>
     </label>
   );
 }
@@ -104,8 +111,8 @@ export default function TermPage() {
               onChange={(v) => set("workout_minutes", v)} />
             <Slider label="Everything else a day" value={week.overhead_hours} min={0} max={12} step={0.5} unit="h"
               onChange={(v) => set("overhead_hours", v)} />
-            <Slider label="Spending a month" value={week.monthly_spending_change} min={-1000} max={1000} step={25}
-              unit="" onChange={(v) => set("monthly_spending_change", v)} />
+            <Slider label="Change in spending a month" value={week.monthly_spending_change} min={-1000} max={1000} step={25}
+              unit="" format={spendingChange} onChange={(v) => set("monthly_spending_change", v)} />
           </section>
 
           {result && (

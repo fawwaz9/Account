@@ -10,7 +10,7 @@ vi.mock("../features/insights/api", () => ({
 const AUTH = { user: { id: "u1" } };
 vi.mock("../app/auth/AuthContext", () => ({ useAuth: () => AUTH }));
 
-import TermPage from "./TermPage";
+import TermPage, { spendingChange } from "./TermPage";
 
 /** Phase 4 item 9: the 168-hour week; nothing academic until study hours are set. */
 
@@ -62,5 +62,13 @@ describe("TermPage", () => {
     fireEvent.change(work, { target: { value: "25" } });
 
     await waitFor(() => expect(api.simulateTerm.mock.lastCall?.[1].work_hours).toBe(25));
+  });
+});
+
+describe("spendingChange", () => {
+  it("reads as a change, so zero never looks like no spending", () => {
+    expect(spendingChange(0)).toBe("no change");
+    expect(spendingChange(250)).toBe("+$250");
+    expect(spendingChange(-75)).toBe("\u2212$75");
   });
 });

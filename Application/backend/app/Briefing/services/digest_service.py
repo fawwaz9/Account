@@ -132,7 +132,8 @@ def build_digest(db: Session, user_id: uuid.UUID, now: datetime | None = None) -
 
     risk = deadline_risk(db, user_id, today)
     at_risk = [
-        DigestRisk(due_date=d.due_date, titles=d.titles, shortfall_minutes=d.shortfall_minutes)
+        DigestRisk(due_date=d.due_date, titles=d.titles, shortfall_minutes=d.shortfall_minutes,
+                   includes_earlier=d.minutes_by_then > d.own_minutes)
         for d in (risk.deadlines if risk and risk.ready else []) if d.at_risk
     ]
 
@@ -211,7 +212,8 @@ def render(digest: Digest) -> str:
     for item in digest.at_risk:
         days = (item.due_date - digest.on_date).days
         lines.append(
-            f"At risk: {', '.join(item.titles)} ({_days(days)}) — about "
+            f"At risk: {', '.join(item.titles)} ({_days(days)})"
+            f"{', with what is due before it' if item.includes_earlier else ''} — about "
             f"{_duration(item.shortfall_minutes)} short at your usual pace."
         )
 

@@ -71,7 +71,7 @@ def reading(r: float | None, weeks: int, academic: str) -> str:
     word = strength(r)
     if word == "no clear link":
         return f"No clear link across {weeks} weeks between how much you moved and the {academic} you finished."
-    direction = "more" if r > 0 else "less"
+    direction = "more" if r > 0 else ("fewer" if academic == "tasks" else "less")
     return (f"A {word} link across {weeks} weeks: in weeks you moved more, you tended to finish "
             f"{direction} {academic}.")
 
