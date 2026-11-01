@@ -575,3 +575,35 @@ mutations, all caught. The table is in the isolation world, and the walks cover
 the three routes. `FocusCard.test.tsx`, 4 tests. The repo's class-collision
 guard caught chart classes I'd reused from the Fitness page; they're renamed.
 Seen in a browser with a session running.
+
+## D24. Setting money aside for a crunch week, and the report card (mine, 2026-11-01; yours to overturn)
+
+- **A table, so a schema step:** `crunch_allocations` (per user: a category, a
+  week's Monday, an amount or nothing, and whether it was waved off). One row per
+  category per week; a second tap replaces the first. Deleting a category takes
+  its rows; deleting the account takes them all.
+- **A mark, not an edit to your plan:** D19 called this "a per-week override of
+  a category limit", but your limits are monthly and per account, so a week's
+  override has nowhere honest to land. Setting money aside records the amount
+  for that week and nothing else; your monthly limits and safe-to-spend don't
+  move. A nudge that quietly rewrote your budget would be worse than one that
+  doesn't. If you'd rather it moved money, that's a change to the limits model
+  and I'd want your say on it first.
+- **The buttons:** under each category the guard names, "Set aside $85" (the
+  crunch-week average, rounded) and "Not this time". Only your own categories,
+  else not found; only this week or next, from its Monday, else refused. The
+  amount runs 0 to $10,000.
+- **Three weeks of "not this time"** for a category and the guard stops naming
+  it (§13.5). Changing your mind within a week replaces that week's tap, so a
+  tap then a "Set aside" counts as setting aside.
+- **The report card** reads the last finished week you set money aside for:
+  "Last crunch week: $85.00 of $90.00 on Delivery, inside what you set aside".
+  Spending on accounts you don't count is left out, as in every money figure. A
+  week still under way has no card yet. It shows even with no crunch ahead.
+
+Evidence: `tests/test_spending_guard.py`, 21 tests (also green on Postgres);
+the new mutations all caught, after one survived until a test pinned that a week
+not yet over has no card. The table is in the isolation world, and the walks
+drive both new routes with each variant's own category. `SpendingGuardCard.test.tsx`
+covers both buttons and the card. Walked in a browser at both widths, before and
+after a tap.

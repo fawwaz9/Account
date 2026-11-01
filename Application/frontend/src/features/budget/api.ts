@@ -373,6 +373,17 @@ export async function fetchSpendingGuard(userId: string) {
   return get<SpendingGuard>(endpoints.finances.spendingGuard(userId));
 }
 
+/** Set money aside in a category for a crunch week (Phase 4 item 13). */
+export async function allocateForCrunch(userId: string, categoryId: string, weekStart: string, amount: number) {
+  return post<SpendingGuard>(`finances/${userId}/spending-guard/allocate`,
+    { category_id: categoryId, week_start: weekStart, amount });
+}
+
+/** Wave a category's suggestion off for a week; three times stops it. */
+export async function dismissCrunchSuggestion(userId: string, categoryId: string, weekStart: string) {
+  return post<SpendingGuard>(`finances/${userId}/spending-guard/dismiss`, { category_id: categoryId, week_start: weekStart });
+}
+
 /** The year plan beside the plan with a scenario's changes; nothing is stored (Phase 4 item 14). */
 export async function fetchWhatIf(userId: string, scenario: WhatIfIn) {
   return post<WhatIfResult>(endpoints.finances.whatIf(userId), scenario, { keepCache: true });

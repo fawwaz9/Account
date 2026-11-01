@@ -13,10 +13,12 @@ from fastapi.testclient import TestClient
 
 import app.main
 from app._database.db import get_db
-from app._database.models import EventModel, TaskModel, TransactionModel
+from app._database.models import CrunchAllocationModel, EventModel, TaskModel, TransactionModel
 from app.Auth.dependencies import get_current_user
+from app.Finances.schemas.guard import AllocateIn, DismissIn
+from app.Finances.services.budget_service import delete_category
 from app.Finances.services.guard_service import (
-    CRUNCH_FLOOR, NEEDED_CRUNCH_WEEKS, spending_guard, threshold, weekly_load,
+    CRUNCH_FLOOR, DISMISSALS_TO_STOP, NEEDED_CRUNCH_WEEKS, allocate, dismiss, spending_guard, threshold, weekly_load,
 )
 from conftest import make_account, make_category, make_user
 
@@ -207,6 +209,94 @@ def test_a_stray_row_on_my_category_is_still_not_mine(db, user, history):
 
     (lift,) = spending_guard(db, user.id, TODAY).lifts
     assert lift.usual_weekly == 40.0
+
+
+# ------------------------------------------------- setting aside, waving off --
+
+@pytest.fixture
+def ahead(db, user, history):
+    """A crunch week next week."""
+    exam(db, user, NEXT_WEEK + timedelta(days=1))
+    exam(db, user, NEXT_WEEK + timedelta(days=2), "final")
+    return history
+
+
+def test_setting_money_aside_for_the_week_ahead(db, user, ahead):
+    _, delivery, _ = ahead
+
+    allocate(db, user.id, AllocateIn(category_id=delivery.id, week_start=NEXT_WEEK, amount=60), TODAY)
+    allocate(db, user.id, AllocateIn(category_id=delivery.id, week_start=NEXT_WEEK, amount=75), TODAY)
+
+    result = spending_guard(db, user.id, TODAY)
+    (lift,) = result.lifts
+    assert (lift.set_aside, lift.dismissed) == (75.0, False)
+    assert db.query(CrunchAllocationModel).count() == 1
+    # A week not yet over has no report card.
+    assert (result.report_week, result.report) == (None, [])
+
+
+def test_waving_it_off_and_three_times_stops_it(db, user, ahead):
+    _, delivery, _ = ahead
+    dismiss(db, user.id, DismissIn(category_id=delivery.id, week_start=NEXT_WEEK), TODAY)
+    assert spending_guard(db, user.id, TODAY).lifts[0].dismissed is True
+
+    for w in range(1, DISMISSALS_TO_STOP):
+        db.add(CrunchAllocationModel(id=uuid.uuid4(), user_id=user.id, category_id=delivery.id,
+                                     week_start=monday(w * 3), dismissed=True))
+    db.commit()
+
+    assert spending_guard(db, user.id, TODAY).lifts == []
+
+
+def test_the_report_card_follows_the_week(db, user, ahead):
+    account, delivery, _ = ahead
+    db.add(CrunchAllocationModel(id=uuid.uuid4(), user_id=user.id, category_id=delivery.id,
+                                 week_start=monday(2), amount=60.0))
+    db.commit()
+
+    result = spending_guard(db, user.id, TODAY)
+
+    assert result.report_week == monday(2)
+    (line,) = result.report
+    assert (line.category, line.set_aside, line.spent) == ("Delivery", 60.0, 90.0)
+
+
+def test_only_your_categories_and_only_this_week_or_next(db, user, ahead):
+    stranger = make_user(db, "stranger@example.com")
+    theirs = make_category(db, stranger.id, "Theirs")
+    _, delivery, _ = ahead
+
+    with pytest.raises(LookupError):
+        allocate(db, user.id, AllocateIn(category_id=theirs.id, week_start=NEXT_WEEK, amount=10), TODAY)
+    with pytest.raises(LookupError):
+        dismiss(db, user.id, DismissIn(category_id=uuid.uuid4(), week_start=NEXT_WEEK), TODAY)
+    for week in (NEXT_WEEK + timedelta(weeks=1), monday(1), NEXT_WEEK + timedelta(days=1)):
+        with pytest.raises(ValueError):
+            allocate(db, user.id, AllocateIn(category_id=delivery.id, week_start=week, amount=10), TODAY)
+    assert db.query(CrunchAllocationModel).count() == 0
+
+
+def test_deleting_the_category_clears_its_allocations(db, user, ahead):
+    _, delivery, _ = ahead
+    allocate(db, user.id, AllocateIn(category_id=delivery.id, week_start=NEXT_WEEK, amount=60), TODAY)
+
+    delete_category(db, user.id, delivery.id)
+
+    assert db.query(CrunchAllocationModel).count() == 0
+
+
+def test_another_users_allocations_never_count(db, user, ahead):
+    _, delivery, _ = ahead
+    stranger = make_user(db, "stranger@example.com")
+    db.add(CrunchAllocationModel(id=uuid.uuid4(), user_id=stranger.id, category_id=delivery.id,
+                                 week_start=NEXT_WEEK, dismissed=True))
+    for w in (3, 6, 9):
+        db.add(CrunchAllocationModel(id=uuid.uuid4(), user_id=stranger.id, category_id=delivery.id,
+                                     week_start=monday(w), dismissed=True))
+    db.commit()
+
+    (lift,) = spending_guard(db, user.id, TODAY).lifts
+    assert lift.dismissed is False
 
 
 @pytest.fixture

@@ -2047,3 +2047,18 @@
 .spendingGuardList li {
   padding: 2px 0;
 }
+
+.spendingGuardActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 2px;
+}
+
+.spendingGuardQuiet {
+  border-left-color: var(--border);
+}
+
+.spendingGuardReport {
+  margin: 6px 0;
+}

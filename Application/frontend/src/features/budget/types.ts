@@ -804,6 +804,10 @@ export interface SpendingGuard {
   crunch_weeks: number;
   needed_crunch_weeks: number;
   upcoming: { starts_on: string; days_away: number; exams: number; deadlines: number; tasks: number } | null;
-  lifts: { category: string; crunch_weekly: number; usual_weekly: number; lift: number; crunch_weeks: number }[];
+  lifts: { category_id: string | null; category: string; crunch_weekly: number; usual_weekly: number; lift: number;
+    crunch_weeks: number; set_aside?: number | null; dismissed?: boolean }[];
+  /** The last finished week you set money aside for, and what you spent there (needs the schema step). */
+  report_week?: string | null;
+  report?: { category: string; set_aside: number; spent: number }[];
   note: string;
 }

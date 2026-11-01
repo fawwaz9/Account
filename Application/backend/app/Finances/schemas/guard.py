@@ -6,6 +6,7 @@ Silent until two crunch weeks of history; no generic priors, no peer data.
 """
 
 from datetime import date
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -31,17 +32,60 @@ class CategoryLift(BaseModel):
     """A category you spend more on in crunch weeks.
 
     Attributes:
+        category_id: The category.
         category: Its name.
         crunch_weekly: Average a crunch week.
         usual_weekly: Average any other week.
         lift: The first over the second.
         crunch_weeks: Crunch weeks it is averaged over.
+        set_aside: What you set aside for the week ahead, if you did.
+        dismissed: True when you waved it off for the week ahead.
     """
+    category_id: UUID | None = None
     category: str
     crunch_weekly: float
     usual_weekly: float
     lift: float
     crunch_weeks: int
+    set_aside: float | None = None
+    dismissed: bool = False
+
+
+class ReportLine(BaseModel):
+    """One category of the last crunch week you set money aside for.
+
+    Attributes:
+        category: Its name.
+        set_aside: What you set aside.
+        spent: What you spent in it that week.
+    """
+    category: str
+    set_aside: float
+    spent: float
+
+
+class AllocateIn(BaseModel):
+    """Money set aside in a category for a crunch week.
+
+    Attributes:
+        category_id: One of your categories.
+        week_start: The crunch week's Monday: this week's or next.
+        amount: Dollars, 0 to 10,000.
+    """
+    category_id: UUID
+    week_start: date
+    amount: float = Field(..., ge=0, le=10_000)
+
+
+class DismissIn(BaseModel):
+    """A suggestion waved off for one week.
+
+    Attributes:
+        category_id: One of your categories.
+        week_start: The crunch week's Monday: this week's or next.
+    """
+    category_id: UUID
+    week_start: date
 
 
 class SpendingGuard(BaseModel):
@@ -54,7 +98,10 @@ class SpendingGuard(BaseModel):
         upcoming: The crunch week starting in the next seven days, if any; never the
             week already under way.
         lifts: Categories with real lift (above `MIN_LIFT`, over at least
-            `MIN_CATEGORY_WEEKS` crunch weeks), biggest first.
+            `MIN_CATEGORY_WEEKS` crunch weeks), biggest first; a category waved off
+            three times is left out.
+        report_week: The last finished week you set money aside for, if any.
+        report: What you set aside and spent there, per category.
         note: The framing, in words: pre-allocation, not permission.
     """
     ready: bool
@@ -62,4 +109,6 @@ class SpendingGuard(BaseModel):
     needed_crunch_weeks: int
     upcoming: UpcomingCrunch | None = None
     lifts: list[CategoryLift] = Field(default_factory=list)
+    report_week: date | None = None
+    report: list[ReportLine] = Field(default_factory=list)
     note: str = ""

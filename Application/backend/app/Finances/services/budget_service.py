@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app._database.models import (
     AccountCategoryLimitModel,
     AccountCategoryMonthLimitModel,
+    CrunchAllocationModel,
     AccountModel,
     BudgetTargetModel,
     RecurringTransactionModel,
@@ -243,6 +244,11 @@ def delete_category(db: Session, user_id: uuid.UUID, category_id: uuid.UUID):
     db.query(AccountCategoryMonthLimitModel).filter(
         AccountCategoryMonthLimitModel.user_id == user_id,
         AccountCategoryMonthLimitModel.category_id == category_id,
+    ).delete(synchronize_session=False)
+    # Phase 4 item 13: a crunch week's allocation in the category goes with it.
+    db.query(CrunchAllocationModel).filter(
+        CrunchAllocationModel.user_id == user_id,
+        CrunchAllocationModel.category_id == category_id,
     ).delete(synchronize_session=False)
 
     # Scoped to the owner: without the user_id filter this UPDATE reaches every

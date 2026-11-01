@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchSpendingGuard } from "../api";
+import { allocateForCrunch, dismissCrunchSuggestion, fetchSpendingGuard } from "../api";
 import { SpendingGuard } from "../types";
 import { formatMoney } from "../money";
 
@@ -25,6 +25,7 @@ export function loadWords(week: { exams: number; deadlines: number; tasks: numbe
  */
 export default function SpendingGuardCard({ userId, nonce }: SpendingGuardCardProps) {
   const [guard, setGuard] = useState<SpendingGuard | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -34,7 +35,32 @@ export default function SpendingGuardCard({ userId, nonce }: SpendingGuardCardPr
     return () => { cancelled = true; };
   }, [userId, nonce]);
 
-  if (!guard?.ready || !guard.upcoming || guard.lifts.length === 0) return null;
+  async function act(call: () => Promise<SpendingGuard>) {
+    setError(null);
+    try {
+      setGuard(await call());
+    } catch {
+      setError("Couldn't save that. Try again in a moment.");
+    }
+  }
+
+  const report = guard?.report ?? [];
+  const reportCard = report.length > 0 && guard?.report_week ? (
+    <p className="small-text spendingGuardReport">
+      Last crunch week:{" "}
+      {report.map((r, i) => (
+        <span key={r.category}>
+          {i > 0 && "; "}
+          {formatMoney(r.spent)} of {formatMoney(r.set_aside)} on {r.category}
+          {r.spent <= r.set_aside ? ", inside what you set aside" : ", over what you set aside"}
+        </span>
+      ))}.
+    </p>
+  ) : null;
+
+  if (!guard?.ready || !guard.upcoming || guard.lifts.length === 0) {
+    return reportCard ? <section className="spendingGuard spendingGuardQuiet" aria-label="Crunch week report">{reportCard}</section> : null;
+  }
   const week = guard.upcoming;
   const when = new Date(`${week.starts_on}T00:00:00`).toLocaleDateString(undefined,
     { weekday: "short", month: "short", day: "numeric" });
@@ -48,9 +74,31 @@ export default function SpendingGuardCard({ userId, nonce }: SpendingGuardCardPr
           <li key={c.category}>
             <strong>{c.category}</strong>: about {formatMoney(c.crunch_weekly)} a week, against{" "}
             {formatMoney(c.usual_weekly)} usually <span className="muted small-text">({c.lift}× over {c.crunch_weeks} crunch weeks)</span>
+            {c.category_id && (
+              <span className="spendingGuardActions">
+                {c.set_aside != null ? (
+                  <span className="small-text">{formatMoney(c.set_aside)} set aside.</span>
+                ) : c.dismissed ? (
+                  <span className="small-text muted">Not this time.</span>
+                ) : (
+                  <>
+                    <button type="button" className="calButton"
+                      onClick={() => void act(() => allocateForCrunch(userId, c.category_id as string, week.starts_on, Math.round(c.crunch_weekly)))}>
+                      Set aside {formatMoney(Math.round(c.crunch_weekly), { whole: true })}
+                    </button>
+                    <button type="button" className="calButton"
+                      onClick={() => void act(() => dismissCrunchSuggestion(userId, c.category_id as string, week.starts_on))}>
+                      Not this time
+                    </button>
+                  </>
+                )}
+              </span>
+            )}
           </li>
         ))}
       </ul>
+      {error && <p className="small-text error">{error}</p>}
+      {reportCard}
       <p className="small-text muted">{guard.note}</p>
     </section>
   );

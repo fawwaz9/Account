@@ -66,7 +66,7 @@ and what happened to a flag (see items 2 and 3).
 | 10 | Grade scenarios | No | **Deployed 2026-11-01** (`97f94a4`, D10) |
 | 11 | Course-drop simulator | No | **Deployed 2026-11-01** (`ce9eba9`, D14) |
 | 12 | Next-term planner | No | **Deployed 2026-11-01** (`ce9eba9`, D15) |
-| 13 | Deadline spending guard | Partly | **Detection deployed 2026-11-01** (`ce9eba9`, D19); pre-allocation and report card wait for the schema step |
+| 13 | Deadline spending guard | Partly | **Detection deployed 2026-11-01** (`ce9eba9`, D19); pre-allocation and report card **built** (D24), wait for your schema step |
 | 14 | Money what-if | No | **Deployed 2026-11-01** (`ce9eba9`, D16) |
 | 15 | Self-employed support | **Yes** | Planned |
 | — | Plaid | — | Out of scope (D2) |

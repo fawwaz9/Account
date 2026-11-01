@@ -195,6 +195,8 @@ class UserModel(Base):
     assistant_tokens = relationship("AssistantTokenModel", cascade=cascade)
     # Phase 4 item 4: focus sessions.
     focus_sessions = relationship("FocusSessionModel", cascade=cascade, overlaps="course,focus_sessions")
+    # Phase 4 item 13: money set aside for crunch weeks, and the weeks waved off.
+    crunch_allocations = relationship("CrunchAllocationModel", cascade=cascade)
     partnerships = relationship(
         "PartnershipModel", cascade=cascade, foreign_keys="PartnershipModel.user_id"
     )
@@ -3320,3 +3322,37 @@ class FocusSessionModel(Base):
     created_at = Column(DateTime, nullable=False, default=utc_now)
 
     course = relationship("CourseModel", back_populates="focus_sessions", overlaps="focus_sessions")
+
+
+class CrunchAllocationModel(Base):
+    """Per-user row: money set aside in a category for one crunch week, or the week waved off.
+
+    Phase 4 item 13, the spending guard's second half (§13.5): one tap extends the
+    category limit to a single week; the report card reads it afterwards. A row with
+    `dismissed` set records "not this time" instead, and three of those for one
+    category stop the guard suggesting it.
+
+    Attributes:
+        id: Primary key.
+        user_id: Owner.
+        category_id: The spending category.
+        week_start: The crunch week's Monday.
+        amount: Dollars set aside; null on a dismissal.
+        dismissed: True when the suggestion was waved off.
+        created_at: When it was set.
+    """
+
+    __tablename__ = "crunch_allocations"
+    __table_args__ = (
+        UniqueConstraint("user_id", "category_id", "week_start", name="uq_crunch_allocation_week"),
+        CheckConstraint("amount IS NULL OR amount >= 0", name="ck_crunch_allocation_amount"),
+    )
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    category_id = Column(Uuid, ForeignKey("spend_categories.id"), nullable=False, index=True)
+    category = relationship("SpendCategoryModel")  # delete order only, see ORDERING
+    week_start = Column(Date, nullable=False)
+    amount = Column(Float, nullable=True)
+    dismissed = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, nullable=False, default=utc_now)

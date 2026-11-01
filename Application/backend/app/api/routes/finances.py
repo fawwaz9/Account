@@ -14,7 +14,8 @@ from fastapi import APIRouter, HTTPException, Query
 
 from app.Finances.schemas.whatif import WhatIfIn, WhatIfResult
 from app.Finances.services.whatif_service import what_if
-from app.Finances.schemas.guard import SpendingGuard
+from app.Finances.schemas.guard import AllocateIn, DismissIn, SpendingGuard
+from app.Finances.services import guard_service
 from app.Finances.services.guard_service import spending_guard
 from app._database.dependencies import DBSession
 from app.shared.dates import user_today
@@ -462,6 +463,57 @@ def get_spending_guard(user_id: VerifiedUserId, db: DBSession):
     if found is None:
         raise HTTPException(status_code=404, detail=error_user["not_found"])
     return found
+
+
+def _guard_write(action, db, user_id, body):
+    try:
+        action(db, user_id, body)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    found = spending_guard(db, user_id)
+    if found is None:
+        raise HTTPException(status_code=404, detail=error_user["not_found"])
+    return found
+
+
+@router.post("/{user_id}/spending-guard/allocate", response_model=SpendingGuard, responses=responses["user_404"])
+def allocate_for_crunch(user_id: VerifiedUserId, body: AllocateIn, db: DBSession):
+    """Set money aside in a category for a crunch week (Phase 4 item 13).
+
+    Args:
+        user_id: The verified caller's id.
+        body: The category, the week's Monday, the amount.
+        db: Request-scoped database session.
+
+    Returns:
+        The guard's reading afterwards.
+
+    Raises:
+        HTTPException: 404 for a category that isn't the caller's; 422 for a week
+            other than this one or the next.
+    """
+    return _guard_write(guard_service.allocate, db, user_id, body)
+
+
+@router.post("/{user_id}/spending-guard/dismiss", response_model=SpendingGuard, responses=responses["user_404"])
+def dismiss_crunch_suggestion(user_id: VerifiedUserId, body: DismissIn, db: DBSession):
+    """Wave a category's suggestion off for a week; three times stops it (Phase 4 item 13).
+
+    Args:
+        user_id: The verified caller's id.
+        body: The category and the week's Monday.
+        db: Request-scoped database session.
+
+    Returns:
+        The guard's reading afterwards.
+
+    Raises:
+        HTTPException: 404 for a category that isn't the caller's; 422 for a week
+            other than this one or the next.
+    """
+    return _guard_write(guard_service.dismiss, db, user_id, body)
 
 
 @router.post("/{user_id}/what-if", response_model=WhatIfResult, responses=responses["user_404"])
