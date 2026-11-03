@@ -331,8 +331,9 @@ class AccountActivity(BaseModel):
         used_percent: `total_out / planned * 100`, 1 dp; 0 when nothing is planned.
         planned_is_derived: True when `planned` comes from category limits.
         daily: One entry per day of the month, zero-filled.
-        by_category: The month's expenses by category with this account's limits;
-            a limited category appears even with nothing spent.
+        by_category: The month's expenses and categorised transfers out by
+            category with this account's limits; a limited category appears even
+            with nothing spent.
         balance_history: The running balance after each day the account moved,
             from its first row.
         investment_return: The reading that applies to the month (its own, or the

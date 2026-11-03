@@ -18,8 +18,8 @@ interface EditTransactionModalProps {
 }
 
 /**
- * Edit a transaction's amount, description and date; an expense's category and course too.
- * A transfer's two sides change together.
+ * Edit a transaction's amount, description and date; an expense's category and course,
+ * and a transfer's category, too. A transfer's two sides change together.
  */
 export default function EditTransactionModal({
   transaction,
@@ -65,9 +65,10 @@ export default function EditTransactionModal({
         amount: Number(amount),
         description: description || null,
         occurred_on: occurredOn,
-        // Only expenses carry a category or a course, so don't send either
-        // for anything else.
+        // Money going out carries a category, and only an expense a course,
+        // so don't send either where it means nothing.
         ...(isExpense ? { category_id: categoryId || null, course_id: courseId || null } : {}),
+        ...(isTransfer ? { category_id: categoryId || null } : {}),
       });
       onSaved();
       onClose();
@@ -83,8 +84,8 @@ export default function EditTransactionModal({
 
       {isTransfer && (
         <p className="muted small-text">
-          Both sides of this transfer move together -- amount, date and
-          description.
+          Both sides of this transfer move together -- amount, date,
+          description and category.
         </p>
       )}
 
@@ -113,7 +114,7 @@ export default function EditTransactionModal({
           />
         </div>
 
-        {isExpense && categories.length > 0 && (
+        {(isExpense || isTransfer) && categories.length > 0 && (
           <div className="loginField">
             <label htmlFor="edit-category">Category</label>
             <select

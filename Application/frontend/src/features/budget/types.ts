@@ -164,6 +164,8 @@ export interface TransferCreate {
   amount: number;
   description: string | null;
   occurred_on: string;
+  /** What the money went on; both sides of the transfer carry it. */
+  category_id?: string | null;
 }
 
 /** One account's part of a deposit. */

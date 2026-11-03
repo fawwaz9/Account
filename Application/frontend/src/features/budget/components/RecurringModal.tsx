@@ -114,7 +114,7 @@ export default function RecurringModal({
       kind,
       account_id: kind === "deposit" ? null : current.account_id ?? accounts[0]?.id ?? null,
       to_account_id: kind === "transfer" ? current.to_account_id : null,
-      category_id: kind === "expense" ? current.category_id : null,
+      category_id: kind === "expense" || kind === "transfer" ? current.category_id : null,
     }));
   }
 
@@ -227,7 +227,7 @@ export default function RecurringModal({
           </label>
         </div>
 
-        {form.kind === "expense" && categories.length > 0 && (
+        {(form.kind === "expense" || form.kind === "transfer") && categories.length > 0 && (
           <label className="calField">
             <span className="calFieldLabel">Category</span>
             <select

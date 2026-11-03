@@ -129,6 +129,7 @@ export default function AddMoneyModal({
           amount: Number(amount),
           description: description || null,
           occurred_on: occurredOn,
+          category_id: categoryId || null,
         });
       } else {
         await createTransaction(user.id, {
@@ -137,7 +138,7 @@ export default function AddMoneyModal({
           amount: Number(amount),
           description: description || null,
           occurred_on: occurredOn,
-          // Only expenses carry a category; the server ignores it on income.
+          // Only money going out carries a category; the server ignores it on income.
           category_id: mode === "expense" && categoryId ? categoryId : null,
           course_id: mode === "expense" && courseId ? courseId : null,
         });
@@ -263,7 +264,7 @@ export default function AddMoneyModal({
           </div>
         )}
 
-        {mode === "expense" && categories.length > 0 && (
+        {(mode === "expense" || mode === "transfer") && categories.length > 0 && (
           <div className="loginField">
             <label htmlFor="money-category">Category</label>
             <select

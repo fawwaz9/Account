@@ -230,8 +230,8 @@ class BudgetSummary(BaseModel):
         total_planned: The accounts' planned figures, summed.
         total_actual: The accounts' actual figures, summed.
         accounts: One entry per counted, unarchived account, in the user's order.
-        by_category: Expenses per category on counted accounts, largest first,
-            with no limits attached.
+        by_category: Expenses and categorised transfers out per category on
+            counted accounts, largest first, with no limits attached.
     """
 
     month: date

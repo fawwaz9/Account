@@ -708,3 +708,44 @@ Left for you, not changed:
   "Nothing reserved yet", and its footnote says the week "stays inside your plan".
 
 Not walked end to end: a real push on a phone (needs VAPID keys and a device; tests only).
+
+## D27. Transfers carry a category, 2026-11-03 (yours)
+
+Asked for: "Transfers must have a category too as they are money leaving an account."
+Your three answers:
+- **Optional, like an expense's.** The picker defaults to "Uncategorised". Older transfers
+  stay uncategorised until edited, and repeating and fund transfers still work without one.
+- **It counts.** A categorised transfer's outgoing leg counts in that category's spending
+  and against an account's limit for it, on the account page and the budget page. The
+  receiving leg never counts: it is money arriving.
+- **It ships with Batch 4,** built on `phase4`. There's no schema change:
+  `transactions.category_id` and `recurring_transactions.category_id` already exist.
+
+Mine, yours to overturn:
+- **Both legs hold the category,** kept in step the way the description is, so either row
+  shows it and editing either moves both.
+- **An uncategorised transfer is in no category row.** Otherwise every top-up from before
+  this would pile into "Uncategorised". A categorised one now makes an account's breakdown
+  add up to its money out.
+- **Left expense-only:**
+  - The spending guard, because moving money is not a crunch-week spike.
+  - The categoriser's learning and the shared merchant map, so "Chequing to Savings"
+    neither trains nor votes.
+  - The term budget and the plan review, which already treat transfers as not spending.
+  - Sinking-fund contributions, which stay uncategorised.
+- **Paying a card from chequing,** if categorised, shows in that category beside the card's
+  purchases. The budget page's account totals already count it twice the same way.
+
+Evidence:
+- `tests/test_transfer_categories.py`, 18 tests, and a guard test in
+  `test_spending_guard.py`.
+- `TransferCategory.test.tsx`, 4 tests, covering the record, edit and standing-instruction
+  dialogs.
+- 13 mutations, all caught. Seven are backend: the partner sync, writing the category on
+  create, `amount < 0` and the category guard in both the Python and SQL rules, and the
+  recurring hand-off. Six are frontend: each dialog's picker and what it sends.
+- Walked in a browser at both widths:
+  - A $200 Chequing→Savings transfer as "Savings goal" showed on Chequing's "Where it
+    went", which then added up to its money out. It showed on the budget page once and not
+    on Savings.
+  - Editing the Savings-side leg to Groceries moved both legs.

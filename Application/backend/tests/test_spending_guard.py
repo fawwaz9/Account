@@ -106,6 +106,17 @@ def test_a_category_that_doesnt_spike_isnt(db, user, history):
     assert "Groceries" not in {c.category for c in spending_guard(db, user.id, TODAY).lifts}
 
 
+def test_a_categorised_transfer_is_not_spending_here(db, user, history):
+    """D27: a transfer can carry a category, but moving money is not a crunch-week spike."""
+    account, _, groceries = history
+    for w in (2, 5, 8):
+        db.add(TransactionModel(id=uuid.uuid4(), user_id=user.id, account_id=account.id, kind="transfer",
+                                amount=-500.0, description="x", occurred_on=monday(w), category_id=groceries.id))
+    db.commit()
+
+    assert "Groceries" not in {c.category for c in spending_guard(db, user.id, TODAY).lifts}
+
+
 def test_two_crunch_weeks_speak_but_name_no_category(db, user, money):
     account, delivery, _ = money
     for w in range(1, 9):

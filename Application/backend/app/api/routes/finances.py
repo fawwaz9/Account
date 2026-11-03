@@ -1052,14 +1052,15 @@ def add_transfer(user_id: VerifiedUserId, transfer: TransferCreate, db: DBSessio
 
     Args:
         user_id: The verified caller's id.
-        transfer: The amount, date and both accounts.
+        transfer: The amount, date, both accounts and an optional category.
         db: Request-scoped database session.
 
     Returns:
         The outgoing and incoming rows.
 
     Raises:
-        HTTPException: 404 if either account is missing or not the caller's.
+        HTTPException: 400 if the category is not the caller's; 404 if either
+            account is missing or not the caller's.
     """
     try:
         created = create_transfer(db, user_id, transfer)

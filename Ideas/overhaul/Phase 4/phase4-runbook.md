@@ -35,6 +35,11 @@ Five new tables (72 → 77), four new nullable columns, two new definer function
 nothing is backfilled: every new column starts null, which every reader takes
 as "not set".
 
+**These ride along, with no schema of their own:** the walkthrough fixes (D26,
+`f360bb6`) and transfers that carry a category (D27). D27 uses
+`transactions.category_id` and `recurring_transactions.category_id`, which
+production already has.
+
 **The scheduler needs nothing new.** The briefing push rides the existing
 reminder dispatch (`POST /api/internal/reminders/dispatch`), whose answer gains a
 `briefings` count.

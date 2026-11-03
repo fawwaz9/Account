@@ -529,11 +529,20 @@ def get_budget_summary(db: Session, user_id: uuid.UUID, month: date):
             planned_is_derived=is_derived,
         ))
 
+    # `activity_service.counts_in_category` in SQL: expenses, plus the outgoing
+    # leg of a transfer that has a category.
     category_rows = (
         db.query(TransactionModel.category_id, func.sum(TransactionModel.amount))
         .filter(
             TransactionModel.user_id == user_id,
-            TransactionModel.kind == TransactionKind.EXPENSE.value,
+            or_(
+                TransactionModel.kind == TransactionKind.EXPENSE.value,
+                and_(
+                    TransactionModel.kind == TransactionKind.TRANSFER.value,
+                    TransactionModel.amount < 0,
+                    TransactionModel.category_id.isnot(None),
+                ),
+            ),
             TransactionModel.occurred_on >= start,
             TransactionModel.occurred_on <= end,
             on_counted_accounts(user_id),  # D39

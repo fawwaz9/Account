@@ -243,7 +243,7 @@ def create_rule(db: Session, user_id: uuid.UUID, data: RecurringCreate):
     Args:
         db: Open database session.
         user_id: Whose instruction.
-        data: The instruction; a category is kept only on an expense.
+        data: The instruction; a category is kept only on an expense or a transfer.
 
     Returns:
         The new row with derived fields; None when the user does not exist.
@@ -264,7 +264,7 @@ def create_rule(db: Session, user_id: uuid.UUID, data: RecurringCreate):
         to_account_id=data.to_account_id,
         amount=data.amount,
         description=data.description,
-        category_id=data.category_id if data.kind == EXPENSE else None,
+        category_id=data.category_id if data.kind in (EXPENSE, TRANSFER) else None,
         starts_on=data.starts_on,
         skipped_dates=[],
         active=data.active,
@@ -292,7 +292,7 @@ def update_rule(db: Session, user_id: uuid.UUID, rule_id: uuid.UUID, data: Recur
         The updated row with derived fields; None when it is not the user's.
 
     Raises:
-        ValueError: If a category is set on anything but an expense or is not the
+        ValueError: If a category is set on income or a deposit or is not the
             user's, or the repeat would end before it starts.
 
     Note:
@@ -309,8 +309,8 @@ def update_rule(db: Session, user_id: uuid.UUID, rule_id: uuid.UUID, data: Recur
     if update_data.get("category_id") is not None:
         if owned_category(db, user_id, update_data["category_id"]) is None:
             raise ValueError("That category does not exist")
-        if instruction.kind != EXPENSE:
-            raise ValueError("Only an expense carries a spending category")
+        if instruction.kind not in (EXPENSE, TRANSFER):
+            raise ValueError("Only an expense or a transfer carries a spending category")
 
     for key, value in update_data.items():
         setattr(instruction, key, value)
@@ -455,6 +455,7 @@ def write_occurrence(
             description=instruction.description,
             from_account_id=instruction.account_id,
             to_account_id=instruction.to_account_id,
+            category_id=instruction.category_id,
         ))
     else:
         created = create_transaction(db, user_id, TransactionCreate(

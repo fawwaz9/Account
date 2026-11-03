@@ -36,7 +36,8 @@ class RecurringBase(BaseModel):
             deposit, which must leave it empty.
         to_account_id: Where a transfer goes; required for a transfer, refused
             otherwise, and not the same as `account_id`.
-        category_id: What an expense is spent on; refused on any other kind.
+        category_id: What an expense or a transfer goes on; refused on income
+            and deposits.
         starts_on: The first date of the series, which anchors the rule.
         recurrence: The repeat rule.
         active: False pauses it: nothing is written or projected.
@@ -51,7 +52,7 @@ class RecurringBase(BaseModel):
     account_id: UUID | None = None
     #: Transfers only.
     to_account_id: UUID | None = None
-    #: Expenses only.
+    #: Expenses and transfers only.
     category_id: UUID | None = None
     starts_on: date
     recurrence: Recurrence
@@ -66,7 +67,7 @@ class RecurringBase(BaseModel):
 
         Raises:
             ValueError: If the kind is unknown, the account fields do not fit the
-                kind, a category is set on anything but an expense, or the rule's
+                kind, a category is set on income or a deposit, or the rule's
                 `until` is before `starts_on`.
         """
         kind = self.kind.value if isinstance(self.kind, TransactionKind) else str(self.kind)
@@ -91,9 +92,9 @@ class RecurringBase(BaseModel):
             raise ValueError("Only a transfer has a destination account")
 
         # Matching the one-off rule: a category labels what money went on, which
-        # only means anything for money going out.
-        if kind != EXPENSE and self.category_id is not None:
-            raise ValueError("Only an expense carries a spending category")
+        # only means anything for money going out -- spent, or moved elsewhere.
+        if kind not in (EXPENSE, TRANSFER) and self.category_id is not None:
+            raise ValueError("Only an expense or a transfer carries a spending category")
 
         if self.recurrence.until is not None and self.recurrence.until < self.starts_on:
             raise ValueError("A repeat cannot end before it starts")
@@ -119,7 +120,7 @@ class RecurringUpdate(BaseModel):
     Attributes:
         amount: New magnitude for future payments, above 0.
         description: New description; null clears it.
-        category_id: New category for an expense, one of the user's.
+        category_id: New category for an expense or a transfer, one of the user's.
         starts_on: New first date of the series.
         recurrence: New repeat rule; null leaves the rule as it is.
         active: Pause (False) or resume (True).
@@ -174,7 +175,7 @@ class UpcomingCharge(BaseModel):
         account_id: The account it comes from or lands in; None for a deposit.
         account_name: That account's name.
         to_account_id: Where a transfer goes.
-        category_id: An expense's category.
+        category_id: An expense's or a transfer's category.
     """
 
     recurring_id: UUID

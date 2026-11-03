@@ -67,6 +67,27 @@ def is_money_in(kind: str, amount: float) -> bool:
     )
 
 
+def counts_in_category(kind: str, amount: float, category_id: uuid.UUID | None) -> bool:
+    """Return whether a row counts in a category's spending.
+
+    The budget page's breakdown applies the same rule in SQL.
+
+    Args:
+        kind: The row's kind.
+        amount: The row's signed amount.
+        category_id: The row's category.
+
+    Returns:
+        True for an expense, or the outgoing leg of a transfer that has a
+        category.
+    """
+    if kind == TransactionKind.EXPENSE.value:
+        return True
+    # A transfer with no category stays out: every savings top-up from before
+    # transfers took one would otherwise pile into "Uncategorised".
+    return kind == TransactionKind.TRANSFER.value and amount < 0 and category_id is not None
+
+
 def running_balance(db: Session, account_id: uuid.UUID) -> list[BalancePoint]:
     """Return an account's balance after each day it moved, from its first row.
 
@@ -103,9 +124,9 @@ def get_account_activity(
 ) -> AccountActivity | None:
     """Return everything one account's page shows for a month.
 
-    Money in and out follow `is_money_in` and `is_money_out`; category spending is
-    expenses only, with every category this account limits listed even when nothing
-    was spent. An investment account also gets its reading for the month and its
+    Money in and out follow `is_money_in` and `is_money_out`; category spending
+    follows `counts_in_category`, with every category this account limits listed
+    even when nothing was spent. An investment account also gets its reading for the month and its
     all-time return.
 
     Args:
@@ -162,9 +183,8 @@ def get_account_activity(
         entry.money_in = round(entry.money_in, 2)
         entry.money_out = round(entry.money_out, 2)
 
-    # Expenses only, matching the budget page's breakdown. Transfers carry no
-    # category, so including them would pile the whole month into one
-    # "Uncategorised" row and drown the real labels.
+    # Expenses and categorised transfers out, matching the budget page's
+    # breakdown.
     names = {
         category.id: category.name
         for category in db.query(SpendCategoryModel)
@@ -173,7 +193,7 @@ def get_account_activity(
     }
     per_category: dict[uuid.UUID | None, float] = {}
     for row in rows:
-        if row.kind != TransactionKind.EXPENSE.value:
+        if not counts_in_category(row.kind, row.amount, row.category_id):
             continue
         per_category[row.category_id] = per_category.get(row.category_id, 0.0) + abs(row.amount)
 

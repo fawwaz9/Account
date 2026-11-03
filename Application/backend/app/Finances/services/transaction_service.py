@@ -281,19 +281,28 @@ def create_transaction(db: Session, user_id: uuid.UUID, data: TransactionCreate)
 def create_transfer(db: Session, user_id: uuid.UUID, data: TransferCreate):
     """Move money between two of the user's accounts as two rows in one commit.
 
+    Both rows carry the category, so either one shows it; only the outgoing row
+    counts in a category's spending.
+
     Args:
         db: Open database session.
         user_id: Whose ledger.
-        data: The amount, date, description and both accounts.
+        data: The amount, date, description, both accounts and the category.
 
     Returns:
         The outgoing and incoming rows' responses; None when either account is
         not the user's.
+
+    Raises:
+        ValueError: If the category is not the user's.
     """
     source = owned_account(db, user_id, data.from_account_id)
     target = owned_account(db, user_id, data.to_account_id)
     if source is None or target is None:
         return None
+
+    if data.category_id is not None and owned_category(db, user_id, data.category_id) is None:
+        raise ValueError("That category does not exist")
 
     group_id = uuid.uuid4()
     description = data.description or f"{source.name} to {target.name}"
@@ -308,6 +317,7 @@ def create_transfer(db: Session, user_id: uuid.UUID, data: TransferCreate):
             description=description,
             occurred_on=data.occurred_on,
             group_id=group_id,
+            category_id=data.category_id,
         )
         for account, amount in ((source, -data.amount), (target, data.amount))
     ]
@@ -364,7 +374,8 @@ def update_transaction(
     """Change the fields sent on one of the user's rows.
 
     A new amount keeps the row's direction. On a transfer the other leg follows the
-    amount, date and description; a deposit's other rows are left alone. Commits.
+    amount, date, description and category; a deposit's other rows are left alone.
+    Commits.
 
     Args:
         db: Open database session.
@@ -454,6 +465,8 @@ def update_transaction(
                 partner.occurred_on = transaction.occurred_on
             if "description" in update_data:
                 partner.description = transaction.description
+            if "category_id" in update_data:
+                partner.category_id = transaction.category_id
 
     db.commit()
     db.refresh(transaction)

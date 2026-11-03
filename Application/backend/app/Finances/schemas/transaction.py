@@ -70,10 +70,15 @@ class TransferCreate(TransactionBase):
     Attributes:
         from_account_id: The account the money leaves.
         to_account_id: The account it enters; not the same account.
+        category_id: What the money went on -- savings, a card payment; one of
+            the user's categories, kept on both rows.
     """
 
     from_account_id: UUID
     to_account_id: UUID
+    #: Money leaving an account by transfer is labelled like an expense. Both
+    #: rows hold it; only the outgoing one counts in a category's spending.
+    category_id: UUID | None = None
 
     @model_validator(mode="after")
     def validate_transfer(self):
@@ -93,7 +98,7 @@ class TransferCreate(TransactionBase):
 class TransactionUpdate(BaseModel):
     """Request body for editing a transaction; only the fields sent are changed.
 
-    A transfer's other leg follows its amount, date and description; a deposit's
+    A transfer's other leg follows its amount, date, description and category; a deposit's
     other rows do not. A tuition payment's row refuses an amount edit here.
 
     Attributes:
@@ -126,7 +131,7 @@ class Transaction(TransactionBase):
             otherwise.
         group_size: How many rows share the group; 1 when ungrouped. Computed on
             reads; write responses carry 1.
-        category_id: What it was spent on.
+        category_id: What it was spent on; an expense or a transfer.
         course_id: The course it was bought for.
         business_percent: The share that was a business expense, 1 to 100.
         tuition_payment_id: The tuition payment that owns the row, so the client
