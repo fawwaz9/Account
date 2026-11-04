@@ -19,7 +19,7 @@ Deployed from this phase without touching the schema (D3), each recorded in
 after it needs a table or a column production lacks. The deploy's schema gate
 would refuse it before traffic moved, but don't lean on that.
 
-## Batch 4: the schema items. WAITING FOR YOUR SCHEMA STEP
+## Batch 4: the schema items. SHIPPED 2026-11-04, see the result at the end
 
 | What | Commit on `phase4` | Schema change |
 |---|---|---|
@@ -172,4 +172,23 @@ holder's AI stops reading; nothing leaks, because the table is only read
 through the new API), planned blocks stay in the calendar as ordinary events,
 and invoices, focus sessions and set-aside marks stay stored, unread.
 
-**Result:** not yet run.
+**Result:** SHIPPED 2026-11-04.
+- **The schema step, run by you:**
+  - Your manual backup before it (2026-11-02 20:35 UTC) held 72 tables. The next
+    scheduled one held 77.
+  - Read-backs A to E all matched as written.
+- **The deploy, run by you with `deploy.run.sh all`:**
+  - The API is at `94d8532` on `account-api-00053-l5t`, serving 100% from 00:02 UTC.
+  - The gate: 77 of 77 tables with row security.
+  - Its backup: 77 tables, 2,332 rows. Health ok.
+- **Verified after:**
+  - The seven new routes answer 401, against a 404 control.
+  - MCP with a made-up token answers 401.
+  - The dispatch answered 200 three times on the new revision.
+  - No errors or 5xx in the new revision's logs.
+  - The settings carried over: the same nine as before.
+  - The live site matches the build, 44 files.
+- **Not read:** the dispatch's `briefings` count. It is in the response body, which
+  the logs don't hold.
+- **Rollback, should you need it:** both halves together, Cloud Run to
+  `account-api-00052-x7s` and Pages to the `ce9eba9` deployment.

@@ -884,6 +884,48 @@ production-URL build: 26 of 26 files.
 
 ---
 
+## Phase 4 batch 4: the schema items, the walkthrough fixes, transfer categories -- SHIPPED 2026-11-04
+The six items that needed your schema step (five tables, four nullable columns, two
+definer functions; read-backs A to E all matched):
+- **Bring your own AI** (item 7, D20): a revocable, read-only token, stored hashed,
+  that reads only the digest, as a plain API and a one-tool MCP server. Off by default.
+- **The daily briefing push** (item 6, D21): rides the reminder dispatch.
+- **The weekly planner** (item 2, D7, D22): proposes blocks; nothing is booked until
+  you accept them.
+- **Focus sessions** (item 4, D23).
+- **Setting money aside for a crunch week, and the report card** (item 13, D24): a mark,
+  not a move of money.
+- **Self-employed support** (item 15, D25): clients, invoices, business share of an
+  expense, CPP and instalment figures.
+
+Riding along, no schema of their own:
+- **The walkthrough fixes** (D26): the Tasks row on a phone, the term simulator's
+  "Change in spending a month", "fewer tasks", and the digest's at-risk line.
+- **Transfers carry a category** (D27): optional. The outgoing leg counts in that
+  category's spending and limits; uncategorised transfers stay out of the category
+  rows. The guard, the categoriser and the merchant map stay expense-only.
+
+CI green on all three jobs at `94d8532`.
+
+LIVE: deployed by you with `deploy.run.sh all`.
+- **API:** `94d8532` on revision `account-api-00053-l5t`, serving 100% since
+  2026-11-04 00:02 UTC (digest `ec9f7d2d…`).
+- **The deploy's own checks:**
+  - The schema gate: row security on for 77 of 77 tables.
+  - The backup: 77 tables, 2,332 rows.
+  - Health ok.
+- **Checked from this session:**
+  - Seven new routes answer 401 without a login, against a 404 control.
+  - The MCP door answers 401 to a made-up token.
+  - The reminder dispatch answered 200 three times on the new revision, at 00:05,
+    00:10 and 00:15 UTC. The `briefings` count is in the response body, which the
+    logs don't hold, so it isn't read.
+  - No errors or 5xx in the new revision's logs.
+  - The same nine settings as `00052-x7s`.
+- **Pages:** the live site matches this commit's build, 44 files (`check-web`).
+
+---
+
 ## Phase 4 batch 3: the simulators, correlations and the spending guard's detection -- SHIPPED 2026-11-01
 Six items under D3 (no table, no column):
 - **Course-drop simulator** (item 11, D14): "If I drop it…" on a current course;
