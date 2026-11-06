@@ -794,3 +794,89 @@ Evidence:
 
 **Shipped 2026-11-06** at `63f828f`: API revision `account-api-00054-cj9`, and Pages
 matches the build. See `shipped.md`.
+
+## D29. Subcategory weights, and a category's weight shared evenly, 2026-11-06 (yours)
+
+Asked for: enter a mark as the professor gave it (48/52) and still have it count by its
+syllabus weight, rather than rescaling it to 100, 50 or 150. Your ground rules:
+- **They're called subcategory weights.**
+- **They must add up to the category's weight. That is a hard limit.** The server refuses
+  any split that doesn't, and the split dialog won't save one.
+- **With no subcategory weights, the category's weight is shared evenly.** Every item
+  counts the same, whatever it's marked out of. This replaces the old points rule, where
+  an item counted by its out-of: 5/10 and 90/100 averaged 86.36% and now average 70%.
+- **A "?" explains it,** beside each category's split line on the course page.
+
+Your answers to the four cases that would break the limit:
+- **Adding an item to a split category:** it joins at 0%. The split still adds up, the item
+  counts for nothing until you change the split, and the column warns about it.
+- **Deleting an item, or moving it to another category:** its share goes to the rest in
+  proportion, so 10/5/15 without the 5 becomes 12/18. The delete confirmation says so first.
+- **Changing the category's weight:** the split scales in proportion, so 30% to 36% takes
+  10/5/15 to 12/6/18.
+- **Existing courses:** every stored average is recomputed once, at deploy, after a backup,
+  with a list of the courses that moved, old to new. A course with a recorded final grade
+  keeps its letter and GPA, which come from that final.
+
+Mine, yours to overturn:
+- **A dropped item keeps its share,** and the rest count for it while it's dropped. The
+  professor dropped the mark, not the item. So a split must still name it.
+- **A split can't be partly set.** Every item has a share or none does. Anything between
+  would need a rule for the leftover weight, and a guess there is exactly what this
+  replaces.
+- **A category with no weight can't be split,** and a category whose weight drops to 0
+  goes back to even.
+- **When the rest are all at 0%** (deleting the one item that held the whole 30%), there's
+  no proportion to keep, so they share it evenly.
+- **Shares are stored to the cent and always add up exactly:** the cent rounding leaves
+  over goes to the largest share.
+- **An item at 0% isn't outstanding.** The grade band doesn't wait on it, and the cheapest
+  path doesn't offer it, since it can't move anything.
+- **The category-wide blind spots stay as they were.** They pool your marks across courses
+  ("you score lower on quizzes"), which isn't about any course's weights.
+- **The grade's old `weight` column was not reused.** It holds a copy of the category's
+  weight on every row, so reusing it would have split every category wrongly. The share is
+  a new nullable column, `grades.subcategory_weight`.
+- **Five copies of the averaging became one.** `scheme_math.category_average` decides each
+  item's share; the live average, the projection, the band, the required final, the
+  points on the course page and the picked scheme all read it. `category_points` keeps its
+  own Decimal arithmetic, for the 11.825 rounding, with the same shares.
+
+Evidence:
+- `tests/test_subcategory_weights.py`, 34 tests:
+  - **The rule:** even sharing (5/10 and 90/100 is 70), your 10/5/15 example (84.1, where
+    points gave 71), the course page's points, and every reader agreeing with the one
+    engine. Also a 0% item, a category marked only at 0%, a dropped item, drop-lowest, and
+    the band.
+  - **Keeping it adding up:** joining (one and several), deleting (in proportion, and evenly
+    from all 0s), moving out and in, a same-category edit, scaling, a weight of 0, another
+    category's change, and the cent remainder.
+  - **Setting a split:** it's kept, it's refused when it doesn't add up, it must name every
+    item including dropped ones, there's no split without a weight, and clearing it.
+  - **The route,** and the recompute script (it lists, writes only with `--apply`, and needs
+    its URL).
+- `SubcategoryWeights.test.tsx`, 12 tests: the split helpers, the dialog (even start, Save
+  off until it adds up, saving by id, sharing evenly again, the server's refusal), and the
+  column (both lines, the shares, the button, the "?" text, the 0% warning).
+- No existing test changed. None of them averaged a category with mixed out-ofs, so nothing
+  pinned the old points rule.
+- **Suites:** SQLite 3,453 passed and 851 skipped. Postgres 3,989 passed and 315 skipped.
+  Frontend 943 passed. `tsc` and the build are clean.
+- **29 mutations, all caught:** the share rule, the 0% skip, drop-lowest, the
+  unknown-not-zero check, the band, the Decimal points, joining, rebalancing, clearing at 0,
+  even spreading, the remainder, scaling, the delete and move paths, the split checks, the
+  recompute's `--apply`, and five on the page.
+- **Rehearsed on a throwaway Postgres, never production.** The schema command took a
+  database without the column to one with it, and the runbook's two read-backs matched.
+  The recompute then listed two courses (86.36 → 70 and 78.18 → 70, the second marked as
+  having a final grade), wrote nothing until `--apply`, wrote 2, and a second listing found
+  nothing to change.
+- **Walked in a browser on a scratch database, at 1440px and 390px:**
+  - The course read 75.58 shared evenly.
+  - Splitting 10/5/15 took it to 80.58, with Save off at 25% and on at 30%.
+  - A fourth midterm joined at 0% with the warning.
+  - Deleting Midterm 2 said where its 5% would go, then left 12/18 and 85.69.
+  - The dialog and the "?" fit a phone, and nothing scrolls sideways.
+- **Found on the walk, not from this change:** after you delete a grade, the band and
+  "Worth doing next" keep their old figures until the page reloads. Deleting refetches
+  only the course. Adding and editing a grade do the same.

@@ -80,6 +80,8 @@ ADDED_COLUMNS: dict[str, dict[str, str | dict[str, str]]] = {
         "duration_minutes": "INTEGER",
         "schedule_as": "VARCHAR NOT NULL DEFAULT 'task'",
         "excluded": "BOOLEAN NOT NULL DEFAULT 0",
+        # D29: an item's share of its category's weight; null shares it evenly.
+        "subcategory_weight": "FLOAT",
     },
     "events": {
         "grade_id": "CHAR(32)",

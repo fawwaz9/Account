@@ -192,3 +192,88 @@ and invoices, focus sessions and set-aside marks stay stored, unread.
   the logs don't hold.
 - **Rollback, should you need it:** both halves together, Cloud Run to
   `account-api-00052-x7s` and Pages to the `ce9eba9` deployment.
+
+## D29: subcategory weights. Waiting on your schema step
+
+| What | Branch | Schema change |
+|---|---|---|
+| Subcategory weights, and even sharing (D29) | `subcategory-weights` | **New column `grades.subcategory_weight`** (float, nullable, no default) |
+
+One new nullable column. Nothing existing is altered, dropped or backfilled by the
+schema step. The averages change at deploy, and step 3 brings the stored ones over.
+
+**It can share a schema session with audit batch 1** (`audit-batch-1`, its own runbook).
+Each step adds only what its branch declares, and neither branch reads the other's columns.
+
+### 0. Backup (yours)
+
+```sh
+gh workflow run backup.yml --repo fawwaz9/Account
+```
+
+**Verify:** the run succeeds with 77 tables. This backup holds every course's average under
+the old rule, which is the way back for step 3.
+
+### 1. Apply the schema (yours: one column)
+
+```sh
+cd ~/VS_Code/Account/Application/backend
+git fetch origin subcategory-weights && git checkout subcategory-weights && git pull
+set -a; source ../.env; set +a
+DATABASE_URL="$SUPABASE_DATABASE_URL" .venv/bin/python -m app._database.schema
+```
+
+**Verify, in the SQL editor.** One row: `double precision`, `YES`, a null default. Then
+the second query returns 0, since every grade starts even:
+
+```sql
+SELECT data_type, is_nullable, column_default FROM information_schema.columns
+WHERE table_name = 'grades' AND column_name = 'subcategory_weight';
+
+SELECT count(*) FROM grades WHERE subcategory_weight IS NOT NULL;
+```
+
+**Undo:** not needed. The live API never reads the column.
+
+### 2. Deploy (after the read-back matches)
+
+```sh
+cd ~/VS_Code/Account
+./Application/deploy.run.sh all --yes
+```
+
+**Verify:**
+- Gate: 77 of 77 tables with row security. Health ok, the new revision at 100%, and the
+  digest matches the commit.
+- `PUT /api/grades/<id>/courses/<id>/subcategory-weights` answers 401 unauthenticated,
+  against a 404 control. The old API answers 404.
+- No errors or 5xx in the new revision's logs, and the same nine settings.
+- The live site matches the build.
+
+### 3. Bring the stored averages over (yours: reads every course, then writes)
+
+Straight after the deploy, so the old API can't write an old-rule average back in between.
+It runs as the tables' owner, with the same URL as the schema step. First the listing,
+which writes nothing:
+
+```sh
+cd ~/VS_Code/Account/Application/backend
+RECOMPUTE_URL="$SUPABASE_DATABASE_URL" .venv/bin/python scripts/recompute_averages.py
+```
+
+It prints one line per course whose average moves: the id's first eight characters, the
+code, the term, and old → new. It marks any course with a recorded final grade, whose
+letter and GPA don't move. Read it. If it looks right:
+
+```sh
+RECOMPUTE_URL="$SUPABASE_DATABASE_URL" .venv/bin/python scripts/recompute_averages.py --apply
+```
+
+**Verify:** it ends "Wrote N." with the N the listing gave, and a second listing says
+"Nothing to change".
+
+**Rollback:** Cloud Run to the revision before, and Pages to its deployment. The column
+stays. The old API ignores it, and any splits come back on redeploy. The recomputed
+averages stay at their new values: the old API rewrites each course's average under the
+old rule the next time one of its grades is saved, and step 0's backup holds every old
+figure exactly.

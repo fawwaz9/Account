@@ -170,6 +170,12 @@ export interface Grade {
   schedule_as: GradeSchedule;
   /** Dropped: kept on the course but left out of every average. */
   excluded: boolean;
+  /**
+   * This item's share of its category's weight, in percent of the course (D29). Null on
+   * every item of a category that shares its weight evenly; set on every item of one that
+   * is split, adding up to the category's weight.
+   */
+  subcategory_weight?: number | null;
 }
 
 /** What a dated grade raises outside the gradebook. */

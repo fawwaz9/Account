@@ -1475,3 +1475,83 @@
 .dropNotes li {
   padding: 2px 0;
 }
+
+/* D29: how a category's weight is shared, under its heading. Wraps so the help
+   panel opens full width beneath the line rather than squeezing beside it. */
+.splitLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 0 0 8px;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.splitButton {
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--gold);
+  font: inherit;
+  cursor: pointer;
+}
+
+.splitButton:hover {
+  border-color: var(--gold);
+}
+
+.shareTag {
+  margin-left: 8px;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+/* At 0% of a split it counts for nothing, which should not pass for a share. */
+.shareTagZero {
+  color: #ff5a52;
+}
+
+.splitWarning {
+  margin: 6px 0 0;
+  font-size: 0.75rem;
+  color: #ff5a52;
+}
+
+.shareRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 7.5rem;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.shareRowName {
+  overflow-wrap: anywhere;
+}
+
+.shareRowOutOf {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.shareRowInput {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.shareRowInput input {
+  width: 100%;
+  min-width: 0;
+}
+
+.shareTotal {
+  margin: 4px 0 8px;
+  font-size: 0.85rem;
+}
+
+.shareTotalOff {
+  color: #ff5a52;
+}

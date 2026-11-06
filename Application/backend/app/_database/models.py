@@ -406,6 +406,8 @@ class GradeModel(Base):
         max_score: Points possible.
         excluded: Dropped: kept on the course but left out of every average.
         weight: Copy of the category's weight, kept in step by `sync_grade_weights`.
+        subcategory_weight: Its share of the category's weight; null on every item
+            of an even category.
         due_date: When the work is due; a dated grade raises a task or a calendar block.
         due_time: Time of day on `due_date`; null means end of day for a task and all
             day for an event. Requires `due_date`.
@@ -427,6 +429,12 @@ class GradeModel(Base):
     #: as more work is marked.
     excluded = Column(Boolean, nullable=False, default=False)
     weight = Column(Float, default=0.0)
+    #: This item's share of its category's weight, in percent of the course (D29).
+    #: Null on every item of a category means the category's weight is shared
+    #: evenly; set on every item, the shares add up to the category's weight, and
+    #: `subcategory` keeps it that way through every add, move, delete and change
+    #: of the category's weight. Never set on some items and not others.
+    subcategory_weight = Column(Float, nullable=True)
     #: When the work is due, as opposed to when it was marked.
     due_date = Column(Date, nullable=True)
     #: The time of day that date means, where the student knows it -- a lab due

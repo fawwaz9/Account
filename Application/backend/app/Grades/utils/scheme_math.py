@@ -9,6 +9,7 @@ session, and no import of the services that read it.
 
 from dataclasses import dataclass
 
+from app.Grades.utils import subcategory
 from app.Grades.utils.enums import is_additive
 from app.Grades.utils.marks import MAX_COURSE_PERCENT, counts_toward_average
 
@@ -21,12 +22,15 @@ def _value(category) -> str:
 def category_average(
     course, category: str, drop_lowest: int = 0, fill: float | None = None, overrides: dict | None = None,
 ) -> tuple[float | None, int]:
-    """Return a category's point-weighted average and how many items were dropped.
+    """Return a category's average and how many items were dropped.
 
-    Dropped (`excluded`) grades and items with no maximum never count. Each counted
-    item scores, in order of precedence: its override, its mark, or `fill` of its
-    maximum when unmarked. The lowest `drop_lowest` by percentage are then dropped,
-    always keeping at least one.
+    The one place a category is averaged. Each item counts by its share (D29): its
+    subcategory weight when the category is split, otherwise the same as every other
+    item, whatever it is marked out of. Dropped (`excluded`) grades, items with no
+    maximum and items at 0% of a split never count. Each counted item scores, in
+    order of precedence: its override, its mark, or `fill` of its maximum when
+    unmarked. The lowest `drop_lowest` by percentage are then dropped, always keeping
+    at least one, and the rest share the weight between them.
 
     Args:
         course: Course row whose `grades` are read.
@@ -41,25 +45,26 @@ def category_average(
         when nothing in the category counts.
     """
     overrides = overrides or {}
-    items = [
-        g for g in course.grades
-        if g.category == category and g.max_score > 0 and counts_toward_average(g)
-    ]
-    scored: list[tuple[float, float]] = []  # (score, max)
-    for g in items:
+    everything = subcategory.members(course, category)
+    split = subcategory.is_split(everything)
+    scored: list[tuple[float, float]] = []  # (fraction of its maximum, share)
+    for g in everything:
+        weight = subcategory.share(g, split)
+        if g.max_score <= 0 or not counts_toward_average(g) or weight <= 0:
+            continue
         if g.id in overrides:
-            scored.append((overrides[g.id] * g.max_score, g.max_score))
+            scored.append((overrides[g.id], weight))
         elif g.score is not None:
-            scored.append((g.score, g.max_score))
+            scored.append((g.score / g.max_score, weight))
         elif fill is not None:
-            scored.append((fill * g.max_score, g.max_score))
+            scored.append((fill, weight))
     if not scored:
         return None, 0
     dropped = min(drop_lowest, len(scored) - 1)
     if dropped:
-        scored = sorted(scored, key=lambda pair: pair[0] / pair[1])[dropped:]
-    total = sum(maximum for _, maximum in scored)
-    weighted = sum((score / maximum) * 100 * maximum for score, maximum in scored)
+        scored = sorted(scored, key=lambda pair: pair[0])[dropped:]
+    total = sum(weight for _, weight in scored)
+    weighted = sum(fraction * 100 * weight for fraction, weight in scored)
     return round(weighted / total, 2), dropped
 
 

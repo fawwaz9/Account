@@ -141,10 +141,47 @@ class Grade(GradeBase):
     Attributes:
         id: The grade's id.
         weight: Its category's weight in the course, 0-100.
+        subcategory_weight: Its share of that weight when the category is split;
+            null when the category's weight is shared evenly.
     """
     id: UUID = Field(default_factory=uuid4)
     weight: float = Field(..., ge=0, le=100, description="The weight assigned by the grade category")
+    subcategory_weight: float | None = Field(
+        default=None, ge=0, le=100,
+        description="This item's share of its category's weight; null shares it evenly",
+    )
 
     class Config:
         """Pydantic v1-style settings: build the model from object attributes."""
         from_attributes = True
+
+
+class SubcategoryWeights(BaseModel):
+    """A category's weight split between its items, or a request to share it evenly.
+
+    Attributes:
+        category: The category whose weight is split.
+        weights: Grade id to its share in percent of the course, for every item in
+            the category, adding up to the category's weight. Null or empty clears
+            the split, and every item counts the same.
+    """
+    category: GradeCategory
+    weights: dict[UUID, float] | None = Field(
+        default=None,
+        description="Grade id to its share of the category's weight; null shares it evenly",
+    )
+
+    @model_validator(mode="after")
+    def each_share_in_range(self):
+        """Refuse a share outside 0-100 before the service checks the total.
+
+        Returns:
+            The validated model.
+
+        Raises:
+            ValueError: If a share is negative or over 100.
+        """
+        for value in (self.weights or {}).values():
+            if value < 0 or value > 100:
+                raise ValueError("A subcategory weight must be between 0 and 100")
+        return self

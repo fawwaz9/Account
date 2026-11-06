@@ -29,6 +29,8 @@ import { intakeStatus } from "../../features/intake/api";
 import BulkGradesModal from "../../features/grades/components/BulkGradesModal";
 import { getErrorMessage } from "../../features/grades/components/AddCourseModal";
 import GradeCategoryColumn from "../../features/grades/components/GradeCategoryColumn";
+import SubcategoryWeightsModal from "../../features/grades/components/SubcategoryWeightsModal";
+import { isSplit } from "../../features/grades/subcategory";
 import ClassScheduleModal from "../../features/calender/components/ClassScheduleModal";
 import { useApiRefreshCount } from "../../shared/hooks/useApiRefresh";
 import "../../styles/calendar.css";
@@ -50,6 +52,7 @@ export default function CourseDetailPage() {
   // Bumped when a syllabus may have filed prerequisite rules, to refetch them.
   const [rulesNonce, setRulesNonce] = useState(0);
   const [addGradeCategory, setAddGradeCategory] = useState<GradeCategory | null>(null);
+  const [splitCategory, setSplitCategory] = useState<GradeCategory | null>(null);
   const [editGrade, setEditGrade] = useState<Grade | null>(null);
   const [editingCourse, setEditingCourse] = useState(false);
   const [showRequiredFinal, setShowRequiredFinal] = useState(false);
@@ -210,6 +213,14 @@ export default function CourseDetailPage() {
     const c = await fetchCourseDetail(user.id, courseId);
     setCourse(c);
   }
+
+  // Says where a split item's share goes before it goes (D29): to the rest of its
+  // category, in proportion, so the split still adds up.
+  const deleteTargetSiblings = deleteGradeTarget ? gradesByCategory[deleteGradeTarget.category] ?? [] : [];
+  const deleteShareNote =
+    deleteGradeTarget && isSplit(deleteTargetSiblings) && deleteGradeTarget.subcategory_weight
+      ? ` Its ${trimNumber(deleteGradeTarget.subcategory_weight)}% of ${deleteGradeTarget.category} will be shared among the rest in proportion.`
+      : "";
 
   if (loading) return <div className="p-4">Loading...</div>;
   if (loadError) {
@@ -387,10 +398,12 @@ export default function CourseDetailPage() {
             key={category}
             title={unweightedCategories.has(category) ? `${category} (0% weight)` : category}
             category={category}
+            categoryWeight={course.category_weights[category] ?? 0}
             items={gradesByCategory[category] ?? []}
             onEditItem={handleEditGrade}
             onAddGrade={handleAddGrade}
             onDeleteItem={handleDeleteGradeRequest}
+            onSplit={setSplitCategory}
           />
         ))}
       </div>
@@ -476,6 +489,18 @@ export default function CourseDetailPage() {
         />
       )}
 
+      {splitCategory && (
+        <SubcategoryWeightsModal
+          open
+          courseId={courseId}
+          category={splitCategory}
+          categoryWeight={course.category_weights[splitCategory] ?? 0}
+          items={gradesByCategory[splitCategory] ?? []}
+          onClose={() => setSplitCategory(null)}
+          onSaved={() => { void refreshCourse(); setReloadNonce((n) => n + 1); }}
+        />
+      )}
+
       <AddGradeModal
         open={addGradeCategory !== null}
         courseId={courseId}
@@ -536,7 +561,7 @@ export default function CourseDetailPage() {
       <DeleteConfirmModal
         open={deleteGradeTarget !== null}
         title="Delete Grade"
-        message={`Are you sure you want to delete "${deleteGradeTarget?.name}"? This cannot be undone.`}
+        message={`Are you sure you want to delete "${deleteGradeTarget?.name}"? This cannot be undone.${deleteShareNote}`}
         onConfirm={handleConfirmDeleteGrade}
         onCancel={() => setDeleteGradeTarget(null)}
         submitting={deletingGrade}

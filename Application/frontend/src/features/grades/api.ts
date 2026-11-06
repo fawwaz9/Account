@@ -26,6 +26,7 @@ import { CheapestPath,
   CourseDetail,
   CourseUpdate,
   Grade,
+  GradeCategory,
   GradeCreate,
   GradeUpdate,
   RequiredFinal,
@@ -69,6 +70,19 @@ export async function updateCategoryWeights(
     endpoints.grades.CategoryWeights(userId, courseId),
     payload
   );
+}
+
+/**
+ * Split a category's weight between its items, by grade id, or pass null to share it evenly
+ * again. The shares must add up to the category's weight, or the server refuses with a 400.
+ */
+export async function setSubcategoryWeights(
+  userId: string,
+  courseId: string,
+  category: GradeCategory,
+  weights: Record<string, number> | null
+) {
+  return put<Grade[]>(endpoints.grades.subcategoryWeights(userId, courseId), { category, weights });
 }
 
 /** Add a grade to a course. */

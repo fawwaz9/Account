@@ -22,7 +22,7 @@ from app.Grades.services.grade_schedule import (
 )
 # Re-exported: callers import both from here, as they always have.
 from app.Grades.utils.marks import MAX_COURSE_PERCENT, counts_toward_average  # noqa: F401
-from app.Grades.utils import scheme_math
+from app.Grades.utils import scheme_math, subcategory
 from app.shared.dates import user_today
 
 #: A grade may exceed its max -- bonus marks are real -- but not absurdly, so a
@@ -84,7 +84,7 @@ def update_category_weights(db: Session, user_id: uuid.UUID, course_id: uuid.UUI
 
     The sent weights are merged over the stored ones and the whole set is checked
     before anything is written; the grades of the changed categories take the new
-    weights.
+    weights, and a changed category's subcategory weights scale with it.
 
     Args:
         db: Request-scoped database session.
@@ -126,6 +126,9 @@ def update_category_weights(db: Session, user_id: uuid.UUID, course_id: uuid.UUI
 
     updated_categories = {(c.value if isinstance(c, GradeCategory) else c) for c in weights}
     sync_grade_weights(course, updated_categories)
+    # A split scales with its category, so it still adds up (D29).
+    for category in updated_categories:
+        subcategory.rebalance(course, category)
     course.average = course_grade(course)
 
     db.commit()
@@ -144,6 +147,52 @@ def sync_grade_weights(course: CourseModel, categories: set[str] | None = None):
     for grade in course.grades:
         if categories is None or grade.category in categories:
             grade.weight = weights.get(grade.category, 0.0)
+
+
+def set_subcategory_weights(
+    db: Session, user_id: uuid.UUID, course_id: uuid.UUID, category: str, weights: dict[uuid.UUID, float] | None,
+):
+    """Split a category's weight between its items, or share it evenly again (D29).
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+        course_id: The course.
+        category: Category value.
+        weights: Grade id to its share in percent of the course, one for every item in
+            the category, adding up to the category's weight; None or empty clears the
+            split, so every item counts the same.
+
+    Returns:
+        The course's grades in display order, or None when the course is missing or
+        another user's.
+
+    Raises:
+        ValueError: If the split does not cover exactly the category's items or does
+            not add up to its weight; nothing is written.
+
+    Note:
+        Commits.
+    """
+    course = get_user_course(db, user_id, course_id)
+    if course is None:
+        return None
+
+    before = forecast_before(course)
+    items = subcategory.members(course, category)
+    if weights:
+        checked = subcategory.check_split(course, category, weights)
+        for g in items:
+            g.subcategory_weight = checked[g.id]
+    else:
+        for g in items:
+            g.subcategory_weight = None
+
+    course.average = course_grade(course)
+    keep_projection(course, before, user_today(db, user_id))
+    db.commit()
+    db.refresh(course)
+    return sorted_grades(course.grades)
 
 
 def add_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_data: GradeCreate):
@@ -177,6 +226,8 @@ def add_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_data:
         score=grade_data.score,
         max_score=grade_data.max_score,
         weight=weights.get(category_value, 0.0),
+        # 0% in a split category, so the split still adds up (D29).
+        subcategory_weight=subcategory.joining_share(course, category_value),
         due_date=grade_data.due_date,
         due_time=grade_data.due_time,
         duration_minutes=grade_data.duration_minutes,
@@ -235,6 +286,9 @@ def add_grades_bulk(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade
                 score=grade_data.score,
                 max_score=grade_data.max_score,
                 weight=weights.get(category_value, 0.0),
+                # Read before any of these join, so each one lands at 0% in a
+                # split category and every one stays even in an even one.
+                subcategory_weight=subcategory.joining_share(course, category_value),
                 due_date=grade_data.due_date,
                 due_time=grade_data.due_time,
                 duration_minutes=grade_data.duration_minutes,
@@ -328,6 +382,7 @@ def update_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id
     # student took it away" and "the grade never had one" look identical
     # afterwards, and they call for opposite things on the calendar.
     had_time = grade.due_time is not None
+    old_category = grade.category
     before = forecast_before(course)
 
     for key, value in update_data.items():
@@ -336,6 +391,11 @@ def update_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id
     if "category" in update_data:
         weights = course.category_weights
         grade.weight = weights.get(grade.category, 0.0)
+        if grade.category != old_category:
+            # A move is a leave and a join (D29): the item takes 0% in a split
+            # category, and its old category shares out what it held.
+            grade.subcategory_weight = subcategory.joining_share(course, grade.category, exclude=grade)
+            subcategory.rebalance(course, old_category)
 
     # A partial update can raise the score or lower max_score independently, so
     # the pair is only checkable after both have been applied.
@@ -404,11 +464,14 @@ def delete_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id
         return None
     
     deleted_grade = GradeSchema.model_validate(grade)
+    category = grade.category
 
     db.delete(grade)
     db.flush()
     db.refresh(course)
 
+    # Its share goes to the rest of a split category, in proportion (D29).
+    subcategory.rebalance(course, category)
     course.average = course_grade(course)
     db.commit()
     return deleted_grade
@@ -583,7 +646,7 @@ def forecast_before(course: CourseModel) -> Forecast:
         forecast had already ended.
     """
     marked = any(
-        g.score is not None and g.max_score > 0 and counts_toward_average(g) and not is_additive(g.category)
+        g.score is not None and not is_additive(g.category) and category_is_marked(course, g.category)
         for g in course.grades
     )
     return Forecast(course_grade(course) if marked else None, forecast_ended(course))
@@ -646,7 +709,7 @@ def project_course(course: CourseModel, unmarked: float, overrides: dict | None 
 def calculate_current_average(course: CourseModel) -> float:
     """Return the live course average from marked grades and the course's weights.
 
-    Each marked category's point-weighted average is weighted by the category, divided
+    Each marked category's average is weighted by the category, divided
     by the marked categories' weight (at most 100), and the bonus is added on top.
 
     Args:
@@ -668,7 +731,8 @@ def calculate_current_average(course: CourseModel) -> float:
     # sitting next to a 20% batch of marked assignments would have been treated
     # as a fifth of the grade rather than as five points on top of it.
     categories_present = {
-        g.category for g in graded if not is_additive(g.category)
+        g.category for g in graded
+        if not is_additive(g.category) and category_is_marked(course, g.category)
     }
 
     total_weight = sum(weights.get(category, 0.0) for category in categories_present)
@@ -768,41 +832,11 @@ def category_average_assuming(
         overrides: Grade id to a forced fraction (0-1).
 
     Returns:
-        The point-weighted percentage, rounded to 2 places; None when the category
-        holds no counted item, which is unknown rather than zero.
+        The percentage by each item's share, rounded to 2 places; None when the
+        category holds no counted item, which is unknown rather than zero.
     """
     category_value = category.value if isinstance(category, GradeCategory) else category
-    items = [
-        g for g in course.grades
-        if g.category == category_value and g.max_score > 0 and counts_toward_average(g)
-    ]
-    if not items:
-        return None
-
-    possible = sum(g.max_score for g in items)
-    if possible == 0:
-        return None
-
-    earned = sum(assumed_score(g, unmarked, overrides) for g in items)
-    return round(earned / possible * 100, 2)
-
-
-def assumed_score(grade, unmarked: float, overrides: dict | None) -> float:
-    """Return a grade's points: its override, else its score, else `unmarked`.
-
-    Args:
-        grade: The grade.
-        unmarked: Fraction (0-1) of the maximum assumed when unmarked.
-        overrides: Grade id to a forced fraction (0-1); never written to the row.
-
-    Returns:
-        Points, out of the grade's maximum.
-    """
-    if overrides is not None and grade.id in overrides:
-        return overrides[grade.id] * grade.max_score
-    if grade.score is not None:
-        return grade.score
-    return unmarked * grade.max_score
+    return scheme_math.category_average(course, category_value, 0, unmarked, overrides)[0]
 
 
 def project_average(
@@ -903,9 +937,11 @@ def calculate_grade_band(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
     worst = project_course(course, 0.0)
     current = course_grade(course)
 
+    # An item at 0% of a split can't move the band, so it isn't outstanding.
     outstanding = sum(
         1 for g in course.grades
         if g.score is None and g.max_score > 0 and counts_toward_average(g)
+        and subcategory.carries_weight(course, g)
     )
     empty_categories = empty_weighted_categories(course)
 
@@ -962,20 +998,17 @@ def calculate_required_final(
     weights = course.category_weights
     final_weight = weights.get(GradeCategory.FINAL.value, 0.0)
 
-    # Which non-final categories have at least one marked grade. The averages
+    # Which non-final categories have a marked grade that counts. The averages
     # themselves come from calculate_grade_category_average so this prediction
-    # agrees with the average shown on the course; computing a plain mean of
-    # percentages here made the two disagree whenever a category mixed
-    # assignments of different sizes (5/10 and 90/100 gave 70% here but 86.36%
-    # on the course page).
+    # agrees with the average shown on the course: the two once disagreed
+    # whenever a category mixed assignments of different sizes, because each
+    # did its own arithmetic.
     graded_categories = {
         grade.category
         for grade in course.grades
         if grade.category != GradeCategory.FINAL.value
         and not is_additive(grade.category)
-        and grade.score is not None
-        and grade.max_score > 0
-        and counts_toward_average(grade)
+        and category_is_marked(course, grade.category)
     }
 
     if final_weight == 0:
@@ -1088,8 +1121,9 @@ def required_final_under_scheme(course: CourseModel, components, target_grade: f
 def category_points(course: CourseModel, category) -> float:
     """Return the marks a category contributes to the course, out of its weight.
 
-    Computed in `Decimal` from the raw scores, rounded half up once, so an exact
-    11.825 reads 11.83 where float rounding gives 11.82.
+    The same shares as `scheme_math.category_average`, computed in `Decimal` from the
+    raw scores and rounded half up once, so an exact 11.825 reads 11.83 where float
+    rounding gives 11.82.
 
     Args:
         course: Course with its grades and weights loaded.
@@ -1101,25 +1135,25 @@ def category_points(course: CourseModel, category) -> float:
     category_value = category.value if isinstance(category, GradeCategory) else category
     weight = course.category_weights.get(category_value, 0.0)
 
-    items = [
-        g for g in course.grades
-        if g.category == category_value and g.score is not None and g.max_score > 0
-        and counts_toward_average(g)
+    everything = subcategory.members(course, category_value)
+    split = subcategory.is_split(everything)
+    counted = [
+        (g, Decimal(str(subcategory.share(g, split))))
+        for g in everything
+        if g.score is not None and g.max_score > 0 and counts_toward_average(g)
+        and subcategory.share(g, split) > 0
     ]
-    if not items or weight == 0:
+    if not counted or weight == 0:
         return 0.0
 
-    earned = sum(Decimal(str(g.score)) for g in items)
-    possible = sum(Decimal(str(g.max_score)) for g in items)
-    if possible == 0:
-        return 0.0
-
-    points = earned / possible * Decimal(str(weight))
+    earned = sum(Decimal(str(g.score)) / Decimal(str(g.max_score)) * part for g, part in counted)
+    total = sum(part for _, part in counted)
+    points = earned / total * Decimal(str(weight))
     return float(points.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
 def calculate_grade_category_average(course: CourseModel, category: GradeCategory) -> float:
-    """Return a category's point-weighted average over its marked, counted grades.
+    """Return a category's live average over its marked, counted grades, by share.
 
     Args:
         course: Course with its grades loaded.
@@ -1129,20 +1163,20 @@ def calculate_grade_category_average(course: CourseModel, category: GradeCategor
         The percentage rounded to 2 places; 0.0 when nothing is marked.
     """
     category_value = category.value if isinstance(category, GradeCategory) else category
-    category_grades = [
-        g for g in course.grades
-        if g.category == category_value and g.score is not None and g.max_score > 0
-        and counts_toward_average(g)
-    ]
-    if not category_grades:
-        return 0.0
+    return scheme_math.category_average(course, category_value)[0] or 0.0
 
-    total_weight = sum(g.max_score for g in category_grades)
-    if total_weight == 0:
-        return 0.0
 
-    weighted_sum = sum(
-        (g.score / g.max_score) * 100 * g.max_score
-        for g in category_grades
-    )
-    return round(weighted_sum / total_weight, 2)
+def category_is_marked(course: CourseModel, category: str) -> bool:
+    """Return whether a category has a marked item that moves its average.
+
+    An item at 0% of a split is marked but counts for nothing, so it does not make
+    its category count toward the course either.
+
+    Args:
+        course: Course with its grades loaded.
+        category: Category value.
+
+    Returns:
+        True when the category's live average is known.
+    """
+    return scheme_math.category_average(course, category)[0] is not None
