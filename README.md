@@ -16,24 +16,21 @@ The aim is a tool good enough to live in every day, not one to demonstrate — b
 > the last three boxes of the tree below are unbuilt: Notes, Goals and Study
 > Analytics have never been started, and nothing depends on them.
 >
-> **`Ideas/` is the live record, and it is what to read rather than this file.**
-> [`Ideas/design/`](Ideas/design/README.md) carries how each module works and *why*,
-> which is what stops a settled decision being reversed for looking inconvenient;
-> [`shipped.md`](Ideas/shipped.md) holds what has shipped and [`next.md`](Ideas/next.md) what is next;
-> [`shipping.md`](Ideas/shipping.md) is the loop for building and deploying a change;
-> [`ROLLBACK.md`](Ideas/ROLLBACK.md) is for when something is broken; and
-> [`audit.md`](Ideas/audit.md) is the defect record — 56 findings, one still open.
+> **The planning notes are private.** Design notes, decisions, runbooks, the audit
+> and the backlog live in `Ideas/`, which is ignored by git and kept on the owner's
+> machine since 2026-11-06. Copies from before that date are in this repository's
+> history.
 >
-> **Sections further down still describe the app as it was before any of that
-> shipped** — they name Calendar and Tasks as stubs, list closed security findings as
-> open, and point at files since deleted. They are being brought current; until they
-> are, trust `Ideas/` over anything below this line.
+> **Sections further down still describe the app as it was before most of it
+> shipped.** They name Calendar and Tasks as stubs, list closed security findings as
+> open, and point at files since deleted. Trust the code over anything below this
+> line.
 
 ---
 
 ## The Goal
 
-From `Ideas/core.txt` — the app is meant to become a single place that holds:
+From the original brief, the app is meant to become a single place that holds:
 
 - A **heavily modifiable calendar** with recurring events and "ends by" rules, showing classes, tasks/reminders, money spent per day, and recurring payments/transfers all on the same surface.
 - A **grade calculator and class schedule**, with predictions and analytics.
@@ -457,7 +454,7 @@ are gitignored.
 ## Testing
 
 The project had no automated tests of any kind, which is the single fact that best
-explained the shape of `Ideas/audit.md`: nearly every defect in it is one a test would
+explained the shape of the project's audit: nearly every defect in it is one a test would
 have pinned down, and several were re-runs of bugs already fixed once elsewhere.
 
 ```bash
@@ -572,8 +569,8 @@ silently resolved a different TypeScript major.
 
 ## Security
 
-`Ideas/audit.md` is the current, verified list; `Ideas/fix.txt` was an earlier pass and
-has been folded into it (including seven findings that did not survive re-checking).
+The owner's audit, kept privately in `Ideas/`, is the current, verified list. This
+section is an older summary of it.
 
 ### Closed
 
@@ -664,26 +661,15 @@ origin  https://github.com/fawwaz9/Account.git
   report that turned out to be a branch without the fix in it.
 
 **A push to `main` deploys the frontend**, because Cloudflare Pages builds from
-it. The API does not deploy itself — that is a manual `gcloud run deploy`. See
-`Ideas/deployment.md`.
+it. The API deploys when a commit reaches `ship`, whose workflow checks the schema and
+takes a backup first. `Application/deploy.run.sh` runs the whole sequence; applying the
+schema stays a person's step.
 
 ### Where the planning lives
-**[`Ideas/README.md`](Ideas/README.md) indexes all of it.** `Ideas/to_do.txt`,
-`Ideas/fix.txt` and `Ideas/features.txt` have been folded into the files below
-and deleted:
 
-| File | Holds |
-|---|---|
-| `Ideas/design/` | **Start here.** One note per module plus an overview: how each works and why |
-| `Ideas/session-handoff.md` | Where the project is right now — branch, live URLs, data, what is left |
-| `Ideas/next.md` | The feature backlog per module, and the order to build it in |
-| `Ideas/shipped.md` | What is already built and deployed — check before proposing anything |
-| `Ideas/audit.md` | Every known defect, tiered by severity, with what was verified how |
-| `Ideas/deployment.md` | The 39-step deploy runbook, all of it done bar the last two |
-| `Ideas/plan-a-decisions.md` | Why each deployment choice was made, and what would change its mind |
-| `Ideas/ROLLBACK.md` | What to do when it is broken. Commands first |
-| `Ideas/jobs-plan.md` | The worked example: a module planned, built and logged |
-| `Ideas/core.txt` | The original goal, in the author's own words |
+In `Ideas/`, the owner's private notes, ignored by git since 2026-11-06. Its own
+`README.md` indexes it, folder by folder: `AI/`, `additions/`, `audit/`, `deploy/` and
+`design/`.
 
 Docker has since been run end to end — that was Phase 0 of the deployment, and
 it found a real defect nothing else would have (local builds are `linux/arm64`;

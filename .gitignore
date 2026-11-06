@@ -34,3 +34,8 @@ Application/backend/data/testing-data-manifest.json
 
 # ---- Deploy logs (Application/deploy.run.sh keeps failed runs here) ----
 Application/.deploy-logs/
+
+# ---- The owner's notes: plans, decisions, runbooks, audits. Personal, so they
+# stay on the owner's machine. Untracked 2026-11-06; earlier versions remain in
+# the history. ----
+Ideas/
