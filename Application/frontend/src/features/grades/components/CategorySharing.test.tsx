@@ -2,16 +2,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-const api = { setSubcategoryWeights: vi.fn() };
-vi.mock("../api", () => ({ setSubcategoryWeights: (...a: unknown[]) => api.setSubcategoryWeights(...a) }));
+const api = { setCategorySharing: vi.fn() };
+vi.mock("../api", () => ({ setCategorySharing: (...a: unknown[]) => api.setCategorySharing(...a) }));
 vi.mock("../../../app/auth/AuthContext", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
 
-import SubcategoryWeightsModal from "./SubcategoryWeightsModal";
+import CategorySharingModal from "./CategorySharingModal";
 import GradeCategoryColumn from "./GradeCategoryColumn";
 import { Grade, GradeCategory, GradeSchedule } from "../types";
 import { addsUp, evenSplit } from "../subcategory";
 
-/** D29: a category's weight split between its items, adding up to it, or shared evenly. */
+/** D29: a category's weight shared evenly, by points, or split between its items, adding up to it. */
 
 function grade(id: string, name: string, score: number | null, max: number, share: number | null = null): Grade {
   return {
@@ -25,19 +25,23 @@ const even = [grade("m1", "M1", 48, 52), grade("m2", "M2", 40, 80), grade("m3", 
 const split = [grade("m1", "M1", 48, 52, 10), grade("m2", "M2", 40, 80, 5), grade("m3", "M3", 27, 30, 15)];
 
 beforeEach(() => {
-  api.setSubcategoryWeights.mockReset();
-  api.setSubcategoryWeights.mockResolvedValue([]);
+  api.setCategorySharing.mockReset();
+  api.setCategorySharing.mockResolvedValue([]);
 });
 afterEach(cleanup);
 
-function openModal(items: Grade[], onSaved = vi.fn()) {
+function openModal(items: Grade[], onSaved = vi.fn(), byPoints = false) {
   render(
-    <SubcategoryWeightsModal
+    <CategorySharingModal
       open courseId="c1" category={GradeCategory.MIDTERM} categoryWeight={30} items={items}
-      onClose={() => {}} onSaved={onSaved}
+      byPoints={byPoints} onClose={() => {}} onSaved={onSaved}
     />
   );
   return onSaved;
+}
+
+function choose(label: string) {
+  fireEvent.click(screen.getByRole("radio", { name: new RegExp(`^${label}`) }));
 }
 
 function share(name: string): HTMLInputElement {
@@ -52,9 +56,38 @@ describe("the split helpers", () => {
   });
 });
 
-describe("SubcategoryWeightsModal", () => {
-  it("starts an even category at its even share", () => {
+describe("CategorySharingModal", () => {
+  it("starts on how the category is shared now", () => {
     openModal(even);
+    expect((screen.getByRole("radio", { name: /^Evenly/ }) as HTMLInputElement).checked).toBe(true);
+    cleanup();
+    openModal(even, vi.fn(), true);
+    expect((screen.getByRole("radio", { name: /^By points/ }) as HTMLInputElement).checked).toBe(true);
+    cleanup();
+    openModal(split, vi.fn(), true);
+    expect((screen.getByRole("radio", { name: /^My own weights/ }) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("asks for no weights unless you choose your own", () => {
+    openModal(even);
+    expect(screen.queryByLabelText("M1")).toBeNull();
+    choose("My own weights");
+    expect(screen.getByLabelText("M1")).toBeTruthy();
+  });
+
+  it("saves by points as no split, by points", async () => {
+    const onSaved = openModal(even);
+
+    choose("By points");
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(api.setCategorySharing).toHaveBeenCalledWith("u1", "c1", "Midterm", { weights: null, by_points: true });
+  });
+
+  it("starts your own weights at the even share", () => {
+    openModal(even);
+    choose("My own weights");
 
     expect([share("M1").value, share("M2").value, share("M3").value]).toEqual(["10", "10", "10"]);
     expect(screen.getByRole("status").textContent).toBe("Adds up to 30%.");
@@ -62,6 +95,7 @@ describe("SubcategoryWeightsModal", () => {
 
   it("won't save a split that doesn't add up", () => {
     openModal(even);
+    choose("My own weights");
 
     fireEvent.change(share("M3"), { target: { value: "5" } });
 
@@ -74,30 +108,31 @@ describe("SubcategoryWeightsModal", () => {
 
   it("saves a split that adds up, by grade id", async () => {
     const onSaved = openModal(even);
+    choose("My own weights");
 
     fireEvent.change(share("M2"), { target: { value: "5" } });
     fireEvent.change(share("M3"), { target: { value: "15" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
-    expect(api.setSubcategoryWeights).toHaveBeenCalledWith("u1", "c1", "Midterm", { m1: 10, m2: 5, m3: 15 });
+    expect(api.setCategorySharing).toHaveBeenCalledWith("u1", "c1", "Midterm", {
+      weights: { m1: 10, m2: 5, m3: 15 }, by_points: false,
+    });
   });
 
-  it("offers to share evenly again only when split, and sends null", async () => {
-    openModal(even);
-    expect(screen.queryByRole("button", { name: "Share evenly again" })).toBeNull();
-    cleanup();
-
+  it("shows a stored split, and going back to even clears it", async () => {
     const onSaved = openModal(split);
     expect([share("M1").value, share("M2").value, share("M3").value]).toEqual(["10", "5", "15"]);
-    fireEvent.click(screen.getByRole("button", { name: "Share evenly again" }));
+
+    choose("Evenly");
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
-    expect(api.setSubcategoryWeights).toHaveBeenCalledWith("u1", "c1", "Midterm", null);
+    expect(api.setCategorySharing).toHaveBeenCalledWith("u1", "c1", "Midterm", { weights: null, by_points: false });
   });
 
   it("shows the server's refusal", async () => {
-    api.setSubcategoryWeights.mockRejectedValue(new Error("Subcategory weights must add up to Midterm's 30%"));
+    api.setCategorySharing.mockRejectedValue(new Error("Subcategory weights must add up to Midterm's 30%"));
     openModal(split);
 
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -106,11 +141,11 @@ describe("SubcategoryWeightsModal", () => {
   });
 });
 
-function column(items: Grade[], weight = 30) {
+function column(items: Grade[], weight = 30, byPoints = false) {
   const onSplit = vi.fn();
   render(
     <GradeCategoryColumn
-      title="Midterm" category={GradeCategory.MIDTERM} categoryWeight={weight} items={items}
+      title="Midterm" category={GradeCategory.MIDTERM} categoryWeight={weight} byPoints={byPoints} items={items}
       onEditItem={() => {}} onAddGrade={() => {}} onDeleteItem={() => {}} onSplit={onSplit}
     />
   );
@@ -125,6 +160,12 @@ describe("GradeCategoryColumn and subcategory weights", () => {
     expect(screen.queryByText("10%")).toBeNull();
   });
 
+  it("says a category marked by points is", () => {
+    column(even, 30, true);
+
+    expect(screen.getByText("30% shared by points")).toBeTruthy();
+  });
+
   it("shows each item's share when split", () => {
     column(split);
 
@@ -133,10 +174,10 @@ describe("GradeCategoryColumn and subcategory weights", () => {
     expect(screen.getByText("15%")).toBeTruthy();
   });
 
-  it("opens the split from its button", () => {
+  it("opens the choice from its button", () => {
     const onSplit = column(even);
 
-    fireEvent.click(screen.getByRole("button", { name: "Split Midterm's 30%" }));
+    fireEvent.click(screen.getByRole("button", { name: "Change how Midterm's 30% is shared" }));
 
     expect(onSplit).toHaveBeenCalledWith("Midterm");
   });
@@ -144,11 +185,12 @@ describe("GradeCategoryColumn and subcategory weights", () => {
   it("explains the rules behind a ? mark", () => {
     column(even);
 
-    fireEvent.click(screen.getByRole("button", { name: "What subcategory weights are" }));
+    fireEvent.click(screen.getByRole("button", { name: "How a category's weight is shared" }));
 
     const note = screen.getByRole("note");
-    expect(note.textContent).toContain("They must add up to 30%");
-    expect(note.textContent).toContain("shared evenly: every item counts the same, whatever it's out of");
+    expect(note.textContent).toContain("Subcategory weights must add up to 30%");
+    expect(note.textContent).toContain("Evenly, the default: every item counts the same, whatever it's out of");
+    expect(note.textContent).toContain("By points, for a professor who adds up marks: total earned over total possible");
   });
 
   it("warns about an item at 0% of a split", () => {
@@ -160,6 +202,6 @@ describe("GradeCategoryColumn and subcategory weights", () => {
   it("has nothing to split in a category with no weight", () => {
     column(even, 0);
 
-    expect(screen.queryByRole("button", { name: /Split/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /shared/ })).toBeNull();
   });
 });

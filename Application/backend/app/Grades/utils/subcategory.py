@@ -1,13 +1,23 @@
 """Subcategory weights: how a category's weight is shared between its items (D29).
 
-A category is either *even* -- no item carries a `subcategory_weight`, and every
-item counts the same whatever it is marked out of -- or *split*: every item carries
-one, and together they add up to the category's weight. Nothing in between is
-ever stored. The helpers here keep that true through each change that could break
-it: an item joins a split category at 0%, an item that leaves gives its weight to
-the rest in proportion, and a change to the category's weight scales the split.
-Pure: no session, no commit.
+A category shares its weight one of three ways:
+
+- *even*, the default: every item counts the same, whatever it is marked out of;
+- *by points*, for a professor who adds up marks: each item counts by its maximum,
+  so the category is total earned over total possible (the `by_points` flag on the
+  course's category weight);
+- *split*: every item carries a `subcategory_weight`, and together they add up to
+  the category's weight. A split overrides the other two.
+
+A split is never partly stored. The helpers here keep it adding up through each
+change that could break it: an item joins a split category at 0%, an item that
+leaves gives its weight to the rest in proportion, and a change to the category's
+weight scales the split. Pure: no session, no commit.
 """
+
+EVEN = "even"
+POINTS = "points"
+SPLIT = "split"
 
 #: How far a split's total may sit from the category's weight, in percent,
 #: before it is refused. Shares are stored to 2 places, so anything finer is
@@ -43,19 +53,41 @@ def is_split(items) -> bool:
     return any(g.subcategory_weight is not None for g in items)
 
 
-def share(grade, split: bool) -> float:
+def sharing(course, category: str, items=None) -> str:
+    """Return how a category shares its weight: `SPLIT`, `POINTS` or `EVEN`.
+
+    Args:
+        course: Course row with its grades and weights loaded.
+        category: Category value.
+        items: The category's members, when the caller already has them.
+
+    Returns:
+        `SPLIT` when any item carries a subcategory weight, else `POINTS` when the
+        category is marked by points, else `EVEN`.
+    """
+    if is_split(members(course, category) if items is None else items):
+        return SPLIT
+    if category in getattr(course, "points_categories", ()):
+        return POINTS
+    return EVEN
+
+
+def share(grade, mode: str) -> float:
     """Return an item's share for averaging within its category.
 
     Args:
         grade: The grade.
-        split: Whether its category is split.
+        mode: How its category shares its weight, from `sharing`.
 
     Returns:
-        Its subcategory weight when split (0 for none), else 1 -- every item equal.
+        Its subcategory weight when split (0 for none), its maximum by points, else 1
+        -- every item equal.
     """
-    if not split:
-        return 1.0
-    return grade.subcategory_weight or 0.0
+    if mode == SPLIT:
+        return grade.subcategory_weight or 0.0
+    if mode == POINTS:
+        return grade.max_score
+    return 1.0
 
 
 def carries_weight(course, grade) -> bool:
@@ -68,7 +100,7 @@ def carries_weight(course, grade) -> bool:
     Returns:
         False only for an item at 0% of a split category.
     """
-    return share(grade, is_split(members(course, grade.category))) > 0
+    return share(grade, sharing(course, grade.category)) > 0
 
 
 def spread(total: float, parts: list[float]) -> list[float]:

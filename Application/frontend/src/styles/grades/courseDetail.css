@@ -1555,3 +1555,28 @@
 .shareTotalOff {
   color: #ff5a52;
 }
+
+.shareChoices {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 0;
+  border: none;
+}
+
+.shareChoice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.shareChoice input {
+  margin-top: 3px;
+}
+
+.shareChoiceNote {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--muted);
+}

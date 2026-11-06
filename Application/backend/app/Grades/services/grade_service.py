@@ -149,10 +149,15 @@ def sync_grade_weights(course: CourseModel, categories: set[str] | None = None):
             grade.weight = weights.get(grade.category, 0.0)
 
 
-def set_subcategory_weights(
-    db: Session, user_id: uuid.UUID, course_id: uuid.UUID, category: str, weights: dict[uuid.UUID, float] | None,
+def set_category_sharing(
+    db: Session,
+    user_id: uuid.UUID,
+    course_id: uuid.UUID,
+    category: str,
+    weights: dict[uuid.UUID, float] | None,
+    by_points: bool = False,
 ):
-    """Split a category's weight between its items, or share it evenly again (D29).
+    """Set how a category shares its weight: evenly, by points, or split (D29).
 
     Args:
         db: Request-scoped database session.
@@ -160,8 +165,10 @@ def set_subcategory_weights(
         course_id: The course.
         category: Category value.
         weights: Grade id to its share in percent of the course, one for every item in
-            the category, adding up to the category's weight; None or empty clears the
-            split, so every item counts the same.
+            the category, adding up to the category's weight. None or empty clears the
+            split, and the category is shared evenly or by points.
+        by_points: With no split, share by points (each item by its maximum) rather
+            than evenly. Ignored with a split, which turns it off.
 
     Returns:
         The course's grades in display order, or None when the course is missing or
@@ -169,7 +176,8 @@ def set_subcategory_weights(
 
     Raises:
         ValueError: If the split does not cover exactly the category's items or does
-            not add up to its weight; nothing is written.
+            not add up to its weight, or by points is asked of a category with no
+            weight; nothing is written.
 
     Note:
         Commits.
@@ -180,13 +188,19 @@ def set_subcategory_weights(
 
     before = forecast_before(course)
     items = subcategory.members(course, category)
+    row = next((cw for cw in course.category_weight_rows if cw.category == category), None)
     if weights:
         checked = subcategory.check_split(course, category, weights)
         for g in items:
             g.subcategory_weight = checked[g.id]
+        by_points = False
     else:
+        if by_points and (row is None or row.weight <= 0):
+            raise ValueError(f"{category} has no weight to share. Give it a weight first.")
         for g in items:
             g.subcategory_weight = None
+    if row is not None:
+        row.by_points = by_points
 
     course.average = course_grade(course)
     keep_projection(course, before, user_today(db, user_id))
@@ -1136,12 +1150,12 @@ def category_points(course: CourseModel, category) -> float:
     weight = course.category_weights.get(category_value, 0.0)
 
     everything = subcategory.members(course, category_value)
-    split = subcategory.is_split(everything)
+    mode = subcategory.sharing(course, category_value, everything)
     counted = [
-        (g, Decimal(str(subcategory.share(g, split))))
+        (g, Decimal(str(subcategory.share(g, mode))))
         for g in everything
         if g.score is not None and g.max_score > 0 and counts_toward_average(g)
-        and subcategory.share(g, split) > 0
+        and subcategory.share(g, mode) > 0
     ]
     if not counted or weight == 0:
         return 0.0

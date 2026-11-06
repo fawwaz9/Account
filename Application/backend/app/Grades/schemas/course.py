@@ -521,8 +521,9 @@ class CourseDetail(Course):
 
     Attributes:
         grades: The course's grades in display order (see `grade_sort_key`).
-        category_averages: Point-weighted average per category, 0-100.
+        category_averages: Average per category, 0-100, by each item's share (D29).
         category_points: Marks each category contributes, out of its weight.
+        points_categories: The categories shared by points rather than evenly.
     """
 
     grades: List[Grade] = Field(default_factory=list)
@@ -556,6 +557,10 @@ class CourseDetail(Course):
     category_points: dict[GradeCategory, float] = Field(
         default_factory=dict,
         description="Marks each category contributes, out of its weight",
+    )
+    points_categories: List[GradeCategory] = Field(
+        default_factory=list,
+        description="Categories whose weight is shared by points (earned over possible) rather than evenly",
     )
 
     class Config:

@@ -5,7 +5,7 @@
     python scripts/recompute_averages.py --apply    # write it
 
 D29 changed how a category is averaged: every item counts the same unless its
-category is split, where it used to count by its points. `courses.average` is
+category is split or marked by points, where it used to count by its points. `courses.average` is
 stored, and readers never recompute it, so every course keeps its old figure until
 one of its grades is next saved. This brings them all over at once.
 
@@ -14,7 +14,8 @@ term and the first eight characters of its id -- never whose it is. A course wit
 a recorded final grade is marked: its letter, GPA and year average come from that
 final, so they don't move. Only `average` is written; a recorded projection
 (`projected_before_final`) is history and is left as it was. Run the listing,
-read it, then run --apply. It runs as the tables' owner, since the API's role sees
+read it, then run --apply. A listed course whose professor adds up marks can then be
+set to "By points" on its page, which brings its old figure back. It runs as the tables' owner, since the API's role sees
 one user at a time.
 """
 from __future__ import annotations

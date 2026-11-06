@@ -156,32 +156,41 @@ class Grade(GradeBase):
         from_attributes = True
 
 
-class SubcategoryWeights(BaseModel):
-    """A category's weight split between its items, or a request to share it evenly.
+class CategorySharing(BaseModel):
+    """How a category shares its weight: evenly, by points, or split (D29).
 
     Attributes:
-        category: The category whose weight is split.
+        category: The category.
         weights: Grade id to its share in percent of the course, for every item in
             the category, adding up to the category's weight. Null or empty clears
-            the split, and every item counts the same.
+            the split.
+        by_points: With no split, share by points -- total earned over total possible
+            -- rather than evenly.
     """
     category: GradeCategory
     weights: dict[UUID, float] | None = Field(
         default=None,
-        description="Grade id to its share of the category's weight; null shares it evenly",
+        description="Grade id to its share of the category's weight; null for no split",
+    )
+    by_points: bool = Field(
+        default=False,
+        description="With no split, count each item by what it's marked out of rather than evenly",
     )
 
     @model_validator(mode="after")
-    def each_share_in_range(self):
-        """Refuse a share outside 0-100 before the service checks the total.
+    def one_way_at_a_time(self):
+        """Refuse a share outside 0-100, and a split asked to go by points as well.
 
         Returns:
             The validated model.
 
         Raises:
-            ValueError: If a share is negative or over 100.
+            ValueError: If a share is negative or over 100, or both a split and by
+                points are sent.
         """
         for value in (self.weights or {}).values():
             if value < 0 or value > 100:
                 raise ValueError("A subcategory weight must be between 0 and 100")
+        if self.weights and self.by_points:
+            raise ValueError("A category is split or shared by points, not both")
         return self

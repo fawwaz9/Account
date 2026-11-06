@@ -73,16 +73,17 @@ export async function updateCategoryWeights(
 }
 
 /**
- * Split a category's weight between its items, by grade id, or pass null to share it evenly
- * again. The shares must add up to the category's weight, or the server refuses with a 400.
+ * Set how a category shares its weight (D29): split between its items by grade id, or, with
+ * `weights` null, evenly or by points. A split must add up to the category's weight, or the
+ * server refuses with a 400.
  */
-export async function setSubcategoryWeights(
+export async function setCategorySharing(
   userId: string,
   courseId: string,
   category: GradeCategory,
-  weights: Record<string, number> | null
+  sharing: { weights: Record<string, number> | null; by_points: boolean }
 ) {
-  return put<Grade[]>(endpoints.grades.subcategoryWeights(userId, courseId), { category, weights });
+  return put<Grade[]>(endpoints.grades.categorySharing(userId, courseId), { category, ...sharing });
 }
 
 /** Add a grade to a course. */

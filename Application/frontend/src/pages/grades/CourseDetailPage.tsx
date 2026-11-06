@@ -29,7 +29,7 @@ import { intakeStatus } from "../../features/intake/api";
 import BulkGradesModal from "../../features/grades/components/BulkGradesModal";
 import { getErrorMessage } from "../../features/grades/components/AddCourseModal";
 import GradeCategoryColumn from "../../features/grades/components/GradeCategoryColumn";
-import SubcategoryWeightsModal from "../../features/grades/components/SubcategoryWeightsModal";
+import CategorySharingModal from "../../features/grades/components/CategorySharingModal";
 import { isSplit } from "../../features/grades/subcategory";
 import ClassScheduleModal from "../../features/calender/components/ClassScheduleModal";
 import { useApiRefreshCount } from "../../shared/hooks/useApiRefresh";
@@ -399,6 +399,7 @@ export default function CourseDetailPage() {
             title={unweightedCategories.has(category) ? `${category} (0% weight)` : category}
             category={category}
             categoryWeight={course.category_weights[category] ?? 0}
+            byPoints={course.points_categories?.includes(category) ?? false}
             items={gradesByCategory[category] ?? []}
             onEditItem={handleEditGrade}
             onAddGrade={handleAddGrade}
@@ -490,12 +491,13 @@ export default function CourseDetailPage() {
       )}
 
       {splitCategory && (
-        <SubcategoryWeightsModal
+        <CategorySharingModal
           open
           courseId={courseId}
           category={splitCategory}
           categoryWeight={course.category_weights[splitCategory] ?? 0}
           items={gradesByCategory[splitCategory] ?? []}
+          byPoints={course.points_categories?.includes(splitCategory) ?? false}
           onClose={() => setSplitCategory(null)}
           onSaved={() => { void refreshCourse(); setReloadNonce((n) => n + 1); }}
         />

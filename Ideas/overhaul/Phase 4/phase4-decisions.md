@@ -880,3 +880,59 @@ Evidence:
 - **Found on the walk, not from this change:** after you delete a grade, the band and
   "Worth doing next" keep their old figures until the page reloads. Deleting refetches
   only the course. Adding and editing a grade do the same.
+
+**Added the same day, after the arithmetic check: sharing by points (yours).** You asked
+for an option, because some professors add up marks: "Labs 20%" meaning every lab mark
+over every lab maximum. Each category now shares its weight one of three ways, chosen
+in one dialog from "Change" under its heading:
+- **Evenly,** the default.
+- **By points:** total earned over total possible, the old rule, so an item out of 100
+  counts ten times one out of 10. It's stored as `course_category_weights.by_points`,
+  a second new column in the same schema step.
+- **My own weights:** the subcategory weights above.
+
+A split overrides the other two, and setting one turns by points off. Clearing a split
+goes back to whichever you choose in the same dialog. By points needs the category to
+have a weight, and it survives a change of that weight. A new item in a by-points
+category needs no share. After the recompute, a listed course whose professor adds up
+marks goes back to its old figure once you set its category to by points.
+
+**Drop-lowest stays as it is, at your call.** It drops the lowest percentage, and
+choosing which grade to drop is up to you or an agent.
+
+Evidence for the addition, on top of the above:
+- 9 more backend tests:
+  - By points is 95/110 = 86.36 on the category, the course and the stored average.
+  - The course page's points.
+  - It needs a weight.
+  - A split overrides it, and clearing the split goes back to even.
+  - A split sent with by points still turns it off, for any caller.
+  - A new item needs no share.
+  - It survives a weight change.
+  - The route sets it, and the course detail lists it.
+  - A split and by points together are refused.
+- 4 more frontend tests:
+  - The dialog starts on the current way.
+  - It asks for weights only for "My own weights".
+  - By points saves as no split.
+  - The column says "shared by points".
+- **Suites:** SQLite 3,461 passed and 851 skipped. Postgres 3,997 passed and 315 skipped.
+  Frontend 947 passed. These ran before the ninth test was added; that file then passed
+  on both databases.
+- **Mutations:** 16 new ones on the by-points paths, all caught. One was first missed:
+  dropping the rule that a split turns by points off. The ninth test is what catches it.
+  The original 29 were rerun against the renamed code, and all of them still apply and
+  are caught.
+- **The rehearsal caught a real failure.** As first written, the new column's DDL was
+  `BOOLEAN NOT NULL DEFAULT 0`, the form the older boolean columns use. Postgres refuses
+  that ("default expression is of type integer"), and the schema step would have failed
+  on production before adding anything. It is now `DEFAULT false`, the form this codebase
+  already records for exactly this. Rehearsed again over an existing category row:
+  `by_points` comes in `boolean`, not null, default `false`, the row reads false, and the
+  runbook's read-backs match.
+- **Walked in a browser at 1440px and 390px:**
+  - By points took Quiz (5/10 and 90/100) from 70% to 86.36%, 8.64 of 10, and the course
+    from 75.58 to 79.67.
+  - Splitting the midterms 10/5/15 took it to 84.66.
+  - Both choices survive a reload.
+  - The dialog asks for weights only for "My own weights", and fits a phone.

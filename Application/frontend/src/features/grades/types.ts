@@ -125,6 +125,8 @@ export interface CourseDetail {
   category_averages: Partial<Record<GradeCategory, number>>;
   /** Marks each category contributes out of its weight; sent because deriving it rounds twice. */
   category_points: Partial<Record<GradeCategory, number>>;
+  /** Categories whose weight is shared by points (earned over possible) rather than evenly (D29). */
+  points_categories?: GradeCategory[];
 }
 
 /** Patch body for a course; callers send a `Partial` holding only the changed fields. */

@@ -1,9 +1,9 @@
 """Subcategory weights (D29): how a category's weight is shared between its items.
 
-Two rules. With no subcategory weights, every item in a category counts the same,
-whatever it is marked out of -- not by points, as before. With them, each item
-counts by its own share, and the shares must add up to the category's weight. The
-second rule is a hard limit, so every change that could break it repairs it: an
+Three ways. With no subcategory weights, every item in a category counts the same,
+whatever it is marked out of, unless the category is marked by points, where each
+counts by its maximum. With them, each item counts by its own share, and the shares
+must add up to the category's weight. That is a hard limit, so every change that could break it repairs it: an
 item joins a split category at 0%, one that leaves gives its share to the rest in
 proportion, and a change to the category's weight scales the split.
 """
@@ -34,7 +34,7 @@ from app.Grades.services.grade_service import (
     delete_grade,
     get_user_course,
     project_course,
-    set_subcategory_weights,
+    set_category_sharing,
     update_category_weights,
     update_grade,
 )
@@ -162,6 +162,98 @@ def test_an_unmarked_item_at_0_percent_is_not_outstanding(db, user):
     band = calculate_grade_band(db, user.id, course.id)
     assert band["outstanding_items"] == 0
     assert band["settled"] is True
+
+
+def by_points(db, user, course, category):
+    """Mark a category as shared by points, through the service."""
+    set_category_sharing(db, user.id, course.id, category, None, by_points=True)
+    db.expire_all()
+    return get_user_course(db, user.id, course.id)
+
+
+def test_by_points_is_total_earned_over_total_possible(db, user):
+    """The old rule, for a professor who adds up marks: 95/110, not 70."""
+    course = make_course(db, user.id, "COSC 110", category_weights={"Lab": 100.0})
+    mark(db, course, "Lab", "L1", 5.0, 10.0)
+    mark(db, course, "Lab", "L2", 90.0, 100.0)
+
+    course = by_points(db, user, course, "Lab")
+
+    assert course.points_categories == ["Lab"]
+    assert calculate_grade_category_average(course, "Lab") == 86.36
+    assert calculate_current_average(course) == 86.36
+    assert course.average == 86.36
+
+
+def test_by_points_reaches_the_course_page_points(db, user):
+    course = make_course(db, user.id, "COSC 111", category_weights={"Lab": 20.0, "Final": 80.0})
+    mark(db, course, "Lab", "L1", 5.0, 10.0)
+    mark(db, course, "Lab", "L2", 90.0, 100.0)
+    course = by_points(db, user, course, "Lab")
+
+    attach_category_averages(course)
+    # 95/110 of 20.
+    assert course.category_points["Lab"] == 17.27
+
+
+def test_by_points_needs_a_weight(db, user):
+    course = make_course(db, user.id, "COSC 112", category_weights={"Lab": 0.0, "Final": 100.0})
+    mark(db, course, "Lab", "L1", 5.0, 10.0)
+
+    with pytest.raises(ValueError, match="no weight to share"):
+        set_category_sharing(db, user.id, course.id, "Lab", None, by_points=True)
+
+
+def test_a_split_overrides_by_points_and_clearing_it_goes_back_to_even(db, user):
+    course = make_course(db, user.id, "COSC 113", category_weights={"Lab": 20.0, "Final": 80.0})
+    first = mark(db, course, "Lab", "L1", 5.0, 10.0)
+    second = mark(db, course, "Lab", "L2", 90.0, 100.0)
+    by_points(db, user, course, "Lab")
+
+    set_category_sharing(db, user.id, course.id, "Lab", {first.id: 15.0, second.id: 5.0})
+    db.expire_all()
+    course = get_user_course(db, user.id, course.id)
+    assert course.points_categories == []
+    # (50*15 + 90*5) / 20.
+    assert calculate_grade_category_average(course, "Lab") == 60.0
+
+    set_category_sharing(db, user.id, course.id, "Lab", None)
+    db.expire_all()
+    assert calculate_grade_category_average(get_user_course(db, user.id, course.id), "Lab") == 70.0
+
+
+def test_a_split_sent_with_by_points_still_turns_it_off(db, user):
+    """The route refuses both at once; the service holds the rule for any other caller."""
+    course = make_course(db, user.id, "COSC 117", category_weights={"Lab": 20.0, "Final": 80.0})
+    first = mark(db, course, "Lab", "L1", 5.0, 10.0)
+    second = mark(db, course, "Lab", "L2", 90.0, 100.0)
+    by_points(db, user, course, "Lab")
+
+    set_category_sharing(db, user.id, course.id, "Lab", {first.id: 15.0, second.id: 5.0}, by_points=True)
+
+    db.expire_all()
+    assert get_user_course(db, user.id, course.id).points_categories == []
+
+
+def test_a_new_item_in_a_by_points_category_needs_no_share(db, user):
+    course = make_course(db, user.id, "COSC 114", category_weights={"Lab": 20.0, "Final": 80.0})
+    mark(db, course, "Lab", "L1", 5.0, 10.0)
+    by_points(db, user, course, "Lab")
+
+    added = add_grade(db, user.id, course.id, GradeCreate(name="L2", category=GradeCategory.LAB, max_score=100.0))
+
+    assert added.subcategory_weight is None
+
+
+def test_by_points_survives_a_change_of_the_category_weight(db, user):
+    course = make_course(db, user.id, "COSC 115", category_weights={"Lab": 20.0, "Final": 80.0})
+    mark(db, course, "Lab", "L1", 5.0, 10.0)
+    by_points(db, user, course, "Lab")
+
+    update_category_weights(db, user.id, course.id, {GradeCategory.LAB: 25.0, GradeCategory.FINAL: 75.0})
+
+    db.expire_all()
+    assert get_user_course(db, user.id, course.id).points_categories == ["Lab"]
 
 
 # --------------------------------------------------------------------------
@@ -296,7 +388,7 @@ def test_a_split_that_adds_up_is_kept_and_moves_the_average(db, user):
     # Even: (92.31 + 50 + 90) / 3.
     assert calculate_grade_category_average(course, "Midterm") == 77.44
 
-    set_subcategory_weights(db, user.id, course.id, "Midterm", {
+    set_category_sharing(db, user.id, course.id, "Midterm", {
         grades[0].id: 10.0, grades[1].id: 5.0, grades[2].id: 15.0,
     })
 
@@ -310,7 +402,7 @@ def test_a_split_that_does_not_add_up_is_refused(db, user):
     course, grades = three_midterms(db, user, split=(None, None, None))
 
     with pytest.raises(ValueError, match="must add up to Midterm's 30%; these add up to 25%"):
-        set_subcategory_weights(db, user.id, course.id, "Midterm", {
+        set_category_sharing(db, user.id, course.id, "Midterm", {
             grades[0].id: 10.0, grades[1].id: 5.0, grades[2].id: 10.0,
         })
 
@@ -322,9 +414,9 @@ def test_a_split_must_name_every_item_and_only_those(db, user):
     course, grades = three_midterms(db, user, split=(None, None, None))
 
     with pytest.raises(ValueError, match="every item"):
-        set_subcategory_weights(db, user.id, course.id, "Midterm", {grades[0].id: 10.0, grades[1].id: 20.0})
+        set_category_sharing(db, user.id, course.id, "Midterm", {grades[0].id: 10.0, grades[1].id: 20.0})
     with pytest.raises(ValueError, match="every item"):
-        set_subcategory_weights(db, user.id, course.id, "Midterm", {
+        set_category_sharing(db, user.id, course.id, "Midterm", {
             grades[0].id: 10.0, grades[1].id: 5.0, grades[2].id: 10.0, uuid.uuid4(): 5.0,
         })
 
@@ -334,7 +426,7 @@ def test_a_category_with_no_weight_cannot_be_split(db, user):
     quiz = mark(db, course, "Quiz", "Q1", 5.0, 10.0)
 
     with pytest.raises(ValueError, match="no weight to split"):
-        set_subcategory_weights(db, user.id, course.id, "Quiz", {quiz.id: 0.0})
+        set_category_sharing(db, user.id, course.id, "Quiz", {quiz.id: 0.0})
 
 
 def test_a_dropped_item_needs_a_share_too(db, user):
@@ -344,13 +436,13 @@ def test_a_dropped_item_needs_a_share_too(db, user):
     db.commit()
 
     with pytest.raises(ValueError, match="every item"):
-        set_subcategory_weights(db, user.id, course.id, "Midterm", {grades[0].id: 20.0, grades[1].id: 10.0})
+        set_category_sharing(db, user.id, course.id, "Midterm", {grades[0].id: 20.0, grades[1].id: 10.0})
 
 
 def test_clearing_a_split_shares_the_weight_evenly_again(db, user):
     course, _ = three_midterms(db, user)
 
-    set_subcategory_weights(db, user.id, course.id, "Midterm", None)
+    set_category_sharing(db, user.id, course.id, "Midterm", None)
 
     assert set(shares(db, user, course).values()) == {None}
     db.expire_all()
@@ -373,7 +465,7 @@ def client(db, user):
 
 def test_the_route_sets_a_split_and_returns_the_grades(db, user, client):
     course, grades = three_midterms(db, user, split=(None, None, None))
-    url = f"/api/grades/{user.id}/courses/{course.id}/subcategory-weights"
+    url = f"/api/grades/{user.id}/courses/{course.id}/category-sharing"
 
     done = client.put(url, json={"category": "Midterm", "weights": {
         str(grades[0].id): 10, str(grades[1].id): 5, str(grades[2].id): 15,
@@ -385,7 +477,7 @@ def test_the_route_sets_a_split_and_returns_the_grades(db, user, client):
 
 def test_the_route_refuses_a_split_that_does_not_add_up(db, user, client):
     course, grades = three_midterms(db, user, split=(None, None, None))
-    url = f"/api/grades/{user.id}/courses/{course.id}/subcategory-weights"
+    url = f"/api/grades/{user.id}/courses/{course.id}/category-sharing"
 
     refused = client.put(url, json={"category": "Midterm", "weights": {
         str(grades[0].id): 10, str(grades[1].id): 10, str(grades[2].id): 15,
@@ -395,9 +487,34 @@ def test_the_route_refuses_a_split_that_does_not_add_up(db, user, client):
     assert "35%" in refused.json()["detail"]
 
 
+def test_the_route_sets_by_points_and_the_course_says_so(db, user, client):
+    course = make_course(db, user.id, "COSC 116", category_weights={"Lab": 20.0, "Final": 80.0})
+    mark(db, course, "Lab", "L1", 5.0, 10.0)
+    mark(db, course, "Lab", "L2", 90.0, 100.0)
+
+    done = client.put(f"/api/grades/{user.id}/courses/{course.id}/category-sharing",
+                      json={"category": "Lab", "by_points": True})
+    assert done.status_code == 200, done.text
+
+    read = client.get(f"/api/grades/{user.id}/courses/{course.id}").json()
+    assert read["points_categories"] == ["Lab"]
+    assert read["category_averages"]["Lab"] == 86.36
+
+
+def test_the_route_refuses_a_split_and_by_points_together(db, user, client):
+    course, grades = three_midterms(db, user, split=(None, None, None))
+
+    refused = client.put(f"/api/grades/{user.id}/courses/{course.id}/category-sharing", json={
+        "category": "Midterm", "by_points": True,
+        "weights": {str(grades[0].id): 10, str(grades[1].id): 5, str(grades[2].id): 15},
+    })
+
+    assert refused.status_code == 422
+
+
 def test_the_route_refuses_a_share_over_100(db, user, client):
     course, grades = three_midterms(db, user, split=(None, None, None))
-    url = f"/api/grades/{user.id}/courses/{course.id}/subcategory-weights"
+    url = f"/api/grades/{user.id}/courses/{course.id}/category-sharing"
 
     refused = client.put(url, json={"category": "Midterm", "weights": {str(grades[0].id): 130}})
 

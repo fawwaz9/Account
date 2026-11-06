@@ -25,8 +25,9 @@ def category_average(
     """Return a category's average and how many items were dropped.
 
     The one place a category is averaged. Each item counts by its share (D29): its
-    subcategory weight when the category is split, otherwise the same as every other
-    item, whatever it is marked out of. Dropped (`excluded`) grades, items with no
+    subcategory weight when the category is split, its maximum when the category is
+    marked by points, otherwise the same as every other item, whatever it is marked
+    out of. Dropped (`excluded`) grades, items with no
     maximum and items at 0% of a split never count. Each counted item scores, in
     order of precedence: its override, its mark, or `fill` of its maximum when
     unmarked. The lowest `drop_lowest` by percentage are then dropped, always keeping
@@ -46,10 +47,10 @@ def category_average(
     """
     overrides = overrides or {}
     everything = subcategory.members(course, category)
-    split = subcategory.is_split(everything)
+    mode = subcategory.sharing(course, category, everything)
     scored: list[tuple[float, float]] = []  # (fraction of its maximum, share)
     for g in everything:
-        weight = subcategory.share(g, split)
+        weight = subcategory.share(g, mode)
         if g.max_score <= 0 or not counts_toward_average(g) or weight <= 0:
             continue
         if g.id in overrides:

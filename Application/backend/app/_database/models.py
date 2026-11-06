@@ -372,6 +372,11 @@ class CourseModel(Base):
         """Map of each category name to its weight, from `category_weight_rows`."""
         return {cw.category: cw.weight for cw in self.category_weight_rows}
 
+    @property
+    def points_categories(self) -> list[str]:
+        """The categories whose weight is shared by points rather than evenly (D29)."""
+        return sorted(cw.category for cw in self.category_weight_rows if cw.by_points)
+
 
 class CourseCategoryWeightModel(Base):
     """Child of `courses`: one grade category's weight in a course.
@@ -382,6 +387,9 @@ class CourseCategoryWeightModel(Base):
         category: Category name, a `GradeCategory` value.
         weight: Percentage of the course grade; a bonus category's weight sits outside
             the 100.
+        by_points: Share the weight by points -- each item by what it's marked out
+            of, total earned over total possible -- instead of evenly (D29). A split
+            by subcategory weights overrides either.
     """
     __tablename__ = "course_category_weights"
 
@@ -389,6 +397,9 @@ class CourseCategoryWeightModel(Base):
     course_id = Column(Uuid, ForeignKey("courses.id"), nullable=False)
     category = Column(String, nullable=False)
     weight = Column(Float, nullable=False, default=0.0)
+    #: For a professor who adds up points ("Labs 20%" meaning every lab mark
+    #: summed over every lab maximum). Off is even sharing, the D29 default.
+    by_points = Column(Boolean, nullable=False, default=False)
 
     course = relationship("CourseModel", back_populates="category_weight_rows")
 

@@ -11,8 +11,8 @@ export const endpoints = {
     dashboard: (userId: string) => `grades/${userId}/grades/dashboard`,
     courseDetail: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}`,
     CategoryWeights: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/category-weights`,
-    subcategoryWeights: (userId: string, courseId: string) =>
-      `grades/${userId}/courses/${courseId}/subcategory-weights`,
+    categorySharing: (userId: string, courseId: string) =>
+      `grades/${userId}/courses/${courseId}/category-sharing`,
     requiredFinal: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/required-final`,
     scenario: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/scenario`,
     dropPreview: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/drop-preview`,

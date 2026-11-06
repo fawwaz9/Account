@@ -30,7 +30,7 @@ from app.Grades.services.drop_service import drop_preview
 from app.Grades.schemas.next_term import NextTermIn, NextTermPlan
 from app.Grades.services.next_term_service import next_term
 from app.Grades.schemas.blind_spot import CategoryBlindSpot
-from app.Grades.schemas.grade import Grade, GradeCreate, GradeUpdate, SubcategoryWeights
+from app.Grades.schemas.grade import Grade, GradeCreate, GradeUpdate, CategorySharing
 from app.Grades.services.grade_service import (
     add_grade,
     add_grades_bulk,
@@ -41,7 +41,7 @@ from app.Grades.services.grade_service import (
     get_category_weights,
     get_grade,
     record_grade,
-    set_subcategory_weights,
+    set_category_sharing,
     update_category_weights,
     update_grade,
 )
@@ -542,20 +542,18 @@ def edit_course_category_weights(user_id: VerifiedUserId, course_id: UUID, categ
     return updated_weights
 
 @router.put(
-    "/{user_id}/courses/{course_id}/subcategory-weights",
+    "/{user_id}/courses/{course_id}/category-sharing",
     response_model=list[Grade],
     responses={404: {"description": error_course["not_found"]}, 400: {"description": "The split does not add up"}},
 )
-def put_subcategory_weights(
-    user_id: VerifiedUserId, course_id: UUID, split: SubcategoryWeights, db: DBSession,
-):
-    """Split a category's weight between its items, or share it evenly again (D29).
+def put_category_sharing(user_id: VerifiedUserId, course_id: UUID, sharing: CategorySharing, db: DBSession):
+    """Set how a category shares its weight: evenly, by points, or split (D29).
 
     Args:
         user_id: The verified caller's id.
         course_id: The course.
-        split: The category, and every item's share adding up to its weight; null
-            weights clear the split.
+        sharing: The category, and either every item's share adding up to its weight
+            or, with no split, whether to go by points.
         db: Request-scoped database session.
 
     Returns:
@@ -563,11 +561,13 @@ def put_subcategory_weights(
 
     Raises:
         HTTPException: 400 when the split does not cover exactly the category's items
-            or does not add up to its weight; 404 when the course is missing or
-            another user's.
+            or does not add up to its weight, or by points is asked of a category with
+            no weight; 404 when the course is missing or another user's.
     """
     try:
-        grades = set_subcategory_weights(db, user_id, course_id, split.category.value, split.weights)
+        grades = set_category_sharing(
+            db, user_id, course_id, sharing.category.value, sharing.weights, sharing.by_points,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if grades is None:

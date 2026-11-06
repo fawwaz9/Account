@@ -74,6 +74,11 @@ ADDED_COLUMNS: dict[str, dict[str, str | dict[str, str]]] = {
         # literal is accepted by both SQLite and Postgres.
         "counts_toward_net_worth": "BOOLEAN NOT NULL DEFAULT true",
     },
+    "course_category_weights": {
+        # D29: share the category's weight by points instead of evenly. `false`,
+        # not 0: see counts_toward_net_worth below.
+        "by_points": "BOOLEAN NOT NULL DEFAULT false",
+    },
     "grades": {
         "due_date": "DATE",
         "due_time": "TIME",

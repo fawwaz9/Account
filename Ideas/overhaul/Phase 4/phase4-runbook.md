@@ -198,9 +198,11 @@ and invoices, focus sessions and set-aside marks stay stored, unread.
 | What | Branch | Schema change |
 |---|---|---|
 | Subcategory weights, and even sharing (D29) | `subcategory-weights` | **New column `grades.subcategory_weight`** (float, nullable, no default) |
+| Sharing a category by points (D29) | `subcategory-weights` | **New column `course_category_weights.by_points`** (boolean, not null, default false) |
 
-One new nullable column. Nothing existing is altered, dropped or backfilled by the
-schema step. The averages change at deploy, and step 3 brings the stored ones over.
+Two new columns. Nothing existing is altered or dropped. The only fill is
+`by_points` taking its default, false, on every existing row: every category starts
+even, which is the D29 rule. The averages change at deploy, and step 3 brings the stored ones over.
 
 **It can share a schema session with audit batch 1** (`audit-batch-1`, its own runbook).
 Each step adds only what its branch declares, and neither branch reads the other's columns.
@@ -214,7 +216,7 @@ gh workflow run backup.yml --repo fawwaz9/Account
 **Verify:** the run succeeds with 77 tables. This backup holds every course's average under
 the old rule, which is the way back for step 3.
 
-### 1. Apply the schema (yours: one column)
+### 1. Apply the schema (yours: two columns)
 
 ```sh
 cd ~/VS_Code/Account/Application/backend
@@ -223,17 +225,22 @@ set -a; source ../.env; set +a
 DATABASE_URL="$SUPABASE_DATABASE_URL" .venv/bin/python -m app._database.schema
 ```
 
-**Verify, in the SQL editor.** One row: `double precision`, `YES`, a null default. Then
-the second query returns 0, since every grade starts even:
+**Verify, in the SQL editor.** Two rows:
+- `by_points`: `boolean`, `NO`, default `false`.
+- `subcategory_weight`: `double precision`, `YES`, a null default.
+
+Then both counts are 0, since every grade and every category starts even:
 
 ```sql
-SELECT data_type, is_nullable, column_default FROM information_schema.columns
-WHERE table_name = 'grades' AND column_name = 'subcategory_weight';
+SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns
+WHERE (table_name, column_name) IN (('grades', 'subcategory_weight'), ('course_category_weights', 'by_points'))
+ORDER BY 1;
 
 SELECT count(*) FROM grades WHERE subcategory_weight IS NOT NULL;
+SELECT count(*) FROM course_category_weights WHERE by_points;
 ```
 
-**Undo:** not needed. The live API never reads the column.
+**Undo:** not needed. The live API never reads either column.
 
 ### 2. Deploy (after the read-back matches)
 
@@ -245,7 +252,7 @@ cd ~/VS_Code/Account
 **Verify:**
 - Gate: 77 of 77 tables with row security. Health ok, the new revision at 100%, and the
   digest matches the commit.
-- `PUT /api/grades/<id>/courses/<id>/subcategory-weights` answers 401 unauthenticated,
+- `PUT /api/grades/<id>/courses/<id>/category-sharing` answers 401 unauthenticated,
   against a 404 control. The old API answers 404.
 - No errors or 5xx in the new revision's logs, and the same nine settings.
 - The live site matches the build.
@@ -272,8 +279,13 @@ RECOMPUTE_URL="$SUPABASE_DATABASE_URL" .venv/bin/python scripts/recompute_averag
 **Verify:** it ends "Wrote N." with the N the listing gave, and a second listing says
 "Nothing to change".
 
+**Then, on the site:** for any listed course whose professor adds up marks, open the
+course, choose "Change" under that category, and pick "By points". Its average goes back
+to the old figure.
+
 **Rollback:** Cloud Run to the revision before, and Pages to its deployment. The column
-stays. The old API ignores it, and any splits come back on redeploy. The recomputed
+and its by-points twin stay. The old API ignores both, and any splits or by-points
+choices come back on redeploy. The recomputed
 averages stay at their new values: the old API rewrites each course's average under the
 old rule the next time one of its grades is saved, and step 0's backup holds every old
 figure exactly.
