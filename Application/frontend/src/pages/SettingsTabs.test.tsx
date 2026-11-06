@@ -259,9 +259,31 @@ describe("each tab saves only its own preferences", () => {
     await waitFor(() => expect(updatePreferences).toHaveBeenCalled());
     const sent = updatePreferences.mock.calls[0][1] as Record<string, unknown>;
     expect(Object.keys(sent).sort()).toEqual(
-      ["event_colors", "exam_buffer_hours", "min_free_block_minutes", "study_day_end", "study_day_start", "timezone"],
+      ["event_colors", "exam_buffer_hours", "min_free_block_minutes", "planner_daily_minutes",
+        "study_day_end", "study_day_start", "timezone"],
     );
     expect(updateAcademicStatus).not.toHaveBeenCalled();
+  });
+});
+
+describe("the planner's daily limit (D28)", () => {
+  it("shows the server's four hours when it has never been set", () => {
+    render(<SettingsPage />);
+    fireEvent.click(screen.getByRole("tab", { name: "Calendar" }));
+
+    expect((screen.getByLabelText("Most planned study a day") as HTMLInputElement).value).toBe("4");
+  });
+
+  it("is chosen in hours and saved in minutes", async () => {
+    render(<SettingsPage />);
+    fireEvent.click(screen.getByRole("tab", { name: "Calendar" }));
+
+    const field = screen.getByLabelText("Most planned study a day");
+    fireEvent.change(field, { target: { value: "2.5" } });
+    fireEvent.submit(field.closest("form")!);
+
+    await waitFor(() => expect(updatePreferences).toHaveBeenCalled());
+    expect((updatePreferences.mock.calls[0][1] as Record<string, unknown>).planner_daily_minutes).toBe(150);
   });
 });
 

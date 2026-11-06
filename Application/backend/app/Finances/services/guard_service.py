@@ -47,8 +47,10 @@ LEAD_DAYS = 7
 #: Waved off this many times, a category is not suggested again (§13.5).
 DISMISSALS_TO_STOP = 3
 
-NOTE = ("A heads-up, not a licence: if you set money aside for it, the week stays inside your plan "
-        "rather than on top of it.")
+#: D28: the button said "Set aside", which reads as a transfer, beside a sinking-
+#: fund section called "Set aside" that really does move money. Planning moves none.
+NOTE = ("A heads-up, not a licence. Planning an amount moves no money: it's a figure to keep the "
+        "week inside, and after the week you'll see how it went against it.")
 
 
 def _monday(day: date) -> date:
@@ -211,7 +213,7 @@ def _owned_week(db: Session, user_id: uuid.UUID, category_id: uuid.UUID, week_st
         raise LookupError("Category not found")
     this_week = _monday(today)
     if week_start not in (this_week, this_week + timedelta(weeks=1)):
-        raise ValueError("Money can be set aside for this week or next, from its Monday")
+        raise ValueError("Money can be planned for this week or next, from its Monday")
 
 
 def _upsert(db: Session, user_id: uuid.UUID, category_id: uuid.UUID, week_start: date, amount, dismissed: bool):

@@ -56,6 +56,13 @@ def _day(on: date, today: date) -> str:
     return on.strftime("%A")
 
 
+def _hours(minutes: int) -> str:
+    """A limit in words: "4 hours", "1.5 hours", "1 hour"."""
+    hours = minutes / 60
+    shown = f"{hours:g}" if hours * 2 == int(hours * 2) else f"{hours:.1f}"
+    return f"{shown} hour{'' if hours == 1 else 's'}"
+
+
 def needed_minutes(task, ratio: float | None) -> int:
     """Return the minutes still to plan for a task: its estimate (scaled) less what's done.
 
@@ -91,7 +98,9 @@ def plan_week(db: Session, user_id: uuid.UUID, now: datetime | None = None) -> W
     now = now or user_now(db, user_id)
     today = now.date()
     end = today + timedelta(days=HORIZON_DAYS - 1)
-    floor = get_preferences(user).min_free_block_minutes
+    preferences = get_preferences(user)
+    floor = preferences.min_free_block_minutes
+    daily_cap = preferences.planner_daily_minutes
 
     # Every free stretch in the week, earliest first, as mutable [day, start, end].
     slots = sorted(
@@ -109,13 +118,17 @@ def plan_week(db: Session, user_id: uuid.UUID, now: datetime | None = None) -> W
     tasks = [t for t in tasks if t.snoozed_until is None or t.snoozed_until <= today]
     tasks.sort(key=lambda t: (t.due_date, -t.priority, t.title.lower()))
 
-    # Time already planned for a task, so a second plan doesn't plan it twice.
+    # Time already planned for a task, so a second plan doesn't plan it twice;
+    # and per day, so a second plan can't take a day past the daily limit (D28).
     planned: dict[uuid.UUID, int] = {}
+    used: dict[date, int] = {}
     for event in db.query(EventModel).filter(EventModel.user_id == user_id, EventModel.source == SOURCE,
-                                             EventModel.starts_on >= today, EventModel.planned_task_id.isnot(None)):
+                                             EventModel.starts_on >= today):
         if event.start_time and event.end_time:
-            planned[event.planned_task_id] = planned.get(event.planned_task_id, 0) + (
-                _minutes(event.end_time) - _minutes(event.start_time))
+            length = _minutes(event.end_time) - _minutes(event.start_time)
+            used[event.starts_on] = used.get(event.starts_on, 0) + length
+            if event.planned_task_id is not None:
+                planned[event.planned_task_id] = planned.get(event.planned_task_id, 0) + length
 
     ratio_reading = estimate_ratio(db, user_id)
     ratio = ratio_reading.ratio if ratio_reading.applied else None
@@ -131,6 +144,7 @@ def plan_week(db: Session, user_id: uuid.UUID, now: datetime | None = None) -> W
         last_day = end if overdue else task.due_date
         cutoff = _minutes(task.due_time) if task.due_time and not overdue else None
         placed = 0
+        capped = False
         first_block = True
         earliest_possible = min((d for d in first_free if d <= last_day), default=None)
         for slot in slots:
@@ -144,9 +158,11 @@ def plan_week(db: Session, user_id: uuid.UUID, now: datetime | None = None) -> W
                 day, start, stop = slot
                 if cutoff is not None and day == last_day:
                     stop = min(stop, cutoff)
-                room = stop - start
+                free = stop - start
+                room = min(free, daily_cap - used.get(day, 0))
                 left = need - placed
                 if room < floor:
+                    capped = capped or free >= floor
                     break
                 # Never a block shorter than your shortest free block: a ten-minute
                 # remainder rounds up rather than becoming a ten-minute block.
@@ -168,16 +184,24 @@ def plan_week(db: Session, user_id: uuid.UUID, now: datetime | None = None) -> W
                     on_date=day, starts_at=_time(start), ends_at=_time(start + take), minutes=take, reason=reason,
                 ))
                 slot[1] = start + take
+                used[day] = used.get(day, 0) + take
                 placed += min(take, left)
                 first_block = False
                 if need - placed > 0:
                     slot[1] += BREAK_MINUTES
         if placed < need:
             short = need - placed
+            due = _day(task.due_date, today)
+            if capped:
+                reason = (f"Only {placed} of {need} minutes fit before it's due {due} inside your daily limit of "
+                          f"{_hours(daily_cap)}." if placed else
+                          f"No time left before it's due {due} inside your daily limit of {_hours(daily_cap)}.")
+            else:
+                reason = (f"Only {placed} of {need} minutes are free before it's due {due}."
+                          if placed else f"No free time left before it's due {due}.")
             unplaced.append(Unplaced(
                 task_id=task.id, title=task.title, due_date=task.due_date, minutes_needed=need, minutes_short=short,
-                reason=(f"Only {placed} of {need} minutes are free before it's due {_day(task.due_date, today)}."
-                        if placed else f"No free time left before it's due {_day(task.due_date, today)}."),
+                reason=reason,
             ))
 
     assumptions = [
@@ -187,6 +211,8 @@ def plan_week(db: Session, user_id: uuid.UUID, now: datetime | None = None) -> W
         f"{floor} minutes, so a small remainder rounds up.",
         f"No block runs longer than {MAX_CHUNK // 60} hours, with a {BREAK_MINUTES}-minute break before more of the "
         "same task. Soonest due goes first, then the most important.",
+        f"At most {_hours(daily_cap)} of planned study a day, counting blocks you've already accepted. "
+        "Change it in Settings, under Calendar.",
     ]
     if planned:
         assumptions.append("Time you've already accepted from the planner counts toward each task.")

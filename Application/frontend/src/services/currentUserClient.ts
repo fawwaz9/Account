@@ -36,6 +36,8 @@ export interface CurrentUser {
     study_day_end: string;
     /** Gaps shorter than this are not offered as study time. */
     min_free_block_minutes: number;
+    /** Most study the weekly planner proposes on one day, in minutes (D28). */
+    planner_daily_minutes?: number;
     /** A shift ending within this many hours before an exam is flagged. */
     exam_buffer_hours?: number;
     /** Colour per event kind the student changed; a missing kind uses its default. */

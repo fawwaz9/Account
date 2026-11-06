@@ -269,3 +269,84 @@ def test_the_routes(db, window, client):
     assert set(body) >= {"blocks", "unplaced", "assumptions"}
     bad = {"blocks": [{"task_id": str(uuid.uuid4()), "on_date": body["starts_on"], "starts_at": "09:00", "ends_at": "10:00"}]}
     assert client.post(f"/api/calendar/{window.id}/planner/accept", json=bad).status_code == 404
+
+
+# ----------------------------------------------------------- daily limit --
+# D28: with 11 hours due the planner once put 9.5 of them on one Sunday. The
+# student sets the ceiling in Settings; four hours until they do.
+
+def per_day(blocks):
+    totals = {}
+    for b in blocks:
+        totals[b.on_date] = totals.get(b.on_date, 0) + b.minutes
+    return totals
+
+
+def test_no_day_is_planned_past_four_hours_by_default(db, window):
+    task(db, window, "Project", due_in=1, estimate=660)
+
+    plan = plan_week(db, window.id, NOW)
+
+    assert max(per_day(plan.blocks).values()) == 240
+    (short,) = plan.unplaced
+    assert short.minutes_short == 660 - 480
+    assert "inside your daily limit of 4 hours" in short.reason
+    assert any("At most 4 hours of planned study a day" in a for a in plan.assumptions)
+
+
+def test_the_students_own_limit_is_used(db, window):
+    window.preferences = {**window.preferences, "planner_daily_minutes": 90}
+    db.commit()
+    task(db, window, "Project", due_in=3, estimate=300)
+
+    plan = plan_week(db, window.id, NOW)
+
+    assert max(per_day(plan.blocks).values()) == 90
+    assert sum(b.minutes for b in plan.blocks) == 300
+    assert any("At most 1.5 hours" in a for a in plan.assumptions)
+
+
+def test_a_limit_above_the_free_time_changes_nothing(db, window):
+    """Eight free hours a day and a limit of sixteen: the old plan, block for block."""
+    window.preferences = {**window.preferences, "planner_daily_minutes": 960}
+    db.commit()
+    task(db, window, "Project", due_in=1, estimate=660)
+
+    plan = plan_week(db, window.id, NOW)
+
+    assert sum(b.minutes for b in plan.blocks) == 660
+    assert max(per_day(plan.blocks).values()) > 240
+
+
+def test_blocks_already_accepted_count_toward_the_day(db, window):
+    """Planning twice must not take a day past the limit."""
+    other = task(db, window, "Reading", due_in=5, estimate=60)
+    db.add(EventModel(id=uuid.uuid4(), user_id=window.id, title="Reading", kind="personal", starts_on=TODAY,
+                      start_time=time(9), end_time=time(12), source=SOURCE, planned_task_id=other.id))
+    db.commit()
+    t = task(db, window, "Essay", due_in=0, estimate=120)
+
+    blocks = [b for b in plan_week(db, window.id, NOW).blocks if b.task_id == t.id]
+
+    assert sum(b.minutes for b in blocks) == 60
+
+
+def test_your_own_events_do_not_count_toward_the_limit(db, window):
+    """The limit is on what the planner proposes; a lecture is not planned study."""
+    busy(db, window, 0, time(9), time(12))
+    t = task(db, window, "Essay", due_in=0, estimate=240)
+
+    blocks = [b for b in plan_week(db, window.id, NOW).blocks if b.task_id == t.id]
+
+    assert sum(b.minutes for b in blocks) == 240
+
+
+def test_a_short_window_still_says_free_time(db, window):
+    """Out of free time rather than out of limit: the reason must not blame the limit."""
+    busy(db, window, 0, time(9), time(16, 30))
+    task(db, window, "Essay", due_in=0, estimate=120)
+
+    (short,) = plan_week(db, window.id, NOW).unplaced
+
+    assert "are free" in short.reason and "limit" not in short.reason
+

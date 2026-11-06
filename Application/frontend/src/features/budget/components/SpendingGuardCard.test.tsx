@@ -53,7 +53,7 @@ describe("SpendingGuardCard", () => {
   });
 });
 
-describe("SpendingGuardCard, setting aside", () => {
+describe("SpendingGuardCard, planning an amount", () => {
   const LIFTED = { ...GUARD, lifts: [{ ...GUARD.lifts[0], category_id: "cat1", set_aside: null, dismissed: false }] };
 
   beforeEach(() => {
@@ -61,14 +61,22 @@ describe("SpendingGuardCard, setting aside", () => {
     api.dismissCrunchSuggestion.mockReset().mockResolvedValue({ ...LIFTED, lifts: [{ ...LIFTED.lifts[0], dismissed: true }] });
   });
 
-  it("sets the usual crunch-week amount aside for the week ahead", async () => {
+  it("never says it sets money aside, because nothing moves (D28)", async () => {
+    api.fetchSpendingGuard.mockResolvedValue(LIFTED);
+    const { container } = render(<SpendingGuardCard userId="u1" nonce={0} />);
+
+    await screen.findByRole("button", { name: /Plan \$85 for this/ });
+    expect(container.textContent).not.toMatch(/set aside/i);
+  });
+
+  it("plans the usual crunch-week amount for the week ahead", async () => {
     api.fetchSpendingGuard.mockResolvedValue(LIFTED);
     render(<SpendingGuardCard userId="u1" nonce={0} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /Set aside \$85/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Plan \$85 for this/ }));
 
     await waitFor(() => expect(api.allocateForCrunch).toHaveBeenCalledWith("u1", "cat1", "2099-11-02", 85));
-    expect(await screen.findByText(/\$85\.00 set aside/)).toBeTruthy();
+    expect(await screen.findByText(/\$85\.00 planned/)).toBeTruthy();
   });
 
   it("waves it off for the week", async () => {
@@ -85,6 +93,6 @@ describe("SpendingGuardCard, setting aside", () => {
       report: [{ category: "Delivery", set_aside: 60, spent: 52 }] });
     render(<SpendingGuardCard userId="u1" nonce={0} />);
 
-    expect(await screen.findByText(/\$52\.00 of \$60\.00 on Delivery, inside what you set aside/)).toBeTruthy();
+    expect(await screen.findByText(/\$52\.00 of \$60\.00 on Delivery, inside what you planned/)).toBeTruthy();
   });
 });

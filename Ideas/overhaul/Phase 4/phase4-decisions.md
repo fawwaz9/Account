@@ -749,3 +749,45 @@ Evidence:
     went", which then added up to its money out. It showed on the budget page once and not
     on Savings.
   - Editing the Savings-side leg to Groceries moved both legs.
+
+## D28. The planner's daily limit, and "Plan", not "Set aside", 2026-11-05 (yours)
+
+The two walkthrough findings D26 left for you. Your answers:
+- **The planner has a daily limit, and each user chooses it in Settings.** It sits under
+  Calendar as "Most planned study a day", in hours (half-hour steps, 0.5 to 16). It is
+  stored as `preferences.planner_daily_minutes` (30 to 960), and there is no schema change:
+  preferences are a JSON column.
+- **"Set aside $90" becomes "Plan $90 for this".** The button moves no money, and the
+  sinking funds' "Set aside" section, which does move money, sat right beside it.
+
+Mine, yours to overturn:
+- **Four hours until you choose,** the figure I suggested when asking.
+- **Blocks you've already accepted from the planner count toward a day.** Otherwise planning
+  twice could take a day past the limit. Your own events, a lecture or a study session you
+  booked, don't count: the limit is on what the planner proposes, and those already take
+  their time out of the free blocks.
+- **Work the limit leaves out is listed, not squeezed in,** like work that doesn't fit the
+  free time. Its reason names the limit ("…inside your daily limit of 4 hours") only when
+  the limit is what stopped it. When the free time ran out first, it still says so.
+- **The guard card no longer says "set aside" anywhere.** The confirmation reads "$85.00
+  planned", the report card "…inside what you planned", and the note says that planning an
+  amount moves no money.
+
+Evidence:
+- `tests/test_planner.py`, 6 new tests: the default limit, your own limit, a limit above
+  the free time changes nothing, accepted blocks count, your own events don't, and the
+  free-time reason. `tests/test_user_routes.py`: the limit saves and is bounded (422 at 29
+  and 961).
+- `SettingsTabs.test.tsx`: 4 hours shows when unset, 2.5 hours saves as 150 minutes, and
+  the calendar form sends the new key. `SpendingGuardCard.test.tsx`: the card never says
+  "set aside".
+- 9 mutations, all caught: the cap itself, counting accepted blocks, counting only the
+  planner's blocks, the limit reason, the patch field, the default, the hours-to-minutes
+  conversion, and two of the guard card's wordings.
+- Walked in a browser on a scratch database at both widths:
+  - The default plan held each day to 4 hours.
+  - Saving 2 in Settings held each day to 2 hours, with what didn't fit listed under the
+    limit.
+  - The field fits a 390px phone, and no page scrolls sideways.
+  - Not walked: the guard card itself, because the scratch data had no crunch week ahead.
+    Its wording is covered by the tests above.

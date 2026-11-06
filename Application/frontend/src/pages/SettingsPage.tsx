@@ -29,6 +29,11 @@ function clockValue(value: unknown, fallback: string): string {
   return typeof value === "string" ? value.slice(0, 5) : fallback;
 }
 
+/** The planner's daily limit in hours, for the field; the server's four hours when unset. */
+function hoursOf(minutes: unknown): string {
+  return String(typeof minutes === "number" ? minutes / 60 : 4);
+}
+
 /** The server's default zone, repeated so an unset preference shows the zone actually applied. */
 const DEFAULT_ZONE = "America/Regina";
 
@@ -100,6 +105,8 @@ export default function SettingsPage() {
   const [studyEnd, setStudyEnd] = useState(clockValue(user?.preferences?.study_day_end, "22:00"));
   const [minBlock, setMinBlock] = useState(String(user?.preferences?.min_free_block_minutes ?? 30));
   const [examBuffer, setExamBuffer] = useState(String(user?.preferences?.exam_buffer_hours ?? 12));
+  // Shown in hours, stored in minutes: "4" reads better than "240".
+  const [plannerHours, setPlannerHours] = useState(hoursOf(user?.preferences?.planner_daily_minutes));
   // Stored value only. Seeding this from `guessedZone()` would mean that
   // opening Settings in another city silently repointed every reminder on the
   // next Calendar save -- a save changing something nobody asked it to, which
@@ -184,6 +191,7 @@ export default function SettingsPage() {
     setStudyEnd(clockValue(user.preferences?.study_day_end, "22:00"));
     setMinBlock(String(user.preferences?.min_free_block_minutes ?? 30));
     setExamBuffer(String(user.preferences?.exam_buffer_hours ?? 12));
+    setPlannerHours(hoursOf(user.preferences?.planner_daily_minutes));
     setZone(user.preferences?.timezone ?? DEFAULT_ZONE);
     setColors(user.preferences?.event_colors ?? {});
     setTipAccount(user.preferences?.cash_tip_account_id ?? "");
@@ -292,6 +300,7 @@ export default function SettingsPage() {
         study_day_end: studyEnd,
         min_free_block_minutes: Number(minBlock),
         exam_buffer_hours: Number(examBuffer),
+        planner_daily_minutes: Math.round(Number(plannerHours) * 60),
         // The whole map, always: the API replaces it, so a kind put back to its
         // default is absent here and therefore removed there.
         event_colors: colors,
@@ -788,6 +797,27 @@ export default function SettingsPage() {
                 <HelpTip label="What the minimum block is for">
                   A gap shorter than this is walking time rather than study time, so it is
                   left out of the free blocks the calendar offers.
+                </HelpTip>
+              </div>
+
+              <div className="loginField">
+                <label htmlFor="planner-daily">Most planned study a day</label>
+                <input
+                  id="planner-daily"
+                  className="loginInput"
+                  type="number"
+                  min={0.5}
+                  max={16}
+                  step={0.5}
+                  value={plannerHours}
+                  onChange={(event) => setPlannerHours(event.target.value)}
+                  required
+                />
+                <span className="loginHint">Hours</span>
+                <HelpTip label="What the daily study limit does">
+                  The weekly planner never proposes more than this on one day, counting blocks
+                  you&apos;ve already accepted from it. Work that doesn&apos;t fit is listed with
+                  how much is short, rather than piled onto one day.
                 </HelpTip>
               </div>
 

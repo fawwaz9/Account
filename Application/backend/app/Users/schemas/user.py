@@ -124,6 +124,8 @@ class UserPreferences(BaseModel):
         study_day_start: Earliest local time a free block may start.
         study_day_end: Latest local time a free block may end.
         min_free_block_minutes: Shortest gap counted as a free block, 5-240 minutes.
+        planner_daily_minutes: Most study the weekly planner proposes on one day,
+            30-960 minutes, counting blocks already accepted from it.
         event_colors: The user's own colour per event kind, only for kinds they changed.
         cash_tip_account_id: Account cash tips are filed into; None holds them out of
             the budget. Set only through the cash-tip-account route, never a settings
@@ -159,6 +161,9 @@ class UserPreferences(BaseModel):
     #: Below this a gap is not a block: twenty minutes between two lectures is
     #: walking time, not an hour of work.
     min_free_block_minutes: int = Field(default=30, ge=5, le=240)
+    #: Phase 4 D28: without a ceiling the planner put 9.5 hours on one Sunday.
+    #: The student sets it; four hours until they do.
+    planner_daily_minutes: int = Field(default=240, ge=30, le=960)
     #: The student's own colour per event kind. Only the kinds they changed: a
     #: missing kind means its default, so resetting one is removing its key and
     #: no stale copy of a default is ever stored. Recolouring only -- kinds
@@ -265,6 +270,7 @@ class UserPreferencesPatch(BaseModel):
         study_day_start: Earliest local time a free block may start.
         study_day_end: Latest local time a free block may end.
         min_free_block_minutes: Shortest free block, 5-240 minutes.
+        planner_daily_minutes: Most study the planner proposes a day, 30-960 minutes.
         event_colors: The whole colour map; replaces the stored one when sent.
         use_estimate_ratio: Scale the workload forecast by real task durations.
         exam_buffer_hours: Hours before an exam a shift may not end within, 0-48.
@@ -286,6 +292,7 @@ class UserPreferencesPatch(BaseModel):
     study_day_start: time | None = None
     study_day_end: time | None = None
     min_free_block_minutes: int | None = Field(default=None, ge=5, le=240)
+    planner_daily_minutes: int | None = Field(default=None, ge=30, le=960)
     #: Replaces the whole map when sent -- Settings always sends all of it.
     event_colors: dict[EventKind, str] | None = None
     use_estimate_ratio: bool | None = None

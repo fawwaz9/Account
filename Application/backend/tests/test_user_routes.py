@@ -293,3 +293,14 @@ def test_the_two_settings_tabs_do_not_overwrite_each_other(db, user, client):
     db.refresh(user)
     assert user.preferences["min_free_block_minutes"] == 45
     assert user.preferences["study_day_start"] == "06:30:00"
+
+
+def test_the_planners_daily_limit_saves_and_is_bounded(db, user, client):
+    assert client.patch(f"/api/users/{user.id}",
+                        json={"preferences": {"planner_daily_minutes": 150}}).status_code == 200
+    db.refresh(user)
+    assert user.preferences["planner_daily_minutes"] == 150
+
+    for bad in (29, 961):
+        assert client.patch(f"/api/users/{user.id}",
+                            json={"preferences": {"planner_daily_minutes": bad}}).status_code == 422

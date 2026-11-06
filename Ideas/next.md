@@ -231,6 +231,8 @@ are the size of each job rather than an impression of it.
           edge, so the Tasks page scrolls sideways. Pre-existing, not from Phase 4:
           found while looking at the deadline risk card above the list. The row is
           a flex line with no wrap; the fix is to let the actions wrap or shrink.
+          BUILT, 2026-11-03 (`f360bb6`, Phase 4 D26): the actions wrap under the
+          title. Live with Batch 4, 2026-11-04.
 
 ### Grades
         Term retrospective when a term closes: what moved, what slipped, what you predicted vs got.
@@ -368,6 +370,8 @@ are the size of each job rather than an impression of it.
         
         Add categories to transfers between accounts too, because they count 
             towards planned spending so we have to record the categories.
+          BUILT, 2026-11-03 (`94d8532`, Phase 4 D27), live with Batch 4 on
+          2026-11-04. See `shipped.md`.
 
 ### Grades x Budget (nothing else does this)
         A dollar figure next to a dropped course, since the deadline to drop with a refund is a date on the calendar.

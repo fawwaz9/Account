@@ -52,7 +52,7 @@ export default function SpendingGuardCard({ userId, nonce }: SpendingGuardCardPr
         <span key={r.category}>
           {i > 0 && "; "}
           {formatMoney(r.spent)} of {formatMoney(r.set_aside)} on {r.category}
-          {r.spent <= r.set_aside ? ", inside what you set aside" : ", over what you set aside"}
+          {r.spent <= r.set_aside ? ", inside what you planned" : ", over what you planned"}
         </span>
       ))}.
     </p>
@@ -77,14 +77,16 @@ export default function SpendingGuardCard({ userId, nonce }: SpendingGuardCardPr
             {c.category_id && (
               <span className="spendingGuardActions">
                 {c.set_aside != null ? (
-                  <span className="small-text">{formatMoney(c.set_aside)} set aside.</span>
+                  <span className="small-text">{formatMoney(c.set_aside)} planned.</span>
                 ) : c.dismissed ? (
                   <span className="small-text muted">Not this time.</span>
                 ) : (
                   <>
                     <button type="button" className="calButton"
                       onClick={() => void act(() => allocateForCrunch(userId, c.category_id as string, week.starts_on, Math.round(c.crunch_weekly)))}>
-                      Set aside {formatMoney(Math.round(c.crunch_weekly), { whole: true })}
+                      {/* "Plan", not "Set aside" (D28): nothing moves, and the
+                          sinking funds' "Set aside" section really does move money. */}
+                      Plan {formatMoney(Math.round(c.crunch_weekly), { whole: true })} for this
                     </button>
                     <button type="button" className="calButton"
                       onClick={() => void act(() => dismissCrunchSuggestion(userId, c.category_id as string, week.starts_on))}>
