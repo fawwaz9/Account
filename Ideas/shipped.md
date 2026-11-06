@@ -884,6 +884,30 @@ production-URL build: 26 of 26 files.
 
 ---
 
+## Phase 4 D28: the planner's daily limit, and "Plan", not "Set aside" -- SHIPPED 2026-11-06
+The two walkthrough findings D26 left for you, no schema change:
+- **The planner's daily limit, chosen in Settings.** Settings -> Calendar, "Most
+  planned study a day", in hours. Stored as `preferences.planner_daily_minutes`,
+  four hours until chosen. Blocks already accepted from the planner count toward a
+  day, and work the limit leaves out is listed with the limit named.
+- **"Set aside $90" is "Plan $90 for this".** The card says "planned" throughout,
+  and its note says planning an amount moves no money.
+
+CI green on all three jobs at `63f828f`.
+
+LIVE: deployed from this session through `ship`, then `main`, under the Phase 4
+standing permission for no-schema batches.
+- **API:** `63f828f` on revision `account-api-00054-cj9`, serving 100% since
+  2026-11-06 00:29 UTC (digest `aad26a93…`, matched to the commit by the deploy).
+- **The deploy's own checks:** the schema gate, row security on for 77 of 77
+  tables; the backup, 77 tables and 2,390 rows; health ok.
+- **Checked after:** the planner route answers 401 without a login against a 404
+  control; no errors or 5xx in the new revision's logs; the same nine settings as
+  `00053-l5t`.
+- **Pages:** the live site matches this commit's build, 44 files (`check-web`).
+
+---
+
 ## Phase 4 batch 4: the schema items, the walkthrough fixes, transfer categories -- SHIPPED 2026-11-04
 The six items that needed your schema step (five tables, four nullable columns, two
 definer functions; read-backs A to E all matched):

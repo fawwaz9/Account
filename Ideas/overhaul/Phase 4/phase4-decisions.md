@@ -791,3 +791,6 @@ Evidence:
   - The field fits a 390px phone, and no page scrolls sideways.
   - Not walked: the guard card itself, because the scratch data had no crunch week ahead.
     Its wording is covered by the tests above.
+
+**Shipped 2026-11-06** at `63f828f`: API revision `account-api-00054-cj9`, and Pages
+matches the build. See `shipped.md`.
