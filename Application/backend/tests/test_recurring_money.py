@@ -23,6 +23,7 @@ from app.Finances.services.recurring_service import (
     update_rule,
 )
 from app.Finances.services.transaction_service import list_transactions
+from app.shared.dates import user_today
 from conftest import make_account, make_category, make_user, sqlite_only
 
 START = date(2026, 1, 1)
@@ -138,11 +139,23 @@ def test_the_catchup_does_not_reach_back_forever(db, user):
     account = make_account(db, user.id, "Spending")
     create_rule(db, user.id, monthly(account_id=account.id))
 
-    result = run_due(db, user.id, through=date(2027, 1, 1))
+    result = run_due(db, user.id, through=date(2026, 10, 1))
 
-    # A 120-day catch-up window, not the whole twelve months since the start.
+    # A 120-day catch-up window, not the whole nine months since the start.
     assert result.created == 4
-    assert min(row.occurred_on for row in result.transactions) >= date(2026, 9, 1)
+    assert min(row.occurred_on for row in result.transactions) >= date(2026, 7, 1)
+
+
+def test_the_catchup_never_writes_a_payment_before_its_day(db, user):
+    """A `through` past today is held to today: a payment is a row only once its date comes."""
+    account = make_account(db, user.id, "Spending")
+    today = user_today(db, user.id)
+    create_rule(db, user.id, monthly(account_id=account.id, starts_on=today - timedelta(days=40)))
+
+    result = run_due(db, user.id, through=today + timedelta(days=90))
+
+    assert result.created >= 1
+    assert max(row.occurred_on for row in result.transactions) <= today
 
 
 # ---------------------------------------------------- the other three kinds --

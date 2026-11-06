@@ -357,3 +357,120 @@ def test_deleting_the_ledger_rows_takes_the_cheque(db, user, accounts, job):
 
     assert db.query(PaychequeModel).count() == 0
     assert db.query(PaychequeDeductionModel).count() == 0
+
+
+# --- a correction keeps the money where it landed (audit H2) -------------
+
+def split_of(db, user):
+    """Each account's share of the cheque, by name."""
+    names = {a.id: a.name for a in db.query(AccountModel).filter(AccountModel.user_id == user.id)}
+    return {names[row.account_id]: round(row.amount, 2) for row in income_rows(db, user)}
+
+
+def test_fixing_a_note_moves_no_money_between_accounts(db, user, accounts, job):
+    """The audit's case: after the shares changed, a notes-only edit re-split
+    September's cheque by November's shares and moved it all into Savings."""
+    cheque = record_paycheque(db, user.id, a_cheque(job))
+    before = split_of(db, user)
+    accounts[0].income_share, accounts[1].income_share = 0.0, 100.0
+    db.commit()
+
+    update_paycheque(db, user.id, cheque.id, PaychequeUpdate(notes="typo fixed", allocations=[]))
+
+    assert split_of(db, user) == before
+
+
+def test_moving_the_cheques_date_moves_its_rows_and_nothing_else(db, user, accounts, job):
+    cheque = record_paycheque(db, user.id, a_cheque(job))
+    before = split_of(db, user)
+    ids = {row.id for row in income_rows(db, user)}
+
+    update_paycheque(db, user.id, cheque.id, PaychequeUpdate(occurred_on=PAID_ON + datetime.timedelta(days=1)))
+
+    assert split_of(db, user) == before
+    assert {row.id for row in income_rows(db, user)} == ids
+    assert {row.occurred_on for row in income_rows(db, user)} == {PAID_ON + datetime.timedelta(days=1)}
+
+
+def test_a_new_net_keeps_each_accounts_share(db, user, accounts, job):
+    """Rescaled in the cheque's own 70/30, not today's shares, and to the cent."""
+    cheque = record_paycheque(db, user.id, a_cheque(job))
+    accounts[0].income_share, accounts[1].income_share = 0.0, 100.0
+    db.commit()
+
+    update_paycheque(db, user.id, cheque.id, PaychequeUpdate(gross_amount=700.0))
+
+    split = split_of(db, user)
+    net = round(700.0 - 117.20, 2)
+    assert round(sum(split.values()), 2) == net
+    assert split["Chequing"] == pytest.approx(net * 0.7, abs=CENT)
+    assert split["Savings"] == pytest.approx(net * 0.3, abs=CENT)
+
+
+def test_allocations_sent_with_a_correction_are_used(db, user, accounts, job):
+    cheque = record_paycheque(db, user.id, a_cheque(job))
+    net = round(612.0 - 117.20, 2)
+
+    update_paycheque(db, user.id, cheque.id, PaychequeUpdate(allocations=[
+        DepositAllocation(account_id=accounts[1].id, amount=net)]))
+
+    assert split_of(db, user) == {"Savings": net}
+
+
+# --- one share of a cheque can't go alone (audit H5) ---------------------
+
+def test_one_share_of_a_cheque_is_refused_and_nothing_is_deleted(db, user, accounts, job):
+    """It used to delete the cheque and leave the other shares as anonymous income."""
+    record_paycheque(db, user.id, a_cheque(job))
+    row = income_rows(db, user)[0]
+
+    with pytest.raises(ValueError, match="share of a paycheque"):
+        delete_transaction(db, user.id, row.id, scope="row")
+
+    assert db.query(PaychequeModel).count() == 1
+    assert len(income_rows(db, user)) == 2
+
+
+def test_the_ledger_says_which_rows_a_cheque_owns(db, user, accounts, job):
+    from app.Finances.services.transaction_service import list_transactions
+
+    cheque = record_paycheque(db, user.id, a_cheque(job))
+    make_account(db, user.id, "Cash")
+
+    listed = list_transactions(db, user.id)
+
+    assert {row.paycheque_id for row in listed if row.kind == "income"} == {cheque.id}
+
+
+def test_the_route_answers_400_for_one_share_of_a_cheque(db, user, accounts, job):
+    from fastapi.testclient import TestClient
+
+    import app.main
+    from app._database.db import get_db
+    from app.Auth.dependencies import get_current_user
+
+    record_paycheque(db, user.id, a_cheque(job))
+    row = income_rows(db, user)[0]
+    app.main.app.dependency_overrides[get_current_user] = lambda: user
+    app.main.app.dependency_overrides[get_db] = lambda: db
+    try:
+        client = TestClient(app.main.app)
+        url = f"/api/finances/{user.id}/transactions/{row.id}"
+        refused = client.delete(url, params={"scope": "row"})
+        assert refused.status_code == 400 and "paycheque" in refused.json()["detail"]
+        assert client.delete(url, params={"scope": "group"}).status_code == 200
+    finally:
+        app.main.app.dependency_overrides.clear()
+    assert db.query(PaychequeModel).count() == 0 and income_rows(db, user) == []
+
+
+def test_a_rescaled_deposit_comes_to_the_net_to_the_cent():
+    """Three equal shares of $100 round to 33.33 each; the leftover cent must land somewhere."""
+    from app.Jobs.services.paycheque_service import rescale
+
+    rows = [TransactionModel(amount=10.0) for _ in range(3)]
+
+    rescale(rows, 100.0)
+
+    assert round(sum(row.amount for row in rows), 2) == 100.0
+    assert sorted(row.amount for row in rows) == [33.33, 33.33, 33.34]

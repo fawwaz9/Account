@@ -136,6 +136,9 @@ class Transaction(TransactionBase):
         business_percent: The share that was a business expense, 1 to 100.
         tuition_payment_id: The tuition payment that owns the row, so the client
             sends it to the tuition editor; set on list reads only.
+        paycheque_id: The paycheque that owns the row's deposit, so the client
+            offers deleting the cheque rather than one share; list reads only.
+        recurring_id: The standing instruction that wrote it, if one did.
     """
 
     id: UUID = Field(default_factory=uuid4)
@@ -155,6 +158,12 @@ class Transaction(TransactionBase):
     #: row to the tuition editor instead of the plain one, because editing
     #: the amount directly would leave the rate and the ledger disagreeing.
     tuition_payment_id: UUID | None = None
+    #: Set when a paycheque owns this row's deposit (audit H5): its shares go
+    #: together or not at all.
+    paycheque_id: UUID | None = None
+    #: Set when a standing instruction wrote the row, so a delete can say the
+    #: payment won't come back.
+    recurring_id: UUID | None = None
 
     class Config:
         """Pydantic settings: allow building the model from an ORM row."""

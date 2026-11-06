@@ -10,6 +10,7 @@ scheduler, and the Budget page runs the catch-up on every load.
 import uuid
 from datetime import date, timedelta
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app._database.models import (
@@ -280,7 +281,9 @@ def create_rule(db: Session, user_id: uuid.UUID, data: RecurringCreate):
 def update_rule(db: Session, user_id: uuid.UUID, rule_id: uuid.UUID, data: RecurringUpdate):
     """Change the fields sent on one of the user's instructions.
 
-    Payments already written are left alone. Commits.
+    Payments already written are left alone. A change to the start date or the
+    repeat sets the catch-up floor to the owner's today, so the edited rule writes
+    nothing dated before the edit (audit C1). Commits.
 
     Args:
         db: Open database session.
@@ -296,8 +299,9 @@ def update_rule(db: Session, user_id: uuid.UUID, rule_id: uuid.UUID, data: Recur
             user's, or the repeat would end before it starts.
 
     Note:
-        The next catch-up writes every date the edited rule produces in the last
-        120 days that has no payment, so moving a rule's day back-fills it.
+        A student who moved a rule to back-fill missed payments now records them
+        by hand: the floor is what stops rent moved from the 1st to the 5th
+        writing every past 5th as a fresh payment.
     """
     instruction = get_rule(db, user_id, rule_id)
     if instruction is None:
@@ -312,6 +316,7 @@ def update_rule(db: Session, user_id: uuid.UUID, rule_id: uuid.UUID, data: Recur
         if instruction.kind not in (EXPENSE, TRANSFER):
             raise ValueError("Only an expense or a transfer carries a spending category")
 
+    dates_before = (instruction.starts_on, rule_of(instruction))
     for key, value in update_data.items():
         setattr(instruction, key, value)
 
@@ -320,6 +325,9 @@ def update_rule(db: Session, user_id: uuid.UUID, rule_id: uuid.UUID, data: Recur
 
     if instruction.recur_until is not None and instruction.recur_until < instruction.starts_on:
         raise ValueError("A repeat cannot end before it starts")
+
+    if (instruction.starts_on, rule_of(instruction)) != dates_before:
+        instruction.catchup_from = user_today(db, user_id)
 
     db.commit()
     db.refresh(instruction)
@@ -392,7 +400,7 @@ def due_dates(db: Session, instruction: RecurringTransactionModel, through: date
     """Return the dates owed but not yet written, oldest first.
 
     Looks back at most `MAX_CATCHUP_DAYS` from `through`, never before the rule's
-    start.
+    start or its catch-up floor.
 
     Args:
         db: Open database session.
@@ -403,7 +411,7 @@ def due_dates(db: Session, instruction: RecurringTransactionModel, through: date
         The missing dates.
     """
     earliest = add_days(through, -MAX_CATCHUP_DAYS)
-    window_start = max(instruction.starts_on, earliest)
+    window_start = max(instruction.starts_on, earliest, instruction.catchup_from or earliest)
 
     wanted = occurrences(
         rule_of(instruction),
@@ -422,8 +430,9 @@ def write_occurrence(
     """Write one payment through the ordinary money path for its kind.
 
     A deposit splits by today's income shares, a transfer writes both legs, and
-    income or an expense one row; the rows are then stamped with the rule's id.
-    Commits twice: the money service commits the rows, then the stamp.
+    income or an expense one row, each carrying the rule's id. One commit, made by
+    the money service: a failure can't leave a payment without the stamp that says
+    it was written (audit M3).
 
     Args:
         db: Open database session.
@@ -437,6 +446,7 @@ def write_occurrence(
     Raises:
         ValueError: If the account it points at is gone, or the deposit has no
             income shares to split by.
+        sqlalchemy.exc.IntegrityError: If another request wrote this date first.
     """
     if instruction.kind == DEPOSIT:
         # No allocations means "split by each account's income share", and the
@@ -447,7 +457,7 @@ def write_occurrence(
             amount=instruction.amount,
             occurred_on=on_date,
             description=instruction.description or "Deposit",
-        ))
+        ), recurring_id=instruction.id)
     elif instruction.kind == TRANSFER:
         created = create_transfer(db, user_id, TransferCreate(
             amount=instruction.amount,
@@ -456,7 +466,7 @@ def write_occurrence(
             from_account_id=instruction.account_id,
             to_account_id=instruction.to_account_id,
             category_id=instruction.category_id,
-        ))
+        ), recurring_id=instruction.id)
     else:
         created = create_transaction(db, user_id, TransactionCreate(
             kind=TransactionKind(instruction.kind),
@@ -465,34 +475,27 @@ def write_occurrence(
             description=instruction.description,
             occurred_on=on_date,
             category_id=instruction.category_id,
-        ))
+        ), recurring_id=instruction.id)
 
     if created is None:
         raise ValueError("the account it points at no longer exists")
 
-    rows = created if isinstance(created, list) else [created]
-    # Stamped after the fact because the money services own row creation, and
-    # widening all three of their signatures to carry a recurrence id would put
-    # a scheduling concern into the one-off path.
-    db.query(TransactionModel).filter(
-        TransactionModel.id.in_([row.id for row in rows])
-    ).update({TransactionModel.recurring_id: instruction.id}, synchronize_session=False)
-    db.commit()
-
-    return rows
+    return created if isinstance(created, list) else [created]
 
 
 def run_due(db: Session, user_id: uuid.UUID, through: date | None = None) -> RecurringRun | None:
     """Write every payment that is owed and not yet written, for all active rules.
 
-    Idempotent through the (recurring_id, occurred_on) check, which is what makes
-    calling it on every load safe. A rule that fails is reported, and its later
-    dates are left, while the other rules still run.
+    Idempotent through the (recurring_id, occurred_on) check, and the unique
+    index behind it, which is what makes calling it on every load safe: a date
+    another request wrote first is taken as written. A rule that fails is
+    reported, and its later dates are left, while the other rules still run.
 
     Args:
         db: Open database session.
         user_id: Whose instructions.
-        through: The last date that counts as due; defaults to the user's today.
+        through: The last date that counts as due; defaults to the user's today,
+            and is never later (a payment is a row only once its date has come).
 
     Returns:
         How many rows were written, the rows, and one line per rule that could
@@ -501,7 +504,8 @@ def run_due(db: Session, user_id: uuid.UUID, through: date | None = None) -> Rec
     if not user_exists(db, user_id):
         return None
 
-    horizon = through or user_today(db, user_id)
+    today = user_today(db, user_id)
+    horizon = min(through, today) if through else today
     rules = (
         db.query(RecurringTransactionModel)
         .filter(
@@ -519,6 +523,9 @@ def run_due(db: Session, user_id: uuid.UUID, through: date | None = None) -> Rec
         for on_date in due_dates(db, instruction, horizon):
             try:
                 written.extend(write_occurrence(db, user_id, instruction, on_date))
+            except IntegrityError:
+                # Two loads at once: the other one wrote this date. Already paid.
+                db.rollback()
             except ValueError as exc:
                 label = instruction.description or instruction.kind
                 skipped.append(f"{label} on {on_date.isoformat()}: {exc}")

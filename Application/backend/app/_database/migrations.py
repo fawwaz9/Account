@@ -107,6 +107,13 @@ ADDED_COLUMNS: dict[str, dict[str, str | dict[str, str]]] = {
     },
     "recurring_tasks": {
         "priority": "INTEGER NOT NULL DEFAULT 3",
+        # Audit C1's twin: the floor an edit sets on the catch-up.
+        "catchup_from": "DATE",
+    },
+    # Audit C1: the floor an edit sets on the catch-up. Not backfilled: a rule
+    # edited before this keeps its 120-day look-back until it is edited again.
+    "recurring_transactions": {
+        "catchup_from": "DATE",
     },
     # Pay on set days of the month (next.md, decided 2026-10-03). Not
     # backfilled: every existing job keeps paying by its rule.

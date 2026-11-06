@@ -104,6 +104,21 @@ describe("permanent deletes ask first", () => {
     expect(sites.length).toBeGreaterThan(10);
   });
 
+  it("lets a hook that holds the confirm state only ever hold, never delete, on request", () => {
+    // The exemption above trusted the hook to ask first. It asked only for a
+    // split deposit and deleted everything else on one tap (audit H9), and this
+    // file could not see it. A request now only sets the pending row; the delete
+    // runs from the dialog's own callbacks.
+    for (const file of PROVIDES_CONFIRM_STATE) {
+      const text = readFileSync(join(SRC, "..", file), "utf8");
+      const request = text.indexOf("function requestDelete");
+      expect(request, `${file} has a requestDelete`).toBeGreaterThan(-1);
+      const body = bodyOf(text, request);
+      expect(body, `${file}: requestDelete must hold the row for the dialog`).toMatch(/setPending\(/);
+      expect(body, `${file}: requestDelete must not delete`).not.toMatch(/\brun\s*\(|deleteTransaction\s*\(/);
+    }
+  });
+
   it("renders a confirmation at every site, not just an import", () => {
     const offenders = sites
       .filter((s) => !PROVIDES_CONFIRM_STATE.has(s.file))

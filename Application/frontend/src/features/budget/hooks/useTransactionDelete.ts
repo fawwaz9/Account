@@ -4,8 +4,8 @@ import { Transaction } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
 
 /**
- * Transaction delete flow: a split deposit asks which part; anything else goes at once.
- * Returns the pending row and the scope dialog's handlers; reloads after each delete.
+ * Transaction delete flow: every row asks first (audit H9), and a split deposit asks
+ * which part. Returns the pending row and the dialog's handlers; reloads after each delete.
  */
 export function useTransactionDelete(reload: () => Promise<void>) {
   const { user } = useAuth();
@@ -30,13 +30,11 @@ export function useTransactionDelete(reload: () => Promise<void>) {
     }
   }
 
+  // Held for the confirmation, never deleted straight away: a mis-tap on the ×
+  // used to change balances with no way back. TransactionDeleteDialog words it.
   function requestDelete(transaction: Transaction) {
-    if (transaction.kind !== "transfer" && transaction.group_size > 1) {
-      setPending(transaction);
-      return;
-    }
-
-    void run(transaction, "group");
+    setError(null);
+    setPending(transaction);
   }
 
   return {

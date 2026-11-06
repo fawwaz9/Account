@@ -1109,6 +1109,11 @@ class RecurringTransactionModel(Base):
     #: was paused. Without these, skipping one payment could only mean ending
     #: the whole standing instruction.
     skipped_dates = Column(JSON, nullable=False, default=list)
+    #: The catch-up writes nothing dated before this (audit C1). Set to the
+    #: owner's today when the rule's dates change, so an edit never back-fills
+    #: payments the old rule didn't call for. Null means no floor beyond the
+    #: catch-up's own 120 days.
+    catchup_from = Column(Date, nullable=True)
 
     #: Paused rather than deleted: a cancelled subscription is worth keeping, so
     #: last term's spending still explains itself.
@@ -1176,6 +1181,10 @@ class RecurringTaskModel(Base):
     recur_count = Column(Integer, nullable=True)
     #: Occurrences cancelled individually -- a week the seminar did not run.
     skipped_dates = Column(JSON, nullable=False, default=list)
+    #: Nothing is written dated before this. Set to the owner's today when the
+    #: rule's dates change, so the next Tasks page load cannot back-fill overdue
+    #: work the edit never assigned. Null means only the 14-day look-back.
+    catchup_from = Column(Date, nullable=True)
 
     #: Paused rather than deleted, so a term's record of what was actually done
     #: still explains itself.
@@ -1511,6 +1520,14 @@ Index("ix_transactions_category_id", TransactionModel.category_id)
 # Both the "has this rule already written this date" check and the subscription
 # audit's `recurring_id IS NULL` filter read this.
 Index("ix_transactions_recurring_id", TransactionModel.recurring_id)
+# One payment per standing instruction per date per account (audit M3). The
+# catch-up runs on every Budget page load, so two at once both read "not
+# written" and both wrote. account_id is in it because a transfer writes two
+# rows, and a deposit one per account, for one rule and date. Rows with no rule
+# have a null recurring_id, which never collides.
+Index("uq_transactions_recurring_date_account",
+      TransactionModel.recurring_id, TransactionModel.occurred_on, TransactionModel.account_id,
+      unique=True)
 Index("ix_transactions_course_id", TransactionModel.course_id)
 
 Index("ix_courses_user_id", CourseModel.user_id)
@@ -1552,6 +1569,9 @@ Index("ix_tasks_user_id", TaskModel.user_id)
 Index("ix_tasks_course_id", TaskModel.course_id)
 Index("ix_tasks_grade_id", TaskModel.grade_id)
 Index("ix_tasks_recurring_id", TaskModel.recurring_id)
+# One occurrence per repeating task per date (audit M3): the Tasks page runs
+# the catch-up on every load. Keyed on occurrence_date, which never moves.
+Index("uq_tasks_recurring_occurrence", TaskModel.recurring_id, TaskModel.occurrence_date, unique=True)
 Index("ix_task_snoozes_task_id", TaskSnoozeModel.task_id)
 
 Index("ix_reminders_user_id", ReminderModel.user_id)
@@ -1570,6 +1590,9 @@ Index("ix_sinking_funds_user_id", SinkingFundModel.user_id)
 Index("ix_sinking_funds_from_account_id", SinkingFundModel.from_account_id)
 Index("ix_sinking_funds_to_account_id", SinkingFundModel.to_account_id)
 Index("ix_sinking_contributions_fund_id", SinkingContributionModel.fund_id)
+# One contribution per fund per month (audit M3): a double tap fired two.
+Index("uq_sinking_contributions_fund_month",
+      SinkingContributionModel.fund_id, SinkingContributionModel.for_month, unique=True)
 
 Index("ix_tuition_payments_user_id", TuitionPaymentModel.user_id)
 Index("ix_tuition_payments_transaction_id", TuitionPaymentModel.transaction_id)

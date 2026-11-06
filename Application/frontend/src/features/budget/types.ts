@@ -97,6 +97,10 @@ export interface Transaction {
   business_percent?: number | null;
   /** Set when a tuition payment owns this row, so it opens that editor. */
   tuition_payment_id: string | null;
+  /** Set when a paycheque owns this row's deposit: its shares go together or not at all. */
+  paycheque_id?: string | null;
+  /** Set when a standing instruction wrote this row. */
+  recurring_id?: string | null;
 }
 
 /** Body to record income or an expense. */

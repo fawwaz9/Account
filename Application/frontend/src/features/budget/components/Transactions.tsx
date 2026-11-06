@@ -31,6 +31,7 @@ function byDayThenName(a: Transaction, b: Transaction) {
 /** Tooltip for the ×, saying what deleting this row removes. */
 function deleteHint(transaction: Transaction) {
   if (transaction.kind === "transfer") return "Deleting a transfer removes both sides";
+  if (transaction.paycheque_id) return "Part of a paycheque -- deleting it deletes the cheque";
   if (transaction.group_size > 1) return "Part of a split deposit -- you will be asked how much to remove";
   return "Delete this transaction";
 }

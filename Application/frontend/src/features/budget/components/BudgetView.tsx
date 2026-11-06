@@ -22,6 +22,7 @@ import { useCourses } from "../../grades/hooks/useCourses";
 import TuitionModal from "./TuitionModal";
 import TermBudget from "./TermBudget";
 import { useTransactionDelete } from "../hooks/useTransactionDelete";
+import TransactionDeleteDialog from "./TransactionDeleteDialog";
 import DeleteConfirmModal from "../../grades/components/DeleteConfirmModal";
 import { deleteRecurring, setBudgetTarget, updateAccount } from "../api";
 import { Account, RecurringTransaction, Transaction } from "../types";
@@ -267,23 +268,7 @@ export default function BudgetView() {
         onConfirm={() => { if (stoppingRule) void handleStopRule(stoppingRule); }}
       />
 
-      <DeleteConfirmModal
-        open={remove.pending !== null}
-        title="Remove which part?"
-        message={
-          remove.pending
-            ? `"${remove.pending.description || "This deposit"}" was split across ` +
-              `${remove.pending.group_size} accounts. Remove only this account's ` +
-              `share, or the whole deposit?`
-            : ""
-        }
-        confirmLabel="Whole deposit"
-        secondaryAction={{ label: "Just this share", onConfirm: remove.deleteRow }}
-        onConfirm={remove.deleteGroup}
-        onCancel={remove.cancel}
-        submitting={remove.deletingId !== null}
-        error={remove.error}
-      />
+      <TransactionDeleteDialog remove={remove} />
       <SinkingFundModal
         open={fundOpen}
         accounts={accounts}

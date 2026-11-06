@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import AccountBalanceChart from "../../features/budget/components/AccountBalanceChart";
 import AccountFlowChart from "../../features/budget/components/AccountFlowChart";
-import DeleteConfirmModal from "../../features/grades/components/DeleteConfirmModal";
 import EditTransactionModal from "../../features/budget/components/EditTransactionModal";
 import InvestmentReturnPanel from "../../features/budget/components/InvestmentReturnPanel";
 import TuitionModal from "../../features/budget/components/TuitionModal";
@@ -16,6 +15,7 @@ import { useAccountActivity } from "../../features/budget/hooks/useAccountActivi
 import { useCourses } from "../../features/grades/hooks/useCourses";
 import { fetchAccounts, setAccountCategoryLimit } from "../../features/budget/api";
 import { useTransactionDelete } from "../../features/budget/hooks/useTransactionDelete";
+import TransactionDeleteDialog from "../../features/budget/components/TransactionDeleteDialog";
 import { formatMoney } from "../../features/budget/money";
 import { returnTile } from "../../features/budget/returnTile";
 import { Account, Transaction } from "../../features/budget/types";
@@ -273,23 +273,7 @@ export default function AccountDetailPage() {
         />
       )}
 
-      <DeleteConfirmModal
-        open={remove.pending !== null}
-        title="Remove which part?"
-        message={
-          remove.pending
-            ? `"${remove.pending.description || "This deposit"}" was split across ` +
-              `${remove.pending.group_size} accounts. Remove only this account's ` +
-              `share, or the whole deposit?`
-            : ""
-        }
-        confirmLabel="Whole deposit"
-        secondaryAction={{ label: "Just this share", onConfirm: remove.deleteRow }}
-        onConfirm={remove.deleteGroup}
-        onCancel={remove.cancel}
-        submitting={remove.deletingId !== null}
-        error={remove.error}
-      />
+      <TransactionDeleteDialog remove={remove} />
 
       <TuitionModal
 

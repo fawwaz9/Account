@@ -10,6 +10,7 @@ import uuid
 from datetime import date
 
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app._database.models import (
@@ -19,6 +20,7 @@ from app._database.models import (
     TransactionModel,
     TuitionDeductionModel,
     PaychequeModel,
+    RecurringTransactionModel,
     SinkingContributionModel,
     TuitionPaymentModel,
 )
@@ -129,6 +131,55 @@ def group_sizes(db: Session, user_id: uuid.UUID) -> dict[uuid.UUID, int]:
     return {group_id: count for group_id, count in rows}
 
 
+def paycheque_groups(db: Session, user_id: uuid.UUID) -> dict[uuid.UUID, uuid.UUID]:
+    """Return group id to paycheque id for every deposit a cheque owns.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+
+    Returns:
+        Cheque id by the group id of the rows its net became.
+    """
+    rows = (
+        db.query(PaychequeModel.group_id, PaychequeModel.id)
+        .filter(PaychequeModel.user_id == user_id, PaychequeModel.group_id.isnot(None))
+        .all()
+    )
+    return {group_id: cheque_id for group_id, cheque_id in rows}
+
+
+def mark_handled(db: Session, user_id: uuid.UUID, rows) -> None:
+    """Record on each row's standing instruction that the row's date is dealt with.
+
+    A generated payment counts as written only while a row sits on its date, so
+    deleting one, or moving it to another day, used to have the next catch-up
+    write it again (audit C1). Adding the date to the rule's skipped dates, in the
+    caller's commit, makes the student's change stick. Changes rows only.
+
+    Args:
+        db: Open database session.
+        user_id: Owner of the rows.
+        rows: Ledger rows about to be deleted or re-dated; rows no rule wrote are
+            ignored.
+    """
+    dates: dict[uuid.UUID, set[date]] = {}
+    for row in rows:
+        if row.recurring_id is not None:
+            dates.setdefault(row.recurring_id, set()).add(row.occurred_on)
+    if not dates:
+        return
+
+    rules = db.query(RecurringTransactionModel).filter(
+        RecurringTransactionModel.id.in_(list(dates)),
+        RecurringTransactionModel.user_id == user_id,
+    )
+    for rule in rules:
+        skipped = {date.fromisoformat(str(value)) for value in (rule.skipped_dates or [])}
+        # Rewritten whole: SQLAlchemy does not track mutation inside a JSON column.
+        rule.skipped_dates = sorted(day.isoformat() for day in skipped | dates[rule.id])
+
+
 def signed(kind: TransactionKind, amount: float) -> float:
     """Return an amount signed by kind: positive for income, negative otherwise.
 
@@ -146,6 +197,7 @@ def as_schema(
     transaction: TransactionModel,
     group_size: int = 1,
     tuition_payment_id: uuid.UUID | None = None,
+    paycheque_id: uuid.UUID | None = None,
 ) -> Transaction:
     """Build a detached response from a row, without touching the row itself.
 
@@ -153,6 +205,7 @@ def as_schema(
         transaction: The row.
         group_size: How many rows share its group.
         tuition_payment_id: The tuition payment that owns it, if any.
+        paycheque_id: The paycheque that owns its group, if any.
 
     Returns:
         The response, with `amount` as a magnitude and `signed_amount` as stored.
@@ -171,6 +224,8 @@ def as_schema(
         course_id=transaction.course_id,
         business_percent=transaction.business_percent,
         tuition_payment_id=tuition_payment_id,
+        paycheque_id=paycheque_id,
+        recurring_id=transaction.recurring_id,
     )
 
 
@@ -196,7 +251,8 @@ def list_transactions(
         end: Latest date, inclusive; None for no bound.
 
     Returns:
-        The rows with group sizes and owning tuition payments attached.
+        The rows with group sizes, owning tuition payments and owning paycheques
+        attached.
 
     Raises:
         ValueError: If `start` is after `end`.
@@ -222,13 +278,16 @@ def list_transactions(
     )
     sizes = group_sizes(db, user_id)
     tuition = tuition_payment_ids(db, user_id)
+    cheques = paycheque_groups(db, user_id)
     return [
-        as_schema(row, sizes.get(row.group_id, 1), tuition.get(row.id))
+        as_schema(row, sizes.get(row.group_id, 1), tuition.get(row.id), cheques.get(row.group_id))
         for row in rows
     ]
 
 
-def create_transaction(db: Session, user_id: uuid.UUID, data: TransactionCreate):
+def create_transaction(
+    db: Session, user_id: uuid.UUID, data: TransactionCreate, *, recurring_id: uuid.UUID | None = None
+):
     """Record income or an expense on one of the user's accounts.
 
     A category and a course are kept only on an expense. Commits.
@@ -237,6 +296,9 @@ def create_transaction(db: Session, user_id: uuid.UUID, data: TransactionCreate)
         db: Open database session.
         user_id: Whose ledger.
         data: The transaction; its amount is a positive magnitude.
+        recurring_id: The standing instruction writing it, so the row and the
+            mark that its date is paid land in one commit; None for a row entered
+            by hand.
 
     Returns:
         The new row's response; None when the account is not the user's.
@@ -271,14 +333,21 @@ def create_transaction(db: Session, user_id: uuid.UUID, data: TransactionCreate)
         # Same rule as the category: a course says what money went on, which
         # only makes sense for money going out.
         course_id=data.course_id if data.kind == TransactionKind.EXPENSE else None,
+        recurring_id=recurring_id,
     )
-    db.add(transaction)
-    db.commit()
+    try:
+        db.add(transaction)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     db.refresh(transaction)
     return as_schema(transaction)
 
 
-def create_transfer(db: Session, user_id: uuid.UUID, data: TransferCreate):
+def create_transfer(
+    db: Session, user_id: uuid.UUID, data: TransferCreate, *, recurring_id: uuid.UUID | None = None
+):
     """Move money between two of the user's accounts as two rows in one commit.
 
     Both rows carry the category, so either one shows it; only the outgoing row
@@ -288,6 +357,8 @@ def create_transfer(db: Session, user_id: uuid.UUID, data: TransferCreate):
         db: Open database session.
         user_id: Whose ledger.
         data: The amount, date, description, both accounts and the category.
+        recurring_id: The standing instruction writing it, set on both rows; None
+            for a transfer entered by hand.
 
     Returns:
         The outgoing and incoming rows' responses; None when either account is
@@ -318,6 +389,7 @@ def create_transfer(db: Session, user_id: uuid.UUID, data: TransferCreate):
             occurred_on=data.occurred_on,
             group_id=group_id,
             category_id=data.category_id,
+            recurring_id=recurring_id,
         )
         for account, amount in ((source, -data.amount), (target, data.amount))
     ]
@@ -375,7 +447,10 @@ def update_transaction(
 
     A new amount keeps the row's direction. On a transfer the other leg follows the
     amount, date, description and category; a deposit's other rows are left alone.
-    Commits.
+    Moving a standing instruction's payment to another day marks the day it was
+    due as paid and makes the row the student's own, so the catch-up neither
+    writes that day again nor counts the new one as a payment of the rule
+    (audit C1). Commits.
 
     Args:
         db: Open database session.
@@ -388,8 +463,9 @@ def update_transaction(
 
     Raises:
         ValueError: If the amount of a tuition payment's row is changed (that goes
-            through the tuition editor), or the category or course is not the
-            user's.
+            through the tuition editor), the category or course is not the user's,
+            or the change would give one standing payment two rows on one account
+            and day.
     """
     transaction = (
         db.query(TransactionModel)
@@ -434,6 +510,15 @@ def update_transaction(
 
     new_amount = update_data.pop("amount", None)
 
+    redated = (
+        transaction.recurring_id is not None
+        and "occurred_on" in update_data
+        and update_data["occurred_on"] != transaction.occurred_on
+    )
+    if redated:
+        mark_handled(db, user_id, [transaction])
+        transaction.recurring_id = None
+
     for key, value in update_data.items():
         setattr(transaction, key, value)
 
@@ -463,12 +548,20 @@ def update_transaction(
                 partner.amount = -transaction.amount
             if "occurred_on" in update_data:
                 partner.occurred_on = transaction.occurred_on
+                if redated:
+                    partner.recurring_id = None
             if "description" in update_data:
                 partner.description = transaction.description
             if "category_id" in update_data:
                 partner.category_id = transaction.category_id
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        # Moving a deposit row onto an account another row of the same payment
+        # already holds: the one-payment-per-account rule (audit M3).
+        db.rollback()
+        raise ValueError("Another row of this standing payment is already on that account and day") from exc
     db.refresh(transaction)
     return as_schema(transaction)
 
@@ -483,8 +576,9 @@ def delete_transaction(
 
     A transfer is always deleted whole. For a deposit, `scope` "row" drops one
     allocation and "group" the whole deposit. A tuition payment owning the row, and
-    a paycheque or sinking contribution owning its group, are deleted too.
-    Commits.
+    a paycheque or sinking contribution owning its group, are deleted too. A
+    standing instruction's payment marks its date as dealt with, so the catch-up
+    doesn't write it again (audit C1). Commits.
 
     Args:
         db: Open database session.
@@ -495,10 +589,14 @@ def delete_transaction(
     Returns:
         A copy of the row the caller named; None when it is not the user's.
 
+    Raises:
+        ValueError: If `scope` is "row" on a paycheque's row: one share of a
+            cheque can't go without the cheque, and the cheque can't go leaving
+            the other shares unexplained (audit H5).
+
     Note:
-        A cheque is deleted whenever its group is touched, even with scope "row",
-        which leaves its other rows behind; a shift record pointing at a cash-tip
-        row makes the delete fail its foreign key.
+        A shift record pointing at a cash-tip row makes the delete fail its
+        foreign key.
     """
     transaction = (
         db.query(TransactionModel)
@@ -510,6 +608,33 @@ def delete_transaction(
 
     removed = as_schema(transaction)
     is_transfer = transaction.kind == TransactionKind.TRANSFER.value
+
+    doomed_cheques = []
+    if transaction.group_id is not None:
+        doomed_cheques = (
+            db.query(PaychequeModel)
+            .filter(
+                PaychequeModel.user_id == user_id,
+                PaychequeModel.group_id == transaction.group_id,
+            )
+            .all()
+        )
+    # Refused before anything is touched. This used to delete the cheque, its
+    # deductions and its verdict from Jobs, and leave the other shares in the
+    # ledger as anonymous income.
+    if doomed_cheques and scope == "row" and not is_transfer:
+        raise ValueError(
+            "This is one share of a paycheque. Edit the cheque on the Jobs page, or delete the whole cheque"
+        )
+
+    whole_group = transaction.group_id is not None and (is_transfer or scope == "group")
+    going = (
+        db.query(TransactionModel)
+        .filter(TransactionModel.group_id == transaction.group_id, TransactionModel.user_id == user_id)
+        .all()
+        if whole_group else [transaction]
+    )
+    mark_handled(db, user_id, going)
 
     # A tuition payment owns its ledger row, so removing the row must remove the
     # record of what it was for. Left behind, the payment row still answered
@@ -533,16 +658,8 @@ def delete_transaction(
     # remove the cheque as well. Left behind it would still answer "what did
     # this job pay" for money no longer recorded anywhere -- the orphaned
     # tuition payment, again. Matched on group_id because a cheque is several
-    # rows, not one.
+    # rows, not one; found above.
     if transaction.group_id is not None:
-        doomed_cheques = (
-            db.query(PaychequeModel)
-            .filter(
-                PaychequeModel.user_id == user_id,
-                PaychequeModel.group_id == transaction.group_id,
-            )
-            .all()
-        )
         # Deductions follow through the relationship's delete-orphan cascade.
         for cheque in doomed_cheques:
             db.delete(cheque)
@@ -554,7 +671,7 @@ def delete_transaction(
             SinkingContributionModel.group_id == transaction.group_id
         ).delete(synchronize_session=False)
 
-    if transaction.group_id is not None and (is_transfer or scope == "group"):
+    if whole_group:
         db.query(TransactionModel).filter(
             TransactionModel.group_id == transaction.group_id,
             TransactionModel.user_id == user_id,

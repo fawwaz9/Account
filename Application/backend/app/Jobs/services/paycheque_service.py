@@ -357,14 +357,36 @@ def clear_deposit(db: Session, user_id: uuid.UUID, group_id: uuid.UUID | None) -
     ).delete(synchronize_session=False)
 
 
+def rescale(rows: list[TransactionModel], net: float) -> None:
+    """Move a deposit's rows to a new net, each account keeping its share of it.
+
+    Rounded to the cent row by row; the remainder goes to the largest row, so the
+    rows still come to the net exactly. Changes the rows only.
+
+    Args:
+        rows: The deposit's income rows, at least one, summing above zero.
+        net: The new net, in dollars.
+    """
+    old = sum(row.amount for row in rows)
+    for row in rows:
+        row.amount = money(net * row.amount / old)
+    rest = money(net - sum(row.amount for row in rows))
+    if rest:
+        largest = max(rows, key=lambda row: row.amount)
+        largest.amount = money(largest.amount + rest)
+
+
 def update_paycheque(
     db: Session, user_id: uuid.UUID, paycheque_id: uuid.UUID, data: PaychequeUpdate
 ):
-    """Correct one of the user's cheques, rewriting its ledger rows.
+    """Correct one of the user's cheques, keeping its ledger rows where they landed.
 
-    Whatever field changes, the old rows are deleted and the net is split again,
-    by the patch's allocations or else by today's income shares. Deductions sent
-    replace the old ones. `expected_gross` is never recomputed. One commit.
+    The rows follow the cheque's date. When the net changes they are rescaled,
+    each account keeping its share; otherwise their amounts are left alone, so
+    fixing a note never moves past money between accounts (audit H2). Only
+    allocations sent in the patch, or a cheque whose rows are gone, split the net
+    afresh. Deductions sent replace the old ones. `expected_gross` is never
+    recomputed. One commit.
 
     Args:
         db: Open database session.
@@ -388,6 +410,8 @@ def update_paycheque(
         return None
 
     job = db.query(JobModel).filter(JobModel.id == cheque.job_id).first()
+    net_before = net_of(cheque.gross_amount, db.query(PaychequeDeductionModel).filter(
+        PaychequeDeductionModel.paycheque_id == cheque.id).all())
     update_data = data.model_dump(exclude_unset=True)
     deductions = update_data.pop("deductions", None)
     allocations = update_data.pop("allocations", None)
@@ -425,12 +449,27 @@ def update_paycheque(
     if net <= 0:
         raise ValueError("Deductions cannot come to more than the gross")
 
-    clear_deposit(db, user_id, cheque.group_id)
-    cheque.group_id = uuid.uuid4()
-    db.add_all(deposit_rows(
-        db, user_id, net, data.allocations if allocations is not None else None,
-        cheque.occurred_on, f"{job.name if job else 'Job'} pay", cheque.group_id,
-    ))
+    rows = (
+        db.query(TransactionModel)
+        .filter(TransactionModel.user_id == user_id, TransactionModel.group_id == cheque.group_id)
+        .all()
+        if cheque.group_id is not None else []
+    )
+    if data.allocations or not rows:
+        # The student chose the split, or there is nothing left to keep.
+        clear_deposit(db, user_id, cheque.group_id)
+        cheque.group_id = uuid.uuid4()
+        db.add_all(deposit_rows(
+            db, user_id, net, data.allocations or None,
+            cheque.occurred_on, f"{job.name if job else 'Job'} pay", cheque.group_id,
+        ))
+    else:
+        # Re-splitting by today's shares is what used to move a September
+        # cheque's money between accounts when its note was fixed in November.
+        if money(net) != money(net_before):
+            rescale(rows, net)
+        for row in rows:
+            row.occurred_on = cheque.occurred_on
 
     db.commit()
     db.refresh(cheque)

@@ -9,6 +9,7 @@ while it is still a promise. Every figure takes the day it is computed for.
 import uuid
 from datetime import date
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app._database.models import (
@@ -401,7 +402,13 @@ def contribute(
         confirmed_at=utc_now(),
     ))
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        # A double tap: the other request funded this month between the check
+        # above and here, and the unique index on (fund_id, for_month) caught it.
+        db.rollback()
+        raise ValueError("This month has already been set aside") from exc
     db.refresh(fund)
     return as_schema(fund, anchor)
 

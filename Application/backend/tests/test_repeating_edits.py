@@ -162,3 +162,19 @@ def test_editing_twice_does_not_duplicate_anything(db, user):
 
     assert len(rows(db, rule)) == count
     assert {task.title for task in rows(db, rule)} == {"Two"}
+
+
+def test_the_next_page_load_does_not_back_fill_either(db, user):
+    """`since` covered only the edit itself: the next Tasks page load ran the
+    catch-up without it and wrote the past fortnight of the new day as overdue
+    work nobody had assigned. The rule's floor covers every later load."""
+    today = user_today(db, user.id)
+    days = list(Weekday)
+    rule = weekly_rule(db, user, days[(today.weekday() + 1) % 7])
+
+    svc.update_rule(db, user.id, rule.id, RecurringTaskUpdate(recurrence=Recurrence(
+        freq=Frequency.WEEKLY, interval=1, byday=[days[(today.weekday() - 1) % 7]], until=None, count=None)))
+    before = {t.id for t in rows(db, rule) if t.due_date < today}
+    svc.run_due(db, user.id)
+
+    assert {t.id for t in rows(db, rule) if t.due_date < today} == before

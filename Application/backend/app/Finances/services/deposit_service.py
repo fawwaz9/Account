@@ -89,7 +89,9 @@ def preview_deposit(db: Session, user_id: uuid.UUID, amount: float):
     )
 
 
-def record_deposit(db: Session, user_id: uuid.UUID, data: DepositCreate):
+def record_deposit(
+    db: Session, user_id: uuid.UUID, data: DepositCreate, *, recurring_id: uuid.UUID | None = None
+):
     """Write a deposit as one income row per receiving account, in one commit.
 
     Uses the given allocations, or splits by income share; zero allocations write
@@ -99,6 +101,8 @@ def record_deposit(db: Session, user_id: uuid.UUID, data: DepositCreate):
         db: Open database session.
         user_id: Whose ledger.
         data: The deposit and any explicit allocations.
+        recurring_id: The standing instruction writing it, set on every row; None
+            for a deposit entered by hand.
 
     Returns:
         The rows written; None when an allocation names an account that is not
@@ -133,6 +137,7 @@ def record_deposit(db: Session, user_id: uuid.UUID, data: DepositCreate):
             description=data.description or "Deposit",
             occurred_on=data.occurred_on,
             group_id=group_id,
+            recurring_id=recurring_id,
         )
         for entry in allocations
         if entry.amount > 0

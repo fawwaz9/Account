@@ -13,6 +13,7 @@ where it currently sits and the student may move it.
 import uuid
 from datetime import date, timedelta
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app._database.models import CourseModel, RecurringTaskModel, TaskModel, UserModel, utc_now
@@ -276,7 +277,10 @@ def update_rule(db: Session, user_id: uuid.UUID, rule_id: uuid.UUID, data: Recur
     """Change the fields sent on a repeating task and bring its occurrences in line.
 
     Commits the rule, then resyncs outstanding occurrences and writes any new dates
-    from today on (never back-filling), and commits again.
+    from today on (never back-filling), and commits again. A change to the start
+    date or the repeat also sets the rule's catch-up floor to today, so the next
+    Tasks page load can't back-fill the past either: `since` alone only covered
+    this call.
 
     Args:
         db: Open database session.
@@ -302,6 +306,7 @@ def update_rule(db: Session, user_id: uuid.UUID, rule_id: uuid.UUID, data: Recur
         if owned_course(db, user_id, update_data["course_id"]) is None:
             raise ValueError("Course not found")
 
+    dates_before = (rule.starts_on, rule_of(rule))
     for key, value in update_data.items():
         setattr(rule, key, value)
 
@@ -310,6 +315,9 @@ def update_rule(db: Session, user_id: uuid.UUID, rule_id: uuid.UUID, data: Recur
 
     if rule.recur_until is not None and rule.recur_until < rule.starts_on:
         raise ValueError("A repeat cannot end before it starts")
+
+    if (rule.starts_on, rule_of(rule)) != dates_before:
+        rule.catchup_from = user_today(db, user_id)
 
     db.commit()
     db.refresh(rule)
@@ -473,8 +481,9 @@ def materialise(
 ) -> list[TaskModel]:
     """Write a rule's missing occurrences for the rolling window. Flushes only.
 
-    The window runs from 14 days back (never before `starts_on`) to 60 days ahead of
-    the owner's today. A paused rule writes nothing.
+    The window runs from 14 days back (never before `starts_on` or the rule's
+    catch-up floor) to 60 days ahead of the owner's today. A paused rule writes
+    nothing.
 
     Args:
         db: Open database session.
@@ -491,8 +500,9 @@ def materialise(
 
     horizon = user_today(db, user_id)
     window_start = max(rule.starts_on, horizon - timedelta(days=MATERIALISE_BEHIND_DAYS))
-    if since is not None:
-        window_start = max(window_start, since)
+    for floor in (since, rule.catchup_from):
+        if floor is not None:
+            window_start = max(window_start, floor)
     window_end = horizon + timedelta(days=MATERIALISE_AHEAD_DAYS)
 
     wanted = occurrences(
@@ -535,8 +545,10 @@ def materialise(
 def run_due(db: Session, user_id: uuid.UUID) -> RecurringTaskRun | None:
     """Write the missing occurrences of every active repeating task the user has.
 
-    Idempotent, so the Tasks page calls it on every load. Commits when it writes
-    anything.
+    Idempotent, so the Tasks page calls it on every load. Two loads at once both
+    read "not written"; the unique index on (recurring_id, occurrence_date) stops
+    the second, which then reads again and finds the first one's rows (audit M3).
+    Commits when it writes anything.
 
     Args:
         db: Open database session.
@@ -559,13 +571,17 @@ def run_due(db: Session, user_id: uuid.UUID) -> RecurringTaskRun | None:
     )
 
     created: list[TaskModel] = []
-    for rule in rules:
-        created.extend(materialise(db, user_id, rule))
-
-    if created:
-        db.commit()
-        for task in created:
-            db.refresh(task)
+    for _ in range(2):
+        try:
+            created = [task for rule in rules for task in materialise(db, user_id, rule)]
+            if created:
+                db.commit()
+            break
+        except IntegrityError:
+            db.rollback()
+            created = []
+    for task in created:
+        db.refresh(task)
 
     codes = course_codes(db, user_id)
     for task in created:

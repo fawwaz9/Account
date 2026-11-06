@@ -1153,9 +1153,13 @@ def remove_transaction(
         A copy of the row named.
 
     Raises:
-        HTTPException: 404 if the row is missing or not the caller's.
+        HTTPException: 404 if the row is missing or not the caller's; 400 for one
+            share of a paycheque.
     """
-    removed = delete_transaction(db, user_id, transaction_id, scope)
+    try:
+        removed = delete_transaction(db, user_id, transaction_id, scope)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if removed is None:
         raise HTTPException(status_code=404, detail="Transaction not found")
 
