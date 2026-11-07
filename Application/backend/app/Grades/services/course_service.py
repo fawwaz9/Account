@@ -23,6 +23,7 @@ from app.Grades.services.grade_service import (
     calculate_grade_category_average,
     category_points,
     calculate_letter_grade,
+    finish,
     forecast_before,
     keep_projection,
     update_category_weights as apply_category_weights,
@@ -30,6 +31,7 @@ from app.Grades.services.grade_service import (
 from app.Grades.utils.enums import SEMESTER_ORDER, scoring_weight
 from app.Grades.utils.terms import course_result_grade, term_bucket
 from app.shared.dates import user_today
+from app.shared.validation import check_whole_row
 
 
 def courses_with_marks(db: Session, user_id: uuid.UUID) -> set[uuid.UUID]:
@@ -173,13 +175,15 @@ def current_term_of(db: Session, user_id: uuid.UUID) -> tuple[int | None, str | 
     return user.current_school_year, user.current_semester
 
 
-def create_course(db: Session, user_id: uuid.UUID, course_data: CourseCreate):
+def create_course(db: Session, user_id: uuid.UUID, course_data: CourseCreate, commit: bool = True):
     """Create a course with its category weights and links.
 
     Args:
         db: Request-scoped database session.
         user_id: The verified caller's id.
         course_data: The validated new course.
+        commit: False leaves the course flushed but uncommitted, so a caller can save
+            it and its assessments as one unit.
 
     Returns:
         The new course with every derived field attached, or None when the user does
@@ -228,12 +232,36 @@ def create_course(db: Session, user_id: uuid.UUID, course_data: CourseCreate):
     for category, weight in course_data.category_weights.items():
         db.add(CourseCategoryWeightModel(course_id=course.id, category=category.value, weight=weight))
 
-    db.commit()
+    finish(db, commit)
     db.refresh(course)
     year, semester = current_term_of(db, user_id)
     return attach_category_averages(
         attach_course_summary(course, year, semester, course_has_marks(db, course.id))
     )
+
+
+def check_merged_course(course: CourseModel, changes: dict) -> None:
+    """Refuse an edit that would leave a course a new course's rules would refuse.
+
+    Checked on the row as it would stand, before anything is changed, so a refusal leaves
+    the course exactly as it was.
+
+    Args:
+        course: The stored course, unchanged.
+        changes: The fields the edit sets, by schema name.
+
+    Raises:
+        ValueError: The first rule the edited course would break, as one sentence.
+    """
+    check_whole_row(CourseCreate, {
+        "code": course.code, "name": course.name, "year": course.year, "semester": course.semester,
+        "credits": course.credits, "required": course.required, "professor": course.professor,
+        "section": course.section, "final_grade": course.final_grade, "target_grade": course.target_grade,
+        "category_weights": course.category_weights, "start_date": course.start_date,
+        "end_date": course.end_date, "no_final": course.no_final, "transfer_credit": course.transfer_credit,
+        "archived": course.archived, "links": course.links or [],
+        **changes,
+    })
 
 
 def get_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
@@ -322,11 +350,12 @@ def update_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, data: C
         missing or another user's.
 
     Raises:
-        ValueError: If the merged weights are out of range.
+        ValueError: If the course as edited breaks a rule a new course must meet, its
+            code is another of the user's courses', or the merged weights are out of
+            range; nothing is committed.
 
     Note:
-        Commits. The merged course is not re-validated against the create rules, and a
-        code already used by another of the user's courses fails at commit.
+        Commits.
     """
     course = get_course(db, user_id, course_id)
     if not course:
@@ -338,6 +367,19 @@ def update_course(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, data: C
     # would hand back plain dicts, which cannot be deduplicated by title and
     # url without re-reading their keys.
     update_data.pop("links", None)
+
+    # The whole course as it would stand, against the rules a new course must meet
+    # (audit H1), before anything changes: a blank name, an end before the start or a
+    # graded transfer credit would otherwise be stored, and the course list would stop
+    # loading. A rename onto another course's code is refused here rather than failing
+    # at commit as a 500.
+    check_merged_course(course, {
+        **update_data, **({"links": [link.model_dump() for link in data.links]} if data.links is not None else {}),
+    })
+    if "code" in update_data and db.query(CourseModel.id).filter(
+        CourseModel.user_id == user_id, CourseModel.code == update_data["code"], CourseModel.id != course.id,
+    ).first() is not None:
+        raise ValueError("course code already exists")
 
     before = forecast_before(course)
     for key, value in update_data.items():

@@ -24,6 +24,7 @@ from app.Grades.services.grade_schedule import (
 from app.Grades.utils.marks import MAX_COURSE_PERCENT, counts_toward_average  # noqa: F401
 from app.Grades.utils import scheme_math, subcategory
 from app.shared.dates import user_today
+from app.shared.validation import check_whole_row
 
 #: A grade may exceed its max -- bonus marks are real -- but not absurdly, so a
 #: slipped digit (150 out of 10) is still caught.
@@ -77,6 +78,39 @@ def get_category_weights(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
     if course is None:
         return None
     return course.category_weights
+
+
+def finish(db: Session, commit: bool) -> None:
+    """End a write: commit it, or only flush it for a caller saving several as one unit.
+
+    A service called with `commit=False` leaves its changes in the caller's transaction,
+    so a course and its assessments, say, are saved together or not at all (audit M5).
+
+    Args:
+        db: The session the write was made in.
+        commit: True commits; False flushes, so ids and defaults exist, and commits
+            nothing.
+    """
+    if commit:
+        db.commit()
+    else:
+        db.flush()
+
+
+def check_merged_grade(grade: GradeModel) -> None:
+    """Refuse a grade, as it stands after an edit, that a new grade's rules would refuse.
+
+    Args:
+        grade: The grade with the edit applied, not yet committed.
+
+    Raises:
+        ValueError: The first rule it breaks, as one sentence.
+    """
+    check_whole_row(GradeCreate, {
+        "name": grade.name, "score": grade.score, "max_score": grade.max_score, "category": grade.category,
+        "due_date": grade.due_date, "due_time": grade.due_time, "duration_minutes": grade.duration_minutes,
+        "schedule_as": grade.schedule_as, "excluded": grade.excluded,
+    })
 
 
 def update_category_weights(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, weights: dict[GradeCategory, float]):
@@ -156,6 +190,7 @@ def set_category_sharing(
     category: str,
     weights: dict[uuid.UUID, float] | None,
     by_points: bool = False,
+    commit: bool = True,
 ):
     """Set how a category shares its weight: evenly, by points, or split (D29).
 
@@ -169,6 +204,8 @@ def set_category_sharing(
             split, and the category is shared evenly or by points.
         by_points: With no split, share by points (each item by its maximum) rather
             than evenly. Ignored with a split, which turns it off.
+        commit: False leaves the change flushed but uncommitted, for a caller that
+            saves several changes as one unit.
 
     Returns:
         The course's grades in display order, or None when the course is missing or
@@ -204,7 +241,7 @@ def set_category_sharing(
 
     course.average = course_grade(course)
     keep_projection(course, before, user_today(db, user_id))
-    db.commit()
+    finish(db, commit)
     db.refresh(course)
     return sorted_grades(course.grades)
 
@@ -262,7 +299,9 @@ def add_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_data:
     return grade
 
 
-def add_grades_bulk(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grades: list[GradeCreate]):
+def add_grades_bulk(
+    db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grades: list[GradeCreate], commit: bool = True,
+):
     """Add several grades to a course in one transaction: all of them or none.
 
     Args:
@@ -270,6 +309,8 @@ def add_grades_bulk(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade
         user_id: The verified caller's id.
         course_id: The course.
         grades: The new grades.
+        commit: False leaves them flushed but uncommitted, and a failure is left for
+            the caller to roll back, since the transaction is the caller's.
 
     Returns:
         The new grades, or None when the course is missing or another user's.
@@ -318,9 +359,10 @@ def add_grades_bulk(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade
         keep_projection(course, before, user_today(db, user_id))
         for grade in created:
             sync_schedule_for_grade(db, course, grade)
-        db.commit()
+        finish(db, commit)
     except Exception:
-        db.rollback()
+        if commit:
+            db.rollback()
         raise
 
     for grade in created:
@@ -368,8 +410,8 @@ def update_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id
         user's.
 
     Raises:
-        ValueError: If the merged grade breaks one of the rules above; nothing is
-            committed.
+        ValueError: If the merged grade breaks one of the rules above, or any rule a
+            new grade must meet; nothing is committed.
 
     Note:
         Commits.
@@ -444,6 +486,10 @@ def update_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id
         raise ValueError("A time of day needs a date to go with it")
     if grade.duration_minutes is not None and grade.due_time is None:
         raise ValueError("A length needs a start time to run from")
+    # The whole grade as it now stands, against the rules a new one must meet (audit
+    # H1): a blank name or an explicit null would otherwise be stored, and then
+    # every read of the course would fail.
+    check_merged_grade(grade)
 
     course.average = course_grade(course)
     keep_projection(course, before, user_today(db, user_id))
@@ -527,7 +573,9 @@ def get_all_grades(db: Session, user_id: uuid.UUID, course_id: uuid.UUID):
     return sorted_grades(course.grades)
 
 
-def record_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id: uuid.UUID, score: float):
+def record_grade(
+    db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id: uuid.UUID, score: float, commit: bool = True,
+):
     """Set a grade's score, recompute the average, and close the task it raised.
 
     Args:
@@ -536,6 +584,8 @@ def record_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id
         course_id: The course.
         grade_id: The grade.
         score: Points earned; 0 or more, at most `MAX_SCORE_MULTIPLE` times the maximum.
+        commit: False leaves the score flushed but uncommitted, for a caller that saves
+            several changes as one unit.
 
     Returns:
         The marked grade, or None when the course or grade is missing or another user's.
@@ -561,7 +611,7 @@ def record_grade(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, grade_id
     keep_projection(course, before, user_today(db, user_id))
     # The score landing is what closes the task.
     sync_schedule_for_grade(db, course, grade)
-    db.commit()
+    finish(db, commit)
     db.refresh(grade)
     return grade
 
