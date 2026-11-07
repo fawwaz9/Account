@@ -1,21 +1,24 @@
 import { useState, useEffect } from "react";
 import EditCourseForm from "./EditCourseForm";
 import { updateCourse } from "../api";
-import { CourseCreate, CourseDetail, CourseUpdate, Semester } from "../types";
+import { Course, CourseCreate, CourseDetail, CourseUpdate, Semester } from "../types";
 import { useAuth } from "../../../app/auth/AuthContext";
 import { getErrorMessage } from "./AddCourseModal";
 import Modal from "../../../shared/components/Modal";
 
-/** Whether the dialog is open, the course to edit, and close and updated callbacks. */
+/** Whether the dialog is open, the course to edit, and close, updated and delete callbacks. */
 interface EditCourseModalProps {
   readonly open: boolean;
-  readonly course: CourseDetail | null;
+  /** The course page passes its detail; the Grades page a final-grade-only course from the list. */
+  readonly course: CourseDetail | Course | null;
   readonly onClose: () => void;
   readonly onCourseUpdated: () => void;
+  /** Offers "Delete this course" when given: the only way to a final-grade-only course's deletion. */
+  readonly onDelete?: () => void;
 }
 
 /** Form state for a course (defaults when null); links are carried so the PATCH keeps them. */
-function buildFormFromCourse(course: CourseDetail | null): CourseCreate {
+function buildFormFromCourse(course: CourseDetail | Course | null): CourseCreate {
   return {
     code: course?.code ?? "",
     name: course?.name ?? "",
@@ -46,6 +49,7 @@ export default function EditCourseModal({
   course,
   onClose,
   onCourseUpdated,
+  onDelete,
 }: EditCourseModalProps) {
   const { user } = useAuth();
   const [form, setForm] = useState<CourseCreate>(buildFormFromCourse(course));
@@ -86,6 +90,11 @@ export default function EditCourseModal({
         submitting={loading}
         error={error}
       />
+      {onDelete && (
+        <button type="button" className="courseLinkAdd editCourseDelete" onClick={onDelete}>
+          Delete this course
+        </button>
+      )}
     </Modal>
   );
 }

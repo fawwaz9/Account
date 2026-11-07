@@ -27,7 +27,7 @@ from app.Grades.services.grade_service import (
     keep_projection,
     update_category_weights as apply_category_weights,
 )
-from app.Grades.utils.enums import SEMESTER_ORDER
+from app.Grades.utils.enums import SEMESTER_ORDER, scoring_weight
 from app.Grades.utils.terms import course_result_grade, term_bucket
 from app.shared.dates import user_today
 
@@ -88,8 +88,9 @@ def attach_course_summary(
 ) -> CourseModel:
     """Attach the derived fields every course response carries, from loaded columns.
 
-    Sets `letter_grade`, `grade_points`, `term_bucket` and `reported_average` on the
-    row; safe to map over a list, since it never touches `course.grades`.
+    Sets `letter_grade`, `grade_points`, `term_bucket`, `reported_average` and
+    `final_only` on the row; safe to map over a list, since it never touches
+    `course.grades`.
 
     Args:
         course: The course row; only attributes are set, nothing is written.
@@ -108,7 +109,26 @@ def attach_course_summary(
     # column is mapped, and writing to it during a read is how a GET starts
     # changing data.
     course.reported_average = course.average if has_marks else None
+    course.final_only = is_final_only(course, has_marks)
     return course
+
+
+def is_final_only(course: CourseModel, has_marks: bool) -> bool:
+    """Return whether a course is only its final grade: a record with nothing behind it.
+
+    A final grade above 0, no weight a mark could count toward, and no marks. Derived on
+    every read, never stored, so adding weights or marks later makes it a full course
+    again. Such a course has no page worth opening; its card opens Edit Course instead.
+
+    Args:
+        course: The course row, read through its `category_weights`.
+        has_marks: Whether the course has a counted mark.
+
+    Returns:
+        True for a final-grade-only course.
+    """
+    return bool(course.final_grade and course.final_grade > 0) and not has_marks \
+        and scoring_weight(course.category_weights or {}) == 0
 
 
 def attach_category_averages(course: CourseModel) -> CourseModel:

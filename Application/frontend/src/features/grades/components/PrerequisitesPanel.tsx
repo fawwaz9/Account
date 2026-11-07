@@ -146,13 +146,15 @@ function Editor({ userId, courseId, kind, current, onSaved, onCancel }: EditorPr
 interface PanelProps {
   readonly userId: string;
   readonly courseId: string;
+  /** Told after a rule of yours is saved or removed, so a summary of it can refresh. */
+  readonly onChanged?: () => void;
 }
 
 /**
  * A course's requisites, met or not: your version applies when you have one, the shared one below.
  * Advisory only; renders nothing if the read fails.
  */
-export default function PrerequisitesPanel({ userId, courseId }: PanelProps) {
+export default function PrerequisitesPanel({ userId, courseId, onChanged }: PanelProps) {
   const [data, setData] = useState<Prerequisites | null>(null);
   const [editing, setEditing] = useState<PrerequisiteKindName | null>(null);
   // Removing yours is permanent, so it asks first: the inline pair, as on a
@@ -174,6 +176,7 @@ export default function PrerequisitesPanel({ userId, courseId }: PanelProps) {
     setError(null);
     try {
       setData(await deleteOwnPrerequisite(userId, courseId, kind));
+      onChanged?.();
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -192,7 +195,7 @@ export default function PrerequisitesPanel({ userId, courseId }: PanelProps) {
         <h3>{KIND_TITLE[entry.kind]}</h3>
         {editing === entry.kind ? (
           <Editor userId={userId} courseId={courseId} kind={entry.kind} current={entry.yours}
-                  onSaved={(next) => { setData(next); setEditing(null); }} onCancel={() => setEditing(null)} />
+                  onSaved={(next) => { setData(next); setEditing(null); onChanged?.(); }} onCancel={() => setEditing(null)} />
         ) : (
           <>
             {main && <Side side={main} />}

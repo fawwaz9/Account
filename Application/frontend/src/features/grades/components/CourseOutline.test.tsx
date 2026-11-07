@@ -31,8 +31,9 @@ const shared = {
 };
 
 const onApplied = vi.fn();
-function show() {
-  return render(<CourseOutline userId="u1" courseId="c1" nonce={0} onApplied={onApplied} />);
+/** The page as just opened (changed 0), or after that many outline changes. */
+function show(changed = 0) {
+  return render(<CourseOutline userId="u1" courseId="c1" nonce={0} changed={changed} onApplied={onApplied} />);
 }
 
 beforeEach(() => { Object.values(api).forEach((fn) => fn.mockReset()); onApplied.mockReset(); });
@@ -55,7 +56,7 @@ describe("CourseOutline", () => {
     api.fetchOutline.mockResolvedValueOnce(status()).mockResolvedValueOnce(status());
     api.offerOutline.mockResolvedValue(status({ offer: { status: "pending", created_at: "2026-10-28T00:00:00" } }));
     api.withdrawOutlineOffer.mockResolvedValue({ deleted: true });
-    show();
+    show(1);
     fireEvent.click(await screen.findByRole("button", { name: "Offer outline" }));
     expect(await screen.findByText(/waiting for review/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Take back" }));
@@ -65,7 +66,7 @@ describe("CourseOutline", () => {
 
   it("says where an approved offer stands", async () => {
     api.fetchOutline.mockResolvedValue(status({ offer: { status: "accepted", created_at: "x" } }));
-    show();
+    show(1);
     expect(await screen.findByText(/classmates in this course and term can use it/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Take back" })).toBeNull();
   });
@@ -79,9 +80,43 @@ describe("CourseOutline", () => {
     expect(onApplied).not.toHaveBeenCalled();
   });
 
+  it("never asks to share on opening the page, only after the outline changes", async () => {
+    api.fetchOutline.mockResolvedValue(status());
+    const { container, rerender } = show(0);
+    await waitFor(() => expect(api.fetchOutline).toHaveBeenCalled());
+    expect(container.textContent).toBe("");
+    rerender(<CourseOutline userId="u1" courseId="c1" nonce={0} changed={1} onApplied={onApplied} />);
+    expect(await screen.findByRole("button", { name: "Offer outline" })).toBeTruthy();
+  });
+
+  it("goes away on Not now, and comes back at the next change", async () => {
+    api.fetchOutline.mockResolvedValue(status());
+    const { rerender } = show(1);
+    fireEvent.click(await screen.findByRole("button", { name: "Not now" }));
+    expect(screen.queryByRole("button", { name: "Offer outline" })).toBeNull();
+    expect(api.offerOutline).not.toHaveBeenCalled();
+    rerender(<CourseOutline userId="u1" courseId="c1" nonce={0} changed={2} onApplied={onApplied} />);
+    expect(await screen.findByRole("button", { name: "Offer outline" })).toBeTruthy();
+  });
+
+  it("puts away an offer's status with Done", async () => {
+    api.fetchOutline.mockResolvedValue(status({ offer: { status: "pending", created_at: "x" } }));
+    const { container } = show(1);
+    fireEvent.click(await screen.findByRole("button", { name: "Done" }));
+    expect(container.textContent).toBe("");
+  });
+
+  it("lets a reviewed outline be declined", async () => {
+    api.fetchOutline.mockResolvedValue(status({ shared, can_apply: true }));
+    const { container } = show();
+    fireEvent.click(await screen.findByRole("button", { name: "Not now" }));
+    expect(container.textContent).toBe("");
+    expect(api.applyOutline).not.toHaveBeenCalled();
+  });
+
   it("is silent when nothing can be offered or used", async () => {
     api.fetchOutline.mockResolvedValue(status({ can_offer: false, offer_blocked: "Transfer credit" }));
-    const { container } = show();
+    const { container } = show(1);
     await waitFor(() => expect(api.fetchOutline).toHaveBeenCalled());
     expect(container.textContent).toBe("");
   });

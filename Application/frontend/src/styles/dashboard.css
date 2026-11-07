@@ -242,12 +242,78 @@ p.workloadHeadline {
   align-self: flex-start;
 }
 
+/* ===== Big-screen dashboard (the owner's sketch, 2026-11-07) =====
+   Three cards in a row, then Today below the first, each the width of one. */
+.dashCards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+  align-items: start;
+  margin-bottom: 24px;
+}
+
+.dashCards .dashCard {
+  margin-bottom: 0;
+}
+
+/* A narrower window than the sketch: two across, then one. */
+@media (max-width: 1100px) {
+  .dashCards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .dashCards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.dashCardTitle {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text);
+}
+
+/* Two figures to a row, as the sketch draws them. */
+.dashStats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px 16px;
+}
+
+.dashStats .statValue {
+  white-space: nowrap;
+}
+
 /* ===== Today (Phase 4 item 6) =====
-   The digest's own lines, so the card says what the briefing says. */
-.todayTitle {
-  margin: 0 0 8px;
-  font-size: 1.1rem;
-  color: var(--gold);
+   The day's schedule as a table, then the briefing's own warning lines. */
+.todayTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.todayTable td {
+  padding: 6px 8px 6px 0;
+  border-top: 1px solid var(--border);
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.todayTable td:last-child {
+  padding-right: 0;
+}
+
+.todayWhen {
+  white-space: nowrap;
+}
+
+.todayEmpty {
+  margin: 0;
 }
 
 .todayDate {

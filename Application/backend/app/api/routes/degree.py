@@ -1,4 +1,5 @@
-"""Degree audit routes under `/api/degree`: the audit, requirements and equivalences."""
+"""Degree audit routes under `/api/degree`: the audit, requirements, equivalences and
+the prerequisites of courses under way or planned."""
 
 from uuid import UUID
 
@@ -7,7 +8,8 @@ from fastapi import APIRouter, HTTPException
 from app._database.dependencies import DBSession
 from app.Auth.services.access import VerifiedUserId
 from app.Grades.schemas.degree import DegreeAudit, Equivalence, EquivalenceWrite, Requirement, RequirementWrite
-from app.Grades.services import degree_service
+from app.Grades.schemas.prerequisite import PrerequisiteSummary
+from app.Grades.services import degree_service, prerequisite_service
 from app.Usage.services.usage_service import CREATE, record as record_usage
 
 router = APIRouter()
@@ -31,6 +33,22 @@ def get_audit(user_id: VerifiedUserId, db: DBSession):
     if result is None:
         raise HTTPException(status_code=404, detail="User not found")
     return result
+
+
+@router.get("/{user_id}/prerequisites", response_model=list[PrerequisiteSummary])
+def get_prerequisites(user_id: VerifiedUserId, db: DBSession):
+    """Return each in-progress and planned course's prerequisites in a word.
+
+    Each course's rules are read and changed at `/api/grades/{user_id}/courses/{course_id}/prerequisites`.
+
+    Args:
+        user_id: The verified caller's id.
+        db: Request-scoped database session.
+
+    Returns:
+        One summary per course; empty when there are none.
+    """
+    return prerequisite_service.overview(db, user_id)
 
 
 @router.post("/{user_id}/requirements", response_model=Requirement)

@@ -4,6 +4,7 @@ import { useAuth } from "../../app/auth/AuthContext";
 import Modal from "../../shared/components/Modal";
 import HelpTip from "../../shared/components/HelpTip";
 import DeleteConfirmModal from "../../features/grades/components/DeleteConfirmModal";
+import PrerequisitesSection from "../../features/degree/PrerequisitesSection";
 import {
   Counted,
   createEquivalence,
@@ -30,8 +31,9 @@ const STATUS_WORD: Record<Counted["status"], string> = {
 type Removing = { kind: "requirement"; row: Requirement } | { kind: "equivalence"; row: Equivalence };
 
 /**
- * The degree audit: each requirement with the courses that meet it, the course mappings, and
- * courses counted nowhere, with editors for requirements and mappings; removals ask first.
+ * The degree audit: each requirement with the courses that meet it, the prerequisites of courses
+ * under way or planned, the course mappings, and courses counted nowhere, with editors for
+ * requirements and mappings; removals ask first.
  */
 export default function DegreePage() {
   const { user } = useAuth();
@@ -114,6 +116,8 @@ export default function DegreePage() {
               />
             ))}
           </section>
+
+          <PrerequisitesSection userId={user.id} />
 
           <section aria-label="Course mappings" className="degreeMappings">
             <div className="sectionHeading">

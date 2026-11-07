@@ -143,6 +143,26 @@ class Prerequisites(BaseModel):
     kinds: list[PrerequisiteKind]
 
 
+class PrerequisiteSummary(BaseModel):
+    """One current or planned course's prerequisites in a word, for the degree audit.
+
+    Attributes:
+        course_id: The course's id, as a string.
+        code: The course's code.
+        name: The course's name.
+        planned: True for a course in a later term; False for one this term.
+        status: The worst verdict across the rules that apply; None when no rule does.
+        linked: Whether the course is linked to a shared catalogue course.
+    """
+
+    course_id: str
+    code: str
+    name: str
+    planned: bool
+    status: Status | None = None
+    linked: bool
+
+
 class PrerequisitePreview(BaseModel):
     """The shared rules for a course about to be added, judged against the record.
 

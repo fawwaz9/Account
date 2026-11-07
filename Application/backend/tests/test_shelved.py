@@ -1,4 +1,4 @@
-"""The shelf: fitness, teams and clubs are mounted, but every route answers 404.
+"""The shelf: fitness, teams, clubs and office hours are mounted, but every route answers 404.
 
 The suite opens the shelf for every other test (conftest.py). Here it is closed
 again, to the set the app ships with, captured before any fixture runs.
@@ -18,19 +18,28 @@ from app.shared import shelved
 #: The shelf as the app ships it, read at import, before `_open_shelf` empties it.
 SHIPPED_SHELF = frozenset(shelved.SHELVED)
 
+#: Modules shelved whole, by their router's prefix.
 PREFIXES = {"fitness": "/api/fitness", "teams": "/api/teams", "clubs": "/api/clubs"}
+#: Modules shelved route by route, inside a router that stays open.
+SINGLE_ROUTES = {"office_hours": {
+    ("POST", "/api/grades/{user_id}/courses/{course_id}/office-hours"),
+    ("DELETE", "/api/grades/{user_id}/office-hours/{checkin_id}"),
+}}
 
 
 def shelved_routes() -> list[tuple[str, str]]:
-    """Every (method, path) under a shelved prefix, with each path parameter filled in."""
+    """Every shelved (method, path), with each path parameter filled in."""
+    singles = set().union(*(SINGLE_ROUTES[name] for name in SHIPPED_SHELF if name in SINGLE_ROUTES))
     found = []
     for route in app.main.app.routes:
         if not isinstance(route, APIRoute):
             continue
-        if not any(route.path.startswith(PREFIXES[name] + "/") for name in SHIPPED_SHELF):
+        whole = any(route.path.startswith(PREFIXES[name] + "/") for name in SHIPPED_SHELF if name in PREFIXES)
+        methods = sorted(route.methods) if whole else sorted(m for m in route.methods if (m, route.path) in singles)
+        if not methods:
             continue
         path = re.sub(r"\{[^}]+\}", str(uuid.uuid4()), route.path)
-        found.extend((method, path) for method in sorted(route.methods))
+        found.extend((method, path) for method in methods)
     return found
 
 
@@ -49,15 +58,22 @@ def client(db):
         app.main.app.dependency_overrides.pop(get_db, None)
 
 
-def test_the_app_ships_with_fitness_teams_and_clubs_shelved():
-    assert SHIPPED_SHELF == {"fitness", "teams", "clubs"}
+def test_the_app_ships_with_fitness_teams_clubs_and_office_hours_shelved():
+    assert SHIPPED_SHELF == {"fitness", "teams", "clubs", "office_hours"}
 
 
 def test_every_shelved_module_still_has_its_routes_mounted():
     """Shelved, not deleted: the walk below has something to walk in each module."""
     paths = [path for _, path in shelved_routes()]
-    for name in SHIPPED_SHELF:
+    for name in PREFIXES:
         assert any(path.startswith(PREFIXES[name] + "/") for path in paths), name
+    assert sum("office-hours" in path for path in paths) == 2
+
+
+def test_the_rest_of_the_class_figures_router_stays_open(client, closed_shelf):
+    """Only the two office-hours routes are shelved; the course's figures still ask for a login."""
+    response = client.get(f"/api/grades/{uuid.uuid4()}/courses/{uuid.uuid4()}/class-figures")
+    assert response.status_code == 401
 
 
 def test_every_shelved_route_answers_404_without_a_login(client, closed_shelf):

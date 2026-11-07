@@ -23,6 +23,7 @@ from app.Grades.schemas.prerequisite import (
     PrerequisiteKind,
     PrerequisiteSide,
     Prerequisites,
+    PrerequisiteSummary,
     RuleResult,
     RuleWrite,
 )
@@ -190,6 +191,44 @@ def prerequisites(db: Session, user_id: uuid.UUID, course_id: uuid.UUID) -> Prer
         entry.applies = "yours" if entry.yours else ("shared" if entry.shared else None)
         kinds.append(entry)
     return Prerequisites(course_id=str(course.id), link=link, kinds=kinds)
+
+
+#: Verdicts from best to worst, so a course reads as its worst rule.
+_SEVERITY = {"met": 0, "on_track": 1, "not_met": 2}
+
+
+def overview(db: Session, user_id: uuid.UUID) -> list[PrerequisiteSummary]:
+    """Return every in-progress and planned course's prerequisites in a word.
+
+    The degree audit lists these: the courses whose rules aren't met or are only on
+    track first, and the rest to open on request. Archived courses are left out.
+
+    Args:
+        db: Request-scoped database session.
+        user_id: The verified caller's id.
+
+    Returns:
+        One summary per course, in the course list's order; empty when there are none.
+    """
+    summaries = []
+    for course in get_all_courses(db, user_id):
+        state = course_status(course)
+        if course.archived or state not in ("in_progress", "planned"):
+            continue
+        found = prerequisites(db, user_id, course.id)
+        if found is None:
+            continue
+        verdicts = [
+            (kind.yours if kind.applies == "yours" else kind.shared).result.status
+            for kind in found.kinds if kind.applies is not None
+        ]
+        summaries.append(PrerequisiteSummary(
+            course_id=str(course.id), code=course.code or "", name=course.name or "",
+            planned=state == "planned",
+            status=max(verdicts, key=_SEVERITY.__getitem__) if verdicts else None,
+            linked=found.link.course is not None,
+        ))
+    return summaries
 
 
 def set_own(db: Session, user_id: uuid.UUID, course_id: uuid.UUID, data: RuleWrite,

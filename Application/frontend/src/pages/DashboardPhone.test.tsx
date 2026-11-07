@@ -45,6 +45,10 @@ vi.mock("../features/calender/components/WorkloadHeadline", () => ({
   default: () => <p>Next 7 days</p>,
 }));
 vi.mock("../features/survey/DisappointmentQuestion", () => ({ default: () => <p>survey</p> }));
+// The Today card has tests of its own; here it only needs to be there.
+vi.mock("../features/briefing/TodayCard", () => ({
+  default: () => <section aria-label="Today"><h2>Today</h2></section>,
+}));
 vi.mock("../features/onboarding/GetStarted", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../features/onboarding/GetStarted")>()),
   default: () => <h2>Get started</h2>,
@@ -140,14 +144,48 @@ describe("the phone dashboard", () => {
   });
 });
 
-describe("the desktop dashboard", () => {
-  it("is as it was: the welcome, the cents, and the extras", () => {
-    onScreen(false);
-    show();
+describe("the desktop dashboard (the owner's big-screen sketch, 2026-11-07)", () => {
+  beforeEach(() => onScreen(false));
+
+  /** Each figure's value and label, in order, from one card. */
+  function figures(name: string) {
+    return card(name).getAllByText((_, el) => el?.classList.contains("statBlock") ?? false)
+      .map((block) => block.textContent);
+  }
+
+  it("welcomes by name, then three cards in a row and Today", () => {
+    const { container } = show();
     expect(screen.getByRole("heading", { name: "Welcome, Sample" })).toBeTruthy();
-    expect(screen.getByText("$3,937.60")).toBeTruthy();
-    expect(screen.getByText("Next 7 days")).toBeTruthy();
-    expect(screen.getByText(/Strongest/)).toBeTruthy();
-    expect(screen.queryByText("Year 3 Fall")).toBeNull();
+    const rows = container.querySelectorAll(".dashCards");
+    expect([...rows[0].children].map((el) => el.getAttribute("aria-label"))).toEqual(["Grades", "This week", "Money"]);
+    expect([...rows[1].children].map((el) => el.getAttribute("aria-label"))).toEqual(["Today"]);
+  });
+
+  it("shows the grades card as average, this term, CGPA and credits", () => {
+    show();
+    expect(figures("Grades")).toEqual(["88.38Average", "93.89Year 3 Fall", "4.05CGPA", "66Credits completed"]);
+  });
+
+  it("shows this week with exams, shifts and the longest free stretches", () => {
+    show();
+    expect(card("This week").getByRole("heading", { name: "This week" })).toBeTruthy();
+    expect(figures("This week")).toEqual(["27h 40mBooked", "7Tasks due", "2Exams", "3Shifts"]);
+    expect(card("This week").getByText(/^Free time: 13h/)).toBeTruthy();
+  });
+
+  it("titles the money card with the month, in whole dollars", () => {
+    show();
+    const month = new Date().toLocaleDateString(undefined, { month: "long" });
+    expect(card("Money").getByRole("heading", { name: month })).toBeTruthy();
+    expect(figures("Money")).toEqual(["$3,938Spent", "$512Left", "$19,023Net worth"]);
+  });
+
+  it("leaves out the old extras", () => {
+    show();
+    expect(screen.queryByText(/Strongest/)).toBeNull();
+    expect(screen.queryByText(/Biggest this month/)).toBeNull();
+    expect(screen.queryByText("Next 7 days")).toBeNull();
+    expect(screen.queryByText(/Estimated work/)).toBeNull();
+    expect(screen.queryByText("Courses")).toBeNull();
   });
 });

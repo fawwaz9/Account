@@ -8,8 +8,6 @@ import { trimNumber } from "../../shared/utils/numberUtils";
 import GradeBand from "../../features/grades/components/GradeBand";
 import CourseCost from "../../features/grades/components/CourseCost";
 import CourseLinks from "../../features/grades/components/CourseLinks";
-import CatalogueLine from "../../features/grades/components/CatalogueLine";
-import PrerequisitesPanel from "../../features/grades/components/PrerequisitesPanel";
 import CheapestPath from "../../features/grades/components/CheapestPath";
 import CourseLinksModal from "../../features/grades/components/CourseLinksModal";
 import AddGradeModal from "../../features/grades/components/AddGradeModal";
@@ -37,8 +35,9 @@ import "../../styles/calendar.css";
 
 
 /**
- * One course's page: category strip and average, links, prerequisites, insight panels, schemes,
- * the grade columns, and the dialogs for its grades, details, timetable, syllabus and deletion.
+ * One course's page: category strip and average, links, insight panels, schemes, the grade
+ * columns, and the dialogs for its grades, details, timetable, syllabus and deletion.
+ * Prerequisites and the catalogue link live on the Degree page.
  */
 export default function CourseDetailPage() {
   const { courseId } = useParams<{ courseId: string }>();
@@ -49,8 +48,9 @@ export default function CourseDetailPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadNonce, setReloadNonce] = useState(0);
-  // Bumped when a syllabus may have filed prerequisite rules, to refetch them.
-  const [rulesNonce, setRulesNonce] = useState(0);
+  // Bumped each time you change the outline (grades, weights, sharing, a syllabus), so the
+  // offer to share it shows then, and never on just opening the page.
+  const [outlineChanged, setOutlineChanged] = useState(0);
   const [addGradeCategory, setAddGradeCategory] = useState<GradeCategory | null>(null);
   const [splitCategory, setSplitCategory] = useState<GradeCategory | null>(null);
   const [editGrade, setEditGrade] = useState<Grade | null>(null);
@@ -185,7 +185,7 @@ export default function CourseDetailPage() {
     try {
       await deleteGrade(user.id, courseId, deleteGradeTarget.id);
       setDeleteGradeTarget(null);
-      await refreshCourse();
+      await outlineEdited();
     } catch (err: any) {
       setDeleteGradeError(getErrorMessage(err));
     } finally {
@@ -212,6 +212,12 @@ export default function CourseDetailPage() {
     if (!courseId || !user) return;
     const c = await fetchCourseDetail(user.id, courseId);
     setCourse(c);
+  }
+
+  /** Reload after a change to the outline itself, and let the share offer ask once. */
+  async function outlineEdited() {
+    setOutlineChanged((n) => n + 1);
+    await refreshCourse();
   }
 
   // Says where a split item's share goes before it goes (D29): to the rest of its
@@ -322,19 +328,17 @@ export default function CourseDetailPage() {
       {course && (
         <CourseLinks links={course.links ?? []} onEdit={() => setLinksOpen(true)} />
       )}
-      {user && courseId && <CatalogueLine userId={user.id} courseId={courseId} />}
-      {/* Keyed, so rules a syllabus just filed show at once. */}
-      {user && courseId && <PrerequisitesPanel key={rulesNonce} userId={user.id} courseId={courseId} />}
       {/* The original syllabus, when the course was built from one and the
           file was kept. Renders nothing otherwise. */}
       {user && courseId && <KeptSyllabi userId={user.id} courseId={courseId} />}
       {/* Phase 3 item 2: fill an empty course from a reviewed outline, or offer
-          this one's. Silent when neither is possible. */}
+          this one's after you change it. Silent when neither is possible. */}
       {user && courseId && (
         <CourseOutline
           userId={user.id}
           courseId={courseId}
           nonce={reloadNonce}
+          changed={outlineChanged}
           onApplied={() => { void refreshCourse(); setReloadNonce((n) => n + 1); }}
         />
       )}
@@ -365,12 +369,7 @@ export default function CourseDetailPage() {
       {/* Other students' shared grades for this course (Phase 3 item 3), under
           the course's own figures. Nothing for a code that isn't a course. */}
       {user && courseId && (
-        <ClassFigures
-          userId={user.id}
-          courseId={courseId}
-          current={course?.term_bucket === "current"}
-          nonce={reloadNonce}
-        />
+        <ClassFigures userId={user.id} courseId={courseId} nonce={reloadNonce} />
       )}
 
       {user && course && (
@@ -499,7 +498,7 @@ export default function CourseDetailPage() {
           items={gradesByCategory[splitCategory] ?? []}
           byPoints={course.points_categories?.includes(splitCategory) ?? false}
           onClose={() => setSplitCategory(null)}
-          onSaved={() => { void refreshCourse(); setReloadNonce((n) => n + 1); }}
+          onSaved={() => { void outlineEdited(); setReloadNonce((n) => n + 1); }}
         />
       )}
 
@@ -508,7 +507,7 @@ export default function CourseDetailPage() {
         courseId={courseId}
         category={addGradeCategory}
         onClose={() => setAddGradeCategory(null)}
-        onGradeAdded={refreshCourse}
+        onGradeAdded={outlineEdited}
       />
 
       <EditGradeModal
@@ -516,15 +515,15 @@ export default function CourseDetailPage() {
         courseId={courseId}
         grade={editGrade}
         onClose={() => setEditGrade(null)}
-        onGradeUpdated={refreshCourse}
-        onGradeDeleted={refreshCourse}
+        onGradeUpdated={outlineEdited}
+        onGradeDeleted={outlineEdited}
       />
 
       <EditCourseModal
         open={editingCourse}
         course={course}
         onClose={() => setEditingCourse(false)}
-        onCourseUpdated={refreshCourse}
+        onCourseUpdated={outlineEdited}
       />
 
       <ClassScheduleModal
@@ -542,7 +541,7 @@ export default function CourseDetailPage() {
           userId={user.id}
           courseId={courseId}
           onClose={() => setAddingSyllabus(false)}
-          onAdded={() => { void refreshCourse(); setRulesNonce((n) => n + 1); }}
+          onAdded={() => { void outlineEdited(); }}
         />
       )}
 
@@ -550,7 +549,7 @@ export default function CourseDetailPage() {
         open={showBulkAdd}
         courseId={courseId}
         onClose={() => setShowBulkAdd(false)}
-        onGradesAdded={refreshCourse}
+        onGradesAdded={outlineEdited}
       />
 
       <RequiredFinalModal

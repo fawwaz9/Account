@@ -1,7 +1,8 @@
 """Shelved modules: kept in the code and the database, but closed to every request.
 
-A shelved module's router is still mounted, behind `shelf(name)`, so each of its
-routes answers 404 before authentication, path checks or the database are reached.
+A shelved module's routes are still mounted, behind `shelf(name)` (on the router, or
+on single routes), so each answers 404 before authentication, path checks or the
+database are reached.
 Nothing is deleted: the code, its tables and every row stay, and taking a name out
 of `SHELVED` reopens the module on the next deploy.
 
@@ -13,8 +14,9 @@ from typing import Callable
 from fastapi import HTTPException
 
 #: Modules closed to requests. Fitness, teams and clubs since 2026-11-07: the owner
-#: judged the body room far from production-ready.
-SHELVED: set[str] = {"fitness", "teams", "clubs"}
+#: judged the body room far from production-ready. Office hours since 2026-11-07:
+#: the owner dropped the check-ins; the radar's stored rows are kept, unread.
+SHELVED: set[str] = {"fitness", "teams", "clubs", "office_hours"}
 
 SHELVED_DETAIL = "This feature is shelved."
 """The 404's detail, the same for every route of every shelved module."""

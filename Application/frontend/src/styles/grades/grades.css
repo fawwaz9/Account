@@ -32,6 +32,31 @@
  overflow-y: auto;
 }
 
+/* Every dialog's way out, top right (shared/components/Modal.tsx). Sticky, so it stays in
+   reach while a long panel scrolls; floated, so the title wraps around it. */
+.modalClose {
+  position: sticky;
+  top: 0;
+  float: right;
+  z-index: 1;
+  margin: -6px -6px 0 8px;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.modalClose:hover,
+.modalClose:focus-visible {
+  color: var(--gold);
+  border-color: var(--gold);
+}
+
 /* For the dialogs that are genuinely form-heavy. Wider is worth more than it
    looks: .calField is `flex: 1 1 140px`, so a wider panel turns every .calRow
    from two columns into three with no change to any component. */
@@ -140,6 +165,24 @@
   transform: translateY(-1px);
   border-color: var(--gold);
   filter: brightness(1.2);
+}
+
+/* A final-grade-only course has no page behind it, so its card doesn't light up as if it
+   led somewhere; it opens Edit Course. */
+.courses .courseBox.courseBoxFinalOnly {
+  cursor: default;
+}
+
+.courses .courseBox.courseBoxFinalOnly:hover {
+  transform: none;
+  border-color: var(--border);
+  filter: none;
+}
+
+.editCourseDelete {
+  display: block;
+  margin: 10px auto 0;
+  color: var(--delete);
 }
 .courses {
   display: flex;
@@ -1072,6 +1115,31 @@
   border-bottom: 1px solid var(--border);
 }
 
+/* Prerequisites on the degree audit: a course per row, opening to its catalogue link
+   and rules beneath it. */
+.degreePrereqToggle {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.degreePrereqToggle[aria-expanded="true"] {
+  color: var(--gold);
+}
+
+.degreePrereqDetail {
+  flex-basis: 100%;
+  padding: 6px 0 4px;
+}
+
+.degreePrereqRest {
+  margin-top: 8px;
+}
+
 .degree--missing span:last-child {
   color: var(--delete);
 }
@@ -1273,3 +1341,51 @@
   padding-left: 18px;
   list-style: disc;
 }
+
+/* "Add past courses" under Past Courses, and its table of final-grade-only rows. */
+.pastCoursesEntry {
+  margin: -4px 0 16px;
+}
+
+.pastCoursesTable {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+  text-align: left;
+}
+
+.pastCoursesTable th {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--muted);
+  padding: 0 4px 4px;
+}
+
+.pastCoursesTable td {
+  padding: 2px 4px;
+  vertical-align: top;
+}
+
+.pastCoursesTable .calInput {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.pastCoursesError {
+  color: var(--delete);
+  font-size: 0.8rem;
+}
+
+/* On a phone the table scrolls sideways inside the dialog rather than the page. */
+@media (max-width: 640px) {
+  .pastCoursesTable {
+    display: block;
+    overflow-x: auto;
+  }
+
+  .pastCoursesTable .calInput {
+    min-width: 72px;
+  }
+}
+

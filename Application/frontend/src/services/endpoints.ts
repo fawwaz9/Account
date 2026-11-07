@@ -36,12 +36,8 @@ export const endpoints = {
     checkPrerequisite: (userId: string) => `grades/${userId}/prerequisites/check`,
     /** What past classes' shared answers say about a course, above each floor. */
     classFigures: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/class-figures`,
-    /** Check in at a course's office hours. */
-    officeHours: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/office-hours`,
     /** What can be done with outlines on a course: offer, read, apply (Phase 3 item 2). */
     outline: (userId: string, courseId: string) => `grades/${userId}/courses/${courseId}/outline`,
-    /** One of your own check-ins, to undo it. */
-    officeHoursCheckIn: (userId: string, checkinId: string) => `grades/${userId}/office-hours/${checkinId}`,
   },
   calendar: {
     /** Occurrences in a window; takes ?start= and ?end=. */
@@ -125,6 +121,8 @@ export const endpoints = {
     requirement: (userId: string, id: string) => `degree/${userId}/requirements/${id}`,
     equivalences: (userId: string) => `degree/${userId}/equivalences`,
     equivalence: (userId: string, id: string) => `degree/${userId}/equivalences/${id}`,
+    /** Each in-progress and planned course's prerequisites in a word. */
+    prerequisites: (userId: string) => `degree/${userId}/prerequisites`,
   },
   intake: {
     status: (userId: string) => `intake/${userId}/status`,

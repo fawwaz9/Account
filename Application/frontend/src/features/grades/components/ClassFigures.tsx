@@ -1,16 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { checkInOfficeHours, fetchClassFigures, undoOfficeHoursCheckIn } from "../api";
-import {
-  ClassFigures as Figures, CourseIntel, OfficeHourCheckIn, OfficeHourSlot, OfficeHourWait, TermDistribution,
-} from "../types";
+import { fetchClassFigures } from "../api";
+import { ClassFigures as Figures, CourseIntel, TermDistribution } from "../types";
 import HelpTip from "../../../shared/components/HelpTip";
 
 /** The course to read, and a counter the page bumps to refetch. */
 interface ClassFiguresProps {
   readonly userId: string;
   readonly courseId: string;
-  /** In the current term: office hours are offered only then. */
-  readonly current: boolean;
   /** Bumped by the page when a grade changes, so "you" moves. */
   readonly nonce: number;
 }
@@ -35,21 +31,6 @@ export function filledBands(term: TermDistribution): { bucket: number; contribut
   }
   return out;
 }
-
-const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-/** A local weekday and hour as read: "Tue 2pm". */
-export function slotLabel(weekday: number, hour: number): string {
-  const twelve = hour % 12 === 0 ? 12 : hour % 12;
-  return `${WEEKDAYS[weekday]} ${twelve}${hour < 12 ? "am" : "pm"}`;
-}
-
-/** How a slot's line usually is, in words. */
-const READINGS: Record<OfficeHourWait, string> = {
-  none: "usually no line",
-  short: "usually a short line",
-  long: "usually a long line",
-};
 
 /** A pooled figure to one decimal, so 3.6666 reads 3.7 and 9 stays 9. */
 function oneDecimal(value: number): number {
@@ -78,7 +59,7 @@ export function intelLines(intel: CourseIntel): { label: string; value: string; 
  * "From past students": what their term reviews say, then each finished term's grade bands with
  * the median and your band marked; a one-line wait below the floor, nothing for an uncountable course.
  */
-export default function ClassFigures({ userId, courseId, current, nonce }: ClassFiguresProps) {
+export default function ClassFigures({ userId, courseId, nonce }: ClassFiguresProps) {
   const [figures, setFigures] = useState<Figures | null>(null);
   const [termCode, setTermCode] = useState<string | null>(null);
   const latestRequest = useRef(0);
@@ -137,10 +118,6 @@ export default function ClassFigures({ userId, courseId, current, nonce }: Class
         </dl>
       )}
 
-      {current && (
-        <OfficeHours userId={userId} courseId={courseId} slots={figures.office_hours} floor={figures.floor} />
-      )}
-
       {!term ? (
         <p className="classFiguresWait">
           {figures.intel ? "Grades shown" : "Shown"} once {figures.floor} students in a finished term
@@ -193,76 +170,5 @@ function TermBands({ term, yourBucket, yourGrade }: {
         })}
       </ul>
     </>
-  );
-}
-
-/** The office-hours radar: three taps to say how the line is, then the slots it's usually busy. */
-function OfficeHours({ userId, courseId, slots, floor }: {
-  userId: string;
-  courseId: string;
-  slots: OfficeHourSlot[];
-  floor: number;
-}) {
-  const [made, setMade] = useState<OfficeHourCheckIn | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  async function tell(wait: OfficeHourWait) {
-    setError(null);
-    try {
-      setMade(await checkInOfficeHours(userId, courseId, wait));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't check in");
-    }
-  }
-
-  async function undo() {
-    if (!made) return;
-    setError(null);
-    try {
-      await undoOfficeHoursCheckIn(userId, made.id);
-      setMade(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't undo it");
-    }
-  }
-
-  return (
-    <div className="classFiguresOffice">
-      <p className="classFiguresOfficeAsk">
-        At office hours now? Say how the line is, and everyone sees when it&rsquo;s usually busy.
-      </p>
-      <div className="classFiguresOfficeButtons" role="group" aria-label="How's the line?">
-        {(["none", "short", "long"] as const).map((wait) => (
-          <button
-            key={wait}
-            type="button"
-            className="calButton"
-            aria-pressed={made?.wait === wait}
-            onClick={() => void tell(wait)}
-          >
-            {wait === "none" ? "No line" : wait === "short" ? "Short" : "Long"}
-          </button>
-        ))}
-      </div>
-      {made && (
-        <p className="classFiguresOfficeDone">
-          Counted for {slotLabel(made.weekday, made.hour)}.{" "}
-          <button type="button" className="courseLinkAdd" onClick={() => void undo()}>Undo</button>
-        </p>
-      )}
-      {error && <p className="classFiguresOfficeDone" role="alert">{error}</p>}
-      {slots.length > 0 ? (
-        <ul className="classFiguresSlots" aria-label="Office hours, usually">
-          {slots.map((slot) => (
-            <li key={`${slot.weekday}-${slot.hour}`}>
-              {slotLabel(slot.weekday, slot.hour)}: {READINGS[slot.reading]}{" "}
-              <span className="classFiguresMark">({slot.people})</span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="classFiguresWait">Busy times show once {floor} people have checked in at the same hour.</p>
-      )}
-    </div>
   );
 }

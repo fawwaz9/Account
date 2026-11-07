@@ -3,11 +3,17 @@ import { applyOutline, fetchOutline, offerOutline, withdrawOutlineOffer } from "
 import { OutlineStatus } from "../types";
 import HelpTip from "../../../shared/components/HelpTip";
 
-/** The course, a refetch counter, and what to do once an outline has filled it. */
+/** The course, a refetch counter, the outline-change counter, and what to do once an outline has filled it. */
 interface CourseOutlineProps {
   readonly userId: string;
   readonly courseId: string;
   readonly nonce: number;
+  /**
+   * Bumped by the page whenever you change this course's outline: a grade added, edited
+   * or deleted, weights or sharing changed, a syllabus added. The offer to share shows
+   * only after such a change, never on opening the page.
+   */
+  readonly changed: number;
   /** Called after "Use it" fills the course, so the page reloads its grades. */
   readonly onApplied: () => void;
 }
@@ -21,10 +27,14 @@ const OFFER_STATES: Record<"pending" | "accepted" | "rejected", string> = {
 
 /**
  * Shared course outlines (Phase 3 item 2): fill an empty course from a reviewed one, or offer
- * this course's outline to classmates. Silent when neither is possible.
+ * this course's outline to classmates. The offer is asked only just after you change the
+ * outline, and either prompt goes away for "Not now". Silent when neither is possible.
  */
-export default function CourseOutline({ userId, courseId, nonce, onApplied }: CourseOutlineProps) {
+export default function CourseOutline({ userId, courseId, nonce, changed, onApplied }: CourseOutlineProps) {
   const [status, setStatus] = useState<OutlineStatus | null>(null);
+  // The `changed` count when the offer was last put away; it returns at the next change.
+  const [offerSeen, setOfferSeen] = useState(0);
+  const [applyDismissed, setApplyDismissed] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,11 +63,13 @@ export default function CourseOutline({ userId, courseId, nonce, onApplied }: Co
 
   if (!status) return null;
   const { shared, offer } = status;
-  if (!status.can_apply && !status.can_offer && !offer) return null;
+  const applying = status.can_apply && shared !== null && !applyDismissed;
+  const offering = !(status.can_apply && shared) && (status.can_offer || offer !== null) && changed > offerSeen;
+  if (!applying && !offering) return null;
 
   return (
     <section className="courseOutline" aria-label="Course outline">
-      {status.can_apply && shared ? (
+      {applying && shared ? (
         <>
           <p className="courseOutlineLine">
             A reviewed outline for this course and term: {Object.keys(shared.outline.weights).length} categories,{" "}
@@ -83,6 +95,9 @@ export default function CourseOutline({ userId, courseId, nonce, onApplied }: Co
               onClick={() => void act(() => applyOutline(userId, courseId), onApplied)}>
               Use it
             </button>
+            <button type="button" className="calButton" onClick={() => setApplyDismissed(true)}>
+              Not now
+            </button>
           </div>
         </>
       ) : (
@@ -107,6 +122,9 @@ export default function CourseOutline({ userId, courseId, nonce, onApplied }: Co
                 Take back
               </button>
             )}
+            <button type="button" className="calButton" onClick={() => setOfferSeen(changed)}>
+              {offer ? "Done" : "Not now"}
+            </button>
           </div>
         </>
       )}

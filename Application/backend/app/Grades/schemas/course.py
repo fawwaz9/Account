@@ -474,6 +474,8 @@ class Course(CourseBase):
         projected_before_final: The projection just before the final was marked; set by
             the server only.
         projected_on: The day that projection was taken.
+        final_only: Only a final grade, with no weights or marks behind it; derived
+            by the server, never stored.
     """
 
     id: UUID = Field(default_factory=uuid4)
@@ -507,6 +509,9 @@ class Course(CourseBase):
     #: D34). Set by the server only: not on CourseUpdate.
     projected_before_final: float | None = None
     projected_on: date | None = None
+    #: A final grade and nothing behind it (2026-11-07): the card opens Edit Course
+    #: rather than an empty page. Server-derived; not on CourseUpdate.
+    final_only: bool = False
 
     class Config:
         """Pydantic v1-style settings: read attributes; accept `average` by name."""

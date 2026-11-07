@@ -89,3 +89,21 @@ export const updateEquivalence = (userId: string, id: string, body: EquivalenceB
 /** Delete an equivalence; callers confirm first. */
 export const deleteEquivalence = (userId: string, id: string) =>
   del<{ deleted: boolean }>(endpoints.degree.equivalence(userId, id));
+
+/** One in-progress or planned course's prerequisites in a word (the server's `PrerequisiteSummary`). */
+export interface PrerequisiteSummary {
+  course_id: string;
+  code: string;
+  name: string;
+  /** True for a course in a later term. */
+  planned: boolean;
+  /** The worst verdict across the rules that apply; null when no rule does. */
+  status: "met" | "on_track" | "not_met" | null;
+  /** Whether the course is linked to a shared catalogue course. */
+  linked: boolean;
+}
+
+/** Each in-progress and planned course's prerequisites, for the audit's prerequisites section. */
+export async function fetchPrerequisiteSummaries(userId: string) {
+  return get<PrerequisiteSummary[]>(endpoints.degree.prerequisites(userId));
+}

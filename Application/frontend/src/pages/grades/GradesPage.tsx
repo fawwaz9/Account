@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import CourseList from "../../features/grades/components/CourseList";
-import AddCourseModal from "../../features/grades/components/AddCourseModal";
+import AddCourseModal, { getErrorMessage } from "../../features/grades/components/AddCourseModal";
+import EditCourseModal from "../../features/grades/components/EditCourseModal";
+import DeleteConfirmModal from "../../features/grades/components/DeleteConfirmModal";
+import PastCoursesEntry from "../../features/grades/components/PastCoursesEntry";
+import { deleteCourse } from "../../features/grades/api";
 import SyllabusModal from "../../features/intake/SyllabusModal";
 import { intakeStatus } from "../../features/intake/api";
 import CourseSearch from "../../features/grades/components/CourseSearch";
@@ -26,8 +30,9 @@ interface TermGroup {
 }
 
 /**
- * The grades page: current-term courses (or a chosen year's, by term), search and add, beside
- * the dashboard column of averages, credits, trend, term reviews, Attention and blind spots.
+ * The grades page: current-term courses (or a chosen year's, by term), search and add, past
+ * courses with quick entry of final-grade-only ones, beside the dashboard column of averages,
+ * credits, trend, term reviews, Attention and blind spots.
  */
 export default function GradesPage() {
   const { courses, loading, error, reload } = useCourses();
@@ -39,6 +44,11 @@ export default function GradesPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [readingSyllabus, setReadingSyllabus] = useState(false);
+  // A final-grade-only course has no page; its card opens Edit Course here instead.
+  const [editingFinalOnly, setEditingFinalOnly] = useState<Course | null>(null);
+  const [deletingFinalOnly, setDeletingFinalOnly] = useState<Course | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   // Offered only once the server says it can read one: a button that always
   // answers "not set up yet" is a control that only states an absence.
   const [syllabusReady, setSyllabusReady] = useState(false);
@@ -95,6 +105,21 @@ export default function GradesPage() {
   function handleCourseAdded() {
     reload();
     reloadSummary();
+  }
+
+  async function confirmDeleteFinalOnly() {
+    if (!user || !deletingFinalOnly) return;
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      await deleteCourse(user.id, deletingFinalOnly.id);
+      setDeletingFinalOnly(null);
+      handleCourseAdded();
+    } catch (err) {
+      setDeleteError(getErrorMessage(err));
+    } finally {
+      setDeleteBusy(false);
+    }
   }
 
   const viewingYear = selectedYear !== null;
@@ -182,7 +207,7 @@ export default function GradesPage() {
                   {selectedTerms.map((group) => (
                     <div className="termGroup" key={group.semester}>
                       <h3 className="termHeading">{group.semester}</h3>
-                      <CourseList courses={group.courses} />
+                      <CourseList courses={group.courses} onEditFinalOnly={(picked) => setEditingFinalOnly(picked)} />
                     </div>
                   ))}
                 </div>
@@ -199,7 +224,9 @@ export default function GradesPage() {
                       courses, or set your term in Settings.
                     </p>
                   )}
-                  {currentCourses.length > 0 && <CourseList courses={currentCourses} />}
+                  {currentCourses.length > 0 && (
+                    <CourseList courses={currentCourses} onEditFinalOnly={(picked) => setEditingFinalOnly(picked)} />
+                  )}
                 </>
               )}
             </section>
@@ -211,6 +238,12 @@ export default function GradesPage() {
               selectedYear={selectedYear}
               onSelectYear={setSelectedYear}
             />
+            {/* Under past courses (owner, 2026-11-07): courses you have only a final grade for. */}
+            {user && (
+              <div className="pastCoursesEntry">
+                <PastCoursesEntry userId={user.id} onAdded={handleCourseAdded} />
+              </div>
+            )}
 
             <YearCourses
               title="Future Courses"
@@ -268,6 +301,28 @@ export default function GradesPage() {
         open={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onCourseAdded={handleCourseAdded}
+      />
+
+      <EditCourseModal
+        open={editingFinalOnly !== null}
+        course={editingFinalOnly}
+        onClose={() => setEditingFinalOnly(null)}
+        onCourseUpdated={handleCourseAdded}
+        onDelete={() => {
+          setDeleteError(null);
+          setDeletingFinalOnly(editingFinalOnly);
+          setEditingFinalOnly(null);
+        }}
+      />
+
+      <DeleteConfirmModal
+        open={deletingFinalOnly !== null}
+        title="Delete Course"
+        message={`Delete "${deletingFinalOnly?.code} - ${deletingFinalOnly?.name}"? Its final grade leaves your averages and credits.`}
+        onConfirm={() => void confirmDeleteFinalOnly()}
+        onCancel={() => setDeletingFinalOnly(null)}
+        submitting={deleteBusy}
+        error={deleteError}
       />
     </>
   );

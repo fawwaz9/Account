@@ -6,13 +6,14 @@ own; nothing here returns another user's rows.
 """
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from app._database.dependencies import DBSession
 from app.Auth.services.access import VerifiedUserId
 from app.Grades.schemas.class_figures import ClassFigures, OfficeHourCheckIn, OfficeHourCheckInOut
 from app.Grades.services import class_figures_service as service
 from app.Grades.services import office_hours_service
+from app.shared.shelved import shelf
 
 router = APIRouter()
 
@@ -41,8 +42,10 @@ def get_class_figures(user_id: VerifiedUserId, course_id: UUID, db: DBSession):
     return figures
 
 
+# Office hours are shelved (app/shared/shelved.py): both routes answer 404 until reopened.
 @router.post("/{user_id}/courses/{course_id}/office-hours", response_model=OfficeHourCheckInOut,
-             responses={**COURSE_404, 400: {"description": "Can't be counted"}})
+             responses={**COURSE_404, 400: {"description": "Can't be counted"}},
+             dependencies=[Depends(shelf("office_hours"))])
 def check_in(user_id: VerifiedUserId, course_id: UUID, body: OfficeHourCheckIn, db: DBSession):
     """Check in at a course's office hours, saying how the line is right now.
 
@@ -70,7 +73,8 @@ def check_in(user_id: VerifiedUserId, course_id: UUID, body: OfficeHourCheckIn, 
     return row
 
 
-@router.delete("/{user_id}/office-hours/{checkin_id}", responses={404: {"description": "Check-in not found"}})
+@router.delete("/{user_id}/office-hours/{checkin_id}", responses={404: {"description": "Check-in not found"}},
+               dependencies=[Depends(shelf("office_hours"))])
 def undo_check_in(user_id: VerifiedUserId, checkin_id: UUID, db: DBSession):
     """Take back one of the caller's office-hour check-ins.
 

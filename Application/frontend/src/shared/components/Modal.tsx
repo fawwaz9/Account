@@ -24,8 +24,9 @@ interface ModalProps {
 }
 
 /**
- * Shared dialog shell: traps focus, closes on Escape and hands focus back on close.
- * Never closes on a backdrop click, so a stray click cannot discard a part-filled form.
+ * Shared dialog shell: traps focus, closes on Escape or its × button, and hands focus back on
+ * close. Every dialog gets the ×, so none can be left without a visible way out (owner,
+ * 2026-11-07). Never closes on a backdrop click, so a stray click cannot discard a part-filled form.
  */
 export default function Modal({ title, onClose, children, panelClassName }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -131,6 +132,10 @@ export default function Modal({ title, onClose, children, panelClassName }: Moda
         aria-labelledby={titleId}
         tabIndex={-1}
       >
+        {/* First in the panel so it floats top right and stays there while the panel scrolls. */}
+        <button type="button" className="modalClose" aria-label="Close dialog" onClick={onClose}>
+          &times;
+        </button>
         <h2 id={titleId}>{title}</h2>
         {children}
       </div>

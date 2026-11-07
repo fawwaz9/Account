@@ -31,6 +31,8 @@
   color: var(--gold);
   letter-spacing: 0.02em;
   padding: 0 10px;
+  /* Centred over the links, as the owner's big-screen sketch has it. */
+  text-align: center;
 }
 
 .sidebarNav {

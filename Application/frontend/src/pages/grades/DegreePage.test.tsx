@@ -6,6 +6,7 @@ import { MemoryRouter } from "react-router-dom";
 const api = {
   fetchAudit: vi.fn(), createRequirement: vi.fn(), updateRequirement: vi.fn(), deleteRequirement: vi.fn(),
   createEquivalence: vi.fn(), updateEquivalence: vi.fn(), deleteEquivalence: vi.fn(),
+  fetchPrerequisiteSummaries: vi.fn(),
 };
 vi.mock("../../features/degree/api", () => ({
   fetchAudit: (...a: unknown[]) => api.fetchAudit(...a),
@@ -15,6 +16,8 @@ vi.mock("../../features/degree/api", () => ({
   createEquivalence: (...a: unknown[]) => api.createEquivalence(...a),
   updateEquivalence: (...a: unknown[]) => api.updateEquivalence(...a),
   deleteEquivalence: (...a: unknown[]) => api.deleteEquivalence(...a),
+  // The prerequisites section has tests of its own (features/degree); here it stays empty.
+  fetchPrerequisiteSummaries: (...a: unknown[]) => api.fetchPrerequisiteSummaries(...a),
 }));
 vi.mock("../../app/auth/AuthContext", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
 
@@ -52,6 +55,7 @@ function show() {
 beforeEach(() => {
   Object.values(api).forEach((fn) => fn.mockReset());
   api.fetchAudit.mockResolvedValue(audit);
+  api.fetchPrerequisiteSummaries.mockResolvedValue([]);
 });
 afterEach(cleanup);
 
