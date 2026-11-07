@@ -248,7 +248,9 @@ p.workloadHeadline {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 24px;
-  align-items: start;
+  /* Every card in a row as tall as the tallest, so the row reads as one band (owner,
+     2026-11-07); each card's content still starts at its top. */
+  align-items: stretch;
   margin-bottom: 24px;
 }
 
