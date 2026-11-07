@@ -1013,6 +1013,35 @@
   color: var(--gold);
 }
 
+/* ===== The bottom of the course page (owner, 2026-11-07) =====
+   Past students' figures and the other grading schemes, half and half, then Delete
+   Course alone on the right. */
+.courseBottom {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  align-items: start;
+  margin-top: 28px;
+}
+
+.courseBottom > .classFigures,
+.courseBottom > .gradingSchemes {
+  margin: 0;
+}
+
+/* On a phone, one above the other. */
+@media (max-width: 720px) {
+  .courseBottom {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.courseDeleteRow {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
 /* ===== Other grading schemes (Phase 1 item 4) ===== */
 
 .gradingSchemes {

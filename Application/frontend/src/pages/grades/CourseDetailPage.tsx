@@ -35,8 +35,9 @@ import "../../styles/calendar.css";
 
 
 /**
- * One course's page: category strip and average, links, insight panels, schemes, the grade
- * columns, and the dialogs for its grades, details, timetable, syllabus and deletion.
+ * One course's page: category strip and average, links, insight panels, the grade columns and
+ * their actions, then past students' figures beside the other grading schemes, Delete Course
+ * last, and the dialogs for its grades, details, timetable, syllabus and deletion.
  * Prerequisites and the catalogue link live on the Degree page.
  */
 export default function CourseDetailPage() {
@@ -366,21 +367,6 @@ export default function CourseDetailPage() {
         </div>
       )}
 
-      {/* Other students' shared grades for this course (Phase 3 item 3), under
-          the course's own figures. Nothing for a code that isn't a course. */}
-      {user && courseId && (
-        <ClassFigures userId={user.id} courseId={courseId} nonce={reloadNonce} />
-      )}
-
-      {user && course && (
-        <GradingSchemes
-          userId={user.id}
-          course={course}
-          nonce={reloadNonce}
-          onCountingChanged={() => setReloadNonce((n) => n + 1)}
-        />
-      )}
-
       {courseId && course && (
         <CourseLinksModal
           open={linksOpen}
@@ -467,7 +453,26 @@ export default function CourseDetailPage() {
             If I drop it…
           </button>
         )}
+      </div>
 
+      {/* At the bottom, side by side (owner, 2026-11-07): what past students say, and the
+          course's other grading schemes. Either one renders nothing when it has nothing. */}
+      <div className="courseBottom">
+        {user && courseId && (
+          <ClassFigures userId={user.id} courseId={courseId} nonce={reloadNonce} />
+        )}
+        {user && course && (
+          <GradingSchemes
+            userId={user.id}
+            course={course}
+            nonce={reloadNonce}
+            onCountingChanged={() => setReloadNonce((n) => n + 1)}
+          />
+        )}
+      </div>
+
+      {/* Last on the page and on its own, at the right: the one action that can't be undone. */}
+      <div className="courseDeleteRow">
         <button
           type="button"
           className="deleteCourseButton"
