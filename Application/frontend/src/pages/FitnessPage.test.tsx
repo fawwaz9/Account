@@ -18,6 +18,12 @@ vi.mock("../features/teams/api", async () => {
   return { ...real, ...mocked };
 });
 vi.mock("../app/auth/AuthContext", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
+// Fitness is shelved (shared/shelved.ts); this file opens the shelf so the shelved
+// page and its invite links stay tested. shelved.test.tsx checks the closed shelf.
+vi.mock("../shared/shelved", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../shared/shelved")>()),
+  FITNESS_SHELVED: false,
+}));
 // The cards beyond teams (Phase 3) have tests of their own; here they stay quiet.
 const clubInvite = vi.hoisted(() => ({ previewClubInvite: vi.fn(), acceptClubInvite: vi.fn() }));
 vi.mock("../features/clubs/api", async (importOriginal) => ({

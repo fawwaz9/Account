@@ -63,6 +63,15 @@ describe("TermPage", () => {
 
     await waitFor(() => expect(api.simulateTerm.mock.lastCall?.[1].work_hours).toBe(25));
   });
+
+  it("shows no exertion points while fitness is shelved, but keeps workout time", async () => {
+    render(<TermPage />);
+
+    expect(await screen.findByText("Fits, with 52.5 hours spare")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Exertion" })).toBeNull();
+    expect(screen.queryByText(/points a week/)).toBeNull();
+    expect(screen.getByRole("slider", { name: "Workouts a week" })).toBeTruthy();
+  });
 });
 
 describe("spendingChange", () => {

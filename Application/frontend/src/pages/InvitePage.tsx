@@ -6,6 +6,7 @@ import { AcceptStatus } from "../features/partners/types";
 import { TASK_LINK_PREFIX, TaskAcceptStatus, acceptTaskInvite, previewTaskInvite } from "../features/tasks/sharing";
 import { EVENT_LINK_PREFIX, EventAcceptStatus, acceptEventInvite, previewEventInvite } from "../features/calender/sharing";
 import { shortDate } from "../shared/utils/dateUtils";
+import { FITNESS_SHELVED, SHELVED_INVITE } from "../shared/shelved";
 import { TEAM_LINK_PREFIX, TeamAcceptStatus, acceptTeamInvite, previewTeamInvite } from "../features/teams/api";
 import { CLUB_LINK_PREFIX, ClubAcceptStatus, acceptClubInvite, previewClubInvite } from "../features/clubs/api";
 
@@ -81,6 +82,10 @@ export default function InvitePage() {
 
   useEffect(() => {
     if (!user) return;
+    if (FITNESS_SHELVED && (kind === "team" || kind === "club")) {
+      setProblem(SHELVED_INVITE);
+      return;
+    }
     if (token.length < 16) {
       setProblem(invalid);
       return;

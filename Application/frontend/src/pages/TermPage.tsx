@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../app/auth/AuthContext";
 import HelpTip from "../shared/components/HelpTip";
+import { FITNESS_SHELVED } from "../shared/shelved";
 import { fetchTermDefaults, simulateTerm, TermIn, TermResult } from "../features/insights/api";
 import { formatMoney } from "../features/budget/money";
 import "../styles/term.css";
@@ -151,7 +152,8 @@ export default function TermPage() {
                 </div>
               )}
 
-              <div className="termSimCard">
+              {/* Exertion points belong to the shelved fitness module; workout time still counts above. */}
+              {!FITNESS_SHELVED && <div className="termSimCard">
                 <h2 className="termSimHeading">Exertion</h2>
                 <p className="small-text">
                   About {result.body.points_per_week} points a week
@@ -159,7 +161,7 @@ export default function TermPage() {
                     ? `, reaching your goal of ${result.body.goal}`
                     : `, ${result.body.goal - result.body.points_per_week} short of your goal of ${result.body.goal}`)}
                 </p>
-              </div>
+              </div>}
 
               {result.academic && (
                 <div className="termSimCard">

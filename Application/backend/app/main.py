@@ -9,7 +9,7 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Response, status
+from fastapi import Depends, FastAPI, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
@@ -24,6 +24,7 @@ from app._database import models
 from app._database.schema import apply_schema
 from app.Auth.services.signup_policy import warn_if_open
 from app.Users.services.user_service import purge_expired_users
+from app.shared.shelved import shelf
 
 # The audit log needs somewhere to go. uvicorn configures its own loggers but not
 # the application's, so without this every audit.* call is swallowed by the root
@@ -197,8 +198,11 @@ app.include_router(survey.router, prefix="/api/survey", tags=["Survey"])
 app.include_router(intake.router, prefix="/api/intake", tags=["Intake"])
 app.include_router(degree.router, prefix="/api/degree", tags=["Degree"])
 app.include_router(partners.router, prefix="/api/partners", tags=["Partners"])
-app.include_router(teams.router, prefix="/api/teams", tags=["Teams"])
+# Teams, fitness and clubs are shelved (app/shared/shelved.py): mounted, but every
+# route answers 404 until the shelf is opened.
+app.include_router(teams.router, prefix="/api/teams", tags=["Teams"], dependencies=[Depends(shelf("teams"))])
 # Phase 3 items 6-8 and 13: activity, goals, boards and gym buddies.
-app.include_router(fitness.router, prefix="/api/fitness", tags=["Fitness"])
+app.include_router(fitness.router, prefix="/api/fitness", tags=["Fitness"],
+                   dependencies=[Depends(shelf("fitness"))])
 # Phase 3 item 10: clubs, with members by link, posts, polls and events.
-app.include_router(clubs.router, prefix="/api/clubs", tags=["Clubs"])
+app.include_router(clubs.router, prefix="/api/clubs", tags=["Clubs"], dependencies=[Depends(shelf("clubs"))])

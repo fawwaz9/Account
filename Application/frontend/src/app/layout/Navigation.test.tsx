@@ -37,11 +37,11 @@ describe("the phone's bottom bar", () => {
     return render(<MemoryRouter initialEntries={[path]}><BottomNav /></MemoryRouter>);
   }
 
-  it("runs in the sketched order: home, grades, tasks, budget, calendar, fitness, jobs", () => {
+  it("runs in the sketched order: home, grades, tasks, budget, calendar, jobs (Fitness is shelved)", () => {
     showAt("/");
     const names = within(screen.getByRole("navigation")).getAllByRole("link")
       .map((link) => link.getAttribute("aria-label"));
-    expect(names).toEqual(["Dashboard", "Grades", "Tasks", "Budget", "Calendar", "Fitness", "Jobs"]);
+    expect(names).toEqual(["Dashboard", "Grades", "Tasks", "Budget", "Calendar", "Jobs"]);
   });
 
   it("leaves Settings to the profile icon", () => {
@@ -57,7 +57,7 @@ describe("the phone's bottom bar", () => {
   it("draws an icon in every link and names each one", () => {
     const { container } = showAt("/");
     const links = container.querySelectorAll(".phoneNavLink");
-    expect(links).toHaveLength(7);
+    expect(links).toHaveLength(6);
     for (const link of links) {
       expect(link.querySelector(".appIcon")).not.toBeNull();
       expect(link.getAttribute("aria-label")).toBeTruthy();
@@ -97,5 +97,11 @@ describe("the desktop sidebar", () => {
       const link = screen.getByRole("link", { name: item.label });
       expect(link.querySelector(".appIcon")).not.toBeNull();
     }
+  });
+
+  it("has no Fitness link and no G F shortcut while fitness is shelved", () => {
+    render(<MemoryRouter><Sidebar /></MemoryRouter>);
+    expect(screen.queryByRole("link", { name: "Fitness" })).toBeNull();
+    expect(NAV.some((item) => item.to === "/fitness" || item.key === "f")).toBe(false);
   });
 });

@@ -65,6 +65,8 @@ It's built for real daily use, to be relied on for years rather than finished.
   for a course below its target is marked at risk.
 - **Shared tasks and events,** focus sessions, reminders, and a daily briefing by
   push notification.
+- **Accountability partners,** who see each other's weekly task completion, never
+  grades.
 
 ### Jobs
 - **Jobs with their pay rules** (hourly, or on set days of the month), shifts to
@@ -79,7 +81,6 @@ It's built for real daily use, to be relied on for years rather than finished.
   and it files each in the right place.
 - **A Today card,** a "Get started" checklist, keyboard shortcuts, and a phone
   layout with a bottom bar.
-- **Fitness, with teams and clubs,** and accountability partners.
 - **Bring your own AI:** a read-only MCP server lets a student's own assistant read
   their daily briefing.
 
@@ -97,7 +98,7 @@ It's built for real daily use, to be relied on for years rather than finished.
 | CI/CD | **GitHub Actions** |
 | Tests | **pytest** on SQLite and Postgres; **Vitest** with Testing Library |
 
-About 320 API routes over 77 tables.
+About 270 API routes over 77 tables.
 
 ---
 
@@ -127,7 +128,7 @@ Application/
 
 The backend modules are Grades, Finances, Calendar, Tasks and Jobs, with Auth and
 Users under them. Smaller ones cover syllabus intake, push notifications, the
-omnibox, insights, fitness, teams, clubs and partners.
+omnibox, insights and partners.
 
 ### A few rules the code keeps
 
@@ -149,7 +150,7 @@ omnibox, insights, fitness, teams, clubs and partners.
   every request runs as the signed-in user. Even a query that forgot its user
   filter gets only that user's rows.
 - **Features that cross between users go through security-definer functions.**
-  Shared tasks, teams, the catalogue and grade distributions each have one, and
+  Shared tasks, the catalogue and grade distributions each have one, and
   each has a SQLite twin that means the same thing.
 - **Isolation tests walk every route** as another user, and fail if anything leaks
   or can be changed.

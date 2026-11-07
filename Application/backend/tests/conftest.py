@@ -368,6 +368,16 @@ class FakeBucket:
 
 
 @pytest.fixture(autouse=True)
+def _open_shelf(monkeypatch):
+    """Every test runs with the shelf open, so shelved modules stay tested -- the
+    isolation and non-interference walks included -- and don't rot while they wait.
+    `test_shelved.py` closes it again to check the shelf itself."""
+    from app.shared import shelved
+
+    monkeypatch.setattr(shelved, "SHELVED", set())
+
+
+@pytest.fixture(autouse=True)
 def _no_storage_network(monkeypatch):
     """No test may reach real Cloud Storage. Configured, like the language
     model, so keeping and serving files runs in every suite -- the isolation

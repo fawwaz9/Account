@@ -6,6 +6,7 @@ import { fetchSharedTasks, SharedTask } from "../../tasks/sharing";
 import { fetchSharedEvents, SharedEvent } from "../sharing";
 import { fetchApplications } from "../../jobs/applications/api";
 import { CalendarClubEvent, fetchClubEvents } from "../../clubs/api";
+import { FITNESS_SHELVED } from "../../../shared/shelved";
 import { Application } from "../../jobs/applications/types";
 import { Task } from "../../tasks/types";
 import { useAuth } from "../../../app/auth/AuthContext";
@@ -105,8 +106,10 @@ export function useCalender() {
         // Phase 3 item 1 (D4), likewise: the tracker failing leaves the
         // calendar as it was.
         fetchApplications(userId).catch(() => [] as Application[]),
-        // Phase 3 item 10, likewise for clubs.
-        fetchClubEvents(userId, windowStart, windowEnd).catch(() => [] as CalendarClubEvent[]),
+        // Phase 3 item 10, likewise for clubs. Not asked for while clubs are shelved.
+        FITNESS_SHELVED
+          ? Promise.resolve([] as CalendarClubEvent[])
+          : fetchClubEvents(userId, windowStart, windowEnd).catch(() => [] as CalendarClubEvent[]),
       ]);
       if (ticket !== latestRequest.current) return;
       setOccurrences([

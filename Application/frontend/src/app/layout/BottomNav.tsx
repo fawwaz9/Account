@@ -1,10 +1,13 @@
 import { useEffect, useRef } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import Icon from "../../shared/components/Icon";
+import { FITNESS_SHELVED } from "../../shared/shelved";
 import { NAV, NavItem } from "./Sidebar";
 
 /** Routes in the phone bar's order; Settings is reached from the header instead. */
-export const PHONE_NAV_ORDER = ["/", "/grades", "/tasks", "/budget", "/calendar", "/fitness", "/jobs"];
+export const PHONE_NAV_ORDER = [
+  "/", "/grades", "/tasks", "/budget", "/calendar", ...(FITNESS_SHELVED ? [] : ["/fitness"]), "/jobs",
+];
 
 /** The phone bar's items, picked from NAV so labels and icons match the sidebar. */
 export const PHONE_NAV: NavItem[] = PHONE_NAV_ORDER.map((to) => {

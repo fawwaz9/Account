@@ -1,6 +1,7 @@
 import { lazy } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 import ErrorBoundary from "../shared/components/ErrorBoundary";
+import { FITNESS_SHELVED } from "../shared/shelved";
 import { AuthProvider } from "./auth/AuthContext";
 import ProtectedRoute from "./auth/ProtectedRoute";
 import MainLayout from "./layout/MainLayout";
@@ -74,8 +75,9 @@ export default function App() {
               <Route path="/jobs" element={<JobsPage />} />
               <Route path="/jobs/applications" element={<ApplicationsPage />} />
               <Route path="/jobs/self-employed" element={<SelfEmployedPage />} />
-              {/* Phase 2 item 11: teams, under Fitness. */}
-              <Route path="/fitness" element={<FitnessPage />} />
+              {/* Phase 2 item 11: teams, under Fitness. Shelved (shared/shelved.ts):
+                  an old bookmark lands on the dashboard. */}
+              <Route path="/fitness" element={FITNESS_SHELVED ? <Navigate to="/" replace /> : <FitnessPage />} />
               <Route path="/budget" element={<BudgetPage />} />
               <Route path="/budget/accounts/:accountId" element={<AccountDetailPage />} />
               <Route path="/settings" element={<SettingsPage />} />
