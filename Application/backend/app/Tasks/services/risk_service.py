@@ -30,8 +30,9 @@ WINDOW_DAYS = 28
 NEEDED_DAYS = 14
 #: Finished tasks with a time before velocity means anything.
 NEEDED_TASKS = 5
-#: How far ahead due dates are read.
-HORIZON_DAYS = 21
+#: Days of due dates read, today included: today, tomorrow and the day after (owner,
+#: 2026-11-07; was 21). Further out, a shortfall is too far off to be worth a warning.
+HORIZON_DAYS = 3
 
 
 def task_minutes(task) -> int | None:
@@ -106,7 +107,7 @@ def deadline_risk(db: Session, user_id: uuid.UUID, today: date | None = None) ->
     applied = ratio.ratio if ratio.applied else None
     ready = history_days >= NEEDED_DAYS and counted_tasks >= NEEDED_TASKS and pace is not None
 
-    horizon_end = today + timedelta(days=HORIZON_DAYS)
+    horizon_end = today + timedelta(days=HORIZON_DAYS - 1)
     open_tasks = (
         db.query(TaskModel)
         .filter(

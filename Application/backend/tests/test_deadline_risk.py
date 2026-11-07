@@ -122,7 +122,7 @@ def test_a_deadline_needing_more_than_your_pace_is_at_risk(db, user, history):
 
 
 def test_a_deadline_within_your_pace_is_not(db, user, history):
-    due(db, user, 9, estimate=120)  # 120 over 10 days = 12/day
+    due(db, user, 2, estimate=60)  # 60 over 3 days = 20/day
 
     (only,) = deadline_risk(db, user.id, TODAY).deadlines
 
@@ -131,34 +131,52 @@ def test_a_deadline_within_your_pace_is_not(db, user, history):
 
 def test_work_accumulates_toward_later_deadlines(db, user, history):
     due(db, user, 0, estimate=20)
-    due(db, user, 3, estimate=200)
+    due(db, user, 2, estimate=200)
 
     first, second = deadline_risk(db, user.id, TODAY).deadlines
 
     assert (first.minutes_by_then, first.at_risk) == (20, False)
-    assert (second.minutes_by_then, second.days_left) == (220, 4)
-    assert second.at_risk and second.shortfall_minutes == 220 - 30 * 4
+    assert (second.minutes_by_then, second.days_left) == (220, 3)
+    assert second.at_risk and second.shortfall_minutes == 220 - 30 * 3
 
 
 def test_overdue_work_counts_toward_every_deadline_but_is_not_one(db, user, history):
     due(db, user, -3, estimate=100)
-    due(db, user, 4, estimate=0)
+    due(db, user, 2, estimate=0)
 
     (only,) = deadline_risk(db, user.id, TODAY).deadlines
 
-    assert only.due_date == TODAY + timedelta(days=4)
+    assert only.due_date == TODAY + timedelta(days=2)
     assert only.minutes_by_then == 100
 
 
 def test_a_day_adding_no_estimated_work_is_not_a_new_risk(db, user, history):
     due(db, user, 1, estimate=300)
-    due(db, user, 3, estimate=None, title="Email TA")
+    due(db, user, 2, estimate=None, title="Email TA")
 
     first, second = deadline_risk(db, user.id, TODAY).deadlines
 
     assert first.at_risk and first.own_minutes == 300
     assert second.minutes_by_then == 300 and second.own_minutes == 0
     assert not second.at_risk and second.shortfall_minutes == 0
+
+
+def test_only_today_tomorrow_and_the_day_after_are_read(db, user, history):
+    """Owner, 2026-11-07: at-risk applies to work due in the next 3 days only (was 21)."""
+    due(db, user, 2, estimate=10, title="the day after")
+    due(db, user, 3, estimate=9999, title="three days out")
+    due(db, user, 20, estimate=9999, title="weeks out")
+
+    risk = deadline_risk(db, user.id, TODAY)
+
+    assert risk.horizon_days == 3
+    assert [d.titles for d in risk.deadlines] == [["the day after"]]
+    assert not risk.deadlines[0].at_risk
+
+
+def test_work_further_out_raises_no_warning_however_large(db, user, history):
+    due(db, user, 3, estimate=99999)
+    assert deadline_risk(db, user.id, TODAY).deadlines == []
 
 
 def test_beyond_the_horizon_and_finished_and_archived_work_are_left_out(db, user, history):
@@ -191,7 +209,7 @@ def test_the_estimate_ratio_scales_only_when_asked_for(db, user, history):
     # The fixture's tasks carry no estimates, so add five with both numbers: 2x.
     for n in range(5):
         finished(db, user, days_ago=1 + n, actual=20, estimate=10)
-    due(db, user, 9, estimate=100)
+    due(db, user, 2, estimate=100)
 
     plain = deadline_risk(db, user.id, TODAY)
     user.preferences = {**(user.preferences or {}), "use_estimate_ratio": True}
@@ -207,7 +225,7 @@ def test_another_users_tasks_never_move_it(db, user, history):
     for n in range(20):
         finished(db, stranger, days_ago=n, actual=999)
     due(db, stranger, 1, estimate=9999)
-    due(db, user, 9, estimate=120)
+    due(db, user, 2, estimate=120)
 
     risk = deadline_risk(db, user.id, TODAY)
 
